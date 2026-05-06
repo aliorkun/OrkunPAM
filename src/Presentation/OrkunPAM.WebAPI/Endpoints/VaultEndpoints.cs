@@ -247,6 +247,73 @@ public static class VaultEndpoints
             return Results.Ok(new { success = true, message = $"Credential '{cred.Name}' checked in" });
         });
 
+        // === Share Credential ===
+        creds.MapPost("/{id:guid}/share", async (Guid id, ShareCredentialRequest req, OrkunPamDbContext db, ILogger<Program> logger) =>
+        {
+            var cred = await db.Credentials.FindAsync(id);
+            if (cred == null) return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            var share = new CredentialShare
+            {
+                CredentialId = id,
+                SharedByUserId = req.SharedByUserId,
+                SharedToUserId = req.SharedToUserId,
+                PermissionLevel = req.PermissionLevel,
+                ExpiresAtUtc = req.ExpiresInHours.HasValue ? DateTime.UtcNow.AddHours(req.ExpiresInHours.Value) : null,
+                MaxUseCount = req.MaxUseCount
+            };
+
+            db.CredentialShares.Add(share);
+            await db.SaveChangesAsync();
+
+            logger.LogInformation("Credential '{Name}' shared from user {From} to user {To} (expires: {Expires})",
+                cred.Name, req.SharedByUserId, req.SharedToUserId, share.ExpiresAtUtc);
+
+            return Results.Ok(new { success = true, data = new { share.Id, share.ExpiresAtUtc, share.MaxUseCount } });
+        });
+
+        creds.MapGet("/{id:guid}/shares", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var shares = await db.CredentialShares
+                .Where(s => s.CredentialId == id)
+                .Select(s => new
+                {
+                    s.Id, s.SharedByUserId, s.SharedToUserId,
+                    Level = s.PermissionLevel.ToString(),
+                    s.ExpiresAtUtc, s.MaxUseCount, s.UseCount,
+                    IsExpired = s.ExpiresAtUtc.HasValue && s.ExpiresAtUtc < DateTime.UtcNow,
+                    IsExhausted = s.MaxUseCount.HasValue && s.UseCount >= s.MaxUseCount
+                }).ToListAsync();
+            return Results.Ok(new { success = true, data = shares });
+        });
+
+        // === Personal Vault ===
+        creds.MapGet("/personal/{userId:guid}", async (Guid userId, OrkunPamDbContext db) =>
+        {
+            var folder = await db.VaultFolders
+                .FirstOrDefaultAsync(f => f.IsPersonalVault && f.OwnerUserId == userId);
+
+            if (folder == null)
+            {
+                // Auto-create personal vault
+                folder = new VaultFolder
+                {
+                    Name = $"Personal Vault",
+                    IsPersonalVault = true,
+                    OwnerUserId = userId
+                };
+                db.VaultFolders.Add(folder);
+                await db.SaveChangesAsync();
+            }
+
+            var creds2 = await db.Credentials
+                .Where(c => c.FolderId == folder.Id)
+                .Select(c => new { c.Id, c.Name, c.Username, Type = c.CredentialType.ToString(), c.Tags })
+                .ToListAsync();
+
+            return Results.Ok(new { success = true, data = new { folder.Id, folder.Name, credentials = creds2 } });
+        });
+
         // === Password History ===
         creds.MapGet("/{id:guid}/history", async (Guid id, OrkunPamDbContext db) =>
         {
@@ -302,3 +369,4 @@ public record CreateCredentialRequest(
     int? MaxCheckoutMinutes, bool RequiresApproval);
 public record CheckoutRequest(Guid UserId, string? Reason, string? TicketNumber, int? DurationMinutes);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
+public record ShareCredentialRequest(Guid SharedByUserId, Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
