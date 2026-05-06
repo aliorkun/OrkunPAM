@@ -5,6 +5,7 @@ using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Entities.Vault;
+using OrkunPAM.Domain.Entities.Workflow;
 using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Persistence;
@@ -42,6 +43,11 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
+
+    // Workflow
+    public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ApprovalStep> ApprovalSteps => Set<ApprovalStep>();
 
     // Crypto
     public DbSet<MasterKey> MasterKeys => Set<MasterKey>();
@@ -204,6 +210,19 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(sc => sc.Key);
             e.Property(sc => sc.Key).HasMaxLength(256);
+        });
+
+        // === Workflow ===
+        modelBuilder.Entity<ApprovalRequest>(e =>
+        {
+            e.HasIndex(ar => new { ar.RequesterId, ar.Status });
+        });
+
+        modelBuilder.Entity<ApprovalStep>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedOnAdd();
+            e.HasOne(s => s.Request).WithMany(r => r.Steps).HasForeignKey(s => s.RequestId);
         });
 
         // Seed built-in data
