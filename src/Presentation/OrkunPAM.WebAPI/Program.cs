@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
+using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 using OrkunPAM.SharedKernel;
 using Serilog;
@@ -37,6 +38,11 @@ try
     // === Repository ===
     builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
     builder.Services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<OrkunPamDbContext>());
+
+    // === Identity ===
+    builder.Services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+    builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+    builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
@@ -112,7 +118,46 @@ try
         });
     }).WithTags("Vault");
 
-    // === User Endpoints (Phase 1 preview) ===
+    // === Auth Endpoints ===
+    app.MapPost("/api/v1/auth/login", async (LoginRequest req, IAuthenticationService auth, HttpContext ctx) =>
+    {
+        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var result = await auth.LoginLocalAsync(req.Username, req.Password, ip);
+
+        if (result.IsFailure)
+            return Results.Unauthorized();
+
+        var data = result.Value;
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                accessToken = data.Tokens.AccessToken,
+                refreshToken = data.Tokens.RefreshToken,
+                expiresAt = data.Tokens.AccessTokenExpiry,
+                userId = data.UserId,
+                username = data.Username,
+                displayName = data.DisplayName,
+                mfaRequired = data.MfaRequired
+            }
+        });
+    }).WithTags("Auth");
+
+    app.MapPost("/api/v1/auth/register", async (RegisterRequest req, IAuthenticationService auth) =>
+    {
+        var result = await auth.CreateLocalUserAsync(req.Username, req.Password, req.DisplayName, req.Email);
+        if (result.IsFailure)
+            return Results.Conflict(new { success = false, errors = new[] { result.Error.Message } });
+
+        return Results.Created($"/api/v1/users/{result.Value.Id}", new
+        {
+            success = true,
+            data = new { result.Value.Id, result.Value.Username, result.Value.DisplayName }
+        });
+    }).WithTags("Auth");
+
+    // === User Endpoints ===
     app.MapGet("/api/v1/users", async (OrkunPamDbContext db) =>
     {
         var users = await db.Users.Select(u => new
@@ -185,3 +230,5 @@ finally
 }
 
 record CreateUserRequest(string Username, string? DisplayName, string? Email);
+record LoginRequest(string Username, string Password);
+record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
