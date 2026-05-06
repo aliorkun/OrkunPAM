@@ -126,6 +126,8 @@ try
     app.MapUserEndpoints();
     app.MapGroupEndpoints();
     app.MapRoleEndpoints();
+    app.MapVaultEndpoints();
+    app.MapDeviceEndpoints();
 
     // === Audit Log ===
     app.MapGet("/api/v1/audit-logs", async (OrkunPamDbContext db, int page = 1, int pageSize = 50) =>
