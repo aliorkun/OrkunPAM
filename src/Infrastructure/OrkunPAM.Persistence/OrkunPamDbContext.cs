@@ -206,27 +206,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(sc => sc.Key).HasMaxLength(256);
         });
 
-        // Seed built-in roles
-        SeedData(modelBuilder);
-    }
-
-    private static void SeedData(ModelBuilder modelBuilder)
-    {
-        var adminRoleId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        var vaultAdminId = Guid.Parse("00000000-0000-0000-0000-000000000002");
-        var sessionAdminId = Guid.Parse("00000000-0000-0000-0000-000000000003");
-        var auditorId = Guid.Parse("00000000-0000-0000-0000-000000000004");
-        var readOnlyId = Guid.Parse("00000000-0000-0000-0000-000000000005");
-        var helpDeskId = Guid.Parse("00000000-0000-0000-0000-000000000006");
-
-        modelBuilder.Entity<Role>().HasData(
-            new Role { Id = adminRoleId, Name = "GlobalAdmin", Description = "Full system access", IsSystemRole = true },
-            new Role { Id = vaultAdminId, Name = "VaultAdmin", Description = "Vault management access", IsSystemRole = true },
-            new Role { Id = sessionAdminId, Name = "SessionAdmin", Description = "Session management access", IsSystemRole = true },
-            new Role { Id = auditorId, Name = "Auditor", Description = "Read-only audit access", IsSystemRole = true },
-            new Role { Id = readOnlyId, Name = "ReadOnly", Description = "View-only access", IsSystemRole = true },
-            new Role { Id = helpDeskId, Name = "HelpDesk", Description = "User support access", IsSystemRole = true }
-        );
+        // Seed built-in data
+        modelBuilder.Entity<Role>().HasData(SeedData.GetRoles());
+        modelBuilder.Entity<Permission>().HasData(SeedData.GetPermissions());
+        modelBuilder.Entity<RolePermission>().HasData(SeedData.GetRolePermissions());
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken ct = default)

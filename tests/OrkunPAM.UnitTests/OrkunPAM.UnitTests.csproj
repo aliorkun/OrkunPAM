@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Core\OrkunPAM.SharedKernel\OrkunPAM.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\Core\OrkunPAM.Domain\OrkunPAM.Domain.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\OrkunPAM.Cryptography\OrkunPAM.Cryptography.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\OrkunPAM.Identity\OrkunPAM.Identity.csproj" />
   </ItemGroup>
 
 </Project>

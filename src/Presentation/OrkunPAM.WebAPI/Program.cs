@@ -3,6 +3,7 @@ using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 using OrkunPAM.SharedKernel;
+using OrkunPAM.WebAPI.Endpoints;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -43,6 +44,8 @@ try
     builder.Services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
     builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+    builder.Services.AddScoped<IPermissionService, PermissionService>();
+    builder.Services.AddSingleton<ITotpService, TotpService>();
 
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
@@ -118,92 +121,11 @@ try
         });
     }).WithTags("Vault");
 
-    // === Auth Endpoints ===
-    app.MapPost("/api/v1/auth/login", async (LoginRequest req, IAuthenticationService auth, HttpContext ctx) =>
-    {
-        var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var result = await auth.LoginLocalAsync(req.Username, req.Password, ip);
-
-        if (result.IsFailure)
-            return Results.Unauthorized();
-
-        var data = result.Value;
-        return Results.Ok(new
-        {
-            success = true,
-            data = new
-            {
-                accessToken = data.Tokens.AccessToken,
-                refreshToken = data.Tokens.RefreshToken,
-                expiresAt = data.Tokens.AccessTokenExpiry,
-                userId = data.UserId,
-                username = data.Username,
-                displayName = data.DisplayName,
-                mfaRequired = data.MfaRequired
-            }
-        });
-    }).WithTags("Auth");
-
-    app.MapPost("/api/v1/auth/register", async (RegisterRequest req, IAuthenticationService auth) =>
-    {
-        var result = await auth.CreateLocalUserAsync(req.Username, req.Password, req.DisplayName, req.Email);
-        if (result.IsFailure)
-            return Results.Conflict(new { success = false, errors = new[] { result.Error.Message } });
-
-        return Results.Created($"/api/v1/users/{result.Value.Id}", new
-        {
-            success = true,
-            data = new { result.Value.Id, result.Value.Username, result.Value.DisplayName }
-        });
-    }).WithTags("Auth");
-
-    // === User Endpoints ===
-    app.MapGet("/api/v1/users", async (OrkunPamDbContext db) =>
-    {
-        var users = await db.Users.Select(u => new
-        {
-            u.Id, u.Username, u.DisplayName, u.Email,
-            u.AuthSource, u.Status, u.MfaEnabled,
-            u.LastLoginAtUtc, u.CreatedAtUtc
-        }).ToListAsync();
-        return Results.Ok(new { success = true, data = users, meta = new { totalCount = users.Count } });
-    }).WithTags("Users");
-
-    app.MapPost("/api/v1/users", async (CreateUserRequest req, OrkunPamDbContext db) =>
-    {
-        if (await db.Users.AnyAsync(u => u.NormalizedUsername == req.Username.ToUpperInvariant()))
-            return Results.Conflict(new { success = false, errors = new[] { $"Username '{req.Username}' already exists" } });
-
-        var user = new OrkunPAM.Domain.Entities.Identity.User
-        {
-            Username = req.Username,
-            NormalizedUsername = req.Username.ToUpperInvariant(),
-            DisplayName = req.DisplayName,
-            Email = req.Email,
-            AuthSource = OrkunPAM.Domain.Enums.AuthSource.Local,
-            Status = OrkunPAM.Domain.Enums.UserStatus.Active,
-            PasswordHash = "PLACEHOLDER" // Will be Argon2id in Phase 1
-        };
-
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-
-        return Results.Created($"/api/v1/users/{user.Id}", new { success = true, data = new { user.Id, user.Username } });
-    }).WithTags("Users");
-
-    app.MapGet("/api/v1/users/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
-    {
-        var user = await db.Users.FindAsync(id);
-        if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
-        return Results.Ok(new { success = true, data = user });
-    }).WithTags("Users");
-
-    // === Role Endpoints ===
-    app.MapGet("/api/v1/roles", async (OrkunPamDbContext db) =>
-    {
-        var roles = await db.Roles.Select(r => new { r.Id, r.Name, r.Description, r.IsSystemRole }).ToListAsync();
-        return Results.Ok(new { success = true, data = roles });
-    }).WithTags("Roles");
+    // === Map Module Endpoints ===
+    app.MapAuthEndpoints();
+    app.MapUserEndpoints();
+    app.MapGroupEndpoints();
+    app.MapRoleEndpoints();
 
     // === Audit Log ===
     app.MapGet("/api/v1/audit-logs", async (OrkunPamDbContext db, int page = 1, int pageSize = 50) =>
@@ -229,6 +151,4 @@ finally
     Log.CloseAndFlush();
 }
 
-record CreateUserRequest(string Username, string? DisplayName, string? Email);
-record LoginRequest(string Username, string Password);
-record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
+// Request records moved to Endpoints/ files
