@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Domain.Entities.Aapm;
 using OrkunPAM.Domain.Entities.Crypto;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Identity;
@@ -45,6 +46,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
+
+    // Vault Discovery
+    public DbSet<DiscoveryJob> DiscoveryJobs => Set<DiscoveryJob>();
+    public DbSet<DiscoveredAccount> DiscoveredAccounts => Set<DiscoveredAccount>();
+
+    // AAPM
+    public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+    public DbSet<ApiClientCredentialAccess> ApiClientCredentialAccess => Set<ApiClientCredentialAccess>();
+    public DbSet<ApiAccessLog> ApiAccessLogs => Set<ApiAccessLog>();
 
     // Workflow
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
@@ -212,6 +222,24 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(sc => sc.Key);
             e.Property(sc => sc.Key).HasMaxLength(256);
+        });
+
+        // === AAPM ===
+        modelBuilder.Entity<ApiClient>(e =>
+        {
+            e.HasIndex(ac => ac.ClientId).IsUnique();
+        });
+
+        modelBuilder.Entity<ApiClientCredentialAccess>(e =>
+        {
+            e.HasKey(x => new { x.ApiClientId, x.CredentialId });
+        });
+
+        modelBuilder.Entity<ApiAccessLog>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Id).ValueGeneratedOnAdd();
+            e.HasIndex(l => new { l.ApiClientId, l.RequestedAtUtc });
         });
 
         // === Workflow ===

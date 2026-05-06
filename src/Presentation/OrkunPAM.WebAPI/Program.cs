@@ -132,6 +132,7 @@ try
     app.MapPolicyEndpoints();
     app.MapWorkflowEndpoints();
     app.MapLdapSamlEndpoints();
+    app.MapAapmEndpoints();
     app.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
