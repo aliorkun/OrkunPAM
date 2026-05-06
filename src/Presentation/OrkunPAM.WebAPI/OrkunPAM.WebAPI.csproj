@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\OrkunPAM.Application\OrkunPAM.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Persistence\OrkunPAM.Persistence.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Cryptography\OrkunPAM.Cryptography.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Identity\OrkunPAM.Identity.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
