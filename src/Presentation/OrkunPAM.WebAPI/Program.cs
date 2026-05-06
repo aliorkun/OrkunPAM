@@ -4,6 +4,7 @@ using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 using OrkunPAM.SharedKernel;
 using OrkunPAM.WebAPI.Endpoints;
+using OrkunPAM.WebAPI.Middleware;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -52,7 +53,8 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
-        c.SwaggerDoc("v1", new() { Title = "Orkun PAM API", Version = "v1" });
+        c.SwaggerDoc("v1", new() { Title = "Orkun PAM API", Version = "v1",
+            Description = "Enterprise Privileged Access Management - REST API" });
     });
 
     // === CORS ===
@@ -84,6 +86,7 @@ try
     Log.Information("Vault encryption engine initialized");
 
     // === Middleware ===
+    app.UseGlobalExceptionHandler();
     app.UseSerilogRequestLogging();
     app.UseCors();
 
