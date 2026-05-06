@@ -4,6 +4,7 @@ using OrkunPAM.Domain.Entities.Analytics;
 using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Crypto;
 using OrkunPAM.Domain.Entities.DirectAccess;
+using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;

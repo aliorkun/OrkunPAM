@@ -138,6 +138,7 @@ try
     app.MapReportEndpoints();
     app.MapComplianceEndpoints();
     app.MapAnalyticsEndpoints();
+    app.MapIntegrationEndpoints();
     app.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
