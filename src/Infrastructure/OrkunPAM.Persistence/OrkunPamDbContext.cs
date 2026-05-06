@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Aapm;
+using OrkunPAM.Domain.Entities.Analytics;
 using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Crypto;
+using OrkunPAM.Domain.Entities.DirectAccess;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
@@ -47,6 +49,18 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
+
+    // Analytics
+    public DbSet<CommandRiskRule> CommandRiskRules => Set<CommandRiskRule>();
+    public DbSet<UserBehaviorBaseline> UserBehaviorBaselines => Set<UserBehaviorBaseline>();
+    public DbSet<Anomaly> Anomalies => Set<Anomaly>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<AlertHistory> AlertHistories => Set<AlertHistory>();
+
+    // Direct Access
+    public DbSet<TacacsConfig> TacacsConfigs => Set<TacacsConfig>();
+    public DbSet<RadiusConfig> RadiusConfigs => Set<RadiusConfig>();
+    public DbSet<AvpDefinition> AvpDefinitions => Set<AvpDefinition>();
 
     // Compliance
     public DbSet<ComplianceFramework> ComplianceFrameworks => Set<ComplianceFramework>();
@@ -230,6 +244,20 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(sc => sc.Key);
             e.Property(sc => sc.Key).HasMaxLength(256);
+        });
+
+        // === Analytics ===
+        modelBuilder.Entity<Anomaly>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.Property(a => a.Id).ValueGeneratedOnAdd();
+            e.HasIndex(a => new { a.UserId, a.DetectedAtUtc });
+        });
+
+        modelBuilder.Entity<AlertHistory>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.Id).ValueGeneratedOnAdd();
         });
 
         // === Compliance ===
