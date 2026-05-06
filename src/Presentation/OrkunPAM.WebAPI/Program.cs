@@ -46,6 +46,7 @@ try
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddSingleton<ITotpService, TotpService>();
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
 
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
@@ -128,18 +129,8 @@ try
     app.MapRoleEndpoints();
     app.MapVaultEndpoints();
     app.MapDeviceEndpoints();
-
-    // === Audit Log ===
-    app.MapGet("/api/v1/audit-logs", async (OrkunPamDbContext db, int page = 1, int pageSize = 50) =>
-    {
-        var total = await db.AuditLogs.CountAsync();
-        var logs = await db.AuditLogs
-            .OrderByDescending(a => a.Timestamp)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-        return Results.Ok(new { success = true, data = logs, meta = new { page, pageSize, totalCount = total } });
-    }).WithTags("Audit");
+    app.MapPolicyEndpoints();
+    app.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
     app.Run();
