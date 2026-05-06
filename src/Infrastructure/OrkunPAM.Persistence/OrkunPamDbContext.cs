@@ -18,6 +18,8 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<Policy> Policies => Set<Policy>();
+    public DbSet<LdapConfiguration> LdapConfigurations => Set<LdapConfiguration>();
+    public DbSet<SamlProvider> SamlProviders => Set<SamlProvider>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<GroupRole> GroupRoles => Set<GroupRole>();
