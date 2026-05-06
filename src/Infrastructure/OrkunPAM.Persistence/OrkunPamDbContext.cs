@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Aapm;
+using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Crypto;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Identity;
@@ -46,6 +47,13 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
+
+    // Compliance
+    public DbSet<ComplianceFramework> ComplianceFrameworks => Set<ComplianceFramework>();
+    public DbSet<ControlAssessment> ControlAssessments => Set<ControlAssessment>();
+    public DbSet<SodRule> SodRules => Set<SodRule>();
+    public DbSet<AttestationCampaign> AttestationCampaigns => Set<AttestationCampaign>();
+    public DbSet<AttestationDecision> AttestationDecisions => Set<AttestationDecision>();
 
     // Vault Discovery
     public DbSet<DiscoveryJob> DiscoveryJobs => Set<DiscoveryJob>();
@@ -222,6 +230,13 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(sc => sc.Key);
             e.Property(sc => sc.Key).HasMaxLength(256);
+        });
+
+        // === Compliance ===
+        modelBuilder.Entity<AttestationDecision>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).ValueGeneratedOnAdd();
         });
 
         // === AAPM ===
