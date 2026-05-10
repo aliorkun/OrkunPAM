@@ -51,7 +51,49 @@ See `docs/phases/` for detailed plans:
 - `docs/PAM Template.xlsx` - RFP compliance tracking
 - Phase checklists in `docs/phases/`
 
-## AI Agents
-- Developer (Claude): Architecture, implementation, code review
-- Tester: Automated testing, security testing
-- Product Manager: Feature prioritization, UX review
+## AI Agent Coordination
+
+### Roles
+- **Developer (Claude):** Architecture, implementation, code review. Kod yazar, fix'ler, refactor eder.
+- **Tester & Security Auditor:** Kod review, security audit, functional testing. GitHub Issues açar (label: `security`, `bug`, `test-failure`, `missing-validation`, `code-quality`). Severity: `severity:critical`, `severity:high`, `severity:medium`, `severity:low`.
+- **Product Manager:** Feature gap analizi, RFP uyumluluk, rakip analizi, UX önerileri. GitHub Issues açar (label: `product`, `feature-request`, `ux`, `rfp-gap`, `competitor-gap`). Priority: `priority:mvp`, `priority:v2`, `priority:nice-to-have`.
+
+### Workflow (Sürekli Döngü - GitHub Kontrollü)
+Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'dan takip eder.
+
+**Adım 1 - Developer geliştirir:**
+- TODO'ları temizler, yeni özellik implement eder, commit atar, push eder
+
+**Adım 2 - Security/Tester inceler (her push/versiyon sonrası):**
+- GitHub reposunu çeker, tüm değişiklikleri inceler
+- Zafiyet, bug, eksik validation, test failure bulursa GitHub Issue açar
+- Label: `security`, `bug`, `severity:critical/high/medium/low`
+
+**Adım 3 - Developer fix'ler:**
+- `gh issue list --label security` ile açık bug'ları çeker
+- Önce critical/high, sonra medium/low fix'ler
+- Commit'te `fixes #issue-no` referansı kullanır, push eder
+
+**Adım 4 - Security/Tester tekrar inceler:**
+- Fix'lerin doğruluğunu kontrol eder
+- Yeni sorun yoksa issue'ları kapatır, varsa yeni issue açar
+
+**Adım 5 - Product Manager yeni feature ekler:**
+- GitHub reposunu inceler, mevcut durumu değerlendirir
+- RFP gap, rakip eksiklik, UX iyileştirme, yeni özellik talepleri açar
+- Label: `product`, `feature-request`, `priority:mvp/v2`
+
+**Adım 6 - Developer yeni feature'ları implement eder:**
+- `gh issue list --label product --label priority:mvp` ile talepleri çeker
+- Implement eder, push eder → Adım 2'ye dön
+
+**Döngü sürekli tekrar eder. Her agent GitHub'ı tek kaynak olarak kullanır.**
+
+### Developer Kuralları
+- `gh issue list --label security` → Security agent bulgularını takip et
+- `gh issue list --label product` → PM taleplerini takip et
+- `severity:critical` ve `severity:high` issue'lar her şeyden önce fix'lenir
+- `priority:mvp` issue'lar `priority:v2`'den önce gelir
+- Her fix commit'inde ilgili issue numarasını referansla
+- Proxy katmanında açık kaynak kütüphane KULLANMA - native C# implementasyon
+- Security agent'ın açtığı ticket'larda belirtilen dosya:satır bilgisini dikkate al

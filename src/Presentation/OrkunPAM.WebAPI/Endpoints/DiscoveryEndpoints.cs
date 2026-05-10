@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Cryptography;
+using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
@@ -40,31 +42,44 @@ public static class DiscoveryEndpoints
                 new { success = true, data = new { job.Id, job.Name } });
         });
 
-        jobs.MapPost("/{id:guid}/run", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        jobs.MapPost("/{id:guid}/run", async (Guid id, OrkunPamDbContext db,
+            OrkunPAM.Persistence.Services.IDiscoveryService discoveryService, ILogger<Program> logger) =>
         {
             var job = await db.DiscoveryJobs.FindAsync(id);
             if (job == null) return Results.NotFound(new { success = false, errors = new[] { "Job not found" } });
 
-            // TODO: Actual discovery scan based on type (AD, WMI, SSH, etc.)
+            var scanResult = await discoveryService.RunScanAsync(job.DiscoveryType, job.TargetScopeJson);
+
             job.LastRunAtUtc = DateTime.UtcNow;
-            job.LastRunResult = "Scan completed (placeholder - will connect to targets in full implementation)";
+            job.LastRunResult = scanResult.Message;
 
-            // Simulate finding some accounts
-            var simulatedAccounts = new[]
-            {
-                new DiscoveredAccount { DiscoveryJobId = id, AccountName = "Administrator", AccountType = "LocalAdmin" },
-                new DiscoveredAccount { DiscoveryJobId = id, AccountName = "svc_backup", AccountType = "ServiceAccount" }
-            };
+            // Create discovered accounts from scan results
+            var newAccounts = scanResult.Accounts
+                .Where(a => a.AccountType != "Error")
+                .Select(a => new DiscoveredAccount
+                {
+                    DiscoveryJobId = id,
+                    AccountName = a.AccountName,
+                    AccountType = a.AccountType
+                }).ToList();
 
-            db.DiscoveredAccounts.AddRange(simulatedAccounts);
+            if (newAccounts.Count > 0)
+                db.DiscoveredAccounts.AddRange(newAccounts);
+
             await db.SaveChangesAsync();
 
-            logger.LogInformation("Discovery job '{Name}' completed. Found {Count} accounts", job.Name, simulatedAccounts.Length);
+            logger.LogInformation("Discovery job '{Name}' completed. Found {Count} accounts", job.Name, newAccounts.Count);
 
             return Results.Ok(new
             {
-                success = true,
-                data = new { job.LastRunAtUtc, accountsFound = simulatedAccounts.Length, job.LastRunResult }
+                success = scanResult.Success,
+                data = new
+                {
+                    job.LastRunAtUtc,
+                    accountsFound = newAccounts.Count,
+                    result = scanResult.Message,
+                    accounts = scanResult.Accounts.Take(50)
+                }
             });
         });
 
@@ -173,32 +188,78 @@ public static class DiscoveryEndpoints
 
         // Manual rotation trigger
         app.MapPost("/api/v1/vault/credentials/{id:guid}/rotate", async (Guid id,
-            OrkunPamDbContext db, ILogger<Program> logger) =>
+            OrkunPamDbContext db, OrkunPAM.Persistence.Services.IRotationService rotationService,
+            IVaultEncryptionService vault, ILogger<Program> logger) =>
         {
-            var cred = await db.Credentials.FindAsync(id);
+            var cred = await db.Credentials.FirstOrDefaultAsync(c => c.Id == id);
             if (cred == null) return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
-            // TODO: Actually connect to target and change password via rotation connector
-            cred.LastRotatedAtUtc = DateTime.UtcNow;
-            cred.NextRotationAtUtc = cred.RotationPolicyId != null
-                ? DateTime.UtcNow.AddDays(30) // Use policy interval
-                : null;
-            cred.Version++;
+            // Determine connector from rotation policy or device type
+            var connector = RotationConnector.Ldap; // Default
+            if (cred.RotationPolicyId.HasValue)
+            {
+                var policy = await db.RotationPolicies.FindAsync(cred.RotationPolicyId.Value);
+                if (policy != null) connector = policy.ConnectorType;
+            }
 
-            await db.SaveChangesAsync();
+            // Decrypt current password
+            string? currentPassword = null;
+            if (cred.PasswordEnc != null)
+            {
+                var decResult = vault.DecryptString(cred.PasswordEnc);
+                if (decResult.IsSuccess) currentPassword = decResult.Value;
+            }
 
-            logger.LogInformation("Credential '{Name}' rotated (version {Version}). " +
-                "TODO: connect to target via {Connector} and change password",
-                cred.Name, cred.Version, "WinRM/SSH/LDAP");
+            // Generate new password
+            var newPassword = rotationService.GeneratePassword();
+
+            // Determine target host/port from linked device
+            var device = cred.DeviceId.HasValue ? await db.Devices.FindAsync(cred.DeviceId.Value) : null;
+            var host = device?.IpAddress ?? device?.Hostname ?? "localhost";
+            var port = connector switch
+            {
+                RotationConnector.Ldap => 636,
+                RotationConnector.SqlServer => 1433,
+                RotationConnector.MySql => 3306,
+                RotationConnector.PostgreSql => 5432,
+                RotationConnector.Ssh => 22,
+                RotationConnector.WinRm => 5985,
+                _ => 0
+            };
+
+            var target = new OrkunPAM.Persistence.Services.RotationTarget(
+                host, port, cred.Username ?? "", currentPassword, newPassword);
+
+            var result = await rotationService.RotatePasswordAsync(connector, target);
+
+            if (result.Success)
+            {
+                // Encrypt and save new password
+                var encResult = vault.EncryptString(newPassword);
+                if (encResult.IsSuccess)
+                    cred.PasswordEnc = encResult.Value;
+
+                cred.LastRotatedAtUtc = DateTime.UtcNow;
+                cred.NextRotationAtUtc = cred.RotationPolicyId != null
+                    ? DateTime.UtcNow.AddDays(30)
+                    : null;
+                cred.Version++;
+                await db.SaveChangesAsync();
+            }
+
+            logger.LogInformation("Credential '{Name}' rotation {Status} via {Connector}. Version: {Version}",
+                cred.Name, result.Success ? "succeeded" : "failed", connector, cred.Version);
 
             return Results.Ok(new
             {
-                success = true,
+                success = result.Success,
                 data = new
                 {
                     cred.Id, cred.Name, cred.Version,
+                    connector = connector.ToString(),
                     cred.LastRotatedAtUtc, cred.NextRotationAtUtc,
-                    message = "Rotation triggered (placeholder - actual target connection in full implementation)"
+                    responseTimeMs = result.ResponseTimeMs,
+                    message = result.Message
                 }
             });
         }).WithTags("Vault");

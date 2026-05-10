@@ -40,21 +40,30 @@ public static class IntegrationEndpoints
                 new { success = true, data = new { webhook.Id, webhook.Name } });
         });
 
-        webhooks.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        webhooks.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
+            OrkunPAM.Persistence.Services.IWebhookDeliveryService webhookService, ILogger<Program> logger) =>
         {
             var wh = await db.Set<WebhookConfig>().FindAsync(id);
             if (wh == null) return Results.NotFound(new { success = false, errors = new[] { "Webhook not found" } });
 
-            // TODO: Actually send test payload to webhook URL
             logger.LogInformation("Testing webhook '{Name}' at {Url}", wh.Name, wh.Url);
+
+            var result = await webhookService.SendTestAsync(wh.Url, wh.Secret, wh.TimeoutSeconds);
+
+            wh.LastDeliveryAtUtc = DateTime.UtcNow;
+            wh.LastDeliverySuccess = result.Success;
+            await db.SaveChangesAsync();
 
             return Results.Ok(new
             {
-                success = true,
+                success = result.Success,
                 data = new
                 {
                     url = wh.Url,
-                    message = "Test webhook delivery (placeholder - actual HTTP POST in full implementation)"
+                    statusCode = result.StatusCode,
+                    responseTimeMs = result.ResponseTimeMs,
+                    error = result.Error,
+                    message = result.Success ? "Test webhook delivered successfully" : $"Delivery failed: {result.Error}"
                 }
             });
         });
@@ -90,36 +99,54 @@ public static class IntegrationEndpoints
                 new { success = true, data = new { config.Id, config.Name, config.Provider } });
         });
 
-        itsm.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        itsm.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
+            OrkunPAM.Persistence.Services.IItsmService itsmService, ILogger<Program> logger) =>
         {
             var cfg = await db.Set<ItsmConfig>().FindAsync(id);
             if (cfg == null) return Results.NotFound(new { success = false, errors = new[] { "ITSM config not found" } });
 
             logger.LogInformation("Testing ITSM connection to {Provider} at {Url}", cfg.Provider, cfg.BaseUrl);
 
+            var result = await itsmService.TestConnectionAsync(cfg.Provider, cfg.BaseUrl, cfg.Username, null, null);
+
             return Results.Ok(new
             {
-                success = true,
+                success = result.Success,
                 data = new
                 {
                     provider = cfg.Provider,
                     baseUrl = cfg.BaseUrl,
-                    message = $"Connection test to {cfg.Provider} (placeholder - actual API call in full implementation)"
+                    responseTimeMs = result.ResponseTimeMs,
+                    serverVersion = result.ServerVersion,
+                    message = result.Message
                 }
             });
         });
 
-        itsm.MapPost("/validate-ticket", (ValidateTicketRequest req) =>
+        itsm.MapPost("/validate-ticket", async (ValidateTicketRequest req, OrkunPamDbContext db,
+            OrkunPAM.Persistence.Services.IItsmService itsmService) =>
         {
-            // TODO: Call ITSM API to validate ticket
+            // Find the ITSM config for this provider (or use default enabled one)
+            var cfg = !string.IsNullOrEmpty(req.Provider)
+                ? await db.Set<ItsmConfig>().FirstOrDefaultAsync(c => c.Provider == req.Provider && c.IsEnabled)
+                : await db.Set<ItsmConfig>().FirstOrDefaultAsync(c => c.IsEnabled && c.ValidateTicket);
+
+            if (cfg == null)
+                return Results.BadRequest(new { success = false, errors = new[] { "No active ITSM configuration found for ticket validation" } });
+
+            var result = await itsmService.ValidateTicketAsync(cfg.Provider, cfg.BaseUrl, req.TicketNumber, cfg.Username, null, null);
+
             return Results.Ok(new
             {
                 success = true,
                 data = new
                 {
                     ticketNumber = req.TicketNumber,
-                    valid = true,
-                    message = "Ticket validation placeholder"
+                    valid = result.Valid,
+                    status = result.TicketStatus,
+                    summary = result.Summary,
+                    assignee = result.Assignee,
+                    message = result.Message
                 }
             });
         });

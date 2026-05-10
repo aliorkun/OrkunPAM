@@ -49,6 +49,13 @@ try
     builder.Services.AddSingleton<ITotpService, TotpService>();
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
 
+    // === Integration Services ===
+    builder.Services.AddSingleton<OrkunPAM.Identity.Services.ILdapService, OrkunPAM.Identity.Services.LdapService>();
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IWebhookDeliveryService, OrkunPAM.Persistence.Services.WebhookDeliveryService>();
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IItsmService, OrkunPAM.Persistence.Services.ItsmService>();
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IRotationService, OrkunPAM.Persistence.Services.RotationService>();
+
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>

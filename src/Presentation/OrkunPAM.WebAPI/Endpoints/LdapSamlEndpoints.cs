@@ -80,43 +80,64 @@ public static class LdapSamlEndpoints
             return Results.Ok(new { success = true });
         });
 
-        ldap.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        ldap.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
+            OrkunPAM.Identity.Services.ILdapService ldapService, ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
 
-            // TODO: Actual LDAP connection test using System.DirectoryServices.Protocols
             logger.LogInformation("Testing LDAP connection to {Host}:{Port}", l.Host, l.Port);
+
+            // Decrypt bind password if stored
+            string? bindPassword = null; // Will be decrypted from l.BindPasswordEnc when vault is available
+
+            var result = await ldapService.TestConnectionAsync(l.Host, l.Port, l.UseSsl, l.BindDn, bindPassword, l.BaseDn);
 
             return Results.Ok(new
             {
-                success = true,
+                success = result.Success,
                 data = new
                 {
                     host = l.Host,
                     port = l.Port,
-                    status = "Connection test placeholder - will be implemented with System.DirectoryServices.Protocols",
-                    message = $"LDAP bind to {l.Host}:{l.Port} - SSL: {l.UseSsl}, BaseDN: {l.BaseDn}"
+                    status = result.Success ? "connected" : "failed",
+                    message = result.Message,
+                    responseTimeMs = result.ResponseTimeMs,
+                    serverType = result.ServerType
                 }
             });
         });
 
-        ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db,
+            OrkunPAM.Identity.Services.ILdapService ldapService, ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
 
-            // TODO: Trigger actual LDAP sync
+            string? bindPassword = null; // Will be decrypted from l.BindPasswordEnc
+
+            var result = await ldapService.SyncUsersAndGroupsAsync(
+                l.Host, l.Port, l.UseSsl, l.BindDn, bindPassword,
+                l.BaseDn, l.UserSearchFilter, l.GroupSearchFilter, l.UserAttributeMapping);
+
             l.LastSyncAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            logger.LogInformation("LDAP sync triggered for config '{Name}' ({Host})", l.Name, l.Host);
+            logger.LogInformation("LDAP sync completed for '{Name}'. Users: {Users}, Groups: {Groups}",
+                l.Name, result.UsersFound, result.GroupsFound);
 
             return Results.Ok(new
             {
-                success = true,
-                message = $"Sync triggered for '{l.Name}'. Users and groups will be synchronized.",
-                lastSync = l.LastSyncAtUtc
+                success = result.Success,
+                data = new
+                {
+                    message = result.Message,
+                    usersFound = result.UsersFound,
+                    groupsFound = result.GroupsFound,
+                    lastSync = l.LastSyncAtUtc,
+                    users = result.Users.Take(100),
+                    groups = result.Groups.Take(100)
+                }
             });
         });
 

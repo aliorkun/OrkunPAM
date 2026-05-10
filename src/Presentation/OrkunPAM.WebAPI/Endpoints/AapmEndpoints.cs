@@ -146,7 +146,33 @@ public static class AapmEndpoints
         app.MapGet("/api/v1/aapm/credentials/{credId:guid}", async (Guid credId, OrkunPamDbContext db,
             IVaultEncryptionService vault, ILogger<Program> logger, HttpContext ctx) =>
         {
-            // TODO: Validate AAPM token and check credential access
+            // Validate AAPM token - extract client ID from JWT claims
+            var clientIdClaim = ctx.User?.FindFirst("sub")?.Value ?? ctx.User?.FindFirst("client_id")?.Value;
+            if (string.IsNullOrEmpty(clientIdClaim) || !Guid.TryParse(clientIdClaim, out var apiClientId))
+            {
+                logger.LogWarning("AAPM credential access denied: missing or invalid client_id claim");
+                return Results.Json(new { error = "unauthorized", message = "Valid AAPM token required" }, statusCode: 401);
+            }
+
+            // Verify API client exists and is enabled
+            var apiClient = await db.ApiClients
+                .Include(c => c.CredentialAccess)
+                .FirstOrDefaultAsync(c => c.Id == apiClientId && c.IsEnabled);
+
+            if (apiClient == null)
+            {
+                logger.LogWarning("AAPM credential access denied: client {ClientId} not found or disabled", apiClientId);
+                return Results.Json(new { error = "forbidden", message = "API client not found or disabled" }, statusCode: 403);
+            }
+
+            // Check if this client has access to the requested credential
+            var hasAccess = apiClient.CredentialAccess.Any(ca => ca.CredentialId == credId);
+            if (!hasAccess)
+            {
+                logger.LogWarning("AAPM client {ClientId} attempted to access credential {CredId} without permission",
+                    apiClient.ClientId, credId);
+                return Results.Json(new { error = "forbidden", message = "Client does not have access to this credential" }, statusCode: 403);
+            }
 
             var cred = await db.Credentials.FindAsync(credId);
             if (cred == null)
@@ -157,19 +183,23 @@ public static class AapmEndpoints
             {
                 var decResult = vault.DecryptString(cred.PasswordEnc);
                 if (decResult.IsFailure)
-                    return Results.Problem($"Decryption failed: {decResult.Error.Message}");
+                    return Results.Problem("Credential decryption failed");
                 password = decResult.Value;
             }
 
-            // Log access
+            // Log access with real client ID
             db.ApiAccessLogs.Add(new ApiAccessLog
             {
                 CredentialId = credId,
-                ApiClientId = Guid.Empty, // TODO: extract from JWT
+                ApiClientId = apiClientId,
                 ClientIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
                 Outcome = 0
             });
+            apiClient.LastUsedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
+
+            logger.LogInformation("AAPM credential {CredId} retrieved by client {ClientId} from {Ip}",
+                credId, apiClient.ClientId, ctx.Connection.RemoteIpAddress);
 
             return Results.Ok(new
             {
