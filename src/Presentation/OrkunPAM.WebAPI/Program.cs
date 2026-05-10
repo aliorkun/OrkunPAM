@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
@@ -43,7 +46,9 @@ try
 
     // === Identity ===
     builder.Services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
-    builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+    builder.Services.AddSingleton<IJwtTokenService>(sp =>
+        new JwtTokenService(sp.GetRequiredService<RsaSecurityKey>(),
+            sp.GetRequiredService<IConfiguration>()));
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddSingleton<ITotpService, TotpService>();
@@ -64,12 +69,43 @@ try
             Description = "Enterprise Privileged Access Management - REST API" });
     });
 
-    // === CORS ===
+    // === CORS (fixes #7) ===
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? ["https://localhost:5001"];
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
-            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials());
     });
+
+    // === JWT Authentication (fixes #1) ===
+    var rsaKey = RSA.Create(2048);
+    var signingKey = new RsaSecurityKey(rsaKey);
+    builder.Services.AddSingleton(signingKey);
+
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "OrkunPAM",
+                ValidateAudience = true,
+                ValidAudience = builder.Configuration["Jwt:Audience"] ?? "OrkunPAM",
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = signingKey,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromSeconds(30)
+            };
+        });
+
+    builder.Services.AddAuthorizationBuilder()
+        .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build());
 
     var app = builder.Build();
 
@@ -81,9 +117,15 @@ try
         Log.Information("Database initialized");
     }
 
-    // === Initialize Key Store ===
+    // === Initialize Key Store (fixes #2) ===
     var keyStore = app.Services.GetRequiredService<IKeyStore>();
-    var passphrase = builder.Configuration["Vault:MasterPassphrase"] ?? "OrkunPAM-Dev-2026!";
+    var passphrase = Environment.GetEnvironmentVariable("ORKUNPAM_VAULT_PASSPHRASE")
+        ?? builder.Configuration["Vault:MasterPassphrase"];
+    if (string.IsNullOrEmpty(passphrase))
+    {
+        Log.Fatal("Vault passphrase not configured. Set ORKUNPAM_VAULT_PASSPHRASE env var or Vault:MasterPassphrase in config.");
+        return;
+    }
     var initResult = keyStore.Initialize(passphrase);
     if (initResult.IsFailure)
     {
@@ -96,6 +138,8 @@ try
     app.UseGlobalExceptionHandler();
     app.UseSerilogRequestLogging();
     app.UseCors();
+    app.UseAuthentication();
+    app.UseAuthorization();
 
     if (app.Environment.IsDevelopment())
     {
@@ -112,7 +156,7 @@ try
         version = "0.1.0",
         timestamp = DateTime.UtcNow,
         vault = keyStore.IsInitialized ? "initialized" : "not_initialized"
-    })).WithTags("System");
+    })).WithTags("System").AllowAnonymous();
 
     // === Vault Encryption Test Endpoint (dev only) ===
     app.MapPost("/api/v1/vault/test-encrypt", (string plaintext, IVaultEncryptionService vault) =>
@@ -130,7 +174,7 @@ try
             decrypted = decResult.Value,
             match = plaintext == decResult.Value
         });
-    }).WithTags("Vault");
+    }).WithTags("Vault").AllowAnonymous();
 
     // === Map Module Endpoints ===
     app.MapAuthEndpoints();

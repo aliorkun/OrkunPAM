@@ -140,7 +140,7 @@ public static class AapmEndpoints
                 token_type = "Bearer",
                 expires_in = (int)(tokenResult.Value.AccessTokenExpiry - DateTime.UtcNow).TotalSeconds
             });
-        }).WithTags("AAPM");
+        }).WithTags("AAPM").AllowAnonymous();
 
         // === Credential retrieval (AAPM) ===
         app.MapGet("/api/v1/aapm/credentials/{credId:guid}", async (Guid credId, OrkunPamDbContext db,

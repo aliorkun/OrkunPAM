@@ -24,11 +24,9 @@ public sealed class JwtTokenService : IJwtTokenService
     private readonly int _accessTokenMinutes;
     private readonly int _refreshTokenHours;
 
-    public JwtTokenService(IConfiguration configuration)
+    public JwtTokenService(RsaSecurityKey signingKey, IConfiguration configuration)
     {
-        // Generate RSA key (in production, load from DPAPI-protected store)
-        var rsa = RSA.Create(2048);
-        _signingKey = new RsaSecurityKey(rsa);
+        _signingKey = signingKey;
 
         _issuer = configuration["Jwt:Issuer"] ?? "OrkunPAM";
         _audience = configuration["Jwt:Audience"] ?? "OrkunPAM";
