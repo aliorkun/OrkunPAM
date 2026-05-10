@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Workflow;
 using OrkunPAM.Domain.Enums;
@@ -147,8 +148,12 @@ public static class WorkflowEndpoints
                 new { success = true, data = new { request.Id, request.Status } });
         });
 
-        approvals.MapPost("/{id:guid}/approve", async (Guid id, ApprovalDecisionRequest req, OrkunPamDbContext db, ILogger<Program> logger) =>
+        approvals.MapPost("/{id:guid}/approve", async (Guid id, ApprovalDecisionRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var approverIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (approverIdStr == null || !Guid.TryParse(approverIdStr, out var approverId))
+                return Results.Unauthorized();
+
             var request = await db.ApprovalRequests
                 .Include(r => r.Steps.OrderBy(s => s.StepOrder))
                 .FirstOrDefaultAsync(r => r.Id == id);
@@ -161,8 +166,11 @@ public static class WorkflowEndpoints
             if (currentStep == null)
                 return Results.Conflict(new { success = false, errors = new[] { "No pending step" } });
 
+            if (currentStep.ApproverId.HasValue && currentStep.ApproverId != approverId)
+                return Results.Forbid();
+
             currentStep.Decision = ApprovalStatus.Approved;
-            currentStep.ActualApproverId = req.ApproverId;
+            currentStep.ActualApproverId = approverId;
             currentStep.DecisionAtUtc = DateTime.UtcNow;
             currentStep.Comments = req.Comments;
             request.CurrentStep++;
@@ -176,13 +184,17 @@ public static class WorkflowEndpoints
 
             await db.SaveChangesAsync();
             logger.LogInformation("Approval step {StepOrder} approved for request {RequestId} by {Approver}",
-                currentStep.StepOrder, id, req.ApproverId);
+                currentStep.StepOrder, id, approverId);
 
             return Results.Ok(new { success = true, data = new { request.Id, Status = request.Status.ToString(), request.CurrentStep } });
-        });
+        }).RequireAuthorization();
 
-        approvals.MapPost("/{id:guid}/deny", async (Guid id, ApprovalDecisionRequest req, OrkunPamDbContext db, ILogger<Program> logger) =>
+        approvals.MapPost("/{id:guid}/deny", async (Guid id, ApprovalDecisionRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var approverIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (approverIdStr == null || !Guid.TryParse(approverIdStr, out var approverId))
+                return Results.Unauthorized();
+
             var request = await db.ApprovalRequests
                 .Include(r => r.Steps.OrderBy(s => s.StepOrder))
                 .FirstOrDefaultAsync(r => r.Id == id);
@@ -193,8 +205,11 @@ public static class WorkflowEndpoints
             if (currentStep == null)
                 return Results.Conflict(new { success = false, errors = new[] { "No pending step" } });
 
+            if (currentStep.ApproverId.HasValue && currentStep.ApproverId != approverId)
+                return Results.Forbid();
+
             currentStep.Decision = ApprovalStatus.Denied;
-            currentStep.ActualApproverId = req.ApproverId;
+            currentStep.ActualApproverId = approverId;
             currentStep.DecisionAtUtc = DateTime.UtcNow;
             currentStep.Comments = req.Comments;
 
@@ -203,10 +218,10 @@ public static class WorkflowEndpoints
 
             await db.SaveChangesAsync();
             logger.LogInformation("Approval request {RequestId} denied by {Approver}: {Comments}",
-                id, req.ApproverId, req.Comments);
+                id, approverId, req.Comments);
 
             return Results.Ok(new { success = true, data = new { request.Id, Status = request.Status.ToString() } });
-        });
+        }).RequireAuthorization();
     }
 }
 
@@ -214,4 +229,4 @@ public record CreateWorkflowRequest(string Name, string? Description, string Tri
 public record UpdateWorkflowRequest(string? Name, string? Description, string? StepsJson, bool? IsEnabled);
 public record CreateApprovalRequest(Guid WorkflowId, Guid RequesterId, string ResourceType,
     Guid? ResourceId, string? Reason, string? TicketNumber, Guid[]? ApproverIds, int? ExpiresInMinutes);
-public record ApprovalDecisionRequest(Guid ApproverId, string? Comments);
+public record ApprovalDecisionRequest(string? Comments);

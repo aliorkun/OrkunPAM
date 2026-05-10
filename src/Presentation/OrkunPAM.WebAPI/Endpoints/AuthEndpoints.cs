@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
@@ -84,10 +85,15 @@ public static class AuthEndpoints
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
         });
 
-        // MFA Disable - requires current password and active MFA code for re-authentication
-        group.MapPost("/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db, IPasswordHasher hasher, ITotpService totp) =>
+        // MFA Disable - mapped outside AllowAnonymous group to enforce JWT requirement
+        app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
+            IPasswordHasher hasher, ITotpService totp, HttpContext context) =>
         {
-            var user = await db.Users.FindAsync(req.UserId);
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             if (string.IsNullOrEmpty(user.PasswordHash) || !hasher.Verify(req.CurrentPassword, user.PasswordHash))
@@ -101,7 +107,7 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, message = "MFA disabled" });
-        });
+        }).RequireAuthorization().WithTags("Auth");
     }
 }
 
@@ -109,4 +115,4 @@ public record LoginRequest(string Username, string Password);
 public record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
 public record MfaSetupRequest(Guid UserId);
 public record MfaVerifyRequest(Guid UserId, string Code);
-public record MfaDisableRequest(Guid UserId, string CurrentPassword, string CurrentMfaCode);
+public record MfaDisableRequest(string CurrentPassword, string CurrentMfaCode);

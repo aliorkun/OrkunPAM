@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Session;
@@ -113,22 +114,26 @@ public static class SessionEndpoints
 
         // === Terminate Session ===
         sessions.MapPost("/{id:guid}/terminate", async (Guid id, TerminateSessionRequest req,
-            OrkunPamDbContext db, ILogger<Program> logger) =>
+            OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var adminIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (adminIdStr == null || !Guid.TryParse(adminIdStr, out var adminId))
+                return Results.Unauthorized();
+
             var ps = await db.ProxySessions.FindAsync(id);
             if (ps == null) return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
 
             if (ps.Status != SessionStatus.Active)
                 return Results.Conflict(new { success = false, errors = new[] { $"Session is not active (status: {ps.Status})" } });
 
-            ps.Terminate(req.AdminUserId, req.Reason);
+            ps.Terminate(adminId, req.Reason);
             await db.SaveChangesAsync();
 
             logger.LogWarning("Session {SessionId} terminated by admin {AdminId}: {Reason}",
-                id, req.AdminUserId, req.Reason);
+                id, adminId, req.Reason);
 
             return Results.Ok(new { success = true, message = "Session terminated" });
-        });
+        }).RequireAuthorization();
 
         // === Command Logs ===
         sessions.MapGet("/{id:guid}/commands", async (Guid id, OrkunPamDbContext db, int page = 1, int pageSize = 100) =>
@@ -305,7 +310,7 @@ public static class SessionEndpoints
 
 public record ConnectRequest(Guid UserId, Guid DeviceId, Guid CredentialId,
     Guid? SessionPolicyId, string? Reason, string? TicketNumber, string? ClientIp);
-public record TerminateSessionRequest(Guid AdminUserId, string Reason);
+public record TerminateSessionRequest(string Reason);
 public record CreateSessionPolicyRequest(string Name, int? MaxDurationMinutes, int? IdleTimeoutMinutes,
     bool AllowClipboard, bool AllowFileTransfer, bool AllowDriveMapping, bool AllowPrinting,
     bool? RecordingEnabled, bool? KeystrokeLogging, bool RequireReason, bool RequireTicket,

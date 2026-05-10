@@ -228,11 +228,18 @@ public static class VaultEndpoints
         }).RequireAuthorization();
 
         // === Check-In ===
-        creds.MapPost("/{id:guid}/checkin", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
+        creds.MapPost("/{id:guid}/checkin", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
             var cred = await db.Credentials.FindAsync(id);
             if (cred == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            if (cred.CheckedOutByUserId != userId)
+                return Results.Forbid();
 
             var checkinResult = cred.CheckIn();
             if (checkinResult.IsFailure)
@@ -247,21 +254,25 @@ public static class VaultEndpoints
                 history.CheckedInAtUtc = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
-            logger.LogInformation("Credential '{Name}' checked in", cred.Name);
+            logger.LogInformation("Credential '{Name}' checked in by user {UserId}", cred.Name, userId);
 
             return Results.Ok(new { success = true, message = $"Credential '{cred.Name}' checked in" });
-        });
+        }).RequireAuthorization();
 
         // === Share Credential ===
-        creds.MapPost("/{id:guid}/share", async (Guid id, ShareCredentialRequest req, OrkunPamDbContext db, ILogger<Program> logger) =>
+        creds.MapPost("/{id:guid}/share", async (Guid id, ShareCredentialRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var sharedByIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (sharedByIdStr == null || !Guid.TryParse(sharedByIdStr, out var sharedByUserId))
+                return Results.Unauthorized();
+
             var cred = await db.Credentials.FindAsync(id);
             if (cred == null) return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
             var share = new CredentialShare
             {
                 CredentialId = id,
-                SharedByUserId = req.SharedByUserId,
+                SharedByUserId = sharedByUserId,
                 SharedToUserId = req.SharedToUserId,
                 PermissionLevel = req.PermissionLevel,
                 ExpiresAtUtc = req.ExpiresInHours.HasValue ? DateTime.UtcNow.AddHours(req.ExpiresInHours.Value) : null,
@@ -271,11 +282,11 @@ public static class VaultEndpoints
             db.CredentialShares.Add(share);
             await db.SaveChangesAsync();
 
-            logger.LogInformation("Credential '{Name}' shared from user {From} to user {To} (expires: {Expires})",
-                cred.Name, req.SharedByUserId, req.SharedToUserId, share.ExpiresAtUtc);
+            logger.LogInformation("Credential '{Name}' shared by user {From} to user {To} (expires: {Expires})",
+                cred.Name, sharedByUserId, req.SharedToUserId, share.ExpiresAtUtc);
 
             return Results.Ok(new { success = true, data = new { share.Id, share.ExpiresAtUtc, share.MaxUseCount } });
-        });
+        }).RequireAuthorization();
 
         creds.MapGet("/{id:guid}/shares", async (Guid id, OrkunPamDbContext db) =>
         {
@@ -374,4 +385,4 @@ public record CreateCredentialRequest(
     int? MaxCheckoutMinutes, bool RequiresApproval);
 public record CheckoutRequest(string? Reason, string? TicketNumber, int? DurationMinutes);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
-public record ShareCredentialRequest(Guid SharedByUserId, Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
+public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
