@@ -109,12 +109,16 @@ public static class WorkflowEndpoints
             return Results.Ok(new { success = true, data = pending });
         });
 
-        approvals.MapPost("/", async (CreateApprovalRequest req, OrkunPamDbContext db, ILogger<Program> logger) =>
+        approvals.MapPost("/", async (CreateApprovalRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
+            var requesterIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (requesterIdStr == null || !Guid.TryParse(requesterIdStr, out var requesterId))
+                return Results.Unauthorized();
+
             var request = new ApprovalRequest
             {
                 WorkflowId = req.WorkflowId,
-                RequesterId = req.RequesterId,
+                RequesterId = requesterId,
                 ResourceType = req.ResourceType,
                 ResourceId = req.ResourceId,
                 Reason = req.Reason,
@@ -142,11 +146,11 @@ public static class WorkflowEndpoints
             await db.SaveChangesAsync();
 
             logger.LogInformation("Approval request {Id} created for {ResourceType}/{ResourceId} by user {Requester}",
-                request.Id, req.ResourceType, req.ResourceId, req.RequesterId);
+                request.Id, req.ResourceType, req.ResourceId, requesterId);
 
             return Results.Created($"/api/v1/approval-requests/{request.Id}",
                 new { success = true, data = new { request.Id, request.Status } });
-        });
+        }).RequireAuthorization();
 
         approvals.MapPost("/{id:guid}/approve", async (Guid id, ApprovalDecisionRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
@@ -227,6 +231,6 @@ public static class WorkflowEndpoints
 
 public record CreateWorkflowRequest(string Name, string? Description, string TriggerType, string? StepsJson);
 public record UpdateWorkflowRequest(string? Name, string? Description, string? StepsJson, bool? IsEnabled);
-public record CreateApprovalRequest(Guid WorkflowId, Guid RequesterId, string ResourceType,
+public record CreateApprovalRequest(Guid WorkflowId, string ResourceType,
     Guid? ResourceId, string? Reason, string? TicketNumber, Guid[]? ApproverIds, int? ExpiresInMinutes);
 public record ApprovalDecisionRequest(string? Comments);

@@ -180,22 +180,25 @@ try
     })).WithTags("System").AllowAnonymous();
 
     // === Vault Encryption Test Endpoint (dev only) ===
-    app.MapPost("/api/v1/vault/test-encrypt", (string plaintext, IVaultEncryptionService vault) =>
+    if (app.Environment.IsDevelopment())
     {
-        var encResult = vault.EncryptString(plaintext);
-        if (encResult.IsFailure) return Results.BadRequest(encResult.Error);
-
-        var decResult = vault.DecryptString(encResult.Value);
-        if (decResult.IsFailure) return Results.BadRequest(decResult.Error);
-
-        return Results.Ok(new
+        app.MapPost("/api/v1/vault/test-encrypt", (string plaintext, IVaultEncryptionService vault) =>
         {
-            originalLength = plaintext.Length,
-            encryptedLength = encResult.Value.Length,
-            decrypted = decResult.Value,
-            match = plaintext == decResult.Value
-        });
-    }).WithTags("Vault").AllowAnonymous();
+            var encResult = vault.EncryptString(plaintext);
+            if (encResult.IsFailure) return Results.BadRequest(encResult.Error);
+
+            var decResult = vault.DecryptString(encResult.Value);
+            if (decResult.IsFailure) return Results.BadRequest(decResult.Error);
+
+            return Results.Ok(new
+            {
+                originalLength = plaintext.Length,
+                encryptedLength = encResult.Value.Length,
+                decrypted = decResult.Value,
+                match = plaintext == decResult.Value
+            });
+        }).WithTags("Vault").RequireAuthorization();
+    }
 
     // === Map Module Endpoints ===
     app.MapAuthEndpoints();

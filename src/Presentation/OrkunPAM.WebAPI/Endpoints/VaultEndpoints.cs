@@ -183,6 +183,17 @@ public static class VaultEndpoints
             if (cred == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
+            if (cred.RequiresApproval)
+            {
+                var hasApproval = await db.ApprovalRequests
+                    .AnyAsync(ar => ar.ResourceId == id
+                                 && ar.RequesterId == userId
+                                 && ar.Status == ApprovalStatus.Approved
+                                 && (ar.ExpiresAtUtc == null || ar.ExpiresAtUtc > DateTime.UtcNow));
+                if (!hasApproval)
+                    return Results.Forbid();
+            }
+
             var checkoutResult = cred.CheckOut(userId, req.DurationMinutes ?? cred.MaxCheckoutMinutes);
             if (checkoutResult.IsFailure)
                 return Results.Conflict(new { success = false, errors = new[] { checkoutResult.Error.Message } });
