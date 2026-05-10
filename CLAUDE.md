@@ -99,14 +99,32 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 - Proxy katmanında açık kaynak kütüphane KULLANMA - native C# implementasyon
 - Security agent'ın açtığı ticket'larda belirtilen dosya:satır bilgisini dikkate al
 
-### Versiyon & Cycle Yönetimi (Remote Agents - Otonom)
-- **Developer Agent** (her 3 saat, 8 run/gün): Issue fix, feature implement, MCP ile push
-- **Security Agent** (her 8 saat, 3 run/gün): Kod review, issue aç/kapat, fix doğrula
-- **PM Agent** (her 12 saat, 2 run/gün): Feature gap, issue aç/kapat, kabul doğrula
-- **Günlük limit:** 15 remote run toplam (13 kullanılıyor, 2 yedek manuel tetik)
-- **Push yöntemi:** Remote agent'lar `mcp__github__push_files` kullanır (git push çalışmaz)
-- **Issue yönetimi:** `mcp__github__create_issue`, `mcp__github__update_issue` ile açar/kapatır
-- Her push = yeni versiyon. Agent'lar `git log` ile yeni commit kontrol eder
-- Duplicate issue açılmaz - agent'lar önce mevcut issue'ları kontrol eder
-- Security ve PM koda DOKUNMAZ, sadece okur ve issue yönetir
-- Developer MCP ile push eder, en fazla 2 fix/cycle
+### Remote Agent Schedule (15 run/gün - tam limit)
+
+| Agent | Cron (UTC) | Senin Saatin (UTC+7) | Run/gün |
+|-------|------------|----------------------|---------|
+| Developer | `:30 */3h` | 07:30, 10:30, 13:30, 16:30, 19:30, 22:30, 01:30, 04:30 | 8 |
+| Security | `05:00, 13:00, 21:00` | 12:00, 20:00, 04:00 | 3 |
+| PM | `08:00, 20:00` | 15:00, 03:00 | 2 |
+| Coordinator | `00:00, 12:00` | 07:00, 19:00 | 2 |
+
+### Agent Kuralları
+- **Push:** Remote agent'lar `mcp__github__push_files` kullanır (git push çalışmaz)
+- **Issue:** `mcp__github__create_issue`, `mcp__github__update_issue` ile açar/kapatır
+- **Developer:** Run başına 3-5 fix. critical/high açıkken feature çalışmaz
+- **Security/PM:** Koda dokunmaz, sadece okur ve issue yönetir
+- **Çakışma önleme:** Agent'lar farklı saatlerde çalışır, üst üste binmez
+- **Duplicate:** Tüm agent'lar önce mevcut issue'ları kontrol eder
+
+### Backlog Sağlık Kuralları
+- Toplam açık issue > 35 → PM yeni issue açmayı durdurur
+- Toplam açık issue > 35 → Security sadece critical/high açar
+- 3 gün üst üste backlog büyürse → Developer fix-only moda geçer
+- severity:critical 24 saatten fazla açık kalamaz
+
+### Versiyon & Milestone
+- **Coordinator** günde 2 kez çalışır: sabah (milestone check) + akşam (tag + rapor)
+- **Tag formatı:** `v0.X.Y-dev-YYYY-MM-DD` (commit varsa atılır)
+- **Milestone:** severity:critical/high + priority:mvp → aktif milestone
+- **Taşıma:** Çözülmeyen issue'lar sonraki milestone'a taşınır (silinmez)
+- **Rapor:** `[DAILY]` label'lı issue olarak açılır, backlog trend + anomali uyarıları
