@@ -12,7 +12,7 @@ public static class VaultEndpoints
     public static void MapVaultEndpoints(this WebApplication app)
     {
         // === Folders ===
-        var folders = app.MapGroup("/api/v1/vault/folders").WithTags("Vault");
+        var folders = app.MapGroup("/api/v1/vault/folders").WithTags("Vault").RequireAuthorization();
 
         folders.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -83,7 +83,7 @@ public static class VaultEndpoints
         });
 
         // === Credentials ===
-        var creds = app.MapGroup("/api/v1/vault/credentials").WithTags("Vault");
+        var creds = app.MapGroup("/api/v1/vault/credentials").WithTags("Vault").RequireAuthorization();
 
         creds.MapGet("/", async (OrkunPamDbContext db, string? search, string? type, int page = 1, int pageSize = 50) =>
         {
@@ -303,18 +303,21 @@ public static class VaultEndpoints
             return Results.Ok(new { success = true, data = shares });
         });
 
-        // === Personal Vault ===
-        creds.MapGet("/personal/{userId:guid}", async (Guid userId, OrkunPamDbContext db) =>
+        // === Personal Vault - userId from JWT to prevent IDOR ===
+        creds.MapGet("/personal", async (OrkunPamDbContext db, HttpContext context) =>
         {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
             var folder = await db.VaultFolders
                 .FirstOrDefaultAsync(f => f.IsPersonalVault && f.OwnerUserId == userId);
 
             if (folder == null)
             {
-                // Auto-create personal vault
                 folder = new VaultFolder
                 {
-                    Name = $"Personal Vault",
+                    Name = "Personal Vault",
                     IsPersonalVault = true,
                     OwnerUserId = userId
                 };
@@ -322,12 +325,12 @@ public static class VaultEndpoints
                 await db.SaveChangesAsync();
             }
 
-            var creds2 = await db.Credentials
+            var personalCreds = await db.Credentials
                 .Where(c => c.FolderId == folder.Id)
                 .Select(c => new { c.Id, c.Name, c.Username, Type = c.CredentialType.ToString(), c.Tags })
                 .ToListAsync();
 
-            return Results.Ok(new { success = true, data = new { folder.Id, folder.Name, credentials = creds2 } });
+            return Results.Ok(new { success = true, data = new { folder.Id, folder.Name, credentials = personalCreds } });
         });
 
         // === Password History ===
@@ -346,7 +349,7 @@ public static class VaultEndpoints
         });
 
         // === Vault Permissions ===
-        var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault");
+        var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault").RequireAuthorization();
 
         perms.MapGet("/{folderId:guid}", async (Guid folderId, OrkunPamDbContext db) =>
         {

@@ -11,31 +11,31 @@ public static class SessionEndpoints
 {
     public static void MapSessionEndpoints(this WebApplication app)
     {
-        var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions");
+        var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions").RequireAuthorization();
 
         // === Connect (request new session) ===
         sessions.MapPost("/ssh/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Ssh, 2222, db, vault, logger);
+            return await CreateSession(req, SessionType.Ssh, 2222, db, vault, logger, context);
         });
 
         sessions.MapPost("/rdp/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Rdp, 3389, db, vault, logger);
+            return await CreateSession(req, SessionType.Rdp, 3389, db, vault, logger, context);
         });
 
         sessions.MapPost("/vnc/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Vnc, 5900, db, vault, logger);
+            return await CreateSession(req, SessionType.Vnc, 5900, db, vault, logger, context);
         });
 
         sessions.MapPost("/sql/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger);
+            return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger, context);
         });
 
         // === List Sessions ===
@@ -225,8 +225,12 @@ public static class SessionEndpoints
     }
 
     private static async Task<IResult> CreateSession(ConnectRequest req, SessionType type, int defaultPort,
-        OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger)
+        OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context)
     {
+        var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+            return Results.Unauthorized();
+
         // Validate device
         var device = await db.Devices.FindAsync(req.DeviceId);
         if (device == null)
@@ -246,7 +250,7 @@ public static class SessionEndpoints
             {
                 logger.LogError("Session connect failed: cannot decrypt credential {CredId} for device {DeviceId}: {Error}",
                     req.CredentialId, req.DeviceId, decResult.Error.Message);
-                return Results.Problem($"Cannot decrypt credential: {decResult.Error.Message}");
+                return Results.Problem("Credential decryption failed. Check server logs.");
             }
             password = decResult.Value;
         }
@@ -257,7 +261,7 @@ public static class SessionEndpoints
         // Create session record
         var session = new ProxySession
         {
-            UserId = req.UserId,
+            UserId = userId,
             DeviceId = req.DeviceId,
             CredentialId = req.CredentialId,
             SessionPolicyId = req.SessionPolicyId,
@@ -273,7 +277,7 @@ public static class SessionEndpoints
         await db.SaveChangesAsync();
 
         logger.LogInformation("Session {SessionId} ({Type}) started: user {UserId} → {Target}:{Port} via credential '{CredName}'",
-            session.Id, type, req.UserId, device.IpAddress ?? device.Hostname, session.TargetPort, cred.Name);
+            session.Id, type, userId, device.IpAddress ?? device.Hostname, session.TargetPort, cred.Name);
 
         return Results.Ok(new
         {
@@ -308,7 +312,7 @@ public static class SessionEndpoints
     }
 }
 
-public record ConnectRequest(Guid UserId, Guid DeviceId, Guid CredentialId,
+public record ConnectRequest(Guid DeviceId, Guid CredentialId,
     Guid? SessionPolicyId, string? Reason, string? TicketNumber, string? ClientIp);
 public record TerminateSessionRequest(string Reason);
 public record CreateSessionPolicyRequest(string Name, int? MaxDurationMinutes, int? IdleTimeoutMinutes,

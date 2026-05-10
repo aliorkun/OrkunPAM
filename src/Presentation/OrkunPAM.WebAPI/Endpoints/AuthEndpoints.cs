@@ -49,16 +49,19 @@ public static class AuthEndpoints
             });
         });
 
-        // MFA Setup
-        group.MapPost("/mfa/setup", async (MfaSetupRequest req, OrkunPamDbContext db, ITotpService totp) =>
+        // MFA Setup - requires authentication; userId taken from JWT to prevent IDOR
+        app.MapPost("/api/v1/auth/mfa/setup", async (OrkunPamDbContext db, ITotpService totp, HttpContext context) =>
         {
-            var user = await db.Users.FindAsync(req.UserId);
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             var (secret, qrUri) = totp.GenerateSecret(user.Username);
             var secretBytes = TotpService.Base32Decode(secret);
 
-            // Store secret temporarily (user must verify before enabling)
             user.MfaSecret = secretBytes;
             await db.SaveChangesAsync();
 
@@ -67,12 +70,17 @@ public static class AuthEndpoints
                 success = true,
                 data = new { secret, qrUri, message = "Scan QR code with authenticator app, then call /mfa/verify to enable" }
             });
-        });
+        }).RequireAuthorization().WithTags("Auth");
 
-        // MFA Verify & Enable
-        group.MapPost("/mfa/verify", async (MfaVerifyRequest req, OrkunPamDbContext db, ITotpService totp) =>
+        // MFA Verify & Enable - requires authentication; userId taken from JWT to prevent IDOR
+        app.MapPost("/api/v1/auth/mfa/verify", async (MfaVerifyRequest req, OrkunPamDbContext db,
+            ITotpService totp, HttpContext context) =>
         {
-            var user = await db.Users.FindAsync(req.UserId);
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
             if (user.MfaSecret == null) return Results.BadRequest(new { success = false, errors = new[] { "MFA not set up. Call /mfa/setup first" } });
 
@@ -83,9 +91,9 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
-        });
+        }).RequireAuthorization().WithTags("Auth");
 
-        // MFA Disable - mapped outside AllowAnonymous group to enforce JWT requirement
+        // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
             IPasswordHasher hasher, ITotpService totp, HttpContext context) =>
         {
@@ -113,6 +121,5 @@ public static class AuthEndpoints
 
 public record LoginRequest(string Username, string Password);
 public record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
-public record MfaSetupRequest(Guid UserId);
-public record MfaVerifyRequest(Guid UserId, string Code);
+public record MfaVerifyRequest(string Code);
 public record MfaDisableRequest(string CurrentPassword, string CurrentMfaCode);
