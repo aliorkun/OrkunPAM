@@ -122,7 +122,7 @@ public sealed class RotationService : IRotationService
                     : "";
 
                 var searchRequest = new SearchRequest(baseDn,
-                    $"(sAMAccountName={target.Username})", SearchScope.Subtree, "distinguishedName");
+                    $"(sAMAccountName={EscapeLdapFilterValue(target.Username)})", SearchScope.Subtree, "distinguishedName");
                 var searchResponse = (SearchResponse)connection.SendRequest(searchRequest);
 
                 if (searchResponse.Entries.Count == 0)
@@ -250,6 +250,14 @@ public sealed class RotationService : IRotationService
             IsPortOpen(target.Host, target.Port > 0 ? target.Port : 22),
             "SSH"));
     }
+
+    private static string EscapeLdapFilterValue(string input) =>
+        input.Replace("\\", "\\5c")
+             .Replace("*", "\\2a")
+             .Replace("(", "\\28")
+             .Replace(")", "\\29")
+             .Replace("\0", "\\00")
+             .Replace("/", "\\2f");
 
     private static bool IsPortOpen(string host, int port)
     {

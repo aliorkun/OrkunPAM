@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Vault;
@@ -172,13 +173,17 @@ public static class VaultEndpoints
 
         // === Check-Out (retrieve password) ===
         creds.MapPost("/{id:guid}/checkout", async (Guid id, CheckoutRequest req,
-            OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger) =>
+            OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
             var cred = await db.Credentials.FindAsync(id);
             if (cred == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
-            var checkoutResult = cred.CheckOut(req.UserId, req.DurationMinutes ?? cred.MaxCheckoutMinutes);
+            var checkoutResult = cred.CheckOut(userId, req.DurationMinutes ?? cred.MaxCheckoutMinutes);
             if (checkoutResult.IsFailure)
                 return Results.Conflict(new { success = false, errors = new[] { checkoutResult.Error.Message } });
 
@@ -189,8 +194,8 @@ public static class VaultEndpoints
                 var decResult = vault.DecryptString(cred.PasswordEnc);
                 if (decResult.IsFailure)
                 {
-                    logger.LogError("Failed to decrypt credential {CredId}: {Error}", id, decResult.Error.Message);
-                    return Results.Problem($"Decryption failed: {decResult.Error.Message}");
+                    logger.LogError("Failed to decrypt credential {CredId}", id);
+                    return Results.Problem("Decryption failed. Check server logs for details.");
                 }
                 password = decResult.Value;
             }
@@ -199,7 +204,7 @@ public static class VaultEndpoints
             db.CheckOutHistories.Add(new CheckOutHistory
             {
                 CredentialId = id,
-                UserId = req.UserId,
+                UserId = userId,
                 CheckedOutAtUtc = DateTime.UtcNow,
                 Reason = req.Reason,
                 TicketNumber = req.TicketNumber
@@ -208,7 +213,7 @@ public static class VaultEndpoints
             await db.SaveChangesAsync();
 
             logger.LogInformation("Credential '{Name}' checked out by user {UserId} (reason: {Reason})",
-                cred.Name, req.UserId, req.Reason);
+                cred.Name, userId, req.Reason);
 
             return Results.Ok(new
             {
@@ -220,7 +225,7 @@ public static class VaultEndpoints
                     expiresAt = cred.CheckOutExpiresUtc
                 }
             });
-        });
+        }).RequireAuthorization();
 
         // === Check-In ===
         creds.MapPost("/{id:guid}/checkin", async (Guid id, OrkunPamDbContext db, ILogger<Program> logger) =>
@@ -367,6 +372,6 @@ public record CreateCredentialRequest(
     Guid FolderId, string Name, string? Description, CredentialType Type,
     string? Username, string? Password, Guid? DeviceId, string? Tags,
     int? MaxCheckoutMinutes, bool RequiresApproval);
-public record CheckoutRequest(Guid UserId, string? Reason, string? TicketNumber, int? DurationMinutes);
+public record CheckoutRequest(string? Reason, string? TicketNumber, int? DurationMinutes);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedByUserId, Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
