@@ -11,7 +11,7 @@ public static class ImportEndpoints
 {
     public static void MapImportEndpoints(this WebApplication app)
     {
-        var import = app.MapGroup("/api/v1/import").WithTags("Import");
+        var import = app.MapGroup("/api/v1/import").WithTags("Import").RequireAuthorization();
 
         // === CSV Device Import ===
         import.MapPost("/devices/csv", async (HttpRequest request, OrkunPamDbContext db, ILogger<Program> logger) =>
@@ -23,6 +23,9 @@ public static class ImportEndpoints
             var file = form.Files.FirstOrDefault();
             if (file == null || file.Length == 0)
                 return Results.BadRequest(new { success = false, errors = new[] { "No file uploaded" } });
+
+            if (file.Length > 5_000_000)
+                return Results.BadRequest(new { success = false, errors = new[] { "File too large. Maximum 5 MB." } });
 
             using var reader = new StreamReader(file.OpenReadStream());
             var content = await reader.ReadToEndAsync();
@@ -53,6 +56,12 @@ public static class ImportEndpoints
                 try
                 {
                     var hostname = cols[hostnameIdx].Trim().Trim('"');
+
+                    if (IsCsvInjection(hostname))
+                    {
+                        errors.Add($"Row {i + 1}: Hostname contains invalid characters");
+                        continue;
+                    }
 
                     // Skip duplicates
                     if (await db.Devices.AnyAsync(d => d.Hostname == hostname)) continue;
@@ -150,13 +159,19 @@ public static class ImportEndpoints
                         continue;
                     }
 
+                    if (string.IsNullOrEmpty(item.Password))
+                    {
+                        errors.Add($"{item.Username}: password is required");
+                        continue;
+                    }
+
                     var user = new OrkunPAM.Domain.Entities.Identity.User
                     {
                         Username = item.Username.Trim(),
                         NormalizedUsername = normalized,
                         DisplayName = item.DisplayName,
                         Email = item.Email,
-                        PasswordHash = hasher.Hash(item.Password ?? "ChangeMe!2026"),
+                        PasswordHash = hasher.Hash(item.Password),
                         AuthSource = AuthSource.Local,
                         Status = UserStatus.Active,
                         PasswordLastChanged = DateTime.UtcNow
@@ -176,6 +191,9 @@ public static class ImportEndpoints
             return Results.Ok(new { success = true, data = new { imported, errors = errors.Take(10) } });
         });
     }
+
+    private static bool IsCsvInjection(string? value) =>
+        !string.IsNullOrEmpty(value) && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@');
 }
 
 public record BulkCredentialImportRequest(Guid FolderId, CredentialImportItem[] Credentials);

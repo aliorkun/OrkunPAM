@@ -34,7 +34,7 @@ public static class AuthEndpoints
                     mfaRequired = data.MfaRequired
                 }
             });
-        });
+        }).RequireRateLimiting("auth");
 
         group.MapPost("/register", async (RegisterRequest req, IAuthenticationService auth) =>
         {
@@ -91,7 +91,7 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
-        }).RequireAuthorization().WithTags("Auth");
+        }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
 
         // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
