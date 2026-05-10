@@ -97,3 +97,15 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 - Her fix commit'inde ilgili issue numarasını referansla
 - Proxy katmanında açık kaynak kütüphane KULLANMA - native C# implementasyon
 - Security agent'ın açtığı ticket'larda belirtilen dosya:satır bilgisini dikkate al
+
+### Versiyon & Cycle Yönetimi (Remote Agents - Otonom)
+- **Developer Agent** (her 3 saat, 8 run/gün): Issue fix, feature implement, MCP ile push
+- **Security Agent** (her 8 saat, 3 run/gün): Kod review, issue aç/kapat, fix doğrula
+- **PM Agent** (her 12 saat, 2 run/gün): Feature gap, issue aç/kapat, kabul doğrula
+- **Günlük limit:** 15 remote run toplam (13 kullanılıyor, 2 yedek manuel tetik)
+- **Push yöntemi:** Remote agent'lar `mcp__github__push_files` kullanır (git push çalışmaz)
+- **Issue yönetimi:** `mcp__github__create_issue`, `mcp__github__update_issue` ile açar/kapatır
+- Her push = yeni versiyon. Agent'lar `git log` ile yeni commit kontrol eder
+- Duplicate issue açılmaz - agent'lar önce mevcut issue'ları kontrol eder
+- Security ve PM koda DOKUNMAZ, sadece okur ve issue yönetir
+- Developer MCP ile push eder, en fazla 2 fix/cycle
