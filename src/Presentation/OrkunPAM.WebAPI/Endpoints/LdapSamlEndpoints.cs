@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Persistence;
@@ -6,6 +7,32 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class LdapSamlEndpoints
 {
+    // RFC 4514: DN type (attribute) names are alphanumeric or hyphen
+    private static readonly Regex DnTypeRegex = new(@"^[\w\-]+=", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static bool IsValidLdapFilter(string? filter)
+    {
+        if (string.IsNullOrEmpty(filter)) return true;
+        if (filter.Contains('\0')) return false;
+        // Balanced parentheses check (RFC 4515)
+        var depth = 0;
+        foreach (var c in filter)
+        {
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            if (depth < 0) return false;
+        }
+        return depth == 0;
+    }
+
+    // RFC 4514: must start with attr=value and be comma-separated
+    private static bool IsValidDistinguishedName(string? dn)
+    {
+        if (string.IsNullOrEmpty(dn)) return true;
+        if (dn.Contains('\0')) return false;
+        return DnTypeRegex.IsMatch(dn);
+    }
+
     public static void MapLdapSamlEndpoints(this WebApplication app)
     {
         // === LDAP Configurations ===
@@ -24,6 +51,12 @@ public static class LdapSamlEndpoints
 
         ldap.MapPost("/", async (CreateLdapConfigRequest req, OrkunPamDbContext db) =>
         {
+            var userFilter = req.UserSearchFilter ?? "(&(objectClass=user)(sAMAccountName={0}))";
+            if (!IsValidLdapFilter(userFilter) || !IsValidLdapFilter(req.GroupSearchFilter))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid LDAP filter syntax" } });
+            if (!IsValidDistinguishedName(req.BindDn) || !IsValidDistinguishedName(req.BaseDn))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid Distinguished Name format" } });
+
             var config = new LdapConfiguration
             {
                 Name = req.Name,
@@ -32,7 +65,7 @@ public static class LdapSamlEndpoints
                 UseSsl = req.UseSsl ?? true,
                 BaseDn = req.BaseDn,
                 BindDn = req.BindDn,
-                UserSearchFilter = req.UserSearchFilter ?? "(&(objectClass=user)(sAMAccountName={0}))",
+                UserSearchFilter = userFilter,
                 GroupSearchFilter = req.GroupSearchFilter ?? "(objectClass=group)",
                 SyncIntervalMinutes = req.SyncIntervalMinutes ?? 60,
                 UserAttributeMapping = req.UserAttributeMapping,
@@ -53,7 +86,8 @@ public static class LdapSamlEndpoints
                 success = true,
                 data = new
                 {
-                    l.Id, l.Name, l.Host, l.Port, l.UseSsl, l.BaseDn, l.BindDn,
+                    l.Id, l.Name, l.Host, l.Port, l.UseSsl, l.BaseDn,
+                    BindDn = l.BindDn != null ? "****" + l.BindDn[^Math.Min(4, l.BindDn.Length)..] : null,
                     l.UserSearchFilter, l.GroupSearchFilter,
                     l.UserAttributeMapping, l.GroupMapping,
                     l.SyncIntervalMinutes, l.LastSyncAtUtc, l.IsEnabled, l.CreatedAtUtc
@@ -65,6 +99,13 @@ public static class LdapSamlEndpoints
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
+
+            if (req.UserSearchFilter != null && !IsValidLdapFilter(req.UserSearchFilter))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid LDAP filter syntax" } });
+            if (req.BindDn != null && !IsValidDistinguishedName(req.BindDn))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid Distinguished Name format" } });
+            if (req.BaseDn != null && !IsValidDistinguishedName(req.BaseDn))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid Distinguished Name format" } });
 
             if (req.Name != null) l.Name = req.Name;
             if (req.Host != null) l.Host = req.Host;

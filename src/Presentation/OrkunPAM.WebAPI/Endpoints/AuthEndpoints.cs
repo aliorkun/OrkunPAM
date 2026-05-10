@@ -84,11 +84,17 @@ public static class AuthEndpoints
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
         });
 
-        // MFA Disable
-        group.MapPost("/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db) =>
+        // MFA Disable - requires current password and active MFA code for re-authentication
+        group.MapPost("/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db, IPasswordHasher hasher, ITotpService totp) =>
         {
             var user = await db.Users.FindAsync(req.UserId);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            if (string.IsNullOrEmpty(user.PasswordHash) || !hasher.Verify(req.CurrentPassword, user.PasswordHash))
+                return Results.Json(new { success = false, errors = new[] { "Invalid credentials" } }, statusCode: 401);
+
+            if (user.MfaEnabled && user.MfaSecret != null && !totp.ValidateCode(user.MfaSecret, req.CurrentMfaCode))
+                return Results.BadRequest(new { success = false, errors = new[] { "Invalid MFA code" } });
 
             user.MfaEnabled = false;
             user.MfaSecret = null;
@@ -103,4 +109,4 @@ public record LoginRequest(string Username, string Password);
 public record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
 public record MfaSetupRequest(Guid UserId);
 public record MfaVerifyRequest(Guid UserId, string Code);
-public record MfaDisableRequest(Guid UserId);
+public record MfaDisableRequest(Guid UserId, string CurrentPassword, string CurrentMfaCode);
