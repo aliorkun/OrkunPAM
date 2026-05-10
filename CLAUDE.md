@@ -48,7 +48,8 @@ See `docs/phases/` for detailed plans:
 
 ## Tracking
 - GitHub Issues for task tracking
-- `docs/PAM Template.xlsx` - RFP compliance tracking
+- `docs/RFP-CHECKLIST.md` - RFP compliance checklist (readable by agents, 600+ items)
+- `docs/PAM Template.xlsx` - Original RFP source (binary, agents cannot read)
 - Phase checklists in `docs/phases/`
 
 ## AI Agent Coordination
