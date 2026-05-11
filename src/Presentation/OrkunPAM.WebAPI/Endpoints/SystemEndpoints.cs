@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Persistence;
 
@@ -32,15 +33,28 @@ public static class SystemEndpoints
             return Results.Ok(new { success = true, data = masked });
         });
 
-        config.MapPut("/{key}", async (string key, UpdateConfigRequest req, OrkunPamDbContext db) =>
+        config.MapPut("/{key}", async (string key, UpdateConfigRequest req, OrkunPamDbContext db,
+            IVaultEncryptionService vault) =>
         {
+            string? storedValue = req.Value;
+            bool isEncrypted = false;
+            if (req.IsEncrypted && !string.IsNullOrEmpty(req.Value))
+            {
+                var encResult = vault.EncryptString(req.Value, "SystemConfig");
+                if (encResult.IsFailure)
+                    return Results.Problem("Failed to encrypt config value");
+                storedValue = Convert.ToBase64String(encResult.Value);
+                isEncrypted = true;
+            }
+
             var cfg = await db.SystemConfigs.FindAsync(key);
             if (cfg == null)
             {
                 cfg = new SystemConfig
                 {
                     Key = key,
-                    Value = req.Value,
+                    Value = storedValue,
+                    IsEncrypted = isEncrypted,
                     Category = req.Category,
                     Description = req.Description
                 };
@@ -48,7 +62,8 @@ public static class SystemEndpoints
             }
             else
             {
-                cfg.Value = req.Value;
+                cfg.Value = storedValue;
+                cfg.IsEncrypted = isEncrypted;
                 cfg.UpdatedAtUtc = DateTime.UtcNow;
             }
 
@@ -140,4 +155,4 @@ public static class SystemEndpoints
     }
 }
 
-public record UpdateConfigRequest(string Value, string? Category, string? Description);
+public record UpdateConfigRequest(string Value, string? Category, string? Description, bool IsEncrypted = false);

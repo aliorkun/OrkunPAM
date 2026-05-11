@@ -22,7 +22,7 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
         _logger = logger;
         _channel = Channel.CreateBounded<IDomainEvent>(new BoundedChannelOptions(10_000)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false
         });
@@ -58,11 +58,7 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
 
     public async Task PublishAsync<T>(T @event, CancellationToken ct = default) where T : IDomainEvent
     {
-        if (!_channel.Writer.TryWrite(@event))
-        {
-            _logger.LogWarning("Event bus channel full, dropping oldest event. Type: {EventType}", @event.EventType);
-            await _channel.Writer.WriteAsync(@event, ct);
-        }
+        await _channel.Writer.WriteAsync(@event, ct);
     }
 
     public void Dispose()

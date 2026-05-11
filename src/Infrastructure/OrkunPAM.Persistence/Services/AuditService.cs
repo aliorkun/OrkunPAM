@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Enums;
@@ -22,7 +23,6 @@ public sealed class AuditService : IAuditService
 {
     private readonly OrkunPamDbContext _db;
     private readonly ILogger<AuditService> _logger;
-    private byte[]? _lastHash;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public AuditService(OrkunPamDbContext db, ILogger<AuditService> logger)
@@ -38,6 +38,12 @@ public sealed class AuditService : IAuditService
         await _lock.WaitAsync(ct);
         try
         {
+            // Read last hash from DB - safe across restarts and multiple instances
+            var previousHash = await _db.AuditLogs
+                .OrderByDescending(a => a.Id)
+                .Select(a => a.EntryHash)
+                .FirstOrDefaultAsync(ct) ?? Array.Empty<byte>();
+
             var detailsJson = details != null ? JsonSerializer.Serialize(details) : null;
             var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString();
 
@@ -53,13 +59,12 @@ public sealed class AuditService : IAuditService
                 Details = detailsJson,
                 Outcome = outcome,
                 TraceId = traceId,
-                PreviousHash = _lastHash
+                PreviousHash = previousHash.Length > 0 ? previousHash : null
             };
 
             // Compute tamper-proof hash: SHA256(timestamp + event + actor + target + previousHash)
-            var hashInput = $"{entry.Timestamp:O}|{entry.EventType}|{entry.ActorUserId}|{entry.TargetId}|{Convert.ToBase64String(_lastHash ?? [])}";
+            var hashInput = $"{entry.Timestamp:O}|{entry.EventType}|{entry.ActorUserId}|{entry.TargetId}|{Convert.ToBase64String(previousHash)}";
             entry.EntryHash = SHA256.HashData(Encoding.UTF8.GetBytes(hashInput));
-            _lastHash = entry.EntryHash;
 
             _db.AuditLogs.Add(entry);
             await _db.SaveChangesAsync(ct);

@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 
@@ -50,7 +52,8 @@ public static class AuthEndpoints
         });
 
         // MFA Setup - requires authentication; userId taken from JWT to prevent IDOR
-        app.MapPost("/api/v1/auth/mfa/setup", async (OrkunPamDbContext db, ITotpService totp, HttpContext context) =>
+        app.MapPost("/api/v1/auth/mfa/setup", async (OrkunPamDbContext db, ITotpService totp,
+            IVaultEncryptionService vault, HttpContext context) =>
         {
             var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
@@ -61,8 +64,17 @@ public static class AuthEndpoints
 
             var (secret, qrUri) = totp.GenerateSecret(user.Username);
             var secretBytes = TotpService.Base32Decode(secret);
-
-            user.MfaSecret = secretBytes;
+            try
+            {
+                var encResult = vault.Encrypt(secretBytes, "MfaSecret");
+                if (encResult.IsFailure)
+                    return Results.Problem("Failed to protect MFA secret");
+                user.MfaSecret = encResult.Value;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(secretBytes);
+            }
             await db.SaveChangesAsync();
 
             return Results.Ok(new
@@ -74,7 +86,7 @@ public static class AuthEndpoints
 
         // MFA Verify & Enable - requires authentication; userId taken from JWT to prevent IDOR
         app.MapPost("/api/v1/auth/mfa/verify", async (MfaVerifyRequest req, OrkunPamDbContext db,
-            ITotpService totp, HttpContext context) =>
+            ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {
             var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
@@ -84,7 +96,14 @@ public static class AuthEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
             if (user.MfaSecret == null) return Results.BadRequest(new { success = false, errors = new[] { "MFA not set up. Call /mfa/setup first" } });
 
-            if (!totp.ValidateCode(user.MfaSecret, req.Code))
+            var decResult = vault.Decrypt(user.MfaSecret);
+            if (decResult.IsFailure)
+                return Results.Problem("Failed to verify MFA secret");
+            bool valid;
+            try { valid = totp.ValidateCode(decResult.Value, req.Code); }
+            finally { CryptographicOperations.ZeroMemory(decResult.Value); }
+
+            if (!valid)
                 return Results.BadRequest(new { success = false, errors = new[] { "Invalid TOTP code. Check your authenticator app." } });
 
             user.MfaEnabled = true;
@@ -95,7 +114,7 @@ public static class AuthEndpoints
 
         // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
-            IPasswordHasher hasher, ITotpService totp, HttpContext context) =>
+            IPasswordHasher hasher, ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {
             var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
@@ -107,8 +126,17 @@ public static class AuthEndpoints
             if (string.IsNullOrEmpty(user.PasswordHash) || !hasher.Verify(req.CurrentPassword, user.PasswordHash))
                 return Results.Json(new { success = false, errors = new[] { "Invalid credentials" } }, statusCode: 401);
 
-            if (user.MfaEnabled && user.MfaSecret != null && !totp.ValidateCode(user.MfaSecret, req.CurrentMfaCode))
-                return Results.BadRequest(new { success = false, errors = new[] { "Invalid MFA code" } });
+            if (user.MfaEnabled && user.MfaSecret != null)
+            {
+                var decResult = vault.Decrypt(user.MfaSecret);
+                if (decResult.IsFailure)
+                    return Results.Problem("Failed to verify MFA secret");
+                bool valid;
+                try { valid = totp.ValidateCode(decResult.Value, req.CurrentMfaCode); }
+                finally { CryptographicOperations.ZeroMemory(decResult.Value); }
+                if (!valid)
+                    return Results.BadRequest(new { success = false, errors = new[] { "Invalid MFA code" } });
+            }
 
             user.MfaEnabled = false;
             user.MfaSecret = null;

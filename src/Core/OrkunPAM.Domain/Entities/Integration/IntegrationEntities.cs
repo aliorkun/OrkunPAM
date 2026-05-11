@@ -6,7 +6,7 @@ public class WebhookConfig : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
-    public string? Secret { get; set; } // HMAC signing secret
+    public byte[]? SecretEnc { get; set; } // AES-GCM encrypted HMAC signing secret
     public string EventTypesJson { get; set; } = "[]"; // JSON array of event types to send
     public bool IsEnabled { get; set; } = true;
     public int TimeoutSeconds { get; set; } = 10;

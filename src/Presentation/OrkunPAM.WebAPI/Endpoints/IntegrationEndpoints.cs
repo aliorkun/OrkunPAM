@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Persistence;
 
@@ -23,13 +24,22 @@ public static class IntegrationEndpoints
             return Results.Ok(new { success = true, data = list });
         });
 
-        webhooks.MapPost("/", async (CreateWebhookRequest req, OrkunPamDbContext db) =>
+        webhooks.MapPost("/", async (CreateWebhookRequest req, OrkunPamDbContext db,
+            IVaultEncryptionService vault) =>
         {
+            byte[]? secretEnc = null;
+            if (!string.IsNullOrEmpty(req.Secret))
+            {
+                var encResult = vault.EncryptString(req.Secret, "WebhookSecret");
+                if (encResult.IsFailure)
+                    return Results.Problem("Failed to protect webhook secret");
+                secretEnc = encResult.Value;
+            }
             var webhook = new WebhookConfig
             {
                 Name = req.Name,
                 Url = req.Url,
-                Secret = req.Secret,
+                SecretEnc = secretEnc,
                 EventTypesJson = req.EventTypes ?? "[]",
                 TimeoutSeconds = req.TimeoutSeconds ?? 10,
                 RetryCount = req.RetryCount ?? 3
@@ -41,14 +51,23 @@ public static class IntegrationEndpoints
         });
 
         webhooks.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Persistence.Services.IWebhookDeliveryService webhookService, ILogger<Program> logger) =>
+            OrkunPAM.Persistence.Services.IWebhookDeliveryService webhookService,
+            IVaultEncryptionService vault, ILogger<Program> logger) =>
         {
             var wh = await db.Set<WebhookConfig>().FindAsync(id);
             if (wh == null) return Results.NotFound(new { success = false, errors = new[] { "Webhook not found" } });
 
             logger.LogInformation("Testing webhook '{Name}' at {Url}", wh.Name, wh.Url);
 
-            var result = await webhookService.SendTestAsync(wh.Url, wh.Secret, wh.TimeoutSeconds);
+            string? secret = null;
+            if (wh.SecretEnc != null)
+            {
+                var decResult = vault.DecryptString(wh.SecretEnc);
+                if (decResult.IsFailure)
+                    return Results.Problem("Failed to retrieve webhook secret");
+                secret = decResult.Value;
+            }
+            var result = await webhookService.SendTestAsync(wh.Url, secret, wh.TimeoutSeconds);
 
             wh.LastDeliveryAtUtc = DateTime.UtcNow;
             wh.LastDeliverySuccess = result.Success;
@@ -82,14 +101,31 @@ public static class IntegrationEndpoints
             return Results.Ok(new { success = true, data = list });
         });
 
-        itsm.MapPost("/", async (CreateItsmConfigRequest req, OrkunPamDbContext db) =>
+        itsm.MapPost("/", async (CreateItsmConfigRequest req, OrkunPamDbContext db,
+            IVaultEncryptionService vault) =>
         {
+            byte[]? apiKeyEnc = null;
+            if (!string.IsNullOrEmpty(req.ApiKey))
+            {
+                var enc = vault.EncryptString(req.ApiKey, "ItsmApiKey");
+                if (enc.IsFailure) return Results.Problem("Failed to protect ITSM API key");
+                apiKeyEnc = enc.Value;
+            }
+            byte[]? passwordEnc = null;
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                var enc = vault.EncryptString(req.Password, "ItsmPassword");
+                if (enc.IsFailure) return Results.Problem("Failed to protect ITSM password");
+                passwordEnc = enc.Value;
+            }
             var config = new ItsmConfig
             {
                 Name = req.Name,
                 Provider = req.Provider,
                 BaseUrl = req.BaseUrl,
                 Username = req.Username,
+                ApiKeyEnc = apiKeyEnc != null ? Convert.ToBase64String(apiKeyEnc) : null,
+                PasswordEnc = passwordEnc != null ? Convert.ToBase64String(passwordEnc) : null,
                 RequireTicket = req.RequireTicket,
                 ValidateTicket = req.ValidateTicket
             };
@@ -100,14 +136,29 @@ public static class IntegrationEndpoints
         });
 
         itsm.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Persistence.Services.IItsmService itsmService, ILogger<Program> logger) =>
+            OrkunPAM.Persistence.Services.IItsmService itsmService,
+            IVaultEncryptionService vault, ILogger<Program> logger) =>
         {
             var cfg = await db.Set<ItsmConfig>().FindAsync(id);
             if (cfg == null) return Results.NotFound(new { success = false, errors = new[] { "ITSM config not found" } });
 
             logger.LogInformation("Testing ITSM connection to {Provider} at {Url}", cfg.Provider, cfg.BaseUrl);
 
-            var result = await itsmService.TestConnectionAsync(cfg.Provider, cfg.BaseUrl, cfg.Username, null, null);
+            string? password = null;
+            if (!string.IsNullOrEmpty(cfg.PasswordEnc))
+            {
+                var dec = vault.DecryptString(Convert.FromBase64String(cfg.PasswordEnc));
+                if (dec.IsFailure) return Results.Problem("Failed to retrieve ITSM credentials");
+                password = dec.Value;
+            }
+            string? apiKey = null;
+            if (!string.IsNullOrEmpty(cfg.ApiKeyEnc))
+            {
+                var dec = vault.DecryptString(Convert.FromBase64String(cfg.ApiKeyEnc));
+                if (dec.IsFailure) return Results.Problem("Failed to retrieve ITSM API key");
+                apiKey = dec.Value;
+            }
+            var result = await itsmService.TestConnectionAsync(cfg.Provider, cfg.BaseUrl, cfg.Username, password, apiKey);
 
             return Results.Ok(new
             {
@@ -124,7 +175,7 @@ public static class IntegrationEndpoints
         });
 
         itsm.MapPost("/validate-ticket", async (ValidateTicketRequest req, OrkunPamDbContext db,
-            OrkunPAM.Persistence.Services.IItsmService itsmService) =>
+            OrkunPAM.Persistence.Services.IItsmService itsmService, IVaultEncryptionService vault) =>
         {
             // Find the ITSM config for this provider (or use default enabled one)
             var cfg = !string.IsNullOrEmpty(req.Provider)
@@ -134,7 +185,21 @@ public static class IntegrationEndpoints
             if (cfg == null)
                 return Results.BadRequest(new { success = false, errors = new[] { "No active ITSM configuration found for ticket validation" } });
 
-            var result = await itsmService.ValidateTicketAsync(cfg.Provider, cfg.BaseUrl, req.TicketNumber, cfg.Username, null, null);
+            string? password = null;
+            if (!string.IsNullOrEmpty(cfg.PasswordEnc))
+            {
+                var dec = vault.DecryptString(Convert.FromBase64String(cfg.PasswordEnc));
+                if (dec.IsFailure) return Results.Problem("Failed to retrieve ITSM credentials");
+                password = dec.Value;
+            }
+            string? apiKey = null;
+            if (!string.IsNullOrEmpty(cfg.ApiKeyEnc))
+            {
+                var dec = vault.DecryptString(Convert.FromBase64String(cfg.ApiKeyEnc));
+                if (dec.IsFailure) return Results.Problem("Failed to retrieve ITSM API key");
+                apiKey = dec.Value;
+            }
+            var result = await itsmService.ValidateTicketAsync(cfg.Provider, cfg.BaseUrl, req.TicketNumber, cfg.Username, password, apiKey);
 
             return Results.Ok(new
             {
@@ -189,7 +254,7 @@ public static class IntegrationEndpoints
 }
 
 public record CreateWebhookRequest(string Name, string Url, string? Secret, string? EventTypes, int? TimeoutSeconds, int? RetryCount);
-public record CreateItsmConfigRequest(string Name, string Provider, string BaseUrl, string? Username, bool RequireTicket, bool ValidateTicket);
+public record CreateItsmConfigRequest(string Name, string Provider, string BaseUrl, string? Username, string? ApiKey, string? Password, bool RequireTicket, bool ValidateTicket);
 public record ValidateTicketRequest(string TicketNumber, string? Provider);
 public record CreateNotificationConfigRequest(string Channel, string? ConfigJson);
 public record TestNotificationRequest(string Channel, string Recipient);
