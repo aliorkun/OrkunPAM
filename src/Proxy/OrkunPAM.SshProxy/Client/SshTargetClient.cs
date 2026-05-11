@@ -24,6 +24,9 @@ internal sealed class SshTargetClient : IDisposable
     private readonly string _username;
     private readonly string _password;
     private readonly ILogger _log;
+    private readonly string? _expectedFingerprint;
+
+    internal string? ObservedFingerprint { get; private set; }
 
     private TcpClient? _tcp;
     private SshConnection? _conn;
@@ -31,13 +34,15 @@ internal sealed class SshTargetClient : IDisposable
     private readonly uint _clientChanId = 1;
     private string _targetSshVersion = "SSH-2.0-Unknown";
 
-    internal SshTargetClient(string host, int port, string username, string password, ILogger log)
+    internal SshTargetClient(string host, int port, string username, string password, ILogger log,
+        string? expectedFingerprint = null)
     {
-        _host     = host;
-        _port     = port;
-        _username = username;
-        _password = password;
-        _log      = log;
+        _host                = host;
+        _port                = port;
+        _username            = username;
+        _password            = password;
+        _log                 = log;
+        _expectedFingerprint = expectedFingerprint;
     }
 
     // -------------------------------------------------------------------------
@@ -113,6 +118,19 @@ internal sealed class SshTargetClient : IDisposable
             dh.PublicKey, f, K);
 
         VerifyHostKeySignature(hostKeyBlob, sigBlob, H);
+
+        var fingerprint = ComputeHostKeyFingerprint(hostKeyBlob);
+        if (_expectedFingerprint != null && _expectedFingerprint != fingerprint)
+        {
+            _log.LogCritical("Host key mismatch for {Host} — possible MITM. Expected {Expected}, got {Got}",
+                _host, _expectedFingerprint, fingerprint);
+            throw new SshException(
+                $"Host key fingerprint mismatch for {_host} — connection refused (possible MITM)");
+        }
+        ObservedFingerprint = fingerprint;
+        if (_expectedFingerprint == null)
+            _log.LogWarning("TOFU: Host key fingerprint for {Host}: {Fp}", _host, fingerprint);
+
         _log.LogDebug("Target host key verified ({Bytes}B)", hostKeyBlob.Length);
 
         await _conn.SendPacketAsync([Msg.NewKeys], ct);
@@ -148,6 +166,9 @@ internal sealed class SshTargetClient : IDisposable
         SshEncoding.WriteUInt32(ms, 0);
         return ms.ToArray();
     }
+
+    private static string ComputeHostKeyFingerprint(byte[] hostKeyBlob) =>
+        Convert.ToHexString(SHA256.HashData(hostKeyBlob)).ToLowerInvariant();
 
     private static void VerifyHostKeySignature(byte[] hostKeyBlob, byte[] sigBlob, byte[] H)
     {
