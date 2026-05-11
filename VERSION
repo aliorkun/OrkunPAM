@@ -1,0 +1,5 @@
+v0.2.0-security-hardened
+commit: 279bcc06d8b56809d582b9090eca3da85f7e1324
+date: 2026-05-11
+sprint: Sprint 1 - Security Hardening COMPLETE
+exit-criteria: 0 security HIGH, 0 security MEDIUM
