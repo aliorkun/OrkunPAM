@@ -90,3 +90,13 @@
 - Developer agent "Aktif Sprint" bölümündeki issue'lara odaklanır
 - Sprint dışı issue'lar backlog'da kalır
 - Security critical/high her zaman sprint'i keser (acil fix)
+
+## Agent Yetkinlik Sınırları (Koordinatör notu)
+Aşağıdaki konular Sonnet agent kapasitesini aşar - manuel müdahale veya Opus gerekir:
+- **SSH Proxy:** Native SSH protokolü (RFC 4253) - raw socket, key exchange, channel multiplexing
+- **RDP Proxy:** Native RDP gateway - TLS, CredSSP, bitmap codec, virtual channels
+- **Session Recording:** Stream capture, binary format tasarımı, video encoding (RDP), playback engine
+- **Blazor UI:** Karmaşık component mimarisi, SignalR entegrasyonu, real-time terminal
+- **MSI Installer:** WiX toolset, Windows Service registration, upgrade logic
+
+Bu konularda Developer agent başlar, takılırsa koordinatör (bu session) devralır veya Developer Opus'a geçirilir.
