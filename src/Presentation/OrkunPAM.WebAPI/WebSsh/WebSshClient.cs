@@ -24,6 +24,9 @@ internal sealed class WebSshClient : IAsyncDisposable
     private readonly string _username;
     private readonly string _password;
     private readonly ILogger _log;
+    private readonly string? _expectedFingerprint;
+
+    internal string? ObservedFingerprint { get; private set; }
 
     private TcpClient? _tcp;
     private SshPackets? _pkt;
@@ -50,10 +53,12 @@ internal sealed class WebSshClient : IAsyncDisposable
 
     private static readonly BigInteger DhGenerator = 2;
 
-    internal WebSshClient(string host, int port, string username, string password, ILogger log)
+    internal WebSshClient(string host, int port, string username, string password, ILogger log,
+        string? expectedFingerprint = null)
     {
         _host = host; _port = port;
         _username = username; _password = password; _log = log;
+        _expectedFingerprint = expectedFingerprint;
     }
 
     // Phase 1: TCP connect + key exchange + user auth
@@ -234,6 +239,20 @@ internal sealed class WebSshClient : IAsyncDisposable
         var K = BigInteger.ModPow(f, x, DhPrime);
         var H = ComputeExchangeHash(clientKex, serverKex, hostKeyBlob, e, f, K);
         VerifyHostKeySignature(hostKeyBlob, sigBlob, H);
+
+        // TOFU host key pinning
+        var fingerprint = ComputeHostKeyFingerprint(hostKeyBlob);
+        if (_expectedFingerprint != null && _expectedFingerprint != fingerprint)
+        {
+            _log.LogCritical("Host key mismatch for {Host} — possible MITM. Expected {Expected}, got {Got}",
+                _host, _expectedFingerprint, fingerprint);
+            throw new SshWebException(
+                $"Host key fingerprint mismatch for {_host} — connection refused (possible MITM)");
+        }
+        ObservedFingerprint = fingerprint;
+        if (_expectedFingerprint == null)
+            _log.LogWarning("TOFU: Host key fingerprint for {Host}: {Fp}", _host, fingerprint);
+
         _sessionId ??= H;
 
         await _pkt.SendAsync([21], ct); // NEWKEYS
@@ -272,6 +291,12 @@ internal sealed class WebSshClient : IAsyncDisposable
         WBStr(ms, hostKeyBlob);
         WMpInt(ms, e); WMpInt(ms, f); WMpInt(ms, K);
         return sha.ComputeHash(ms.ToArray());
+    }
+
+    private static string ComputeHostKeyFingerprint(byte[] hostKeyBlob)
+    {
+        var hash = SHA256.HashData(hostKeyBlob);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static void VerifyHostKeySignature(byte[] hostKeyBlob, byte[] sigBlob, byte[] H)
