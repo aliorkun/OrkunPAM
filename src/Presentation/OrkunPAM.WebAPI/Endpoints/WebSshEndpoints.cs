@@ -103,7 +103,8 @@ public static class WebSshEndpoints
             if (string.IsNullOrEmpty(targetUser))
             { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsync("Credential has no username"); return; }
 
-            var targetPassword = decResult.Value;
+            // Convert to byte[] immediately so WebSshClient can zero it after auth (#70)
+            var targetPasswordBytes = System.Text.Encoding.UTF8.GetBytes(decResult.Value);
 
             // Accept WebSocket upgrade
             var ws = await ctx.WebSockets.AcceptWebSocketAsync();
@@ -126,7 +127,7 @@ public static class WebSshEndpoints
                 session.Id, userId, targetHost, targetPort);
 
             // Run SSH bridge
-            var client = new WebSshClient(targetHost, targetPort, targetUser, targetPassword, logger,
+            var client = new WebSshClient(targetHost, targetPort, targetUser, targetPasswordBytes, logger,
                 device.SshHostKeyFingerprint);
             try
             {

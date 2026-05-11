@@ -132,7 +132,7 @@ internal sealed class SshServerSession
         RandomNumberGenerator.Fill(cookie);
         SshEncoding.WriteBytes(ms, cookie);
         SshEncoding.WriteNameList(ms, Alg.Kex);
-        SshEncoding.WriteNameList(ms, "rsa-sha2-256", "ssh-rsa");
+        SshEncoding.WriteNameList(ms, "rsa-sha2-256");
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Mac);

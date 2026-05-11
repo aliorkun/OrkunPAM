@@ -22,7 +22,7 @@ internal sealed class WebSshClient : IAsyncDisposable
     private readonly string _host;
     private readonly int _port;
     private readonly string _username;
-    private readonly string _password;
+    private byte[] _password;
     private readonly ILogger _log;
     private readonly string? _expectedFingerprint;
 
@@ -53,7 +53,7 @@ internal sealed class WebSshClient : IAsyncDisposable
 
     private static readonly BigInteger DhGenerator = 2;
 
-    internal WebSshClient(string host, int port, string username, string password, ILogger log,
+    internal WebSshClient(string host, int port, string username, byte[] password, ILogger log,
         string? expectedFingerprint = null)
     {
         _host = host; _port = port;
@@ -70,6 +70,7 @@ internal sealed class WebSshClient : IAsyncDisposable
         _serverVersion = await _pkt.ExchangeVersionsAsync(ClientVersion, ct);
         await DoKeyExchangeAsync(ct);
         await DoUserAuthAsync(ct);
+        CryptographicOperations.ZeroMemory(_password);
         _log.LogInformation("WebSSH authenticated to {Host}:{Port} as '{User}'", _host, _port, _username);
     }
 
@@ -271,7 +272,7 @@ internal sealed class WebSshClient : IAsyncDisposable
         WB(ms, 20); // MSG_KEXINIT
         var cookie = new byte[16]; RandomNumberGenerator.Fill(cookie); ms.Write(cookie);
         WStr(ms, "diffie-hellman-group14-sha256");          // kex
-        WStr(ms, "rsa-sha2-256,ssh-rsa,ecdsa-sha2-nistp256"); // host key
+        WStr(ms, "rsa-sha2-256,ecdsa-sha2-nistp256"); // host key
         WStr(ms, "aes256-ctr"); WStr(ms, "aes256-ctr");     // ciphers c2s, s2c
         WStr(ms, "hmac-sha2-256"); WStr(ms, "hmac-sha2-256"); // MACs c2s, s2c
         WStr(ms, "none"); WStr(ms, "none");                   // compression
@@ -318,8 +319,16 @@ internal sealed class WebSshClient : IAsyncDisposable
             Exponent = e.ToByteArray(isUnsigned: true, isBigEndian: true),
             Modulus  = n.ToByteArray(isUnsigned: true, isBigEndian: true)
         });
-        var alg = sigType == "rsa-sha2-256" ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA1;
-        if (!rsa.VerifyData(H, rawSig, alg, RSASignaturePadding.Pkcs1))
+
+        if (rsa.KeySize < 2048)
+            throw new SshWebException(
+                $"Host key rejected: RSA {rsa.KeySize}-bit is below NIST SP 800-131A minimum of 2048 bits");
+
+        if (sigType != "rsa-sha2-256")
+            throw new SshWebException(
+                $"Host key signature algorithm '{sigType}' rejected — only rsa-sha2-256 accepted (RFC 8332)");
+
+        if (!rsa.VerifyData(H, rawSig, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
             throw new SshWebException("Host key signature verification failed — possible MITM");
     }
 
@@ -373,7 +382,7 @@ internal sealed class WebSshClient : IAsyncDisposable
         WB(authMs, 50); // USERAUTH_REQUEST
         WStr(authMs, _username); WStr(authMs, "ssh-connection"); WStr(authMs, "password");
         authMs.WriteByte(0); // change-password = false
-        WStr(authMs, _password);
+        WBStr(authMs, _password);
         await _pkt.SendAsync(authMs.ToArray(), ct);
 
         for (int i = 0; i < 5; i++)

@@ -22,7 +22,7 @@ internal sealed class SshTargetClient : IDisposable
     private readonly string _host;
     private readonly int _port;
     private readonly string _username;
-    private readonly string _password;
+    private byte[] _password;
     private readonly ILogger _log;
     private readonly string? _expectedFingerprint;
 
@@ -34,7 +34,7 @@ internal sealed class SshTargetClient : IDisposable
     private readonly uint _clientChanId = 1;
     private string _targetSshVersion = "SSH-2.0-Unknown";
 
-    internal SshTargetClient(string host, int port, string username, string password, ILogger log,
+    internal SshTargetClient(string host, int port, string username, byte[] password, ILogger log,
         string? expectedFingerprint = null)
     {
         _host                = host;
@@ -60,6 +60,7 @@ internal sealed class SshTargetClient : IDisposable
 
         await DoKeyExchangeAsync(ct);
         await DoUserAuthAsync(ct);
+        CryptographicOperations.ZeroMemory(_password);
 
         _log.LogInformation("Authenticated to target {Host}:{Port} as '{User}'",
             _host, _port, _username);
@@ -153,7 +154,7 @@ internal sealed class SshTargetClient : IDisposable
         RandomNumberGenerator.Fill(cookie);
         SshEncoding.WriteBytes(ms, cookie);
         SshEncoding.WriteNameList(ms, Alg.Kex);
-        SshEncoding.WriteNameList(ms, "rsa-sha2-256", "ssh-rsa", "ecdsa-sha2-nistp256");
+        SshEncoding.WriteNameList(ms, "rsa-sha2-256", "ecdsa-sha2-nistp256");
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Mac);
@@ -190,8 +191,15 @@ internal sealed class SshTargetClient : IDisposable
             Modulus  = n.ToByteArray(isUnsigned: true, isBigEndian: true),
         });
 
-        var hashAlg = sigType == "rsa-sha2-256" ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA1;
-        if (!rsa.VerifyData(H, rawSig, hashAlg, RSASignaturePadding.Pkcs1))
+        if (rsa.KeySize < 2048)
+            throw new SshException(
+                $"Host key rejected: RSA {rsa.KeySize}-bit is below NIST SP 800-131A minimum of 2048 bits");
+
+        if (sigType != "rsa-sha2-256")
+            throw new SshException(
+                $"Host key signature algorithm '{sigType}' rejected — only rsa-sha2-256 accepted (RFC 8332)");
+
+        if (!rsa.VerifyData(H, rawSig, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
             throw new SshException("Target host key signature verification failed — possible MITM");
     }
 
@@ -235,7 +243,7 @@ internal sealed class SshTargetClient : IDisposable
         SshEncoding.WriteString(authMs, "ssh-connection");
         SshEncoding.WriteString(authMs, "password");
         SshEncoding.WriteBool(authMs, false);
-        SshEncoding.WriteString(authMs, _password);
+        SshEncoding.WriteByteString(authMs, _password);
         await _conn.SendAsync(authMs, ct);
 
         for (int i = 0; i < 5; i++)
