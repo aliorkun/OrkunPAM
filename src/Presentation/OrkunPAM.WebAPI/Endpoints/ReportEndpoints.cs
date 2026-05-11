@@ -93,7 +93,7 @@ public static class ReportEndpoints
                 .Where(u => u.LastLoginAtUtc != null)
                 .OrderByDescending(u => u.LastLoginAtUtc)
                 .Take(count)
-                .Select(u => new { u.Username, u.LastLoginAtUtc, u.LastLoginIp })
+                .Select(u => new { u.Username, u.LastLoginAtUtc })
                 .ToListAsync();
 
             var recentSessions = await db.ProxySessions
@@ -168,7 +168,7 @@ public static class ReportEndpoints
     {
         var usersWithFailures = await db.Users
             .Where(u => u.FailedLoginCount > 0)
-            .Select(u => new { u.Username, u.FailedLoginCount, u.Status, u.LockoutEndUtc, u.LastLoginIp })
+            .Select(u => new { u.Username, u.FailedLoginCount, u.Status, u.LockoutEndUtc })
             .OrderByDescending(u => u.FailedLoginCount)
             .ToListAsync();
 

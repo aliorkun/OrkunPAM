@@ -14,9 +14,10 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
     private const int KeySize = 32; // AES-256
     private const int SaltSize = 16;
     private const int Pbkdf2Iterations = 600_000;
+    private static readonly TimeSpan DekCacheTtl = TimeSpan.FromMinutes(15);
 
     private byte[]? _masterKey;
-    private readonly Dictionary<int, byte[]> _dekCache = new();
+    private readonly Dictionary<int, (byte[] Key, DateTime Expires)> _dekCache = new();
     private readonly Dictionary<string, int> _activeDekVersions = new(); // purpose → active version
     private readonly Dictionary<int, (byte[] Encrypted, int MkVersion, string Purpose)> _storedDeks = new();
     private int _nextDekVersion = 1;
@@ -88,12 +89,17 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
             if (!IsInitialized)
                 return Result<byte[]>.Failure(Error.Encryption("getDek", "Key store not initialized"));
 
-            // Check cache first (performance: avoid repeated decryption)
+            // Check cache first; evict if expired
             if (_dekCache.TryGetValue(version, out var cached))
             {
-                var copy = new byte[cached.Length];
-                cached.CopyTo(copy.AsSpan());
-                return Result<byte[]>.Success(copy);
+                if (cached.Expires > DateTime.UtcNow)
+                {
+                    var copy = new byte[cached.Key.Length];
+                    cached.Key.CopyTo(copy.AsSpan());
+                    return Result<byte[]>.Success(copy);
+                }
+                CryptographicOperations.ZeroMemory(cached.Key);
+                _dekCache.Remove(version);
             }
 
             if (!_storedDeks.TryGetValue(version, out var stored))
@@ -104,8 +110,8 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
             if (dek == null)
                 return Result<byte[]>.Failure(Error.Encryption("getDek", $"Failed to decrypt DEK version {version}"));
 
-            // Cache it
-            _dekCache[version] = dek;
+            // Cache with TTL
+            _dekCache[version] = (dek, DateTime.UtcNow.Add(DekCacheTtl));
 
             var result = new byte[dek.Length];
             dek.CopyTo(result.AsSpan());
@@ -127,7 +133,7 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
             var encrypted = EncryptWithMasterKey(dek);
             _storedDeks[version] = (encrypted, _masterKeyVersion, purpose);
             _activeDekVersions[purpose] = version;
-            _dekCache[version] = dek;
+            _dekCache[version] = (dek, DateTime.UtcNow.Add(DekCacheTtl));
 
             _logger.LogInformation("Created DEK version {Version} for purpose {Purpose}", version, purpose);
             return Result<int>.Success(version);
@@ -145,25 +151,24 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
             var newMk = new byte[KeySize];
             RandomNumberGenerator.Fill(newMk);
 
-            // Re-encrypt all DEKs with new master key
+            // Re-encrypt all DEKs with new master key (no temporary _masterKey swap to avoid race confusion)
             foreach (var (version, stored) in _storedDeks.ToList())
             {
                 var dek = DecryptWithMasterKey(stored.Encrypted);
                 if (dek == null) continue;
 
-                var oldMk = _masterKey;
-                _masterKey = newMk;
-                var reEncrypted = EncryptWithMasterKey(dek);
-                _masterKey = oldMk;
-
+                var reEncrypted = EncryptWithKey(newMk, dek);
                 _storedDeks[version] = (reEncrypted, _masterKeyVersion + 1, stored.Purpose);
                 CryptographicOperations.ZeroMemory(dek);
             }
 
-            // Swap master key
+            // Swap master key and zero the DEK cache
             CryptographicOperations.ZeroMemory(_masterKey!);
             _masterKey = newMk;
             _masterKeyVersion++;
+
+            foreach (var (key, _) in _dekCache.Values)
+                CryptographicOperations.ZeroMemory(key);
             _dekCache.Clear();
 
             _logger.LogInformation("Master key rotated to version {Version}", _masterKeyVersion);
@@ -171,14 +176,14 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
         }
     }
 
-    private byte[] EncryptWithMasterKey(byte[] plaintext)
+    private byte[] EncryptWithKey(byte[] key, byte[] plaintext)
     {
         var iv = new byte[12];
         RandomNumberGenerator.Fill(iv);
         var ciphertext = new byte[plaintext.Length];
         var tag = new byte[16];
 
-        using var aes = new AesGcm(_masterKey!, 16);
+        using var aes = new AesGcm(key, 16);
         aes.Encrypt(iv, plaintext, ciphertext, tag);
 
         var result = new byte[12 + plaintext.Length + 16];
@@ -187,6 +192,8 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
         tag.CopyTo(result, 12 + plaintext.Length);
         return result;
     }
+
+    private byte[] EncryptWithMasterKey(byte[] plaintext) => EncryptWithKey(_masterKey!, plaintext);
 
     private byte[]? DecryptWithMasterKey(byte[] blob)
     {
@@ -213,8 +220,8 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
         if (_masterKey != null)
             CryptographicOperations.ZeroMemory(_masterKey);
 
-        foreach (var dek in _dekCache.Values)
-            CryptographicOperations.ZeroMemory(dek);
+        foreach (var (key, _) in _dekCache.Values)
+            CryptographicOperations.ZeroMemory(key);
 
         _dekCache.Clear();
     }

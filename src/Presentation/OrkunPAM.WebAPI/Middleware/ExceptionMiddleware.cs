@@ -4,21 +4,18 @@ using System.Text.Json;
 namespace OrkunPAM.WebAPI.Middleware;
 
 /// <summary>
-/// Global exception handler. Catches unhandled exceptions and returns
-/// consistent JSON error responses with troubleshoot-friendly details.
-/// Never leaks stack traces in production.
+/// Global exception handler. Returns an opaque error reference ID.
+/// Full exception details are written to structured logs only — never sent to clients.
 /// </summary>
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionMiddleware> _logger;
-    private readonly IHostEnvironment _env;
 
-    public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger, IHostEnvironment env)
+    public ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddleware> logger)
     {
         _next = next;
         _logger = logger;
-        _env = env;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -29,7 +26,9 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+            var errorId = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            _logger.LogError(ex, "Unhandled exception [{ErrorId}] on {Method} {Path}",
+                errorId, context.Request.Method, context.Request.Path);
 
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
@@ -37,12 +36,7 @@ public class ExceptionMiddleware
             var response = new
             {
                 success = false,
-                errors = new[]
-                {
-                    _env.IsDevelopment()
-                        ? $"{ex.GetType().Name}: {ex.Message}"
-                        : "An internal error occurred. Check logs for details."
-                },
+                errors = new[] { $"An internal error occurred. Reference: {errorId}" },
                 traceId = context.TraceIdentifier
             };
 

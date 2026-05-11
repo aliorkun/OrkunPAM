@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -56,7 +58,9 @@ public static class UserEndpoints
                     AuthSource = user.AuthSource.ToString(),
                     Status = user.Status.ToString(),
                     user.MfaEnabled, user.IsTemporary, user.TemporaryExpiresUtc,
-                    user.LastLoginAtUtc, user.LastLoginIp, user.Language, user.Timezone,
+                    user.LastLoginAtUtc,
+                    LastLoginIp = MaskIp(user.LastLoginIp),
+                    user.Language, user.Timezone,
                     user.FailedLoginCount, user.LockoutEndUtc, user.PasswordLastChanged,
                     user.CreatedAtUtc, user.UpdatedAtUtc,
                     Groups = user.UserGroups.Select(ug => new { ug.Group.Id, ug.Group.Name }),
@@ -65,7 +69,8 @@ public static class UserEndpoints
             });
         });
 
-        group.MapPut("/{id:guid}", async (Guid id, UpdateUserRequest req, OrkunPamDbContext db) =>
+        group.MapPut("/{id:guid}", async (Guid id, UpdateUserRequest req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -77,10 +82,17 @@ public static class UserEndpoints
             if (req.Status.HasValue) user.Status = req.Status.Value;
 
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.Updated", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username });
+
             return Results.Ok(new { success = true, data = new { user.Id, user.Username } });
         });
 
-        group.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        group.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -89,10 +101,17 @@ public static class UserEndpoints
             user.DeletedAtUtc = DateTime.UtcNow;
             user.Status = UserStatus.Disabled;
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.Deleted", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username });
+
             return Results.Ok(new { success = true });
         });
 
-        group.MapPost("/{id:guid}/lock", async (Guid id, OrkunPamDbContext db) =>
+        group.MapPost("/{id:guid}/lock", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -100,10 +119,17 @@ public static class UserEndpoints
             user.Status = UserStatus.Locked;
             user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.Locked", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username });
+
             return Results.Ok(new { success = true, message = $"User '{user.Username}' locked" });
         });
 
-        group.MapPost("/{id:guid}/unlock", async (Guid id, OrkunPamDbContext db) =>
+        group.MapPost("/{id:guid}/unlock", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -112,10 +138,17 @@ public static class UserEndpoints
             user.LockoutEndUtc = null;
             user.FailedLoginCount = 0;
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.Unlocked", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username });
+
             return Results.Ok(new { success = true, message = $"User '{user.Username}' unlocked" });
         });
 
-        group.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest req, OrkunPamDbContext db, IPasswordHasher hasher) =>
+        group.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest req,
+            OrkunPamDbContext db, IPasswordHasher hasher, IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -125,6 +158,12 @@ public static class UserEndpoints
             user.PasswordHash = hasher.Hash(req.NewPassword);
             user.PasswordLastChanged = DateTime.UtcNow;
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.PasswordReset", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username, adminReset = true });
+
             return Results.Ok(new { success = true, message = "Password reset successfully" });
         });
 
@@ -136,7 +175,8 @@ public static class UserEndpoints
         });
 
         // Role assignment
-        group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db) =>
+        group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             if (!await db.Users.AnyAsync(u => u.Id == id))
                 return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
@@ -147,18 +187,41 @@ public static class UserEndpoints
 
             db.UserRoles.Add(new UserRole { UserId = id, RoleId = roleId });
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.RoleAssigned", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { roleId });
+
             return Results.Ok(new { success = true, message = "Role assigned" });
         });
 
-        group.MapDelete("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db) =>
+        group.MapDelete("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
         {
             var ur = await db.UserRoles.FindAsync(id, roleId);
             if (ur == null) return Results.NotFound(new { success = false, errors = new[] { "Assignment not found" } });
 
             db.UserRoles.Remove(ur);
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.RoleRemoved", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { roleId });
+
             return Results.Ok(new { success = true, message = "Role removed" });
         });
+    }
+
+    private static Guid? ParseActorId(HttpContext context)
+        => Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var g) ? g : null;
+
+    private static string? MaskIp(string? ip)
+    {
+        if (ip == null) return null;
+        var lastDot = ip.LastIndexOf('.');
+        return lastDot > 0 ? ip[..lastDot] + ".***" : "***";
     }
 }
 

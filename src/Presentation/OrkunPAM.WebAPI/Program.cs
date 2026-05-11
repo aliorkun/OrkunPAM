@@ -101,8 +101,38 @@ try
                 .AllowCredentials());
     });
 
-    // === JWT Authentication (fixes #1) ===
-    var rsaKey = RSA.Create(2048);
+    // === JWT Authentication (fixes #1, #10) ===
+    var keyDir = builder.Configuration["Jwt:KeyDirectory"]
+        ?? Path.Combine(AppContext.BaseDirectory, "keys");
+    Directory.CreateDirectory(keyDir);
+    var keyPath = Path.Combine(keyDir, "jwt-signing-key.xml");
+    RSA rsaKey;
+    if (File.Exists(keyPath))
+    {
+        rsaKey = RSA.Create();
+        try
+        {
+            rsaKey.FromXmlString(File.ReadAllText(keyPath));
+            Log.Information("JWT signing key loaded from persistent store");
+        }
+        catch (Exception loadEx)
+        {
+            Log.Warning(loadEx, "Failed to load JWT key from {Path}, regenerating", keyPath);
+            rsaKey.Dispose();
+            rsaKey = RSA.Create(4096);
+            File.WriteAllText(keyPath, rsaKey.ToXmlString(includePrivateParameters: true));
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(keyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+    else
+    {
+        rsaKey = RSA.Create(4096);
+        File.WriteAllText(keyPath, rsaKey.ToXmlString(includePrivateParameters: true));
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(keyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        Log.Information("JWT signing key generated and persisted to {Path}", keyPath);
+    }
     var signingKey = new RsaSecurityKey(rsaKey);
     builder.Services.AddSingleton(signingKey);
 

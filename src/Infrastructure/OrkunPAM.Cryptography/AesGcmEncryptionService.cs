@@ -107,13 +107,17 @@ public sealed class AesGcmEncryptionService : IVaultEncryptionService
     }
 
     public Result<byte[]> EncryptString(string plaintext, string purpose = "VaultCredentials")
-        => Encrypt(Encoding.UTF8.GetBytes(plaintext), purpose);
+    {
+        var bytes = Encoding.UTF8.GetBytes(plaintext);
+        try { return Encrypt(bytes, purpose); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
 
     public Result<string> DecryptString(byte[] encryptedBlob)
     {
         var result = Decrypt(encryptedBlob);
-        return result.IsSuccess
-            ? Result<string>.Success(Encoding.UTF8.GetString(result.Value))
-            : Result<string>.Failure(result.Error);
+        if (result.IsFailure) return Result<string>.Failure(result.Error);
+        try { return Result<string>.Success(Encoding.UTF8.GetString(result.Value)); }
+        finally { CryptographicOperations.ZeroMemory(result.Value); }
     }
 }
