@@ -66,6 +66,27 @@ public static class WebSshEndpoints
             if (cred == null || cred.DeviceId != deviceId || cred.PasswordEnc == null)
             { ctx.Response.StatusCode = 404; return; }
 
+            // Authorization: admin roles bypass; all others need explicit credential/folder permission
+            var isAdmin = principal.IsInRole("GlobalAdmin")
+                       || principal.IsInRole("VaultAdmin")
+                       || principal.IsInRole("SessionAdmin");
+            if (!isAdmin)
+            {
+                var hasPermission = await db.CredentialPermissions.AnyAsync(
+                    p => p.PrincipalType == PrincipalType.User
+                         && p.PrincipalId == userId
+                         && ((p.CredentialId == credentialId) || (p.FolderId == cred.FolderId))
+                         && p.PermissionLevel >= PermissionLevel.Use);
+                if (!hasPermission)
+                {
+                    logger.LogWarning(
+                        "WebSSH: user {UserId} unauthorized access attempt to credential {CredId}", userId, credentialId);
+                    ctx.Response.StatusCode = 403;
+                    await ctx.Response.WriteAsync("Access denied");
+                    return;
+                }
+            }
+
             var decResult = vault.DecryptString(cred.PasswordEnc);
             if (decResult.IsFailure)
             {
@@ -105,12 +126,21 @@ public static class WebSshEndpoints
                 session.Id, userId, targetHost, targetPort);
 
             // Run SSH bridge
-            var client = new WebSshClient(targetHost, targetPort, targetUser, targetPassword, logger);
+            var client = new WebSshClient(targetHost, targetPort, targetUser, targetPassword, logger,
+                device.SshHostKeyFingerprint);
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromHours(8));
 
                 await client.ConnectAsync(cts.Token);
+
+                // TOFU: save fingerprint on first connection
+                if (device.SshHostKeyFingerprint == null && client.ObservedFingerprint != null)
+                {
+                    device.SshHostKeyFingerprint = client.ObservedFingerprint;
+                    await db.SaveChangesAsync();
+                }
+
                 await client.OpenShellAsync(cols, rows, cts.Token);
 
                 var connMsg = System.Text.Encoding.UTF8.GetBytes("{\"t\":\"connected\"}");

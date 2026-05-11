@@ -22,6 +22,7 @@ public class Device : AuditableEntity
     public string? Tags { get; set; }
     public string? Notes { get; set; }
     public DeviceStatus Status { get; set; } = DeviceStatus.Active;
+    public string? SshHostKeyFingerprint { get; set; }
 
     public ICollection<DeviceGroupMember> DeviceGroupMembers { get; set; } = new List<DeviceGroupMember>();
     public ICollection<DeviceCredential> DeviceCredentials { get; set; } = new List<DeviceCredential>();

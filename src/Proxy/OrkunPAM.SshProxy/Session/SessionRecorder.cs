@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,7 +11,7 @@ namespace OrkunPAM.SshProxy.Session;
 ///
 /// File layout on disk:
 ///   {sessionId}.ascrec  — nonce(12) + AES-256-GCM ciphertext + tag(16)
-///   {sessionId}.dek     — base64 DEK (to be wrapped by KEK via PAM API in production)
+///   {sessionId}.dek     — DPAPI-protected DEK (Windows) or raw DEK with restricted permissions (non-Windows)
 ///
 /// Only the target→client direction (terminal output) is recorded; the client→target
 /// direction (user keystrokes) is intentionally omitted to avoid capturing passwords
@@ -84,9 +85,24 @@ internal sealed class SessionRecorder
             }
 
             var dekPath = Path.Combine(_recDir, $"{_recId}.dek");
-            await File.WriteAllTextAsync(dekPath, Convert.ToBase64String(dek));
+            byte[] dekToStore;
+            if (OperatingSystem.IsWindows())
+            {
+                // DPAPI-protect the DEK so only the local machine service account can decrypt it
+                dekToStore = ProtectDekWindows(dek);
+            }
+            else
+            {
+                dekToStore = (byte[])dek.Clone();
+            }
+
+            await File.WriteAllBytesAsync(dekPath, dekToStore);
+
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(dekPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            CryptographicOperations.ZeroMemory(dek);
+            CryptographicOperations.ZeroMemory(dekToStore);
 
             _log.LogInformation("Recording saved: {Path} ({Events} events, {Bytes}B plaintext)",
                 recPath, _events.Count, plaintext.Length);
@@ -96,6 +112,11 @@ internal sealed class SessionRecorder
             _log.LogError(ex, "Failed to save recording for session {Id}", _recId);
         }
     }
+
+    [SupportedOSPlatform("windows")]
+    private static byte[] ProtectDekWindows(byte[] dek) =>
+        System.Security.Cryptography.ProtectedData.Protect(
+            dek, null, System.Security.Cryptography.DataProtectionScope.LocalMachine);
 
     private byte[] BuildAsciinema()
     {
