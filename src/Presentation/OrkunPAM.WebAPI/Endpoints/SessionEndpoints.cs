@@ -170,6 +170,16 @@ public static class SessionEndpoints
 
         policies.MapPost("/", async (CreateSessionPolicyRequest req, OrkunPamDbContext db) =>
         {
+            // Validate CommandFilterRulesJson is well-formed JSON if provided (fixes #29)
+            if (!string.IsNullOrEmpty(req.CommandFilterRulesJson))
+            {
+                try { System.Text.Json.JsonDocument.Parse(req.CommandFilterRulesJson); }
+                catch (System.Text.Json.JsonException)
+                {
+                    return Results.BadRequest(new { success = false, errors = new[] { "CommandFilterRulesJson must be valid JSON" } });
+                }
+            }
+
             var policy = new SessionPolicy
             {
                 Name = req.Name,
@@ -204,6 +214,15 @@ public static class SessionEndpoints
 
         policies.MapPut("/{id:guid}", async (Guid id, UpdateSessionPolicyRequest req, OrkunPamDbContext db) =>
         {
+            if (!string.IsNullOrEmpty(req.CommandFilterRulesJson))
+            {
+                try { System.Text.Json.JsonDocument.Parse(req.CommandFilterRulesJson); }
+                catch (System.Text.Json.JsonException)
+                {
+                    return Results.BadRequest(new { success = false, errors = new[] { "CommandFilterRulesJson must be valid JSON" } });
+                }
+            }
+
             var p = await db.SessionPolicies.FindAsync(id);
             if (p == null) return Results.NotFound(new { success = false, errors = new[] { "Policy not found" } });
 
@@ -276,7 +295,7 @@ public static class SessionEndpoints
         db.ProxySessions.Add(session);
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Session {SessionId} ({Type}) started: user {UserId} → {Target}:{Port} via credential '{CredName}'",
+        logger.LogInformation("Session {SessionId} ({Type}) started: user {UserId} -> {Target}:{Port} via credential '{CredName}'",
             session.Id, type, userId, device.IpAddress ?? device.Hostname, session.TargetPort, cred.Name);
 
         return Results.Ok(new

@@ -136,6 +136,20 @@ try
     var signingKey = new RsaSecurityKey(rsaKey);
     builder.Services.AddSingleton(signingKey);
 
+    // Register TokenValidationParameters as singleton for WebSocket JWT validation
+    // (browser WebSocket API cannot set custom headers, so JWT is passed as query param)
+    builder.Services.AddSingleton(_ => new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "OrkunPAM",
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["Jwt:Audience"] ?? "OrkunPAM",
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = signingKey,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromSeconds(30)
+    });
+
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
@@ -189,6 +203,7 @@ try
     app.UseSerilogRequestLogging();
     app.UseCors();
     app.UseRateLimiter();
+    app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
     app.UseAuthentication();
     app.UseAuthorization();
 
@@ -242,6 +257,7 @@ try
     app.MapLdapSamlEndpoints();
     app.MapAapmEndpoints();
     app.MapSessionEndpoints();
+    app.MapWebSshEndpoints();
     app.MapDiscoveryEndpoints();
     app.MapReportEndpoints();
     app.MapComplianceEndpoints();

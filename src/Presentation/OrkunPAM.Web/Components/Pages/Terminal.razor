@@ -1,0 +1,79 @@
+@page "/terminal/{DeviceId}/{CredentialId}"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>SSH Terminal - OrkunPAM</PageTitle>
+
+<div style="display:flex;flex-direction:column;height:100vh;margin:0;padding:0;background:#1e1e1e;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#2d2d2d;color:#ccc;padding:6px 16px;font-family:monospace;font-size:12px;flex-shrink:0;border-bottom:1px solid #3d3d3d;">
+        <span>
+            <span style="color:#569cd6;">OrkunPAM</span>
+            <span style="color:#808080;"> &rsaquo; </span>
+            <span style="color:#4ec9b0;">SSH Terminal</span>
+            @if (!string.IsNullOrEmpty(DeviceId))
+            {
+                <span style="color:#808080;"> &rsaquo; </span>
+                <span style="color:#d4d4d4;">@DeviceId</span>
+            }
+        </span>
+        <button @onclick="DisconnectAsync"
+                style="background:#c0392b;color:white;border:none;padding:3px 12px;cursor:pointer;border-radius:3px;font-size:11px;">
+            Disconnect
+        </button>
+    </div>
+
+    <div id="orkunpam-terminal" style="flex:1;overflow:hidden;padding:4px;"></div>
+</div>
+
+@code {
+    [Parameter] public string DeviceId { get; set; } = "";
+    [Parameter] public string CredentialId { get; set; } = "";
+
+    private IJSObjectReference? _module;
+    private bool _initialized;
+
+    // API base URL - in production, read from configuration.
+    // The terminal page is served by the Blazor app; the WebAPI is on a different port.
+    private string ApiBase
+    {
+        get
+        {
+            var uri = new Uri(Nav.BaseUri);
+            var apiPort = uri.Port == 5000 ? 5001 : uri.Port;
+            return $"{uri.Scheme}://{uri.Host}:{apiPort}";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialized) return;
+        _initialized = true;
+
+        if (string.IsNullOrEmpty(DeviceId) || string.IsNullOrEmpty(CredentialId))
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/terminal.js");
+        await _module.InvokeVoidAsync("initTerminal",
+            "orkunpam-terminal", ApiBase, DeviceId, CredentialId);
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (_module != null)
+            try { await _module.InvokeVoidAsync("disposeTerminal"); } catch { }
+        Nav.NavigateTo("/");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module != null)
+        {
+            try { await _module.InvokeVoidAsync("disposeTerminal"); } catch { }
+            await _module.DisposeAsync();
+        }
+    }
+}
