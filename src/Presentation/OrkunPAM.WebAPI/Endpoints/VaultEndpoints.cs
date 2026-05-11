@@ -359,6 +359,44 @@ public static class VaultEndpoints
             return Results.Ok(new { success = true, data = history });
         });
 
+        // === Proxy Service Decrypt (called by SSH/RDP proxy daemons) ===
+        // Requires X-Proxy-Secret header in addition to JWT — defense-in-depth.
+        creds.MapPost("/proxy-decrypt", async (ProxyDecryptRequest req,
+            OrkunPamDbContext db, IVaultEncryptionService vault, IConfiguration config,
+            ILogger<Program> logger, HttpContext context) =>
+        {
+            var expectedSecret = config["ProxyService:Secret"];
+            var providedSecret = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault();
+            if (string.IsNullOrEmpty(expectedSecret) || providedSecret != expectedSecret)
+            {
+                logger.LogWarning("proxy-decrypt: invalid proxy secret from {IP}",
+                    context.Connection.RemoteIpAddress);
+                return Results.Forbid();
+            }
+
+            if (req.CredentialId == Guid.Empty)
+                return Results.BadRequest(new { success = false, errors = new[] { "credentialId required" } });
+
+            var cred = await db.Credentials.FindAsync(req.CredentialId);
+            if (cred == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            if (cred.PasswordEnc == null)
+                return Results.Ok(new { success = true, data = new { password = (string?)null } });
+
+            var decResult = vault.DecryptString(cred.PasswordEnc);
+            if (decResult.IsFailure)
+            {
+                logger.LogError("proxy-decrypt: decryption failed for credential {CredId}", req.CredentialId);
+                return Results.Problem("Decryption failed");
+            }
+
+            logger.LogInformation("proxy-decrypt: '{Name}' decrypted for purpose '{Purpose}'",
+                cred.Name, req.Purpose);
+
+            return Results.Ok(new { success = true, data = new { password = decResult.Value } });
+        });
+
         // === Vault Permissions ===
         var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault").RequireAuthorization();
 
@@ -398,5 +436,6 @@ public record CreateCredentialRequest(
     string? Username, string? Password, Guid? DeviceId, string? Tags,
     int? MaxCheckoutMinutes, bool RequiresApproval);
 public record CheckoutRequest(string? Reason, string? TicketNumber, int? DurationMinutes);
+public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
