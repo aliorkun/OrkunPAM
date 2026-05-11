@@ -78,12 +78,14 @@ internal sealed class SshTargetClient : IDisposable
         int pos = 1;
         var hostKeyBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
         var f = SshEncoding.ReadMpInt(replyPkt, ref pos);
-        var _sigBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
-        _log.LogDebug("Target host key {Bytes}B — TOFU mode", hostKeyBlob.Length);
+        var sigBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
 
         var K = dh.ComputeSharedSecret(f);
         var H = ComputeExchangeHash(clientKexPayload, serverKexPayload, hostKeyBlob,
             dh.PublicKey, f, K);
+
+        VerifyHostKeySignature(hostKeyBlob, sigBlob, H);
+        _log.LogDebug("Target host key verified ({Bytes}B)", hostKeyBlob.Length);
 
         await _conn.SendPacketAsync([Msg.NewKeys], ct);
 
@@ -117,6 +119,33 @@ internal sealed class SshTargetClient : IDisposable
         SshEncoding.WriteBool(ms, false);
         SshEncoding.WriteUInt32(ms, 0);
         return ms.ToArray();
+    }
+
+    private static void VerifyHostKeySignature(byte[] hostKeyBlob, byte[] sigBlob, byte[] H)
+    {
+        // Parse RSA public key: string(key-type) || mpint(e) || mpint(n)
+        int kpos = 0;
+        var keyType = SshEncoding.ReadString(hostKeyBlob, ref kpos);
+        if (keyType is not ("ssh-rsa" or "rsa-sha2-256"))
+            throw new SshException($"Unsupported host key type: {keyType}");
+        var e = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
+        var n = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
+
+        // Parse signature blob: string(sig-type) || string(raw-sig-bytes)
+        int spos = 0;
+        var sigType = SshEncoding.ReadString(sigBlob, ref spos);
+        var rawSig  = SshEncoding.ReadByteString(sigBlob, ref spos);
+
+        using var rsa = RSA.Create();
+        rsa.ImportParameters(new RSAParameters
+        {
+            Exponent = e.ToByteArray(isUnsigned: true, isBigEndian: true),
+            Modulus  = n.ToByteArray(isUnsigned: true, isBigEndian: true),
+        });
+
+        var hashAlg = sigType == "rsa-sha2-256" ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA1;
+        if (!rsa.VerifyData(H, rawSig, hashAlg, RSASignaturePadding.Pkcs1))
+            throw new SshException("Target host key signature verification failed — possible MITM attack");
     }
 
     private byte[] ComputeExchangeHash(

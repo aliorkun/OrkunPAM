@@ -41,7 +41,7 @@ internal sealed class PamApiClient
 
     /// <summary>
     /// Look up a device by hostname/IP and return the SSH credential for it.
-    /// Returns (targetIp, targetPort, targetUsername, targetPassword).
+    /// Throws InvalidOperationException on any failure — caller must close session (fail-closed).
     /// </summary>
     internal async Task<(string ip, int port, string user, string password)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
@@ -63,8 +63,8 @@ internal sealed class PamApiClient
 
             if (jwt == null)
             {
-                _log.LogWarning("Proxy service account login failed — using fallback mode");
-                return (targetHost, 22, "root", "");
+                _log.LogError("Proxy service account login failed — aborting session for {Host}", targetHost);
+                throw new InvalidOperationException("Proxy service account authentication failed");
             }
 
             client.DefaultRequestHeaders.Authorization =
@@ -75,26 +75,28 @@ internal sealed class PamApiClient
                 $"/api/v1/devices?search={Uri.EscapeDataString(targetHost)}&pageSize=1", ct);
 
             if (!devResp.IsSuccessStatusCode)
-                return (targetHost, 22, "root", "");
+                throw new InvalidOperationException(
+                    $"Device lookup failed for '{targetHost}' (HTTP {(int)devResp.StatusCode})");
 
             var devData = await devResp.Content.ReadFromJsonAsync<DeviceListResponse>(ct);
             var device = devData?.Data?.FirstOrDefault();
 
             if (device == null)
-                return (targetHost, 22, "root", "");
+                throw new InvalidOperationException($"No device found for host '{targetHost}'");
 
             // Get the first SSH credential for this device
             var credResp = await client.GetAsync(
                 $"/api/v1/vault/credentials?deviceId={device.Id}&credentialType=Ssh&pageSize=1", ct);
 
             if (!credResp.IsSuccessStatusCode)
-                return (device.IpAddress ?? targetHost, device.ConnectionPort ?? 22, "root", "");
+                throw new InvalidOperationException(
+                    $"Credential lookup failed for device '{device.Id}' (HTTP {(int)credResp.StatusCode})");
 
             var credData = await credResp.Content.ReadFromJsonAsync<CredentialListResponse>(ct);
             var cred = credData?.Data?.FirstOrDefault();
 
             if (cred == null)
-                return (device.IpAddress ?? targetHost, device.ConnectionPort ?? 22, "root", "");
+                throw new InvalidOperationException($"No SSH credential found for device '{device.Id}'");
 
             // Decrypt via dedicated proxy endpoint — also sends X-Proxy-Secret for defense-in-depth
             using var decryptReq = new HttpRequestMessage(HttpMethod.Post,
@@ -104,20 +106,29 @@ internal sealed class PamApiClient
             var decryptResp = await client.SendAsync(decryptReq, ct);
 
             if (!decryptResp.IsSuccessStatusCode)
-                return (device.IpAddress ?? targetHost, device.ConnectionPort ?? 22, cred.Username ?? "root", "");
+                throw new InvalidOperationException(
+                    $"Credential decryption failed for '{cred.Id}' (HTTP {(int)decryptResp.StatusCode})");
 
             var decryptData = await decryptResp.Content.ReadFromJsonAsync<DecryptResponse>(ct);
+            var password = decryptData?.Data?.Password;
+
+            if (string.IsNullOrEmpty(password))
+                throw new InvalidOperationException($"Decrypted credential is empty for '{cred.Id}'");
 
             return (
                 device.IpAddress ?? targetHost,
                 device.ConnectionPort ?? 22,
-                cred.Username ?? "root",
-                decryptData?.Data?.Password ?? "");
+                cred.Username ?? throw new InvalidOperationException("Credential has no username"),
+                password);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Failed to get target credential for {Host}", targetHost);
-            return (targetHost, 22, "root", "");
+            _log.LogError(ex, "Unexpected error retrieving credential for {Host}", targetHost);
+            throw new InvalidOperationException($"Failed to retrieve credential for '{targetHost}'", ex);
         }
     }
 
