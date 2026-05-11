@@ -1,0 +1,92 @@
+# Orkun PAM - Sprint Planı
+
+> Agent'lar bu dosyayı okuyarak hangi sprint'te olduğumuzu ve öncelikleri anlar.
+
+## Aktif Sprint: Sprint 1 - Security Hardening
+**Tarih:** 10-13 Mayıs 2026
+**Hedef:** Tüm security issue'ları kapat, foundation sağlamlaştır
+
+| Issue | Başlık | Severity | Durum |
+|-------|--------|----------|-------|
+| #10 | JWT RSA Key persistence | HIGH | Açık |
+| #18 | Memory zeroing after decrypt | MEDIUM | Açık |
+| #22 | Audit log gap | MEDIUM | Açık |
+| #24 | Stack trace leak | MEDIUM | Açık |
+| #26 | DEK cache expiration | MEDIUM | Açık |
+| #28 | Password reset audit | MEDIUM | Açık |
+| #31 | Sensitive data masking | MEDIUM | Açık |
+
+**Çıkış kriteri:** 0 security HIGH, 0 security MEDIUM → v0.2.0-security-hardened tag
+
+---
+
+## Sprint 2 - SSH Proxy + Temel UI
+**Tarih:** 14-20 Mayıs 2026
+**Hedef:** Native SSH proxy çalışır durumda, Blazor login + dashboard
+
+| Issue | Başlık | Tip | Atanan |
+|-------|--------|-----|--------|
+| #21 | SSH Proxy - native C# | MVP-SESSION | Developer Agent |
+| #25 | HTML5 Web SSH Terminal | MVP-SESSION | Developer Agent |
+| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | Developer Agent |
+| #45 | SAML 2.0 / SSO | MVP-AUTH | Developer Agent |
+
+**Çıkış kriteri:** SSH ile sunucuya bağlanıp komut çalıştırılabiliyor, Blazor login çalışıyor → v0.3.0-ssh-proxy tag
+
+---
+
+## Sprint 3 - RDP Proxy + Vault UI + Reporting
+**Tarih:** 21-28 Mayıs 2026
+**Hedef:** RDP gateway, vault/device UI sayfaları, temel raporlar
+
+| Issue | Başlık | Tip |
+|-------|--------|-----|
+| #23 | RDP Proxy - native C# | MVP-SESSION |
+| #47 | Session Recording | MVP-SESSION |
+| #20 | Blazor UI (vault, device, session sayfaları) | MVP-UI |
+| #27 | Temel Raporlar | MVP-REPORTING |
+| #32 | Otomatik Parola Rotasyonu | MVP-VAULT |
+
+**Çıkış kriteri:** RDP bağlantı + kayıt, vault UI, rapor sayfası → v0.4.0-rdp-proxy tag
+
+---
+
+## Sprint 4 - Enterprise Features + Polish
+**Tarih:** 29 Mayıs - 7 Haziran 2026
+**Hedef:** Enterprise satış için gerekli özellikler
+
+| Issue | Başlık | Tip |
+|-------|--------|-----|
+| #46 | Break-the-Glass acil erişim | MVP-SECURITY |
+| #38 | JIT Privileged Access | MVP-SECURITY |
+| #53 | BYOK + Key Rotation UI | MVP-SECURITY |
+| #40 | Privileged Account Discovery | MVP-DEVICE |
+| #54 | SMTP Bildirim | MVP-INFRA |
+| #39 | Self-Service Portal | MVP-UX |
+
+**Çıkış kriteri:** Enterprise demo yapılabilir → v0.5.0-enterprise tag
+
+---
+
+## Sprint 5 - Installer + GA Hazırlık
+**Tarih:** 8-15 Haziran 2026
+**Hedef:** Tek MSI installer, dokümantasyon, son testler
+
+| Issue | Başlık | Tip |
+|-------|--------|-----|
+| #36 | MSI Installer | MVP-UX |
+| #55 | Backup/DR | MVP-DEPLOYMENT |
+| - | E2E testler | Test |
+| - | Performans testleri | Test |
+| - | Dokümantasyon | Docs |
+
+**Çıkış kriteri:** Müşteriye kurulum yapılabilir → v1.0.0-rc1 tag
+
+---
+
+## Sprint Kuralları
+- Her sprint sonunda Coordinator tag atar
+- Sprint değişikliği bu dosya güncellenerek yapılır
+- Developer agent "Aktif Sprint" bölümündeki issue'lara odaklanır
+- Sprint dışı issue'lar backlog'da kalır
+- Security critical/high her zaman sprint'i keser (acil fix)
