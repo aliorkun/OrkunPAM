@@ -59,7 +59,7 @@ internal sealed class SshProxyService : BackgroundService
                     try
                     {
                         client.NoDelay = true;
-                        var session = new SshServerSession(client, _hostKey, _api, _log, stoppingToken);
+                        var session = new SshServerSession(client, _hostKey, _api, _opts, _log, stoppingToken);
                         await session.RunAsync();
                     }
                     catch (Exception ex)

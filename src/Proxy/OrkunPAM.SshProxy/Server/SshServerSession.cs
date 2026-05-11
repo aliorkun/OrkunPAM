@@ -5,12 +5,14 @@ using System.Text;
 using OrkunPAM.SshProxy.Client;
 using OrkunPAM.SshProxy.Crypto;
 using OrkunPAM.SshProxy.Protocol;
+using OrkunPAM.SshProxy.Session;
 
 namespace OrkunPAM.SshProxy.Server;
 
 /// <summary>
 /// Handles one SSH client connection acting as SSH server (PAM proxy server side).
-/// Flow: version exchange → KEXINIT → DH key exchange → NEWKEYS → userauth → channel → relay.
+/// Flow: version exchange → KEXINIT → DH key exchange → NEWKEYS → userauth →
+///       channel open → pty-req → shell/exec → relay (with session recording).
 /// </summary>
 internal sealed class SshServerSession
 {
@@ -19,23 +21,24 @@ internal sealed class SshServerSession
     private readonly SshConnection _conn;
     private readonly SshHostKey _hostKey;
     private readonly PamApiClient _api;
+    private readonly SshProxyOptions _opts;
     private readonly ILogger _log;
     private readonly CancellationToken _ct;
 
-    // KexInit payloads saved for exchange hash computation
     private byte[] _serverKexInitPayload = [];
     private byte[] _clientKexInitPayload = [];
     private string _clientVersion = "";
     private byte[]? _sessionId;
 
     internal SshServerSession(TcpClient client, SshHostKey hostKey, PamApiClient api,
-        ILogger log, CancellationToken ct)
+        SshProxyOptions opts, ILogger log, CancellationToken ct)
     {
-        _conn = new SshConnection(client.GetStream());
+        _conn    = new SshConnection(client.GetStream());
         _hostKey = hostKey;
-        _api = api;
-        _log = log;
-        _ct = ct;
+        _api     = api;
+        _opts    = opts;
+        _log     = log;
+        _ct      = ct;
     }
 
     internal async Task RunAsync()
@@ -47,14 +50,14 @@ internal sealed class SshServerSession
 
             await DoKeyExchangeAsync();
 
-            var (pamUser, targetHost, pamPassword) = await DoUserAuthAsync();
+            var (pamUser, targetHost, _) = await DoUserAuthAsync();
 
             var (targetIp, targetPort, targetUser, targetPassword) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
-            _log.LogInformation("Relay: {PamUser}@{Target}:{Port}", pamUser, targetIp, targetPort);
+            _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}'",
+                targetUser, targetIp, targetPort, pamUser);
 
-            // Connect to target and start relay
             using var target = new SshTargetClient(
                 targetIp, targetPort, targetUser, targetPassword, _log);
             await target.ConnectAsync(_ct);
@@ -63,7 +66,7 @@ internal sealed class SshServerSession
         }
         catch (OperationCanceledException) { }
         catch (SshException ex) { _log.LogWarning("SSH protocol error: {Msg}", ex.Message); }
-        catch (Exception ex) { _log.LogError(ex, "Session error"); }
+        catch (Exception ex)    { _log.LogError(ex, "Session error"); }
         finally
         {
             await _conn.DisposeAsync();
@@ -71,23 +74,20 @@ internal sealed class SshServerSession
     }
 
     // -------------------------------------------------------------------------
-    // Key Exchange
+    // Key Exchange (server side)
     // -------------------------------------------------------------------------
 
     private async Task DoKeyExchangeAsync()
     {
-        // Build and send server KEXINIT
         var serverKexInit = BuildKexInit();
         _serverKexInitPayload = serverKexInit;
         await _conn.SendPacketAsync(serverKexInit, _ct);
 
-        // Receive client KEXINIT
         var clientKexPkt = await _conn.ReadPacketAsync(_ct);
         if (clientKexPkt[0] != Msg.KexInit)
             throw new SshException($"Expected KEXINIT, got {clientKexPkt[0]}");
         _clientKexInitPayload = clientKexPkt;
 
-        // Receive SSH_MSG_KEXDH_INIT (client's DH public value e)
         var dhInitPkt = await _conn.ReadPacketAsync(_ct);
         if (dhInitPkt[0] != Msg.KexDhInit)
             throw new SshException($"Expected KEXDH_INIT, got {dhInitPkt[0]}");
@@ -95,18 +95,14 @@ internal sealed class SshServerSession
         int offset = 1;
         var e = SshEncoding.ReadMpInt(dhInitPkt, ref offset);
 
-        // Compute server DH
-        var dh = new DhGroup14();
-        var K = dh.ComputeSharedSecret(e);
+        var dh         = new DhGroup14();
+        var K          = dh.ComputeSharedSecret(e);
         var hostKeyBlob = _hostKey.GetPublicKeyBlob();
-
-        // Compute exchange hash H
-        var H = ComputeExchangeHash(hostKeyBlob, e, dh.PublicKey, K);
+        var H          = ComputeExchangeHash(hostKeyBlob, e, dh.PublicKey, K);
         _sessionId ??= H;
 
         var signature = _hostKey.Sign(H);
 
-        // Send KEXDH_REPLY
         using var reply = new MemoryStream();
         SshEncoding.WriteByte(reply, Msg.KexDhReply);
         SshEncoding.WriteByteString(reply, hostKeyBlob);
@@ -114,17 +110,13 @@ internal sealed class SshServerSession
         SshEncoding.WriteByteString(reply, signature);
         await _conn.SendAsync(reply, _ct);
 
-        // Send NEWKEYS
         await _conn.SendPacketAsync([Msg.NewKeys], _ct);
 
-        // Receive client NEWKEYS
         var newkeys = await _conn.ReadPacketAsync(_ct);
         if (newkeys[0] != Msg.NewKeys)
             throw new SshException("Expected NEWKEYS");
 
-        // Derive and activate session keys
         var keys = DhGroup14.DeriveKeys(K, H, _sessionId);
-        // Server reads from client (C→S) and writes to client (S→C)
         _conn.EnableEncryption(
             rxKey: keys.EkC2S, rxIv: keys.IvC2S, rxMacKey: keys.MkC2S,
             txKey: keys.EkS2C, txIv: keys.IvS2C, txMacKey: keys.MkS2C);
@@ -157,7 +149,7 @@ internal sealed class SshServerSession
     private byte[] ComputeExchangeHash(byte[] hostKeyBlob, BigInteger e, BigInteger f, BigInteger K)
     {
         using var sha = SHA256.Create();
-        using var ms = new MemoryStream();
+        using var ms  = new MemoryStream();
 
         SshEncoding.WriteByteString(ms, Encoding.ASCII.GetBytes(_clientVersion));
         SshEncoding.WriteByteString(ms, Encoding.ASCII.GetBytes(ServerVersion));
@@ -172,7 +164,7 @@ internal sealed class SshServerSession
     }
 
     // -------------------------------------------------------------------------
-    // User Auth (SSH_MSG_USERAUTH)
+    // User Auth (PAM credentials — username format: pamuser@target-host)
     // -------------------------------------------------------------------------
 
     private async Task<(string pamUser, string targetHost, string pamPassword)> DoUserAuthAsync()
@@ -181,7 +173,7 @@ internal sealed class SshServerSession
         if (svcReq[0] != Msg.ServiceRequest)
             throw new SshException($"Expected SERVICE_REQUEST, got {svcReq[0]}");
 
-        int o = 1;
+        int o       = 1;
         var svcName = SshEncoding.ReadString(svcReq, ref o);
         if (svcName != "ssh-userauth")
             throw new SshException("Unexpected service: " + svcName);
@@ -193,7 +185,8 @@ internal sealed class SshServerSession
 
         using var bannerMs = new MemoryStream();
         SshEncoding.WriteByte(bannerMs, Msg.UserauthBanner);
-        SshEncoding.WriteString(bannerMs, "OrkunPAM - Privileged Access Management\r\nUsername: pamuser@target-host\r\n");
+        SshEncoding.WriteString(bannerMs,
+            "OrkunPAM - Privileged Access Management\r\nUsername format: pamuser@target-host\r\n");
         SshEncoding.WriteString(bannerMs, "en");
         await _conn.SendAsync(bannerMs, _ct);
 
@@ -203,12 +196,12 @@ internal sealed class SshServerSession
             if (authPkt[0] != Msg.UserauthRequest)
                 throw new SshException("Expected USERAUTH_REQUEST");
 
-            int pos = 1;
-            var username  = SshEncoding.ReadString(authPkt, ref pos);
-            var _service  = SshEncoding.ReadString(authPkt, ref pos);
-            var method    = SshEncoding.ReadString(authPkt, ref pos);
+            int pos      = 1;
+            var username = SshEncoding.ReadString(authPkt, ref pos);
+            var _service = SshEncoding.ReadString(authPkt, ref pos);
+            var method   = SshEncoding.ReadString(authPkt, ref pos);
 
-            if (method is not "password")
+            if (method != "password")
             {
                 await SendAuthFailureAsync("password");
                 continue;
@@ -217,25 +210,27 @@ internal sealed class SshServerSession
             var _changeReq = SshEncoding.ReadBool(authPkt, ref pos);
             var password   = SshEncoding.ReadString(authPkt, ref pos);
 
-            var atIdx = username.IndexOf('@');
-            string pamUser    = atIdx > 0 ? username[..atIdx]     : username;
-            string targetHost = atIdx > 0 ? username[(atIdx + 1)..] : "";
+            var atIdx     = username.IndexOf('@');
+            var pamUser   = atIdx > 0 ? username[..atIdx]        : username;
+            var targetHost = atIdx > 0 ? username[(atIdx + 1)..]  : "";
 
             if (string.IsNullOrEmpty(targetHost))
             {
+                _log.LogWarning("Auth rejected: no target host in username '{User}'", username);
                 await SendAuthFailureAsync("password");
                 continue;
             }
 
             if (!await _api.ValidateUserAsync(pamUser, password, _ct))
             {
-                _log.LogWarning("Auth failure for {User}", pamUser);
+                _log.LogWarning("PAM auth failure for '{User}'", pamUser);
                 await SendAuthFailureAsync("password");
                 continue;
             }
 
             await _conn.SendPacketAsync([Msg.UserauthSuccess], _ct);
-            _log.LogInformation("Authenticated: {User} → {Target}", pamUser, targetHost);
+            _log.LogInformation("Authenticated: {PamUser} → target '{TargetHost}'",
+                pamUser, targetHost);
             return (pamUser, targetHost, password);
         }
 
@@ -252,58 +247,140 @@ internal sealed class SshServerSession
     }
 
     // -------------------------------------------------------------------------
-    // Channel handling + relay
+    // Channel handling: capture client requests, then relay
     // -------------------------------------------------------------------------
 
     private async Task RelayAsync(SshTargetClient target)
     {
+        // Step 1: receive CHANNEL_OPEN from client
         var pkt = await _conn.ReadPacketAsync(_ct);
         if (pkt[0] != Msg.ChannelOpen)
             throw new SshException("Expected CHANNEL_OPEN");
 
-        int pos = 1;
-        var _chanType    = SshEncoding.ReadString(pkt, ref pos);
+        int pos         = 1;
+        var _chanType   = SshEncoding.ReadString(pkt, ref pos);
         var clientChanId = SshEncoding.ReadUInt32(pkt, ref pos);
-        var _clientWin   = SshEncoding.ReadUInt32(pkt, ref pos);
-        var _clientMax   = SshEncoding.ReadUInt32(pkt, ref pos);
+        var _clientWin  = SshEncoding.ReadUInt32(pkt, ref pos);
+        var _clientMax  = SshEncoding.ReadUInt32(pkt, ref pos);
+
+        const uint ServerChanId = 0;
+        const uint ServerWindow = 1024 * 1024;
+        const uint ServerMaxPkt = 32768;
 
         using var confMs = new MemoryStream();
         SshEncoding.WriteByte(confMs, Msg.ChannelOpenConf);
         SshEncoding.WriteUInt32(confMs, clientChanId);
-        SshEncoding.WriteUInt32(confMs, 0);           // server channel id
-        SshEncoding.WriteUInt32(confMs, 1024 * 1024); // server window
-        SshEncoding.WriteUInt32(confMs, 32768);        // max packet
+        SshEncoding.WriteUInt32(confMs, ServerChanId);
+        SshEncoding.WriteUInt32(confMs, ServerWindow);
+        SshEncoding.WriteUInt32(confMs, ServerMaxPkt);
         await _conn.SendAsync(confMs, _ct);
 
-        bool shellStarted = false;
-        while (!shellStarted)
+        // Step 2: collect channel requests from client (pty-req, shell/exec, …)
+        PtyParams? pty     = null;
+        bool isExec        = false;
+        string? execCmd    = null;
+        bool sessionReady  = false;
+
+        while (!sessionReady)
         {
             var reqPkt = await _conn.ReadPacketAsync(_ct);
-            if (reqPkt[0] == Msg.ChannelRequest)
+            switch (reqPkt[0])
             {
-                pos = 1;
-                var _recipChan = SshEncoding.ReadUInt32(reqPkt, ref pos);
-                var reqType    = SshEncoding.ReadString(reqPkt, ref pos);
-                var wantReply  = SshEncoding.ReadBool(reqPkt, ref pos);
+                case Msg.ChannelRequest:
+                {
+                    pos = 1;
+                    var _recipChan = SshEncoding.ReadUInt32(reqPkt, ref pos);
+                    var reqType    = SshEncoding.ReadString(reqPkt, ref pos);
+                    var wantReply  = SshEncoding.ReadBool(reqPkt, ref pos);
 
-                if (reqType == "pty-req")
-                {
-                    if (wantReply) await SendChannelSuccessAsync(clientChanId);
+                    switch (reqType)
+                    {
+                        case "pty-req":
+                        {
+                            var termType     = SshEncoding.ReadString(reqPkt, ref pos);
+                            var widthChars   = SshEncoding.ReadUInt32(reqPkt, ref pos);
+                            var heightRows   = SshEncoding.ReadUInt32(reqPkt, ref pos);
+                            var widthPixels  = SshEncoding.ReadUInt32(reqPkt, ref pos);
+                            var heightPixels = SshEncoding.ReadUInt32(reqPkt, ref pos);
+                            var modes        = SshEncoding.ReadByteString(reqPkt, ref pos);
+                            pty = new PtyParams(termType, widthChars, heightRows,
+                                widthPixels, heightPixels, modes);
+                            if (wantReply) await SendChannelSuccessAsync(clientChanId);
+                            break;
+                        }
+                        case "shell":
+                            if (wantReply) await SendChannelSuccessAsync(clientChanId);
+                            sessionReady = true;
+                            break;
+                        case "exec":
+                            execCmd = SshEncoding.ReadString(reqPkt, ref pos);
+                            isExec  = true;
+                            if (wantReply) await SendChannelSuccessAsync(clientChanId);
+                            sessionReady = true;
+                            break;
+                        case "window-change":
+                            // Terminal resize before shell is open — just accept, no reply
+                            break;
+                        default:
+                            if (wantReply) await SendChannelFailureAsync(clientChanId);
+                            break;
+                    }
+                    break;
                 }
-                else if (reqType is "shell" or "exec")
+
+                case Msg.ChannelWinAdj:
+                    break; // client adjusting pre-shell window — ignore
+
+                case Msg.GlobalRequest:
                 {
-                    if (wantReply) await SendChannelSuccessAsync(clientChanId);
-                    shellStarted = true;
+                    pos = 1;
+                    var _name     = SshEncoding.ReadString(reqPkt, ref pos);
+                    var wantReply = SshEncoding.ReadBool(reqPkt, ref pos);
+                    if (wantReply)
+                        await _conn.SendPacketAsync([Msg.RequestFailure], _ct);
+                    break;
                 }
-                else
-                {
-                    if (wantReply) await SendChannelFailureAsync(clientChanId);
-                }
+
+                default:
+                    break; // silently skip unknown pre-channel messages
             }
-            // ignore ChannelWinAdj and other pre-shell messages
         }
 
-        await target.RelayToClientAsync(_conn, clientChanId, _ct);
+        // Step 3: open session on target with the parameters the client requested
+        try
+        {
+            await target.OpenSessionAsync(pty, isExec, execCmd, _ct);
+        }
+        catch (SshException ex)
+        {
+            _log.LogError("Target session open failed: {Msg}", ex.Message);
+            using var eofMs = new MemoryStream();
+            SshEncoding.WriteByte(eofMs, Msg.ChannelEof);
+            SshEncoding.WriteUInt32(eofMs, clientChanId);
+            await _conn.SendAsync(eofMs, _ct);
+            using var closeMs = new MemoryStream();
+            SshEncoding.WriteByte(closeMs, Msg.ChannelClose);
+            SshEncoding.WriteUInt32(closeMs, clientChanId);
+            await _conn.SendAsync(closeMs, _ct);
+            return;
+        }
+
+        _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={Exec})",
+            clientChanId, pty != null, isExec ? execCmd : "shell");
+
+        // Step 4: record + relay
+        var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty);
+        recorder.Start(_sessionId);
+
+        try
+        {
+            await target.RelayToClientAsync(_conn, clientChanId, recorder, _ct);
+        }
+        finally
+        {
+            recorder.Stop();
+            await recorder.FlushAsync();
+        }
     }
 
     private async Task SendChannelSuccessAsync(uint recipientChan)

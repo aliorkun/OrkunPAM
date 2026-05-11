@@ -6,4 +6,5 @@ public sealed class SshProxyOptions
     public string? ListenAddress { get; set; }
     public string? KeyDirectory { get; set; }
     public int MaxConcurrentSessions { get; set; } = 100;
+    public string RecordingDirectory { get; set; } = "recordings";
 }

@@ -4,13 +4,16 @@ using System.Security.Cryptography;
 using System.Text;
 using OrkunPAM.SshProxy.Crypto;
 using OrkunPAM.SshProxy.Protocol;
+using OrkunPAM.SshProxy.Session;
 
 namespace OrkunPAM.SshProxy.Client;
 
 /// <summary>
 /// SSH client that connects PAM to the target server.
-/// Implements the SSH client side: version exchange, key exchange, password auth,
-/// session channel open, then provides bidirectional relay to the PAM-client side.
+/// ConnectAsync handles TCP + key exchange + user auth only.
+/// OpenSessionAsync opens the session channel with PTY/exec forwarding,
+/// so it can be called after the PAM server has captured the client's
+/// pty-req and shell/exec parameters.
 /// </summary>
 internal sealed class SshTargetClient : IDisposable
 {
@@ -25,17 +28,21 @@ internal sealed class SshTargetClient : IDisposable
     private TcpClient? _tcp;
     private SshConnection? _conn;
     private uint _serverChanId;
-    private uint _clientChanId = 1;
+    private readonly uint _clientChanId = 1;
     private string _targetSshVersion = "SSH-2.0-Unknown";
 
     internal SshTargetClient(string host, int port, string username, string password, ILogger log)
     {
-        _host = host;
-        _port = port;
+        _host     = host;
+        _port     = port;
         _username = username;
         _password = password;
-        _log = log;
+        _log      = log;
     }
+
+    // -------------------------------------------------------------------------
+    // Phase 1: TCP + key exchange + user auth (no channel yet)
+    // -------------------------------------------------------------------------
 
     internal async Task ConnectAsync(CancellationToken ct)
     {
@@ -48,11 +55,32 @@ internal sealed class SshTargetClient : IDisposable
 
         await DoKeyExchangeAsync(ct);
         await DoUserAuthAsync(ct);
-        await OpenSessionChannelAsync(ct);
-        await RequestShellAsync(ct);
 
-        _log.LogInformation("Connected to target {Host}:{Port}", _host, _port);
+        _log.LogInformation("Authenticated to target {Host}:{Port} as '{User}'",
+            _host, _port, _username);
     }
+
+    // -------------------------------------------------------------------------
+    // Phase 2: Open session channel with PTY / exec / shell
+    // -------------------------------------------------------------------------
+
+    internal async Task OpenSessionAsync(
+        PtyParams? pty, bool isExec, string? execCommand, CancellationToken ct)
+    {
+        await OpenSessionChannelAsync(ct);
+
+        if (pty != null)
+            await SendPtyReqAsync(pty, ct);
+
+        if (isExec && execCommand != null)
+            await RequestExecAsync(execCommand, ct);
+        else
+            await RequestShellAsync(ct);
+    }
+
+    // -------------------------------------------------------------------------
+    // Key Exchange (client-side, connects to real SSH server on target)
+    // -------------------------------------------------------------------------
 
     private async Task DoKeyExchangeAsync(CancellationToken ct)
     {
@@ -77,8 +105,8 @@ internal sealed class SshTargetClient : IDisposable
 
         int pos = 1;
         var hostKeyBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
-        var f = SshEncoding.ReadMpInt(replyPkt, ref pos);
-        var sigBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
+        var f           = SshEncoding.ReadMpInt(replyPkt, ref pos);
+        var sigBlob     = SshEncoding.ReadByteString(replyPkt, ref pos);
 
         var K = dh.ComputeSharedSecret(f);
         var H = ComputeExchangeHash(clientKexPayload, serverKexPayload, hostKeyBlob,
@@ -123,16 +151,14 @@ internal sealed class SshTargetClient : IDisposable
 
     private static void VerifyHostKeySignature(byte[] hostKeyBlob, byte[] sigBlob, byte[] H)
     {
-        // Parse RSA public key: string(key-type) || mpint(e) || mpint(n)
-        int kpos = 0;
+        int kpos    = 0;
         var keyType = SshEncoding.ReadString(hostKeyBlob, ref kpos);
         if (keyType is not ("ssh-rsa" or "rsa-sha2-256"))
             throw new SshException($"Unsupported host key type: {keyType}");
         var e = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
         var n = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
 
-        // Parse signature blob: string(sig-type) || string(raw-sig-bytes)
-        int spos = 0;
+        int spos    = 0;
         var sigType = SshEncoding.ReadString(sigBlob, ref spos);
         var rawSig  = SshEncoding.ReadByteString(sigBlob, ref spos);
 
@@ -145,7 +171,7 @@ internal sealed class SshTargetClient : IDisposable
 
         var hashAlg = sigType == "rsa-sha2-256" ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA1;
         if (!rsa.VerifyData(H, rawSig, hashAlg, RSASignaturePadding.Pkcs1))
-            throw new SshException("Target host key signature verification failed — possible MITM attack");
+            throw new SshException("Target host key signature verification failed — possible MITM");
     }
 
     private byte[] ComputeExchangeHash(
@@ -153,7 +179,7 @@ internal sealed class SshTargetClient : IDisposable
         BigInteger e, BigInteger f, BigInteger K)
     {
         using var sha = SHA256.Create();
-        using var ms = new MemoryStream();
+        using var ms  = new MemoryStream();
 
         SshEncoding.WriteByteString(ms, Encoding.ASCII.GetBytes(ClientVersion));
         SshEncoding.WriteByteString(ms, Encoding.ASCII.GetBytes(_targetSshVersion));
@@ -166,6 +192,10 @@ internal sealed class SshTargetClient : IDisposable
 
         return sha.ComputeHash(ms.ToArray());
     }
+
+    // -------------------------------------------------------------------------
+    // User Auth (password injection)
+    // -------------------------------------------------------------------------
 
     private async Task DoUserAuthAsync(CancellationToken ct)
     {
@@ -191,12 +221,16 @@ internal sealed class SshTargetClient : IDisposable
         {
             var authResp = await _conn.ReadPacketAsync(ct);
             if (authResp[0] == Msg.UserauthSuccess) return;
-            if (authResp[0] == Msg.UserauthBanner) continue;
+            if (authResp[0] == Msg.UserauthBanner)  continue;
             if (authResp[0] == Msg.UserauthFailure)
                 throw new SshException($"Target rejected auth for '{_username}'");
         }
-        throw new SshException("Target auth failed");
+        throw new SshException("Target auth failed after retries");
     }
+
+    // -------------------------------------------------------------------------
+    // Session channel setup
+    // -------------------------------------------------------------------------
 
     private async Task OpenSessionChannelAsync(CancellationToken ct)
     {
@@ -204,17 +238,37 @@ internal sealed class SshTargetClient : IDisposable
         SshEncoding.WriteByte(ms, Msg.ChannelOpen);
         SshEncoding.WriteString(ms, "session");
         SshEncoding.WriteUInt32(ms, _clientChanId);
-        SshEncoding.WriteUInt32(ms, 1024 * 1024);
-        SshEncoding.WriteUInt32(ms, 32768);
+        SshEncoding.WriteUInt32(ms, 1024 * 1024); // initial window
+        SshEncoding.WriteUInt32(ms, 32768);        // max packet
         await _conn!.SendAsync(ms, ct);
 
         var resp = await _conn.ReadPacketAsync(ct);
         if (resp[0] != Msg.ChannelOpenConf)
-            throw new SshException("Target did not confirm session channel");
+            throw new SshException("Target did not confirm session channel open");
 
-        int pos = 1;
-        var _ourChan = SshEncoding.ReadUInt32(resp, ref pos);
+        int pos  = 1;
+        var _our = SshEncoding.ReadUInt32(resp, ref pos);
         _serverChanId = SshEncoding.ReadUInt32(resp, ref pos);
+    }
+
+    private async Task SendPtyReqAsync(PtyParams pty, CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        SshEncoding.WriteByte(ms, Msg.ChannelRequest);
+        SshEncoding.WriteUInt32(ms, _serverChanId);
+        SshEncoding.WriteString(ms, "pty-req");
+        SshEncoding.WriteBool(ms, true); // want reply
+        SshEncoding.WriteString(ms, pty.TermType);
+        SshEncoding.WriteUInt32(ms, pty.WidthChars);
+        SshEncoding.WriteUInt32(ms, pty.HeightRows);
+        SshEncoding.WriteUInt32(ms, pty.WidthPixels);
+        SshEncoding.WriteUInt32(ms, pty.HeightPixels);
+        SshEncoding.WriteByteString(ms, pty.Modes);
+        await _conn!.SendAsync(ms, ct);
+
+        var resp = await _conn.ReadPacketAsync(ct);
+        if (resp[0] == Msg.ChannelFailure)
+            _log.LogWarning("Target rejected pty-req (proceeding without PTY)");
     }
 
     private async Task RequestShellAsync(CancellationToken ct)
@@ -231,14 +285,38 @@ internal sealed class SshTargetClient : IDisposable
             throw new SshException("Target refused shell request");
     }
 
-    internal async Task RelayToClientAsync(SshConnection clientConn, uint clientSideChanId, CancellationToken ct)
+    private async Task RequestExecAsync(string command, CancellationToken ct)
     {
-        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, ct), ct);
-        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, ct), ct);
+        using var ms = new MemoryStream();
+        SshEncoding.WriteByte(ms, Msg.ChannelRequest);
+        SshEncoding.WriteUInt32(ms, _serverChanId);
+        SshEncoding.WriteString(ms, "exec");
+        SshEncoding.WriteBool(ms, true);
+        SshEncoding.WriteString(ms, command);
+        await _conn!.SendAsync(ms, ct);
+
+        var resp = await _conn.ReadPacketAsync(ct);
+        if (resp[0] == Msg.ChannelFailure)
+            throw new SshException($"Target refused exec: {command}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bidirectional relay (target ↔ PAM client)
+    // -------------------------------------------------------------------------
+
+    internal async Task RelayToClientAsync(
+        SshConnection clientConn, uint clientSideChanId,
+        SessionRecorder? recorder, CancellationToken ct)
+    {
+        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct), ct);
+        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct), ct);
         await Task.WhenAny(t2c, c2t);
     }
 
-    private async Task TargetToClientLoopAsync(SshConnection clientConn, uint clientSideChanId, CancellationToken ct)
+    // Receives data from target → forwards to client connection
+    private async Task TargetToClientLoopAsync(
+        SshConnection clientConn, uint clientSideChanId,
+        SessionRecorder? recorder, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -247,32 +325,78 @@ internal sealed class SshTargetClient : IDisposable
             {
                 case Msg.ChannelData:
                 {
-                    int pos = 1;
-                    var _ch = SshEncoding.ReadUInt32(pkt, ref pos);
+                    int pos  = 1;
+                    var _ch  = SshEncoding.ReadUInt32(pkt, ref pos);
                     var data = SshEncoding.ReadByteString(pkt, ref pos);
+
                     using var fwd = new MemoryStream();
                     SshEncoding.WriteByte(fwd, Msg.ChannelData);
                     SshEncoding.WriteUInt32(fwd, clientSideChanId);
                     SshEncoding.WriteByteString(fwd, data);
                     await clientConn.SendAsync(fwd, ct);
+
+                    // Replenish target's view of our receive window so it never stalls
+                    using var adj = new MemoryStream();
+                    SshEncoding.WriteByte(adj, Msg.ChannelWinAdj);
+                    SshEncoding.WriteUInt32(adj, _serverChanId);
+                    SshEncoding.WriteUInt32(adj, (uint)data.Length);
+                    await _conn.SendAsync(adj, ct);
+
+                    recorder?.WriteOutput(data);
                     break;
                 }
                 case Msg.ChannelExtData:
                 {
-                    int pos = 1;
-                    var _ch = SshEncoding.ReadUInt32(pkt, ref pos);
-                    var dt = SshEncoding.ReadUInt32(pkt, ref pos);
+                    int pos  = 1;
+                    var _ch  = SshEncoding.ReadUInt32(pkt, ref pos);
+                    var dt   = SshEncoding.ReadUInt32(pkt, ref pos);
                     var data = SshEncoding.ReadByteString(pkt, ref pos);
+
                     using var fwd = new MemoryStream();
                     SshEncoding.WriteByte(fwd, Msg.ChannelExtData);
                     SshEncoding.WriteUInt32(fwd, clientSideChanId);
                     SshEncoding.WriteUInt32(fwd, dt);
                     SshEncoding.WriteByteString(fwd, data);
                     await clientConn.SendAsync(fwd, ct);
+
+                    using var adj = new MemoryStream();
+                    SshEncoding.WriteByte(adj, Msg.ChannelWinAdj);
+                    SshEncoding.WriteUInt32(adj, _serverChanId);
+                    SshEncoding.WriteUInt32(adj, (uint)data.Length);
+                    await _conn.SendAsync(adj, ct);
                     break;
                 }
                 case Msg.ChannelWinAdj:
+                    // Target is giving us more window to send TO it — relay to client so
+                    // client knows PAM can forward more data toward the target.
                     break;
+                case Msg.ChannelRequest:
+                {
+                    // Forward exit-status and exit-signal to client
+                    int pos      = 1;
+                    var _rch     = SshEncoding.ReadUInt32(pkt, ref pos);
+                    var reqType  = SshEncoding.ReadString(pkt, ref pos);
+                    var wantReply = SshEncoding.ReadBool(pkt, ref pos);
+
+                    if (reqType is "exit-status" or "exit-signal")
+                    {
+                        using var fwd = new MemoryStream();
+                        SshEncoding.WriteByte(fwd, Msg.ChannelRequest);
+                        SshEncoding.WriteUInt32(fwd, clientSideChanId);
+                        SshEncoding.WriteString(fwd, reqType);
+                        SshEncoding.WriteBool(fwd, false);
+                        fwd.Write(pkt.AsSpan(pos));
+                        await clientConn.SendAsync(fwd, ct);
+                    }
+                    else if (wantReply)
+                    {
+                        using var fail = new MemoryStream();
+                        SshEncoding.WriteByte(fail, Msg.ChannelFailure);
+                        SshEncoding.WriteUInt32(fail, _serverChanId);
+                        await _conn.SendAsync(fail, ct);
+                    }
+                    break;
+                }
                 case Msg.ChannelEof:
                 {
                     using var eof = new MemoryStream();
@@ -290,13 +414,15 @@ internal sealed class SshTargetClient : IDisposable
                     return;
                 }
                 default:
-                    _log.LogDebug("Unhandled target msg {T}", pkt[0]);
+                    _log.LogDebug("Unhandled target msg type={Type}", pkt[0]);
                     break;
             }
         }
     }
 
-    private async Task ClientToTargetLoopAsync(SshConnection clientConn, CancellationToken ct)
+    // Receives data from client connection → forwards to target
+    private async Task ClientToTargetLoopAsync(
+        SshConnection clientConn, uint clientSideChanId, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -305,17 +431,53 @@ internal sealed class SshTargetClient : IDisposable
             {
                 case Msg.ChannelData:
                 {
-                    int pos = 1;
-                    var _ch = SshEncoding.ReadUInt32(pkt, ref pos);
+                    int pos  = 1;
+                    var _ch  = SshEncoding.ReadUInt32(pkt, ref pos);
                     var data = SshEncoding.ReadByteString(pkt, ref pos);
+
                     using var fwd = new MemoryStream();
                     SshEncoding.WriteByte(fwd, Msg.ChannelData);
                     SshEncoding.WriteUInt32(fwd, _serverChanId);
                     SshEncoding.WriteByteString(fwd, data);
                     await _conn!.SendAsync(fwd, ct);
+
+                    // Replenish client's view of our receive window
+                    using var adj = new MemoryStream();
+                    SshEncoding.WriteByte(adj, Msg.ChannelWinAdj);
+                    SshEncoding.WriteUInt32(adj, clientSideChanId);
+                    SshEncoding.WriteUInt32(adj, (uint)data.Length);
+                    await clientConn.SendAsync(adj, ct);
+                    break;
+                }
+                case Msg.ChannelRequest:
+                {
+                    // Forward window-change (terminal resize) to target
+                    int pos      = 1;
+                    var _rch     = SshEncoding.ReadUInt32(pkt, ref pos);
+                    var reqType  = SshEncoding.ReadString(pkt, ref pos);
+                    var wantReply = SshEncoding.ReadBool(pkt, ref pos);
+
+                    if (reqType == "window-change")
+                    {
+                        using var fwd = new MemoryStream();
+                        SshEncoding.WriteByte(fwd, Msg.ChannelRequest);
+                        SshEncoding.WriteUInt32(fwd, _serverChanId);
+                        SshEncoding.WriteString(fwd, "window-change");
+                        SshEncoding.WriteBool(fwd, false);
+                        fwd.Write(pkt.AsSpan(pos)); // width, height, pixels
+                        await _conn!.SendAsync(fwd, ct);
+                    }
+                    else if (wantReply)
+                    {
+                        using var fail = new MemoryStream();
+                        SshEncoding.WriteByte(fail, Msg.ChannelFailure);
+                        SshEncoding.WriteUInt32(fail, clientSideChanId);
+                        await clientConn.SendAsync(fail, ct);
+                    }
                     break;
                 }
                 case Msg.ChannelWinAdj:
+                    // Client is increasing the window for data we send to it — no relay action needed.
                     break;
                 case Msg.ChannelEof:
                 {
@@ -332,6 +494,15 @@ internal sealed class SshTargetClient : IDisposable
                     SshEncoding.WriteUInt32(close, _serverChanId);
                     await _conn!.SendAsync(close, ct);
                     return;
+                }
+                case Msg.GlobalRequest:
+                {
+                    int pos      = 1;
+                    var _name    = SshEncoding.ReadString(pkt, ref pos);
+                    var wantReply = SshEncoding.ReadBool(pkt, ref pos);
+                    if (wantReply)
+                        await clientConn.SendPacketAsync([Msg.RequestFailure], ct);
+                    break;
                 }
                 default:
                     break;
