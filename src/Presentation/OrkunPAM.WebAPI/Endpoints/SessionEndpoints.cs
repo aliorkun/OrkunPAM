@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Enums;
@@ -20,10 +22,60 @@ public static class SessionEndpoints
         });
 
         sessions.MapPost("/rdp/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
+            IVaultEncryptionService vault, ILogger<Program> logger,
+            IMemoryCache cache, IConfiguration config, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Rdp, 3389, db, vault, logger, context);
+            return await CreateRdpSession(req, db, vault, logger, cache, config, context);
         });
+
+        // Called by the RDP proxy service to exchange a session token for target credentials.
+        // Authenticated via X-Proxy-Secret header (not JWT).
+        app.MapPost("/api/v1/sessions/rdp/validate-token",
+            async (ValidateRdpTokenRequest req, IMemoryCache cache, IConfiguration config, HttpContext context) =>
+        {
+            var secret = config["PamApi:ProxySecret"] ?? "";
+            if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
+                return Results.Unauthorized();
+
+            if (!cache.TryGetValue($"rdp:token:{req.SessionToken}", out RdpTokenData? info) || info == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Session token not found or expired" } });
+
+            // Single-use token: remove from cache immediately after first use
+            cache.Remove($"rdp:token:{req.SessionToken}");
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    sessionId = info.SessionId,
+                    targetIp = info.TargetIp,
+                    targetPort = info.TargetPort,
+                    targetUsername = info.TargetUsername,
+                    targetPasswordBytes = info.TargetPasswordBytes,
+                    targetDomain = info.TargetDomain
+                }
+            });
+        }).WithTags("Sessions").AllowAnonymous();
+
+        // Called by the RDP proxy to mark a session as completed.
+        app.MapPost("/api/v1/sessions/{id:guid}/end",
+            async (Guid id, EndSessionRequest req, OrkunPamDbContext db, IConfiguration config, HttpContext context) =>
+        {
+            var secret = config["PamApi:ProxySecret"] ?? "";
+            if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
+                return Results.Unauthorized();
+
+            var session = await db.ProxySessions.FindAsync(id);
+            if (session == null) return Results.NotFound();
+
+            session.EndedAtUtc = DateTime.UtcNow;
+            session.DurationSeconds = req.DurationSeconds;
+            session.RecordingPath = req.RecordingPath;
+            session.Status = OrkunPAM.Domain.Enums.SessionStatus.Completed;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        }).WithTags("Sessions").AllowAnonymous();
 
         sessions.MapPost("/vnc/connect", async (ConnectRequest req, OrkunPamDbContext db,
             IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
@@ -316,11 +368,141 @@ public static class SessionEndpoints
             }
         });
     }
+
+    // -----------------------------------------------------------------------
+    // RDP session: generates a session token + .rdp launch file
+    // -----------------------------------------------------------------------
+
+    private static async Task<IResult> CreateRdpSession(
+        ConnectRequest req, OrkunPamDbContext db, IVaultEncryptionService vault,
+        ILogger<Program> logger, IMemoryCache cache, IConfiguration config, HttpContext context)
+    {
+        var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+            return Results.Unauthorized();
+
+        var device = await db.Devices.FindAsync(req.DeviceId);
+        if (device == null)
+            return Results.NotFound(new { success = false, errors = new[] { $"Device not found: {req.DeviceId}" } });
+
+        var cred = await db.Credentials.FindAsync(req.CredentialId);
+        if (cred == null)
+            return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
+
+        if (cred.PasswordEnc == null)
+            return Results.BadRequest(new { success = false, errors = new[] { "Credential has no password" } });
+
+        var decResult = vault.DecryptString(cred.PasswordEnc);
+        if (decResult.IsFailure)
+        {
+            logger.LogError("RDP session: cannot decrypt credential {CredId}: {Error}", req.CredentialId, decResult.Error.Message);
+            return Results.Problem("Credential decryption failed.");
+        }
+
+        var session = new ProxySession
+        {
+            UserId     = userId,
+            DeviceId   = req.DeviceId,
+            CredentialId = req.CredentialId,
+            SessionPolicyId = req.SessionPolicyId,
+            SessionType = SessionType.Rdp,
+            ClientIpAddress = req.ClientIp,
+            TargetIpAddress = device.IpAddress,
+            TargetPort  = device.ConnectionPort ?? 3389,
+            Reason      = req.Reason,
+            TicketNumber = req.TicketNumber
+        };
+
+        db.ProxySessions.Add(session);
+        await db.SaveChangesAsync();
+
+        var sessionToken = Guid.NewGuid().ToString("N");
+
+        // Cache token for one-time use by the RDP proxy (TTL = 5 minutes)
+        var tokenData = new RdpTokenData(
+            session.Id.ToString(),
+            device.IpAddress ?? device.Hostname,
+            device.ConnectionPort ?? 3389,
+            cred.Username ?? "",
+            System.Text.Encoding.UTF8.GetBytes(decResult.Value),
+            null);
+
+        // Zero the decrypted password string after encoding into byte array
+        cache.Set($"rdp:token:{sessionToken}", tokenData,
+            TimeSpan.FromSeconds(300));
+
+        // Determine proxy address for the .rdp file
+        var proxyHost = config["RdpProxy:PublicHostname"] ?? context.Request.Host.Host;
+        var proxyPort = int.TryParse(config["RdpProxy:ListenPort"], out var pp) ? pp : 3389;
+
+        var rdpFileContent = BuildRdpFile(proxyHost, proxyPort, sessionToken, device.Hostname);
+        var rdpFileBytes = Encoding.UTF8.GetBytes(rdpFileContent);
+
+        logger.LogInformation("RDP session {SessionId} created for user {UserId} → {Target}",
+            session.Id, userId, device.IpAddress ?? device.Hostname);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                sessionId   = session.Id,
+                sessionToken,
+                proxyHost,
+                proxyPort,
+                rdpFile = new
+                {
+                    filename = $"PAM-{device.Hostname}.rdp",
+                    contentBase64 = Convert.ToBase64String(rdpFileBytes)
+                }
+            }
+        });
+    }
+
+    private static string BuildRdpFile(string proxyHost, int proxyPort, string sessionToken, string deviceHostname)
+    {
+        // Session token is passed as the username so the PAM RDP proxy can identify the pre-authenticated session.
+        // NLA/CredSSP is disabled on the client side (enablecredsspsupport:i:0) because the proxy handles
+        // credential injection at the target side using vault credentials.
+        var sb = new StringBuilder();
+        sb.AppendLine($"full address:s:{proxyHost}:{proxyPort}");
+        sb.AppendLine($"username:s:{sessionToken}");
+        sb.AppendLine($"server port:i:{proxyPort}");
+        sb.AppendLine("enablecredsspsupport:i:0");
+        sb.AppendLine("authentication level:i:2");
+        sb.AppendLine("prompt for credentials:i:0");
+        sb.AppendLine("negotiate security layer:i:0");
+        sb.AppendLine("use redirection server name:i:0");
+        sb.AppendLine("alternate shell:s:");
+        sb.AppendLine("shell working directory:s:");
+        sb.AppendLine($"remoteapplicationprogram:s:");
+        sb.AppendLine("screen mode id:i:2");
+        sb.AppendLine("use multimon:i:0");
+        sb.AppendLine("session bpp:i:32");
+        sb.AppendLine("compression:i:1");
+        sb.AppendLine("keyboardhook:i:2");
+        sb.AppendLine("audiocapturemode:i:0");
+        sb.AppendLine("videoplaybackmode:i:1");
+        sb.AppendLine("connection type:i:7");
+        sb.AppendLine("allow font smoothing:i:1");
+        sb.AppendLine("allow desktop composition:i:1");
+        sb.AppendLine("disable wallpaper:i:0");
+        sb.AppendLine("disable full window drag:i:1");
+        sb.AppendLine("disable menu anims:i:1");
+        sb.AppendLine("disable themes:i:0");
+        sb.AppendLine("bitmapcachepersistenable:i:1");
+        sb.AppendLine($"description:s:PAM Session - {deviceHostname}");
+        return sb.ToString();
+    }
 }
 
 public record ConnectRequest(Guid DeviceId, Guid CredentialId,
     Guid? SessionPolicyId, string? Reason, string? TicketNumber, string? ClientIp);
 public record TerminateSessionRequest(string Reason);
+public record ValidateRdpTokenRequest(string SessionToken);
+public record EndSessionRequest(int DurationSeconds, string? RecordingPath);
+public record RdpTokenData(string SessionId, string TargetIp, int TargetPort,
+    string TargetUsername, byte[] TargetPasswordBytes, string? TargetDomain);
 public record CreateSessionPolicyRequest(string Name, int? MaxDurationMinutes, int? IdleTimeoutMinutes,
     bool AllowClipboard, bool AllowFileTransfer, bool AllowDriveMapping, bool AllowPrinting,
     bool? RecordingEnabled, bool? KeystrokeLogging, bool RequireReason, bool RequireTicket,

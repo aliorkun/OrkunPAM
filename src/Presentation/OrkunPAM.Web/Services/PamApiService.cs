@@ -148,6 +148,29 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<SessionDto>>(url);
     }
 
+    /// <summary>
+    /// Creates an RDP session and returns token + .rdp file content for the browser to download.
+    /// </summary>
+    public async Task<RdpLaunchResult?> LaunchRdpSessionAsync(string deviceId, string credentialId,
+        string? reason = null, string? ticketNumber = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/rdp/connect", new
+            {
+                deviceId     = Guid.Parse(deviceId),
+                credentialId = Guid.Parse(credentialId),
+                reason,
+                ticketNumber
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpLaunchResult>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
     // -----------------------------------------------------------------------
     // Vault -- Folders
     // -----------------------------------------------------------------------
@@ -490,3 +513,12 @@ public record LockoutPolicySettingsDto(
 public record SessionPolicySettingsDto(
     int IdleTimeoutMinutes,
     int MaxConcurrentSessions);
+
+public record RdpLaunchResult(
+    string       SessionId,
+    string       SessionToken,
+    string       ProxyHost,
+    int          ProxyPort,
+    RdpFileInfo  RdpFile);
+
+public record RdpFileInfo(string Filename, string ContentBase64);
