@@ -152,8 +152,18 @@ public sealed class PamApiService
     // Vault — Folders
     // -----------------------------------------------------------------------
 
-    public async Task<SimpleResult<FolderDto>?> GetFoldersAsync()
-        => await GetAsync<SimpleResult<FolderDto>>("/api/v1/vault/folders");
+    public async Task<List<FolderDto>?> GetFoldersAsync()
+    {
+        var result = await GetAsync<ListResult<FolderDto>>("/api/v1/vault/folders");
+        return result?.Data;
+    }
+
+    public async Task<List<CredentialDto>?> GetFolderCredentialsAsync(string folderId)
+    {
+        var result = await GetAsync<ListResult<CredentialDto>>(
+            $"/api/v1/vault/folders/{folderId}/credentials");
+        return result?.Data;
+    }
 
     public async Task<bool> CreateFolderAsync(string name, string? description = null)
     {
@@ -180,52 +190,49 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<CredentialDto>>(url);
     }
 
+    /// <summary>
+    /// Creates a credential. type is the CredentialType enum integer value
+    /// (0=UserPassword, 1=SshKey, 2=ApiKey, 3=Certificate, 4=ConnectionString, 5=Custom).
+    /// </summary>
     public async Task<bool> CreateCredentialAsync(
-        string folderId, string name, string? description,
-        int type, string? username, string? password, string? deviceId)
+        string name, int type, string? username, string? password,
+        string folderId, string? deviceId, string? description,
+        int maxCheckoutMinutes, bool requiresApproval)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials", new
-            {
-                folderId     = Guid.Parse(folderId),
-                name,
-                description,
-                type,
-                username,
-                password,
-                deviceId     = string.IsNullOrEmpty(deviceId) ? (Guid?)null : Guid.Parse(deviceId),
-                tags         = (string?)null,
-                maxCheckoutMinutes = 60,
-                requiresApproval   = false
-            });
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials",
+                new { folderId, name, description, type, username, password,
+                      deviceId, maxCheckoutMinutes, requiresApproval });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<CheckoutResult?> CheckoutCredentialAsync(string credId, string? reason)
+    public async Task<CheckoutResultDto?> CheckoutCredentialAsync(
+        string id, string? reason, string? ticketNumber, int? durationMinutes)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync($"/api/v1/vault/credentials/{credId}/checkout",
-                new { reason, ticketNumber = (string?)null, durationMinutes = (int?)null });
+            var resp = await client.PostAsJsonAsync(
+                $"/api/v1/vault/credentials/{id}/checkout",
+                new { reason, ticketNumber, durationMinutes });
             if (!resp.IsSuccessStatusCode) return null;
-            var envelope = await resp.Content.ReadFromJsonAsync<SingleResult<CheckoutResult>>(JsonOpts);
-            return envelope?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CheckoutResultDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<bool> CheckinCredentialAsync(string credId)
+    public async Task<bool> CheckinCredentialAsync(string id)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsync($"/api/v1/vault/credentials/{credId}/checkin", null);
-            return resp.IsSuccessStatusCode;
+            return (await client.PostAsync(
+                $"/api/v1/vault/credentials/{id}/checkin", null)).IsSuccessStatusCode;
         }
         catch { return false; }
     }
@@ -287,6 +294,12 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // Current user
+    // -----------------------------------------------------------------------
+
+    public async Task<AuthUser?> GetCurrentUserAsync() => await _auth.GetUserAsync();
+
+    // -----------------------------------------------------------------------
     // Dashboard stats helpers
     // -----------------------------------------------------------------------
 
@@ -340,10 +353,11 @@ public record LoginData(
     bool     PasswordExpired);
 
 public record PagedResult<T>(bool Success, List<T>? Data, PageMeta? Meta);
-public record SimpleResult<T>(bool Success, List<T>? Data);
-public record SingleResult<T>(bool Success, T? Data) where T : class;
 public record PagedResultMeta(bool Success, PageMeta? Meta);
 public record PageMeta(int Page, int PageSize, int TotalCount);
+public record SingleResult<T>(bool Success, T? Data) where T : class;
+public record ListResult<T>(bool Success, List<T>? Data);
+public record SimpleResult<T>(bool Success, List<T>? Data);
 
 public record UserDto(
     string    Id,
@@ -393,7 +407,8 @@ public record CredentialDto(
     bool      IsCheckedOut,
     string?   CheckedOutByUserId,
     DateTime? CheckOutExpiresUtc,
-    DateTime? LastRotatedAtUtc);
+    DateTime? LastRotatedAtUtc,
+    bool      RequiresApproval);
 
 public record FolderDto(
     string  Id,
@@ -403,11 +418,11 @@ public record FolderDto(
     int     CredentialCount,
     int     ChildCount);
 
-public record CheckoutResult(
-    string  Id,
-    string  Name,
-    string? Username,
-    string? Password,
+public record CheckoutResultDto(
+    string    Id,
+    string    Name,
+    string?   Username,
+    string?   Password,
     DateTime? ExpiresAt);
 
 public record PolicyDto(
