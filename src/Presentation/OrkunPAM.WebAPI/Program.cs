@@ -52,6 +52,7 @@ try
         new JwtTokenService(sp.GetRequiredService<RsaSecurityKey>(),
             sp.GetRequiredService<IConfiguration>()));
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+    builder.Services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddSingleton<ITotpService, TotpService>();
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
@@ -141,6 +142,8 @@ try
     var signingKey = new RsaSecurityKey(rsaKey);
     builder.Services.AddSingleton(signingKey);
 
+    // Register TokenValidationParameters as singleton for WebSocket JWT validation
+    // (browser WebSocket API cannot set custom headers, so JWT is passed as query param)
     builder.Services.AddSingleton(_ => new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -249,6 +252,7 @@ try
     }
 
     // === Map Module Endpoints (all routed through validation filter) ===
+    // ValidationEndpointFilter validates request bodies against registered FluentValidation validators.
     var api = app.MapGroup("").AddEndpointFilter<ValidationEndpointFilter>();
     api.MapAuthEndpoints();
     api.MapUserEndpoints();
