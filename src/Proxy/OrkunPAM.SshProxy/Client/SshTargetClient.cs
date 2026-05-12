@@ -326,7 +326,7 @@ internal sealed class SshTargetClient : IDisposable
 
         var resp = await _conn.ReadPacketAsync(ct);
         if (resp[0] == Msg.ChannelFailure)
-            throw new SshException($"Target refused exec: {command}");
+            throw new SshException("Target refused exec command");
     }
 
     // -------------------------------------------------------------------------
