@@ -10,6 +10,7 @@ using OrkunPAM.Domain.Enums;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -48,7 +49,8 @@ public static class SamlAuthEndpoints
         // ACS: Assertion Consumer Service — IdP POSTs SAMLResponse here (HTTP-POST binding)
         group.MapPost("/acs", async (
             HttpContext ctx, OrkunPamDbContext db,
-            IJwtTokenService jwt, IAuditService audit, ILogger<Program> log) =>
+            IJwtTokenService jwt, IAuditService audit, ILogger<Program> log,
+            IMemoryCache cache) =>
         {
             if (!ctx.Request.HasFormContentType)
                 return Results.BadRequest(new { success = false, errors = new[] { "Expected application/x-www-form-urlencoded POST from IdP" } });
@@ -159,9 +161,20 @@ public static class SamlAuthEndpoints
             log.LogInformation("SAML login success: user '{User}' via '{Provider}' (IP={Ip})",
                 user.Username, provider.Name, clientIp);
 
-            // Redirect browser to Blazor callback page with the access token
-            var callbackUrl = "/saml-callback?token=" + Uri.EscapeDataString(tokenResult.Value.AccessToken);
+            // Use short-lived opaque code to avoid exposing JWT in URL/logs/browser history
+            var code = Guid.NewGuid().ToString("N");
+            cache.Set($"saml:code:{code}", tokenResult.Value.AccessToken, TimeSpan.FromSeconds(30));
+            var callbackUrl = "/saml-callback?code=" + code;
             return Results.Redirect(callbackUrl);
+        });
+
+        // Single-use code → JWT exchange (30-second TTL, consumed on first use)
+        group.MapPost("/token", (ExchangeCodeRequest req, IMemoryCache cache) =>
+        {
+            var key = $"saml:code:{req.Code}";
+            if (!cache.TryGetValue(key, out string? jwt)) return Results.Unauthorized();
+            cache.Remove(key);
+            return Results.Ok(new { success = true, data = new { token = jwt } });
         });
     }
 
@@ -211,6 +224,7 @@ public static class SamlAuthEndpoints
     // -------------------------------------------------------------------------
 
     private sealed record SamlAssertionResult(string NameId, string? Email, string? DisplayName);
+    private sealed record ExchangeCodeRequest(string Code);
 
     private static SamlAssertionResult ParseAndValidateSamlResponse(
         string samlResponseBase64, SamlProvider provider)
@@ -231,10 +245,12 @@ public static class SamlAuthEndpoints
         if (statusCode != "urn:oasis:names:tc:SAML:2.0:status:Success")
             throw new InvalidOperationException($"IdP returned non-success status: {statusCode}");
 
-        // Validate XML digital signature with IdP certificate (if available)
+        // Validate XML digital signature — mandatory; reject if certificate is not configured
         var idpCert = LoadIdpCertificate(provider);
-        if (idpCert != null)
-            ValidateXmlSignature(doc, idpCert);
+        if (idpCert == null)
+            throw new InvalidOperationException(
+                "IdP signing certificate is not configured. SAML validation requires a certificate.");
+        ValidateXmlSignature(doc, idpCert);
 
         // Validate time conditions (allow ±5 min clock skew)
         var now = DateTime.UtcNow;
@@ -347,34 +363,26 @@ public static class SamlAuthEndpoints
         // Case 1: full IdP metadata XML — parse certificate from KeyDescriptor
         if (provider.MetadataXml.TrimStart().StartsWith('<'))
         {
-            try
-            {
-                var doc = new XmlDocument();
-                doc.LoadXml(provider.MetadataXml);
-                var ns = new XmlNamespaceManager(doc.NameTable);
-                ns.AddNamespace("md", "urn:oasis:names:tc:SAML:2.0:metadata");
-                ns.AddNamespace("ds", "http://www.w3.org/2000/09/xmldsig#");
+            var doc = new XmlDocument();
+            doc.LoadXml(provider.MetadataXml); // throws on malformed XML — caller will reject the SAML flow
+            var ns = new XmlNamespaceManager(doc.NameTable);
+            ns.AddNamespace("md", "urn:oasis:names:tc:SAML:2.0:metadata");
+            ns.AddNamespace("ds", "http://www.w3.org/2000/09/xmldsig#");
 
-                var certNode =
-                    doc.SelectSingleNode("//md:KeyDescriptor[@use='signing']//ds:X509Certificate", ns)
-                    ?? doc.SelectSingleNode("//ds:X509Certificate", ns);
+            var certNode =
+                doc.SelectSingleNode("//md:KeyDescriptor[@use='signing']//ds:X509Certificate", ns)
+                ?? doc.SelectSingleNode("//ds:X509Certificate", ns);
 
-                if (certNode != null)
-                {
-                    var b64 = certNode.InnerText.Replace("\n", "").Replace("\r", "").Replace(" ", "");
-                    return new X509Certificate2(Convert.FromBase64String(b64));
-                }
-            }
-            catch { }
+            if (certNode == null) return null; // metadata present but no signing cert element
+
+            var b64 = certNode.InnerText.Replace("\n", "").Replace("\r", "").Replace(" ", "");
+            return new X509Certificate2(Convert.FromBase64String(b64)); // throws on malformed cert
         }
 
         // Case 2: bare PEM certificate stored in MetadataXml
         if (provider.MetadataXml.StartsWith("-----BEGIN CERTIFICATE-----"))
-        {
-            try { return X509Certificate2.CreateFromPem(provider.MetadataXml); }
-            catch { }
-        }
+            return X509Certificate2.CreateFromPem(provider.MetadataXml); // throws on malformed PEM
 
-        return null; // Certificate not available — signature validation will be skipped
+        return null;
     }
 }

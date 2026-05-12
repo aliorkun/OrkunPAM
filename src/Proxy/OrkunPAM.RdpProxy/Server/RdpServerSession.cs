@@ -108,8 +108,10 @@ internal sealed class RdpServerSession
 
         _log.LogInformation("RDP session {SessionId}: target connection established", sessionInfo.SessionId);
 
+        var masterKey = string.IsNullOrEmpty(_opts.RecordingEncryptionKeyBase64)
+            ? null : Convert.FromBase64String(_opts.RecordingEncryptionKeyBase64);
         await using var recorder = await RdpSessionRecorder.CreateAsync(
-            _opts.RecordingDirectory, sessionInfo.SessionId);
+            _opts.RecordingDirectory, sessionInfo.SessionId, masterKey);
 
         using (targetClient)
         await using (var targetStream = targetClient.GetStream())

@@ -25,4 +25,11 @@ public sealed class RdpProxyOptions
 
     /// <summary>Session token TTL in seconds. Tokens are created by the WebAPI when a user launches an RDP session.</summary>
     public int SessionTokenTtlSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// Base64-encoded 32-byte AES-256 master key used to wrap per-session recording content keys.
+    /// Generate with: openssl rand -base64 32
+    /// If not set, recordings are frame-encrypted but the content key is stored unprotected in the file header.
+    /// </summary>
+    public string? RecordingEncryptionKeyBase64 { get; set; }
 }
