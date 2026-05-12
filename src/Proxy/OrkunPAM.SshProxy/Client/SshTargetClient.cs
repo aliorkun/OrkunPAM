@@ -541,6 +541,7 @@ internal sealed class SshTargetClient : IDisposable
 
     public void Dispose()
     {
+        CryptographicOperations.ZeroMemory(_password);
         _conn?.DisposeAsync().AsTask().Wait(500);
         _tcp?.Dispose();
     }

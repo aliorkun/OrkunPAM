@@ -231,7 +231,7 @@
                     <div class="pam-reveal-box">
                         @if (_passVisible)
                         {
-                            <div class="pam-reveal-password">@_revealPass</div>
+                            <div class="pam-reveal-password">@(_revealPass != null ? new string(_revealPass) : "")</div>
                         }
                         else
                         {
@@ -363,7 +363,7 @@
     private bool      _showReveal;
     private string?   _revealName;
     private string?   _revealUser;
-    private string?   _revealPass;
+    private char[]?   _revealPass;
     private DateTime? _revealExpiry;
     private bool      _passVisible;
 
@@ -465,7 +465,7 @@
         _showCheckout = false;
         _revealName   = result.Name;
         _revealUser   = result.Username;
-        _revealPass   = result.Password;
+        _revealPass   = result.Password?.ToCharArray();
         _revealExpiry = result.ExpiresAt?.ToLocalTime();
         _passVisible  = false;
         _showReveal   = true;
@@ -475,8 +475,12 @@
 
     private void CloseReveal()
     {
+        if (_revealPass != null)
+        {
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(_revealPass.AsSpan()).Clear();
+            _revealPass = null;
+        }
         _showReveal  = false;
-        _revealPass  = null;
         _passVisible = false;
     }
 

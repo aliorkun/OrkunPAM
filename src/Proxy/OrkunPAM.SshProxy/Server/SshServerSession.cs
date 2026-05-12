@@ -213,6 +213,7 @@ internal sealed class SshServerSession
 
             var _changeReq = SshEncoding.ReadBool(authPkt, ref pos);
             var password   = SshEncoding.ReadString(authPkt, ref pos);
+            CryptographicOperations.ZeroMemory(authPkt);
 
             var atIdx     = username.IndexOf('@');
             var pamUser   = atIdx > 0 ? username[..atIdx]        : username;
