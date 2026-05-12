@@ -322,6 +322,18 @@ html, body {
 .pam-login-sub     { text-align: center; font-size: 13px; color: #718096; margin: 0 0 24px; }
 .pam-login-footer  { text-align: center; font-size: 11px; color: #94a3b8; margin: 20px 0 0; }
 
+/* ---- MFA step ---- */
+.pam-mfa-step  { display: flex; flex-direction: column; gap: 4px; }
+.pam-mfa-icon  { text-align: center; font-size: 36px; margin-bottom: 4px; }
+.pam-mfa-input {
+    text-align: center;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 24px; font-weight: 700;
+    letter-spacing: 6px;
+    width: 100%;
+    padding: 10px 12px;
+}
+
 /* ---- Loading overlay ---- */
 .pam-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--pam-content-bg); }
 .pam-loading-spinner {
