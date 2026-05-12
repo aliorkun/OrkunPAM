@@ -18,10 +18,10 @@
 | #21 | SSH Proxy - native C# | MVP-SESSION | ✅ Kapatıldı |
 | #25 | HTML5 Web SSH Terminal | MVP-SESSION | ✅ Kapatıldı |
 | #47 | Session Recording | MVP-SESSION | ✅ Kapatıldı |
-| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | 🟡 Devam ediyor |
+| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | ✅ Kapatıldı |
 | #45 | SAML 2.0 / SSO | MVP-AUTH | ⬜ Açık |
 
-**İlerleme:** 3/5 tamamlandı (%60)
+**İlerleme:** 4/5 tamamlandı (%80)
 **Çıkış kriteri:** SSH ile sunucuya bağlanıp komut çalıştırılabiliyor, Blazor login çalışıyor → v0.3.0-ssh-proxy tag
 
 ---
