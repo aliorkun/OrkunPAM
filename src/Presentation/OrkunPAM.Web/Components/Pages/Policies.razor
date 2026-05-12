@@ -1,18 +1,304 @@
 @page "/policies"
 @rendermode InteractiveServer
+@inject PamApiService Api
 
 <PageTitle>Policies — OrkunPAM</PageTitle>
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Policies</h2>
-    <button class="pam-btn pam-btn-primary">+ New Policy</button>
+    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ New Policy</button>
 </div>
 
+<div class="pam-filters">
+    <input class="pam-input pam-search" type="search" placeholder="Search policies…"
+           @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
 <div class="pam-card">
-    <div class="pam-card-body">
-        <div class="pam-empty">
-            <p>Policy management UI — coming in next sprint.</p>
-            <p>Policies are fully configurable via <code>POST /api/v1/policies</code>.</p>
-        </div>
+    <div class="pam-card-body p-0">
+        @if (_loading)
+        {
+            <div class="pam-loading-text p-4">Loading policies…</div>
+        }
+        else if (_policies == null || _policies.Count == 0)
+        {
+            <div class="pam-empty p-4">No policies found. Create one to get started.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _policies)
+                    {
+                        <tr>
+                            <td><strong>@p.Name</strong></td>
+                            <td><span class="pam-badge">@FormatPolicyType(p.PolicyType)</span></td>
+                            <td>@(p.Description ?? "—")</td>
+                            <td>
+                                @if (p.IsEnabled)
+                                { <span class="pam-status pam-status-active">Enabled</span> }
+                                else
+                                { <span class="pam-status pam-status-done">Disabled</span> }
+                            </td>
+                            <td>@p.CreatedAtUtc.ToLocalTime().ToString("MM/dd/yy")</td>
+                            <td>
+                                <div class="pam-actions">
+                                    <button class="pam-btn-icon" title="Edit policy"
+                                            @onclick="() => OpenEditModal(p)">&#9998;</button>
+                                    <button class="pam-btn-icon pam-btn-danger-icon" title="Delete policy"
+                                            @onclick="() => ConfirmDelete(p)">&#x1F5D1;</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_meta != null && _meta.TotalCount > _pageSize)
+            {
+                <div class="pam-pagination">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount policies</span>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                </div>
+            }
+        }
     </div>
 </div>
+
+<!-- Add / Edit Policy Modal -->
+@if (_showModal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_editingId == null ? "New Policy" : "Edit Policy")</h3>
+                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input w-100-input" @bind="_fName"
+                           placeholder="e.g. SSH Session Policy" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Policy Type *</label>
+                    <select class="pam-input w-100-input" @bind="_fType">
+                        <option value="SessionDuration">Session Duration</option>
+                        <option value="MaxCheckoutTime">Max Checkout Time</option>
+                        <option value="PasswordComplexity">Password Complexity</option>
+                        <option value="MfaRequired">MFA Required</option>
+                        <option value="IpRestriction">IP Restriction</option>
+                        <option value="TimeRestriction">Time-Based Access</option>
+                        <option value="RecordingRequired">Recording Required</option>
+                        <option value="ApprovalRequired">Approval Required</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_fDescription"
+                           placeholder="Describe what this policy does…" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label pam-label-inline">
+                        <input type="checkbox" @bind="_fEnabled" style="margin-right:6px" />
+                        Policy is enabled
+                    </label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_editingId == null ? "Create Policy" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (_showDelete)
+{
+    <div class="pam-modal-overlay" @onclick="CloseDelete">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Delete Policy</h3>
+                <button class="pam-close-btn" @onclick="CloseDelete">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
+                <p style="font-size:13px;color:#718096">This action cannot be undone.</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseDelete">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="ExecuteDeleteAsync" disabled="@_deleting">
+                    @if (_deleting) { <span class="pam-spinner-sm"></span> }
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PolicyDto>? _policies;
+    private PageMeta?        _meta;
+    private bool             _loading  = true;
+    private string?          _error;
+    private string           _search   = "";
+    private int              _page     = 1;
+    private const int        _pageSize = 20;
+
+    // Add/Edit modal
+    private bool    _showModal;
+    private string? _editingId;
+    private string? _formError;
+    private bool    _formSaving;
+    private string  _fName        = "";
+    private string  _fType        = "SessionDuration";
+    private string  _fDescription = "";
+    private bool    _fEnabled     = true;
+
+    // Delete modal
+    private bool    _showDelete;
+    private string  _deleteTargetId   = "";
+    private string  _deleteTargetName = "";
+    private bool    _deleting;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        var result = await Api.GetPoliciesAsync(_search, _page, _pageSize);
+        if (result == null) _error = "Failed to load policies — check API connection.";
+        else { _policies = result.Data; _meta = result.Meta; }
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void OpenAddModal()
+    {
+        _editingId = null;
+        _fName = _fDescription = ""; _fType = "SessionDuration"; _fEnabled = true;
+        _formError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(PolicyDto p)
+    {
+        _editingId    = p.Id;
+        _fName        = p.Name;
+        _fType        = p.PolicyType;
+        _fDescription = p.Description ?? "";
+        _fEnabled     = p.IsEnabled;
+        _formError    = null;
+        _showModal    = true;
+    }
+
+    private void CloseModal() { _showModal = false; _formError = null; }
+
+    private async Task SubmitAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fName)) { _formError = "Policy name is required."; return; }
+
+        _formSaving = true; StateHasChanged();
+
+        bool ok;
+        if (_editingId == null)
+            ok = await Api.CreatePolicyAsync(
+                _fName.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
+                _fType, _fEnabled);
+        else
+            ok = await Api.UpdatePolicyAsync(
+                _editingId,
+                _fName.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
+                _fType, _fEnabled);
+
+        _formSaving = false;
+
+        if (!ok)
+        {
+            _formError = _editingId == null
+                ? "Failed to create policy — check for name conflicts."
+                : "Failed to save changes — please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        CloseModal();
+        if (_editingId == null) _page = 1;
+        await LoadAsync();
+    }
+
+    private void ConfirmDelete(PolicyDto p)
+    {
+        _deleteTargetId   = p.Id;
+        _deleteTargetName = p.Name;
+        _showDelete       = true;
+    }
+
+    private void CloseDelete() { _showDelete = false; _deleting = false; }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        _deleting = true; StateHasChanged();
+        var ok = await Api.DeletePolicyAsync(_deleteTargetId);
+        _deleting = false;
+        if (!ok) { _error = "Failed to delete policy."; StateHasChanged(); }
+        CloseDelete();
+        await LoadAsync();
+    }
+
+    private static string FormatPolicyType(string type) => type switch
+    {
+        "SessionDuration"    => "Session Duration",
+        "MaxCheckoutTime"    => "Checkout Time",
+        "PasswordComplexity" => "Pwd Complexity",
+        "MfaRequired"        => "MFA Required",
+        "IpRestriction"      => "IP Restriction",
+        "TimeRestriction"    => "Time-Based",
+        "RecordingRequired"  => "Recording",
+        "ApprovalRequired"   => "Approval",
+        _                    => type
+    };
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}

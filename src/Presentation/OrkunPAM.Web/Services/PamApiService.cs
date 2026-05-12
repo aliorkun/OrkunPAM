@@ -26,13 +26,13 @@ public sealed class PamApiService
     // Auth
     // -----------------------------------------------------------------------
 
-    public async Task<LoginResult?> LoginAsync(string username, string password)
+    public async Task<LoginResult?> LoginAsync(string username, string password, string? mfaCode = null)
     {
         var client = _factory.CreateClient("PamApi");
         try
         {
             var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username, password, mfaCode = (string?)null });
+                new { username, password, mfaCode });
             if (!resp.IsSuccessStatusCode) return null;
             return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
         }
@@ -83,6 +83,18 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<bool> UpdateUserAsync(string id, string? displayName, string? email)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/users/{id}",
+                new { displayName, email });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // -----------------------------------------------------------------------
     // Devices
     // -----------------------------------------------------------------------
@@ -121,6 +133,89 @@ public sealed class PamApiService
                 new { hostname, fqdn, ipAddress, type, protocol, connectionPort, operatingSystem });
             return resp.IsSuccessStatusCode;
         }
+        catch { return false; }
+    }
+
+    // -----------------------------------------------------------------------
+    // Vault CRUD + Checkout
+    // -----------------------------------------------------------------------
+
+    public async Task<bool> CreateCredentialAsync(
+        string? username, string password, string credentialType, string? description, string? deviceId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials",
+                new { username, password, credentialType, description, deviceId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<CheckoutResult?> CheckoutCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/vault/credentials/{id}/checkout", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<CheckoutResult>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> CheckinCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/vault/credentials/{id}/checkin", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // -----------------------------------------------------------------------
+    // Policies
+    // -----------------------------------------------------------------------
+
+    public async Task<PagedResult<PolicyDto>?> GetPoliciesAsync(
+        string? search = null, int page = 1, int pageSize = 20)
+    {
+        var url = $"/api/v1/policies?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(search)) url += $"&search={Uri.EscapeDataString(search)}";
+        return await GetAsync<PagedResult<PolicyDto>>(url);
+    }
+
+    public async Task<bool> CreatePolicyAsync(string name, string? description, string policyType, bool isEnabled)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/policies",
+                new { name, description, policyType, isEnabled });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdatePolicyAsync(string id, string name, string? description, string policyType, bool isEnabled)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/{id}",
+                new { name, description, policyType, isEnabled });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeletePolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/{id}")).IsSuccessStatusCode; }
         catch { return false; }
     }
 
@@ -249,4 +344,16 @@ public record CredentialDto(
     string? Description,
     string  DeviceId,
     string? FolderId,
-    bool    IsActive);
+    bool    IsActive,
+    bool    IsCheckedOut = false);
+
+public record CheckoutData(string Plaintext, DateTime ExpiresAt);
+public record CheckoutResult(bool Success, CheckoutData? Data);
+
+public record PolicyDto(
+    string   Id,
+    string   Name,
+    string?  Description,
+    string   PolicyType,
+    bool     IsEnabled,
+    DateTime CreatedAtUtc);

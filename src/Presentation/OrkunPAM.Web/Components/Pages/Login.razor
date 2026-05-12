@@ -17,27 +17,51 @@
             <div class="pam-alert pam-alert-danger">@_error</div>
         }
 
-        <EditForm Model="_model" OnValidSubmit="HandleLoginAsync" FormName="login">
-            <DataAnnotationsValidator />
+        @if (!_mfaStep)
+        {
+            <EditForm Model="_model" OnValidSubmit="HandleLoginAsync" FormName="login">
+                <DataAnnotationsValidator />
 
-            <div class="pam-form-group">
-                <label class="pam-label">Username</label>
-                <InputText @bind-Value="_model.Username" class="pam-input" placeholder="admin"
-                           autocomplete="username" disabled="@_loading" />
-                <ValidationMessage For="() => _model.Username" class="pam-validation" />
+                <div class="pam-form-group">
+                    <label class="pam-label">Username</label>
+                    <InputText @bind-Value="_model.Username" class="pam-input" placeholder="admin"
+                               autocomplete="username" disabled="@_loading" />
+                    <ValidationMessage For="() => _model.Username" class="pam-validation" />
+                </div>
+
+                <div class="pam-form-group">
+                    <label class="pam-label">Password</label>
+                    <InputText @bind-Value="_model.Password" class="pam-input" type="password"
+                               placeholder="••••••••" autocomplete="current-password" disabled="@_loading" />
+                    <ValidationMessage For="() => _model.Password" class="pam-validation" />
+                </div>
+
+                <button type="submit" class="pam-btn pam-btn-primary w-100" disabled="@_loading">
+                    @if (_loading) { <span class="pam-spinner-sm"></span> } Sign In
+                </button>
+            </EditForm>
+        }
+        else
+        {
+            <div class="pam-mfa-step">
+                <div class="pam-mfa-icon">🔑</div>
+                <p class="pam-login-sub">Enter the 6-digit code from your authenticator app.</p>
+                <div class="pam-form-group">
+                    <label class="pam-label">Verification Code</label>
+                    <input class="pam-input pam-mfa-input" type="text" inputmode="numeric"
+                           maxlength="6" placeholder="000000" @bind="_mfaCode" @bind:event="oninput"
+                           @onkeyup="OnMfaKeyUp" disabled="@_loading" autocomplete="one-time-code" />
+                </div>
+                <button class="pam-btn pam-btn-primary w-100" @onclick="HandleMfaAsync"
+                        disabled="@(_loading || _mfaCode.Length != 6)">
+                    @if (_loading) { <span class="pam-spinner-sm"></span> } Verify
+                </button>
+                <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
+                        @onclick="ResetToLogin" disabled="@_loading">
+                    ← Back to Sign In
+                </button>
             </div>
-
-            <div class="pam-form-group">
-                <label class="pam-label">Password</label>
-                <InputText @bind-Value="_model.Password" class="pam-input" type="password"
-                           placeholder="••••••••" autocomplete="current-password" disabled="@_loading" />
-                <ValidationMessage For="() => _model.Password" class="pam-validation" />
-            </div>
-
-            <button type="submit" class="pam-btn pam-btn-primary w-100" disabled="@_loading">
-                @if (_loading) { <span class="pam-spinner-sm"></span> } Sign In
-            </button>
-        </EditForm>
+        }
 
         <p class="pam-login-footer">
             © @DateTime.Now.Year OrkunPAM — Enterprise PAM
@@ -48,7 +72,9 @@
 @code {
     private readonly LoginModel _model = new();
     private bool   _loading;
-    private string _error = "";
+    private string _error   = "";
+    private bool   _mfaStep;
+    private string _mfaCode = "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -63,14 +89,20 @@
         _error   = "";
         StateHasChanged();
 
-        var result = await Api.LoginAsync(_model.Username, _model.Password);
+        var result = await Api.LoginAsync(_model.Username, _model.Password, null);
 
         if (result?.Success == true && result.Data != null)
         {
-            var d    = result.Data;
-            var user = new AuthUser(d.UserId, d.Username, d.DisplayName, []);
-            await Auth.SetSessionAsync(d.AccessToken, user);
-            Nav.NavigateTo("/", forceLoad: true);
+            var d = result.Data;
+            if (d.MfaRequired)
+            {
+                _mfaStep = true;
+                _mfaCode = "";
+                _loading = false;
+                StateHasChanged();
+                return;
+            }
+            await CompleteLoginAsync(d);
         }
         else
         {
@@ -79,6 +111,41 @@
             StateHasChanged();
         }
     }
+
+    private async Task HandleMfaAsync()
+    {
+        if (_mfaCode.Length != 6) return;
+        _loading = true;
+        _error   = "";
+        StateHasChanged();
+
+        var result = await Api.LoginAsync(_model.Username, _model.Password, _mfaCode);
+        if (result?.Success == true && result.Data != null)
+        {
+            await CompleteLoginAsync(result.Data);
+        }
+        else
+        {
+            _error   = "Invalid verification code. Please try again.";
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CompleteLoginAsync(LoginData d)
+    {
+        var user = new AuthUser(d.UserId, d.Username, d.DisplayName, []);
+        await Auth.SetSessionAsync(d.AccessToken, user);
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    private async Task OnMfaKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _mfaCode.Length == 6)
+            await HandleMfaAsync();
+    }
+
+    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; }
 
     private sealed class LoginModel
     {

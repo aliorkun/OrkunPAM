@@ -7,12 +7,18 @@
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Vault</h2>
-    <button class="pam-btn pam-btn-primary">+ Add Credential</button>
+    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add Credential</button>
 </div>
 
 <div class="pam-filters">
     <input class="pam-input pam-search" type="search" placeholder="Search credentials…"
            @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+    <select class="pam-input pam-select" @bind="_typeFilter" @bind:after="LoadAsync">
+        <option value="">All Types</option>
+        <option value="Password">Password</option>
+        <option value="Ssh">SSH Key</option>
+        <option value="ApiKey">API Key</option>
+    </select>
     <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
 </div>
 
@@ -39,7 +45,7 @@
                         <th>Username</th>
                         <th>Type</th>
                         <th>Description</th>
-                        <th>Active</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -51,12 +57,25 @@
                             <td><span class="pam-badge">@c.CredentialType</span></td>
                             <td>@(c.Description ?? "—")</td>
                             <td>
-                                @if (c.IsActive) { <span class="pam-status pam-status-active">✓</span> }
-                                else             { <span class="pam-status pam-status-done">✗</span> }
+                                @if (c.IsCheckedOut)
+                                { <span class="pam-status pam-status-error">Checked Out</span> }
+                                else if (c.IsActive)
+                                { <span class="pam-status pam-status-active">Available</span> }
+                                else
+                                { <span class="pam-status pam-status-done">Inactive</span> }
                             </td>
                             <td>
                                 <div class="pam-actions">
-                                    <button class="pam-btn-icon" title="Checkout credential">↗</button>
+                                    @if (c.IsCheckedOut)
+                                    {
+                                        <button class="pam-btn-icon" title="Check in credential"
+                                                @onclick="() => CheckinAsync(c.Id)">&#x2196;</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="pam-btn-icon pam-btn-connect" title="Checkout credential"
+                                                @onclick="() => CheckoutAsync(c.Id)">&#x2197;</button>
+                                    }
                                     @if (c.CredentialType == "Ssh")
                                     {
                                         <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
@@ -83,14 +102,122 @@
     </div>
 </div>
 
+<!-- Add Credential Modal -->
+@if (_showAdd)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Add Credential</h3>
+                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Type *</label>
+                    <select class="pam-input w-100-input" @bind="_fType">
+                        <option value="Password">Password</option>
+                        <option value="Ssh">SSH Key</option>
+                        <option value="ApiKey">API Key</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Username</label>
+                    <input class="pam-input w-100-input" @bind="_fUsername" placeholder="e.g. root, admin" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">@(_fType == "Ssh" ? "Private Key / Passphrase" : "Password / Secret") *</label>
+                    <div class="pam-input-group">
+                        <input class="pam-input w-100-input" type="@(_showPw ? "text" : "password")"
+                               @bind="_fPassword" placeholder="••••••••" />
+                        <button type="button" class="pam-input-reveal" @onclick="() => _showPw = !_showPw"
+                                title="Toggle visibility">@(_showPw ? "🙈" : "👁")</button>
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_fDescription"
+                           placeholder="e.g. Production DB root password" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Device ID (optional)</label>
+                    <input class="pam-input w-100-input" @bind="_fDeviceId"
+                           placeholder="Link to a specific device (leave blank for standalone)" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    Add Credential
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Checkout Reveal Modal -->
+@if (_showReveal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseReveal">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">&#x1F510; Credential Checked Out</h3>
+                <button class="pam-close-btn" @onclick="CloseReveal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p style="font-size:13px;color:#718096;margin-bottom:12px">
+                    This credential has been checked out. Copy it now — it will not be shown again after you close this dialog.
+                </p>
+                <div class="pam-reveal-box">
+                    <span class="pam-reveal-text">@(_revealVisible ? _revealPlaintext : new string('•', Math.Min(_revealPlaintext.Length, 16)))</span>
+                    <button class="pam-btn-icon" @onclick="() => _revealVisible = !_revealVisible"
+                            title="Toggle visibility">@(_revealVisible ? "🙈" : "👁")</button>
+                </div>
+                @if (_revealCopied)
+                {
+                    <div class="pam-alert pam-alert-success" style="margin-top:10px">Copied to clipboard!</div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseReveal">Close</button>
+                <button class="pam-btn pam-btn-primary" @onclick="CopyToClipboardAsync">Copy</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<CredentialDto>? _creds;
     private PageMeta?            _meta;
-    private bool                 _loading  = true;
+    private bool                 _loading    = true;
     private string?              _error;
-    private string               _search   = "";
-    private int                  _page     = 1;
-    private const int            _pageSize = 20;
+    private string               _search     = "";
+    private string               _typeFilter = "";
+    private int                  _page       = 1;
+    private const int            _pageSize   = 20;
+
+    // Add modal
+    private bool    _showAdd;
+    private string? _formError;
+    private bool    _formSaving;
+    private string  _fType        = "Password";
+    private string  _fUsername    = "";
+    private string  _fPassword    = "";
+    private string  _fDescription = "";
+    private string  _fDeviceId    = "";
+    private bool    _showPw;
+
+    // Reveal modal
+    private bool   _showReveal;
+    private string _revealPlaintext = "";
+    private bool   _revealVisible;
+    private bool   _revealCopied;
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -116,6 +243,87 @@
 
     private void ConnectSsh(string deviceId, string credId)
         => Nav.NavigateTo($"/terminal/{deviceId}/{credId}");
+
+    private void OpenAddModal()
+    {
+        _fType = "Password"; _fUsername = _fPassword = _fDescription = _fDeviceId = "";
+        _showPw = false; _formError = null;
+        _showAdd = true;
+    }
+
+    private void CloseModal() { _showAdd = false; _formError = null; }
+
+    private async Task SubmitAddAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fPassword)) { _formError = "Password / secret is required."; return; }
+
+        _formSaving = true; StateHasChanged();
+
+        var ok = await Api.CreateCredentialAsync(
+            string.IsNullOrWhiteSpace(_fUsername)    ? null : _fUsername.Trim(),
+            _fPassword,
+            _fType,
+            string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
+            string.IsNullOrWhiteSpace(_fDeviceId)    ? null : _fDeviceId.Trim());
+
+        _formSaving = false;
+
+        if (!ok)
+        {
+            _formError = "Failed to add credential — please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        CloseModal();
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task CheckoutAsync(string id)
+    {
+        var result = await Api.CheckoutCredentialAsync(id);
+        if (result?.Success == true && result.Data != null)
+        {
+            _revealPlaintext = result.Data.Plaintext;
+            _revealVisible   = false;
+            _revealCopied    = false;
+            _showReveal      = true;
+            StateHasChanged();
+            await LoadAsync();
+        }
+        else
+        {
+            _error = "Checkout failed — you may not have permission or it is already checked out.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckinAsync(string id)
+    {
+        await Api.CheckinCredentialAsync(id);
+        await LoadAsync();
+    }
+
+    private void CloseReveal()
+    {
+        _showReveal      = false;
+        _revealPlaintext = "";
+        _revealVisible   = false;
+        _revealCopied    = false;
+    }
+
+    private async Task CopyToClipboardAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _revealPlaintext);
+            _revealCopied = true;
+            StateHasChanged();
+        }
+        catch { /* clipboard not available (non-HTTPS or denied) */ }
+    }
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }

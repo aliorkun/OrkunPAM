@@ -329,6 +329,50 @@ html, body {
 }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 0.75rem; top: 0.5rem; }
 
+/* ---- Alerts: success ---- */
+.pam-alert-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+
+/* ---- Danger button ---- */
+.pam-btn-danger { background: #ef4444; color: #fff; }
+.pam-btn-danger:hover:not(:disabled) { background: #dc2626; }
+.pam-btn-danger-icon { color: #ef4444; border-color: #fecaca; }
+.pam-btn-danger-icon:hover { background: #fee2e2; }
+
+/* ---- Small modal variant ---- */
+.pam-modal-sm { max-width: 380px; }
+
+/* ---- MFA step ---- */
+.pam-mfa-step { }
+.pam-mfa-icon { text-align: center; font-size: 32px; margin-bottom: 8px; }
+.pam-mfa-input {
+    width: 100%; text-align: center; font-size: 24px; font-family: monospace;
+    letter-spacing: 8px; padding: 10px 12px;
+}
+
+/* ---- Vault credential reveal ---- */
+.pam-reveal-box {
+    display: flex; align-items: center; gap: 8px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 10px 14px;
+}
+.pam-reveal-text {
+    flex: 1; font-family: monospace; font-size: 15px;
+    word-break: break-all; color: #1a202c;
+}
+
+/* ---- Password input group (with reveal toggle) ---- */
+.pam-input-group { position: relative; display: flex; align-items: center; }
+.pam-input-group .pam-input { flex: 1; padding-right: 36px; }
+.pam-input-reveal {
+    position: absolute; right: 6px;
+    background: none; border: none; cursor: pointer;
+    font-size: 14px; padding: 4px; line-height: 1; color: #94a3b8;
+}
+.pam-input-reveal:hover { color: #374151; }
+
+/* ---- Inline label (checkbox) ---- */
+.pam-label-inline { display: inline-flex; align-items: center; cursor: pointer; font-weight: 500; }
+
 /* ---- Blazor validation default overrides ---- */
 .valid.modified:not([type=checkbox]) { outline: 1px solid #22c55e; }
 .invalid { outline: 1px solid #ef4444; }
