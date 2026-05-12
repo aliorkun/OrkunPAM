@@ -7,7 +7,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class GroupEndpoints
 {
-    public static void MapGroupEndpoints(this WebApplication app)
+    public static void MapGroupEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/groups").WithTags("Groups");
 
@@ -92,7 +92,6 @@ public static class GroupEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Members
         group.MapGet("/{id:guid}/members", async (Guid id, OrkunPamDbContext db) =>
         {
             var members = await db.UserGroups
@@ -131,7 +130,6 @@ public static class GroupEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Group Roles
         group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db) =>
         {
             if (!await db.Groups.AnyAsync(g => g.Id == id))

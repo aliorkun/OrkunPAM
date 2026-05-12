@@ -7,7 +7,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class DeviceEndpoints
 {
-    public static void MapDeviceEndpoints(this WebApplication app)
+    public static void MapDeviceEndpoints(this IEndpointRouteBuilder app)
     {
         var devices = app.MapGroup("/api/v1/devices").WithTags("Devices");
 
@@ -123,7 +123,6 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Link credential to device
         devices.MapPost("/{id:guid}/credentials", async (Guid id, LinkCredentialRequest req, OrkunPamDbContext db) =>
         {
             if (await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == id && dc.CredentialId == req.CredentialId))
@@ -140,7 +139,6 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // === Device Groups ===
         var groups = app.MapGroup("/api/v1/device-groups").WithTags("Devices");
 
         groups.MapGet("/", async (OrkunPamDbContext db) =>
@@ -185,7 +183,6 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true, message = $"{added} device(s) added" });
         });
 
-        // === Platforms ===
         var platforms = app.MapGroup("/api/v1/platforms").WithTags("Devices");
 
         platforms.MapGet("/", async (OrkunPamDbContext db) =>

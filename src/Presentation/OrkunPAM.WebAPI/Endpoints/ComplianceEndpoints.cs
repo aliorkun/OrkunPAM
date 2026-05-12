@@ -6,7 +6,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class ComplianceEndpoints
 {
-    public static void MapComplianceEndpoints(this WebApplication app)
+    public static void MapComplianceEndpoints(this IEndpointRouteBuilder app)
     {
         var frameworks = app.MapGroup("/api/v1/compliance/frameworks").WithTags("Compliance");
 
@@ -61,7 +61,6 @@ public static class ComplianceEndpoints
             });
         });
 
-        // === SoD Rules ===
         var sod = app.MapGroup("/api/v1/compliance/sod").WithTags("Compliance");
 
         sod.MapGet("/rules", async (OrkunPamDbContext db) =>
@@ -80,7 +79,6 @@ public static class ComplianceEndpoints
 
         sod.MapGet("/violations", async (OrkunPamDbContext db) =>
         {
-            // Check for users who have both conflicting roles
             var rules = await db.SodRules.Where(r => r.IsEnabled).ToListAsync();
             var violations = new List<object>();
 
@@ -101,7 +99,6 @@ public static class ComplianceEndpoints
             return Results.Ok(new { success = true, data = violations, meta = new { violationCount = violations.Count } });
         });
 
-        // === Attestation Campaigns ===
         var attestations = app.MapGroup("/api/v1/compliance/attestations").WithTags("Compliance");
 
         attestations.MapGet("/", async (OrkunPamDbContext db) =>
@@ -129,10 +126,8 @@ public static class ComplianceEndpoints
                 new { success = true, data = new { campaign.Id, campaign.Name } });
         });
 
-        // Evidence export
         app.MapPost("/api/v1/compliance/evidence/export", async (EvidenceExportRequest req, OrkunPamDbContext db) =>
         {
-            // Collect evidence: audit logs, config snapshots, compliance assessments
             var auditLogs = await db.AuditLogs
                 .Where(a => a.Timestamp >= req.From && a.Timestamp <= req.To)
                 .CountAsync();

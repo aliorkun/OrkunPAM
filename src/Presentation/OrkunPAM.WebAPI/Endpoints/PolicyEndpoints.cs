@@ -7,7 +7,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class PolicyEndpoints
 {
-    public static void MapPolicyEndpoints(this WebApplication app)
+    public static void MapPolicyEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/policies").WithTags("Policies");
 
@@ -89,22 +89,19 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Evaluate effective policies for a user
         group.MapGet("/effective/{userId:guid}", async (Guid userId, string policyType, OrkunPamDbContext db) =>
         {
-            // Get user's groups
             var groupIds = await db.UserGroups
                 .Where(ug => ug.UserId == userId)
                 .Select(ug => ug.GroupId)
                 .ToListAsync();
 
-            // Collect policies: Global + user's groups + direct user, ordered by priority
             var policies = await db.Policies
                 .Where(p => p.PolicyType == policyType && p.IsEnabled &&
                     (p.Scope == PolicyScope.Global ||
                      (p.Scope == PolicyScope.User && p.ScopeId == userId) ||
                      (p.Scope == PolicyScope.Group && groupIds.Contains(p.ScopeId!.Value))))
-                .OrderByDescending(p => p.Scope) // User > Group > Global (higher scope wins)
+                .OrderByDescending(p => p.Scope)
                 .ThenByDescending(p => p.Priority)
                 .Select(p => new { p.Id, p.Name, Scope = p.Scope.ToString(), p.PolicyJson, p.Priority })
                 .ToListAsync();

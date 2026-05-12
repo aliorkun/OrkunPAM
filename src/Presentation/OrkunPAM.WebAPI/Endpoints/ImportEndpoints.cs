@@ -9,11 +9,10 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class ImportEndpoints
 {
-    public static void MapImportEndpoints(this WebApplication app)
+    public static void MapImportEndpoints(this IEndpointRouteBuilder app)
     {
         var import = app.MapGroup("/api/v1/import").WithTags("Import").RequireAuthorization();
 
-        // === CSV Device Import ===
         import.MapPost("/devices/csv", async (HttpRequest request, OrkunPamDbContext db, ILogger<Program> logger) =>
         {
             if (!request.HasFormContentType)
@@ -34,7 +33,6 @@ public static class ImportEndpoints
             if (lines.Length < 2)
                 return Results.BadRequest(new { success = false, errors = new[] { "CSV must have header + at least 1 data row" } });
 
-            // Parse header
             var headers = lines[0].Trim().Split(',').Select(h => h.Trim().ToLowerInvariant()).ToArray();
             var hostnameIdx = Array.IndexOf(headers, "hostname");
             var ipIdx = Array.IndexOf(headers, "ip") >= 0 ? Array.IndexOf(headers, "ip") : Array.IndexOf(headers, "ipaddress");
@@ -63,7 +61,6 @@ public static class ImportEndpoints
                         continue;
                     }
 
-                    // Skip duplicates
                     if (await db.Devices.AnyAsync(d => d.Hostname == hostname)) continue;
 
                     var device = new Device
@@ -96,7 +93,6 @@ public static class ImportEndpoints
             });
         }).DisableAntiforgery();
 
-        // === Bulk Credential Import ===
         import.MapPost("/credentials", async (BulkCredentialImportRequest req,
             OrkunPamDbContext db, OrkunPAM.Cryptography.IVaultEncryptionService vault, ILogger<Program> logger) =>
         {
@@ -141,7 +137,6 @@ public static class ImportEndpoints
             return Results.Ok(new { success = true, data = new { imported, errors = errors.Take(10) } });
         });
 
-        // === Bulk User Import ===
         import.MapPost("/users", async (BulkUserImportRequest req,
             OrkunPamDbContext db, OrkunPAM.Identity.Services.IPasswordHasher hasher, ILogger<Program> logger) =>
         {
