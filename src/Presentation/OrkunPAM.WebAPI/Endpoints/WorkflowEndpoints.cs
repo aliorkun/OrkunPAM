@@ -8,9 +8,8 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class WorkflowEndpoints
 {
-    public static void MapWorkflowEndpoints(this WebApplication app)
+    public static void MapWorkflowEndpoints(this IEndpointRouteBuilder app)
     {
-        // === Workflow Definitions ===
         var wf = app.MapGroup("/api/v1/workflows").WithTags("Workflows");
 
         wf.MapGet("/", async (OrkunPamDbContext db) =>
@@ -61,7 +60,6 @@ public static class WorkflowEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // === Approval Requests ===
         var approvals = app.MapGroup("/api/v1/approval-requests").WithTags("Workflows");
 
         approvals.MapGet("/", async (OrkunPamDbContext db, string? status, Guid? requesterId, int page = 1, int pageSize = 50) =>
@@ -128,7 +126,6 @@ public static class WorkflowEndpoints
                     : DateTime.UtcNow.AddHours(24)
             };
 
-            // Create steps from approver list
             if (req.ApproverIds != null)
             {
                 for (int i = 0; i < req.ApproverIds.Length; i++)
@@ -179,7 +176,6 @@ public static class WorkflowEndpoints
             currentStep.Comments = req.Comments;
             request.CurrentStep++;
 
-            // If all steps approved, mark request as approved
             if (request.Steps.All(s => s.Decision == ApprovalStatus.Approved))
             {
                 request.Status = ApprovalStatus.Approved;

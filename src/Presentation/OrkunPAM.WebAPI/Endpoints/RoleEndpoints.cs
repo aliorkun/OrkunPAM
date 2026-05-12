@@ -6,7 +6,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class RoleEndpoints
 {
-    public static void MapRoleEndpoints(this WebApplication app)
+    public static void MapRoleEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/roles").WithTags("Roles");
 
@@ -72,11 +72,9 @@ public static class RoleEndpoints
             if (role == null) return Results.NotFound(new { success = false, errors = new[] { "Role not found" } });
             if (role.IsSystemRole) return Results.BadRequest(new { success = false, errors = new[] { "Cannot modify system role permissions" } });
 
-            // Remove existing
             var existing = await db.RolePermissions.Where(rp => rp.RoleId == id).ToListAsync();
             db.RolePermissions.RemoveRange(existing);
 
-            // Add new
             foreach (var code in req.PermissionCodes)
             {
                 if (await db.Permissions.AnyAsync(p => p.Code == code))
@@ -98,7 +96,6 @@ public static class RoleEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Permissions catalog
         app.MapGet("/api/v1/permissions", async (OrkunPamDbContext db) =>
         {
             var perms = await db.Permissions
@@ -106,7 +103,6 @@ public static class RoleEndpoints
                 .Select(p => new { p.Code, p.Module, p.Description })
                 .ToListAsync();
 
-            // Group by module
             var grouped = perms.GroupBy(p => p.Module).ToDictionary(g => g.Key, g => g.Select(p => new { p.Code, p.Description }));
             return Results.Ok(new { success = true, data = grouped });
         }).WithTags("Roles");

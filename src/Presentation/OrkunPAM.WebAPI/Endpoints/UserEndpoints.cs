@@ -10,7 +10,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class UserEndpoints
 {
-    public static void MapUserEndpoints(this WebApplication app)
+    public static void MapUserEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/users").WithTags("Users");
 
@@ -117,7 +117,7 @@ public static class UserEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             user.Status = UserStatus.Locked;
-            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
+            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100);
             await db.SaveChangesAsync();
 
             await audit.LogAsync("User", "User.Locked", ParseActorId(context),
@@ -174,7 +174,6 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, data = new { roles, permissions } });
         });
 
-        // Role assignment
         group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db,
             IAuditService audit, HttpContext context) =>
         {
