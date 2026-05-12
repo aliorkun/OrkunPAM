@@ -6,9 +6,10 @@
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Users</h2>
-    <button class="pam-btn pam-btn-primary" @onclick="() => _showAdd = true">+ Add User</button>
+    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add User</button>
 </div>
 
+<!-- Filters -->
 <div class="pam-filters">
     <input class="pam-input pam-search" type="search" placeholder="Search by name, username or email…"
            @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
@@ -66,7 +67,7 @@
                             </td>
                             <td>
                                 @if (u.MfaEnabled)
-                                { <span class="pam-status pam-status-active">✓ On</span> }
+                                { <span class="pam-status pam-status-active">On</span> }
                                 else
                                 { <span class="pam-status pam-status-done">Off</span> }
                             </td>
@@ -76,12 +77,12 @@
                                     @if (u.Status == "Active")
                                     {
                                         <button class="pam-btn-icon" title="Lock user"
-                                                @onclick="@(() => SetStatusAsync(u.Id, "Locked"))">&#x1F512;</button>
+                                                @onclick="() => SetStatusAsync(u.Id, &quot;Locked&quot;)">&#x1F512;</button>
                                     }
                                     else
                                     {
                                         <button class="pam-btn-icon" title="Activate user"
-                                                @onclick="@(() => SetStatusAsync(u.Id, "Active"))">&#10003;</button>
+                                                @onclick="() => SetStatusAsync(u.Id, &quot;Active&quot;)">&#10003;</button>
                                     }
                                 </div>
                             </td>
@@ -90,32 +91,88 @@
                 </tbody>
             </table>
 
+            <!-- Pagination -->
             @if (_meta != null && _meta.TotalCount > _pageSize)
             {
                 <div class="pam-pagination">
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                            disabled="@(_page == 1)" @onclick="PrevPage">&#8592; Prev</button>
                     <span class="pam-page-info">
-                        Page @_page of @TotalPages — @_meta.TotalCount users
+                        Page @_page of @TotalPages &#8212; @_meta.TotalCount users
                     </span>
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next &#8594;</button>
                 </div>
             }
         }
     </div>
 </div>
 
+<!-- Add User Modal -->
+@if (_showAdd)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Add User</h3>
+                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Username *</label>
+                    <input class="pam-input w-100-input" @bind="_fUsername" placeholder="e.g. john.doe" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Display Name</label>
+                    <input class="pam-input w-100-input" @bind="_fDisplayName" placeholder="e.g. John Doe" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Email</label>
+                    <input class="pam-input w-100-input" type="email" @bind="_fEmail" placeholder="user@company.com" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Password *</label>
+                    <input class="pam-input w-100-input" type="password" @bind="_fPassword" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Confirm Password *</label>
+                    <input class="pam-input w-100-input" type="password" @bind="_fPasswordConfirm" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddUserAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    Create User
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<UserDto>? _users;
     private PageMeta?      _meta;
-    private bool           _loading     = true;
+    private bool           _loading      = true;
     private string?        _error;
-    private string         _search      = "";
+    private string         _search       = "";
     private string         _statusFilter = "";
-    private int            _page        = 1;
-    private const int      _pageSize    = 20;
-    private bool           _showAdd;
+    private int            _page         = 1;
+    private const int      _pageSize     = 20;
+
+    // Modal state
+    private bool    _showAdd;
+    private string? _formError;
+    private bool    _formSaving;
+    private string  _fUsername        = "";
+    private string  _fDisplayName     = "";
+    private string  _fEmail           = "";
+    private string  _fPassword        = "";
+    private string  _fPasswordConfirm = "";
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -146,16 +203,51 @@
 
     private async Task OnSearchKeyUp(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
-        {
-            _page = 1;
-            await LoadAsync();
-        }
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
     }
 
     private async Task SetStatusAsync(string userId, string status)
     {
         await Api.SetUserStatusAsync(userId, status);
+        await LoadAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _fUsername = _fDisplayName = _fEmail = _fPassword = _fPasswordConfirm = "";
+        _formError = null;
+        _showAdd   = true;
+    }
+
+    private void CloseModal() { _showAdd = false; _formError = null; }
+
+    private async Task SubmitAddUserAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fUsername))   { _formError = "Username is required."; return; }
+        if (string.IsNullOrWhiteSpace(_fPassword))   { _formError = "Password is required."; return; }
+        if (_fPassword != _fPasswordConfirm)          { _formError = "Passwords do not match."; return; }
+
+        _formSaving = true;
+        StateHasChanged();
+
+        var ok = await Api.CreateUserAsync(
+            _fUsername.Trim(),
+            string.IsNullOrWhiteSpace(_fDisplayName) ? null : _fDisplayName.Trim(),
+            string.IsNullOrWhiteSpace(_fEmail)       ? null : _fEmail.Trim(),
+            _fPassword);
+
+        _formSaving = false;
+
+        if (!ok)
+        {
+            _formError = "Failed to create user — check username uniqueness and password policy.";
+            StateHasChanged();
+            return;
+        }
+
+        CloseModal();
+        _page = 1;
         await LoadAsync();
     }
 
