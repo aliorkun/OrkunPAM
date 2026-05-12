@@ -10,14 +10,22 @@
 </div>
 
 <div class="pam-filters">
-    <input class="pam-input pam-search" type="search" placeholder="Search policies…"
-           @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
-    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+    <select class="pam-input pam-select" @bind="_typeFilter" @bind:after="LoadAsync">
+        <option value="">All Types</option>
+        <option value="Password">Password</option>
+        <option value="Session">Session</option>
+        <option value="Access">Access</option>
+        <option value="MFA">MFA</option>
+    </select>
 </div>
 
 @if (_error != null)
 {
     <div class="pam-alert pam-alert-danger">@_error</div>
+}
+@if (_successMsg != null)
+{
+    <div class="pam-alert pam-alert-success">@_successMsg</div>
 }
 
 <div class="pam-card">
@@ -28,7 +36,7 @@
         }
         else if (_policies == null || _policies.Count == 0)
         {
-            <div class="pam-empty p-4">No policies found. Create one to get started.</div>
+            <div class="pam-empty p-4">No policies defined. Create your first policy to enforce access controls.</div>
         }
         else
         {
@@ -37,9 +45,9 @@
                     <tr>
                         <th>Name</th>
                         <th>Type</th>
-                        <th>Description</th>
+                        <th>Scope</th>
+                        <th>Priority</th>
                         <th>Status</th>
-                        <th>Created</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -48,116 +56,118 @@
                     {
                         <tr>
                             <td><strong>@p.Name</strong></td>
-                            <td><span class="pam-badge">@FormatPolicyType(p.PolicyType)</span></td>
-                            <td>@(p.Description ?? "—")</td>
+                            <td><span class="pam-badge">@p.PolicyType</span></td>
+                            <td><span class="pam-badge pam-badge-secondary">@p.Scope</span></td>
+                            <td>@p.Priority</td>
                             <td>
                                 @if (p.IsEnabled)
-                                { <span class="pam-status pam-status-active">Enabled</span> }
+                                {
+                                    <span class="pam-status pam-status-active">Enabled</span>
+                                }
                                 else
-                                { <span class="pam-status pam-status-done">Disabled</span> }
+                                {
+                                    <span class="pam-status pam-status-done">Disabled</span>
+                                }
                             </td>
-                            <td>@p.CreatedAtUtc.ToLocalTime().ToString("MM/dd/yy")</td>
                             <td>
                                 <div class="pam-actions">
-                                    <button class="pam-btn-icon" title="Edit policy"
-                                            @onclick="() => OpenEditModal(p)">&#9998;</button>
-                                    <button class="pam-btn-icon pam-btn-danger-icon" title="Delete policy"
-                                            @onclick="() => ConfirmDelete(p)">&#x1F5D1;</button>
+                                    @if (p.IsEnabled)
+                                    {
+                                        <button class="pam-btn-icon" title="Disable policy"
+                                                @onclick="@(() => ToggleAsync(p.Id, false))">&#9646;</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="pam-btn-icon pam-btn-success" title="Enable policy"
+                                                @onclick="@(() => ToggleAsync(p.Id, true))">&#9654;</button>
+                                    }
+                                    <button class="pam-btn-icon pam-btn-danger" title="Delete policy"
+                                            @onclick="@(() => ConfirmDelete(p))">&#128465;</button>
                                 </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
-
-            @if (_meta != null && _meta.TotalCount > _pageSize)
-            {
-                <div class="pam-pagination">
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
-                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount policies</span>
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
-                </div>
-            }
         }
     </div>
 </div>
 
-<!-- Add / Edit Policy Modal -->
-@if (_showModal)
+<!-- Add Policy Modal -->
+@if (_showAdd)
 {
-    <div class="pam-modal-overlay" @onclick="CloseModal">
+    <div class="pam-modal-overlay" @onclick="CloseAddModal">
         <div class="pam-modal" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
-                <h3 class="pam-modal-title">@(_editingId == null ? "New Policy" : "Edit Policy")</h3>
-                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+                <h3 class="pam-modal-title">New Policy</h3>
+                <button class="pam-close-btn" @onclick="CloseAddModal">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                @if (_formError != null)
+                @if (_addError != null)
                 {
-                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                    <div class="pam-alert pam-alert-danger">@_addError</div>
                 }
                 <div class="pam-form-group">
                     <label class="pam-label">Name *</label>
-                    <input class="pam-input w-100-input" @bind="_fName"
-                           placeholder="e.g. SSH Session Policy" />
+                    <input class="pam-input w-100-input" @bind="_fName" placeholder="e.g. Global Password Policy" />
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Type *</label>
+                        <select class="pam-input" style="width:100%" @bind="_fPolicyType">
+                            <option value="Password">Password</option>
+                            <option value="Session">Session</option>
+                            <option value="Access">Access</option>
+                            <option value="MFA">MFA</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Scope *</label>
+                        <select class="pam-input" style="width:100%" @bind="_fScope">
+                            <option value="0">Global</option>
+                            <option value="2">Group</option>
+                            <option value="1">User</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="width:80px">
+                        <label class="pam-label">Priority</label>
+                        <input class="pam-input" style="width:100%" type="number" @bind="_fPriority" min="0" max="100" />
+                    </div>
                 </div>
                 <div class="pam-form-group">
-                    <label class="pam-label">Policy Type *</label>
-                    <select class="pam-input w-100-input" @bind="_fType">
-                        <option value="SessionDuration">Session Duration</option>
-                        <option value="MaxCheckoutTime">Max Checkout Time</option>
-                        <option value="PasswordComplexity">Password Complexity</option>
-                        <option value="MfaRequired">MFA Required</option>
-                        <option value="IpRestriction">IP Restriction</option>
-                        <option value="TimeRestriction">Time-Based Access</option>
-                        <option value="RecordingRequired">Recording Required</option>
-                        <option value="ApprovalRequired">Approval Required</option>
-                    </select>
-                </div>
-                <div class="pam-form-group">
-                    <label class="pam-label">Description</label>
-                    <input class="pam-input w-100-input" @bind="_fDescription"
-                           placeholder="Describe what this policy does…" />
-                </div>
-                <div class="pam-form-group">
-                    <label class="pam-label pam-label-inline">
-                        <input type="checkbox" @bind="_fEnabled" style="margin-right:6px" />
-                        Policy is enabled
-                    </label>
+                    <label class="pam-label">Policy JSON *</label>
+                    <textarea class="pam-input w-100-input pam-textarea" rows="5"
+                              @bind="_fPolicyJson" placeholder='{"minLength":12,"requireUppercase":true}'></textarea>
+                    <span class="pam-hint">JSON configuration for this policy type.</span>
                 </div>
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
-                <button class="pam-btn pam-btn-primary" @onclick="SubmitAsync" disabled="@_formSaving">
-                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
-                    @(_editingId == null ? "Create Policy" : "Save Changes")
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseAddModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddPolicyAsync" disabled="@_addSaving">
+                    @if (_addSaving) { <span class="pam-spinner-sm"></span> }
+                    Create Policy
                 </button>
             </div>
         </div>
     </div>
 }
 
-<!-- Delete Confirmation Modal -->
-@if (_showDelete)
+<!-- Delete Confirm Modal -->
+@if (_deleteTarget != null)
 {
-    <div class="pam-modal-overlay" @onclick="CloseDelete">
+    <div class="pam-modal-overlay" @onclick="CancelDelete">
         <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
                 <h3 class="pam-modal-title">Delete Policy</h3>
-                <button class="pam-close-btn" @onclick="CloseDelete">&#215;</button>
+                <button class="pam-close-btn" @onclick="CancelDelete">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
-                <p style="font-size:13px;color:#718096">This action cannot be undone.</p>
+                <p>Delete policy <strong>@_deleteTarget.Name</strong>?</p>
+                <p class="pam-hint pam-hint-warn">This cannot be undone.</p>
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="CloseDelete">Cancel</button>
-                <button class="pam-btn pam-btn-danger" @onclick="ExecuteDeleteAsync" disabled="@_deleting">
-                    @if (_deleting) { <span class="pam-spinner-sm"></span> }
-                    Delete
-                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="CancelDelete">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="ExecuteDeleteAsync">Delete</button>
             </div>
         </div>
     </div>
@@ -165,30 +175,23 @@
 
 @code {
     private List<PolicyDto>? _policies;
-    private PageMeta?        _meta;
-    private bool             _loading  = true;
+    private bool             _loading    = true;
     private string?          _error;
-    private string           _search   = "";
-    private int              _page     = 1;
-    private const int        _pageSize = 20;
+    private string?          _successMsg;
+    private string           _typeFilter = "";
 
-    // Add/Edit modal
-    private bool    _showModal;
-    private string? _editingId;
-    private string? _formError;
-    private bool    _formSaving;
-    private string  _fName        = "";
-    private string  _fType        = "SessionDuration";
-    private string  _fDescription = "";
-    private bool    _fEnabled     = true;
+    // Add modal
+    private bool    _showAdd;
+    private string? _addError;
+    private bool    _addSaving;
+    private string  _fName       = "";
+    private string  _fPolicyType = "Password";
+    private string  _fScope      = "0";
+    private int     _fPriority   = 50;
+    private string  _fPolicyJson = "{}";
 
-    // Delete modal
-    private bool    _showDelete;
-    private string  _deleteTargetId   = "";
-    private string  _deleteTargetName = "";
-    private bool    _deleting;
-
-    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+    // Delete confirm
+    private PolicyDto? _deleteTarget;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -199,106 +202,78 @@
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
-        var result = await Api.GetPoliciesAsync(_search, _page, _pageSize);
-        if (result == null) _error = "Failed to load policies — check API connection.";
-        else { _policies = result.Data; _meta = result.Meta; }
+        var result = await Api.GetPoliciesAsync(string.IsNullOrEmpty(_typeFilter) ? null : _typeFilter);
+        if (result == null)
+            _error = "Failed to load policies — check API connection.";
+        else
+            _policies = result.Data ?? [];
         _loading = false; StateHasChanged();
     }
 
-    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    private async Task ToggleAsync(string id, bool enable)
     {
-        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+        var ok = await Api.TogglePolicyAsync(id, enable);
+        if (ok)
+        {
+            _successMsg = enable ? "Policy enabled." : "Policy disabled.";
+            await LoadAsync();
+            await Task.Delay(3000);
+            _successMsg = null;
+            StateHasChanged();
+        }
+        else
+        {
+            _error = "Failed to update policy.";
+        }
     }
 
     private void OpenAddModal()
     {
-        _editingId = null;
-        _fName = _fDescription = ""; _fType = "SessionDuration"; _fEnabled = true;
-        _formError = null;
-        _showModal = true;
+        _fName = ""; _fPolicyType = "Password"; _fScope = "0"; _fPriority = 50; _fPolicyJson = "{}";
+        _addError = null;
+        _showAdd = true;
     }
 
-    private void OpenEditModal(PolicyDto p)
+    private void CloseAddModal() { _showAdd = false; _addError = null; }
+
+    private async Task SubmitAddPolicyAsync()
     {
-        _editingId    = p.Id;
-        _fName        = p.Name;
-        _fType        = p.PolicyType;
-        _fDescription = p.Description ?? "";
-        _fEnabled     = p.IsEnabled;
-        _formError    = null;
-        _showModal    = true;
-    }
+        _addError = null;
+        if (string.IsNullOrWhiteSpace(_fName))       { _addError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_fPolicyJson)) { _addError = "Policy JSON is required."; return; }
 
-    private void CloseModal() { _showModal = false; _formError = null; }
+        _addSaving = true;
+        StateHasChanged();
 
-    private async Task SubmitAsync()
-    {
-        _formError = null;
-        if (string.IsNullOrWhiteSpace(_fName)) { _formError = "Policy name is required."; return; }
+        var ok = await Api.CreatePolicyAsync(
+            _fName.Trim(), _fPolicyType,
+            int.Parse(_fScope),
+            _fPolicyJson.Trim(),
+            _fPriority);
 
-        _formSaving = true; StateHasChanged();
-
-        bool ok;
-        if (_editingId == null)
-            ok = await Api.CreatePolicyAsync(
-                _fName.Trim(),
-                string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
-                _fType, _fEnabled);
-        else
-            ok = await Api.UpdatePolicyAsync(
-                _editingId,
-                _fName.Trim(),
-                string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
-                _fType, _fEnabled);
-
-        _formSaving = false;
+        _addSaving = false;
 
         if (!ok)
         {
-            _formError = _editingId == null
-                ? "Failed to create policy — check for name conflicts."
-                : "Failed to save changes — please try again.";
+            _addError = "Failed to create policy. Check policy JSON and server logs.";
             StateHasChanged();
             return;
         }
 
-        CloseModal();
-        if (_editingId == null) _page = 1;
+        CloseAddModal();
         await LoadAsync();
     }
 
-    private void ConfirmDelete(PolicyDto p)
-    {
-        _deleteTargetId   = p.Id;
-        _deleteTargetName = p.Name;
-        _showDelete       = true;
-    }
-
-    private void CloseDelete() { _showDelete = false; _deleting = false; }
+    private void ConfirmDelete(PolicyDto p)  { _deleteTarget = p; StateHasChanged(); }
+    private void CancelDelete()              { _deleteTarget = null; StateHasChanged(); }
 
     private async Task ExecuteDeleteAsync()
     {
-        _deleting = true; StateHasChanged();
-        var ok = await Api.DeletePolicyAsync(_deleteTargetId);
-        _deleting = false;
-        if (!ok) { _error = "Failed to delete policy."; StateHasChanged(); }
-        CloseDelete();
+        if (_deleteTarget == null) return;
+        var id = _deleteTarget.Id;
+        _deleteTarget = null;
+        var ok = await Api.DeletePolicyAsync(id);
+        if (!ok) _error = "Failed to delete policy.";
         await LoadAsync();
     }
-
-    private static string FormatPolicyType(string type) => type switch
-    {
-        "SessionDuration"    => "Session Duration",
-        "MaxCheckoutTime"    => "Checkout Time",
-        "PasswordComplexity" => "Pwd Complexity",
-        "MfaRequired"        => "MFA Required",
-        "IpRestriction"      => "IP Restriction",
-        "TimeRestriction"    => "Time-Based",
-        "RecordingRequired"  => "Recording",
-        "ApprovalRequired"   => "Approval",
-        _                    => type
-    };
-
-    private async Task PrevPage() { _page--; await LoadAsync(); }
-    private async Task NextPage() { _page++; await LoadAsync(); }
 }

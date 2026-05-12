@@ -40,6 +40,13 @@
             <div class="pam-stat-label">Vault Credentials</div>
         </div>
     </div>
+    <div class="pam-stat-card pam-stat-red">
+        <div class="pam-stat-icon">⏳</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_pendingApprovals?.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Pending Approvals</div>
+        </div>
+    </div>
 </div>
 
 <div class="pam-row">
@@ -131,6 +138,7 @@
     private int? _totalUsers;
     private int? _totalDevices;
     private int? _totalCredentials;
+    private int? _pendingApprovals;
     private List<SessionDto>? _sessions;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -141,6 +149,11 @@
 
     private async Task LoadDataAsync()
     {
+        var pendingTask = Task.Run(async () =>
+        {
+            _pendingApprovals = await Api.GetPendingApprovalCountAsync();
+        });
+
         var tasks = new[]
         {
             LoadStatAsync("/api/v1/sessions?status=Active",  v => _activeSessions  = v),
@@ -149,6 +162,7 @@
             LoadStatAsync("/api/v1/vault/credentials",       v => _totalCredentials = v),
         };
         await Task.WhenAll(tasks);
+        await pendingTask;
 
         var sessions = await Api.GetSessionsAsync(pageSize: 5);
         _sessions = sessions?.Data ?? [];
