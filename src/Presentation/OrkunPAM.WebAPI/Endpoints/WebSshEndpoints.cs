@@ -13,7 +13,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class WebSshEndpoints
 {
-    public static void MapWebSshEndpoints(this WebApplication app)
+    public static void MapWebSshEndpoints(this IEndpointRouteBuilder app)
     {
         // WebSocket SSH bridge:
         // GET /ws/ssh?deviceId={guid}&credentialId={guid}&token={jwt}&cols={n}&rows={n}

@@ -33,7 +33,7 @@ public static class LdapSamlEndpoints
         return DnTypeRegex.IsMatch(dn);
     }
 
-    public static void MapLdapSamlEndpoints(this WebApplication app)
+    public static void MapLdapSamlEndpoints(this IEndpointRouteBuilder app)
     {
         // === LDAP Configurations ===
         var ldap = app.MapGroup("/api/v1/ldap-configs").WithTags("LDAP");

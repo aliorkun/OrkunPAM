@@ -9,7 +9,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class VaultEndpoints
 {
-    public static void MapVaultEndpoints(this WebApplication app)
+    public static void MapVaultEndpoints(this IEndpointRouteBuilder app)
     {
         // === Folders ===
         var folders = app.MapGroup("/api/v1/vault/folders").WithTags("Vault").RequireAuthorization();
