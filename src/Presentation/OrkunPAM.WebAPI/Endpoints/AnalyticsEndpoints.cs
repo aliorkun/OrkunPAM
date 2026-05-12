@@ -6,9 +6,8 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class AnalyticsEndpoints
 {
-    public static void MapAnalyticsEndpoints(this WebApplication app)
+    public static void MapAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
-        // === UBA Risk Rules ===
         var uba = app.MapGroup("/api/v1/analytics/uba").WithTags("Analytics");
 
         uba.MapGet("/rules", async (OrkunPamDbContext db) =>
@@ -33,7 +32,6 @@ public static class AnalyticsEndpoints
             return Results.Created($"/api/v1/analytics/uba/rules/{rule.Id}", new { success = true, data = new { rule.Id } });
         });
 
-        // === Anomalies ===
         var anomalies = app.MapGroup("/api/v1/analytics/anomalies").WithTags("Analytics");
 
         anomalies.MapGet("/", async (OrkunPamDbContext db, Guid? userId, string? type, int page = 1, int pageSize = 50) =>
@@ -67,7 +65,6 @@ public static class AnalyticsEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // === Alert Rules ===
         var alerts = app.MapGroup("/api/v1/analytics/alerts").WithTags("Analytics");
 
         alerts.MapGet("/rules", async (OrkunPamDbContext db) =>
@@ -106,10 +103,8 @@ public static class AnalyticsEndpoints
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // === Risk Scores ===
         app.MapGet("/api/v1/analytics/risk-scores/users", async (OrkunPamDbContext db) =>
         {
-            // Calculate risk score per user based on anomalies and session risk
             var userRisks = await db.Anomalies
                 .Where(a => !a.IsAcknowledged)
                 .GroupBy(a => a.UserId)
@@ -118,7 +113,7 @@ public static class AnalyticsEndpoints
                     UserId = g.Key,
                     AnomalyCount = g.Count(),
                     MaxSeverity = g.Max(a => a.Severity),
-                    RiskScore = g.Sum(a => (decimal)a.Severity * 25) // Simple scoring
+                    RiskScore = g.Sum(a => (decimal)a.Severity * 25)
                 })
                 .OrderByDescending(u => u.RiskScore)
                 .Take(50)
@@ -127,7 +122,6 @@ public static class AnalyticsEndpoints
             return Results.Ok(new { success = true, data = userRisks });
         }).WithTags("Analytics");
 
-        // === SIEM Configuration ===
         var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations");
 
         siem.MapGet("/", async (OrkunPamDbContext db) =>
@@ -144,10 +138,10 @@ public static class AnalyticsEndpoints
             var configs = new Dictionary<string, string?>
             {
                 ["siem.enabled"] = req.Enabled.ToString(),
-                ["siem.protocol"] = req.Protocol, // "syslog", "cef"
+                ["siem.protocol"] = req.Protocol,
                 ["siem.host"] = req.Host,
                 ["siem.port"] = req.Port?.ToString(),
-                ["siem.transport"] = req.Transport // "udp", "tcp", "tls"
+                ["siem.transport"] = req.Transport
             };
 
             foreach (var (key, value) in configs)

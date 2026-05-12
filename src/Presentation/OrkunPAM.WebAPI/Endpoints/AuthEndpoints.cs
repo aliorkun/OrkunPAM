@@ -9,7 +9,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class AuthEndpoints
 {
-    public static void MapAuthEndpoints(this WebApplication app)
+    public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth").AllowAnonymous();
 
@@ -51,7 +51,6 @@ public static class AuthEndpoints
             });
         });
 
-        // MFA Setup - requires authentication; userId taken from JWT to prevent IDOR
         app.MapPost("/api/v1/auth/mfa/setup", async (OrkunPamDbContext db, ITotpService totp,
             IVaultEncryptionService vault, HttpContext context) =>
         {
@@ -84,7 +83,6 @@ public static class AuthEndpoints
             });
         }).RequireAuthorization().WithTags("Auth");
 
-        // MFA Verify & Enable - requires authentication; userId taken from JWT to prevent IDOR
         app.MapPost("/api/v1/auth/mfa/verify", async (MfaVerifyRequest req, OrkunPamDbContext db,
             ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {
@@ -112,7 +110,6 @@ public static class AuthEndpoints
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
         }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
 
-        // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
             IPasswordHasher hasher, ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {

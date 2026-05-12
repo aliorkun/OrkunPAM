@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,6 +9,7 @@ using OrkunPAM.Persistence;
 using OrkunPAM.SharedKernel;
 using OrkunPAM.WebAPI.Endpoints;
 using OrkunPAM.WebAPI.Middleware;
+using OrkunPAM.WebAPI.Validation;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -53,6 +55,9 @@ try
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddSingleton<ITotpService, TotpService>();
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
+
+    // === Input Validation (fixes #19) ===
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>(ServiceLifetime.Singleton);
 
     // === Integration Services ===
     builder.Services.AddSingleton<OrkunPAM.Identity.Services.ILdapService, OrkunPAM.Identity.Services.LdapService>();
@@ -136,8 +141,6 @@ try
     var signingKey = new RsaSecurityKey(rsaKey);
     builder.Services.AddSingleton(signingKey);
 
-    // Register TokenValidationParameters as singleton for WebSocket JWT validation
-    // (browser WebSocket API cannot set custom headers, so JWT is passed as query param)
     builder.Services.AddSingleton(_ => new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -245,26 +248,27 @@ try
         }).WithTags("Vault").RequireAuthorization();
     }
 
-    // === Map Module Endpoints ===
-    app.MapAuthEndpoints();
-    app.MapUserEndpoints();
-    app.MapGroupEndpoints();
-    app.MapRoleEndpoints();
-    app.MapVaultEndpoints();
-    app.MapDeviceEndpoints();
-    app.MapPolicyEndpoints();
-    app.MapWorkflowEndpoints();
-    app.MapLdapSamlEndpoints();
-    app.MapAapmEndpoints();
-    app.MapSessionEndpoints();
-    app.MapWebSshEndpoints();
-    app.MapDiscoveryEndpoints();
-    app.MapReportEndpoints();
-    app.MapComplianceEndpoints();
-    app.MapAnalyticsEndpoints();
-    app.MapIntegrationEndpoints();
-    app.MapImportEndpoints();
-    app.MapSystemEndpoints();
+    // === Map Module Endpoints (all routed through validation filter) ===
+    var api = app.MapGroup("").AddEndpointFilter<ValidationEndpointFilter>();
+    api.MapAuthEndpoints();
+    api.MapUserEndpoints();
+    api.MapGroupEndpoints();
+    api.MapRoleEndpoints();
+    api.MapVaultEndpoints();
+    api.MapDeviceEndpoints();
+    api.MapPolicyEndpoints();
+    api.MapWorkflowEndpoints();
+    api.MapLdapSamlEndpoints();
+    api.MapAapmEndpoints();
+    api.MapSessionEndpoints();
+    api.MapWebSshEndpoints();
+    api.MapDiscoveryEndpoints();
+    api.MapReportEndpoints();
+    api.MapComplianceEndpoints();
+    api.MapAnalyticsEndpoints();
+    api.MapIntegrationEndpoints();
+    api.MapImportEndpoints();
+    api.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
     app.Run();

@@ -9,7 +9,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class AapmEndpoints
 {
-    public static void MapAapmEndpoints(this WebApplication app)
+    public static void MapAapmEndpoints(this IEndpointRouteBuilder app)
     {
         var clients = app.MapGroup("/api/v1/aapm/clients").WithTags("AAPM");
 
@@ -40,7 +40,6 @@ public static class AapmEndpoints
                 ServiceAccountId = req.ServiceAccountId
             };
 
-            // Link credentials
             if (req.CredentialIds != null)
             {
                 foreach (var credId in req.CredentialIds)
@@ -50,7 +49,6 @@ public static class AapmEndpoints
             db.ApiClients.Add(client);
             await db.SaveChangesAsync();
 
-            // Secret shown ONCE at creation
             return Results.Created($"/api/v1/aapm/clients/{client.Id}", new
             {
                 success = true,
@@ -58,7 +56,7 @@ public static class AapmEndpoints
                 {
                     client.Id, client.Name,
                     clientId,
-                    clientSecret, // Only shown once!
+                    clientSecret,
                     message = "SAVE THIS SECRET NOW - it will not be shown again"
                 }
             });
@@ -108,7 +106,6 @@ public static class AapmEndpoints
             return Results.Ok(new { success = true, data = logs, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // === Token endpoint (OAuth2 Client Credentials) ===
         app.MapPost("/api/v1/aapm/token", async (AapmTokenRequest req, OrkunPamDbContext db,
             IPasswordHasher hasher, IJwtTokenService jwt, ILogger<Program> logger) =>
         {
@@ -142,11 +139,9 @@ public static class AapmEndpoints
             });
         }).WithTags("AAPM").AllowAnonymous();
 
-        // === Credential retrieval (AAPM) ===
         app.MapGet("/api/v1/aapm/credentials/{credId:guid}", async (Guid credId, OrkunPamDbContext db,
             IVaultEncryptionService vault, ILogger<Program> logger, HttpContext ctx) =>
         {
-            // Validate AAPM token - extract client ID from JWT claims
             var clientIdClaim = ctx.User?.FindFirst("sub")?.Value ?? ctx.User?.FindFirst("client_id")?.Value;
             if (string.IsNullOrEmpty(clientIdClaim) || !Guid.TryParse(clientIdClaim, out var apiClientId))
             {
@@ -154,7 +149,6 @@ public static class AapmEndpoints
                 return Results.Json(new { error = "unauthorized", message = "Valid AAPM token required" }, statusCode: 401);
             }
 
-            // Verify API client exists and is enabled
             var apiClient = await db.ApiClients
                 .Include(c => c.CredentialAccess)
                 .FirstOrDefaultAsync(c => c.Id == apiClientId && c.IsEnabled);
@@ -165,7 +159,6 @@ public static class AapmEndpoints
                 return Results.Json(new { error = "forbidden", message = "API client not found or disabled" }, statusCode: 403);
             }
 
-            // Check if this client has access to the requested credential
             var hasAccess = apiClient.CredentialAccess.Any(ca => ca.CredentialId == credId);
             if (!hasAccess)
             {
@@ -187,7 +180,6 @@ public static class AapmEndpoints
                 password = decResult.Value;
             }
 
-            // Log access with real client ID
             db.ApiAccessLogs.Add(new ApiAccessLog
             {
                 CredentialId = credId,
