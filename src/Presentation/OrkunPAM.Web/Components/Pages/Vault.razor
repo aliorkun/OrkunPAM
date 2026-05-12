@@ -139,7 +139,7 @@
                                         @if (!string.IsNullOrEmpty(c.DeviceId))
                                         {
                                             <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
-                                                    @onclick="() => Nav.NavigateTo($"/connect?deviceId={c.DeviceId}")">⌨</button>
+                                                    @onclick="@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))">⌨</button>
                                         }
                                     </div>
                                 </td>
