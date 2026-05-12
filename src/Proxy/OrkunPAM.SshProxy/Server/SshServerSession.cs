@@ -225,7 +225,7 @@ internal sealed class SshServerSession
                 continue;
             }
 
-            if (!await _api.ValidateUserAsync(pamUser, password, _ct, _clientIp))
+            if (!await _api.ValidateUserAsync(pamUser, password, _ct))
             {
                 _log.LogWarning("PAM auth failure for '{User}' from {ClientIp}", pamUser, _clientIp);
                 await SendAuthFailureAsync("password");
