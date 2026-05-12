@@ -1,0 +1,174 @@
+@page "/login"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject IHttpClientFactory Http
+@inject IConfiguration Config
+
+<PageTitle>Login — OrkunPAM</PageTitle>
+
+<div class="pam-login-wrap">
+    <div class="pam-login-card">
+        <div class="text-center mb-4">
+            <div style="font-size:3rem;line-height:1;">🔐</div>
+            <h1 class="pam-logo-title">OrkunPAM</h1>
+            <p class="pam-logo-sub">Privileged Access Management</p>
+        </div>
+        <EditForm Model="@_model" OnValidSubmit="HandleLoginAsync">
+            <div class="mb-3">
+                <label class="pam-label">Username</label>
+                <InputText @bind-Value="_model.Username" class="form-control pam-input"
+                           placeholder="Enter username" autocomplete="username" />
+            </div>
+            <div class="mb-3">
+                <label class="pam-label">Password</label>
+                <InputText @bind-Value="_model.Password" type="password" class="form-control pam-input"
+                           placeholder="Enter password" autocomplete="current-password" />
+            </div>
+            @if (_error != null)
+            {
+                <div class="pam-alert mb-3">@_error</div>
+            }
+            <button type="submit" class="pam-btn-login w-100" disabled="@_loading">
+                @(_loading ? "Authenticating…" : "Login")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+<style>
+    .pam-login-wrap {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        padding: 1rem;
+    }
+    .pam-login-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 2.5rem;
+        width: 100%;
+        max-width: 400px;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+    }
+    .pam-logo-title { color: #e2e8f0; font-size: 1.75rem; font-weight: 700; margin: 0.5rem 0 0; }
+    .pam-logo-sub { color: #64748b; font-size: 0.85rem; margin: 0.2rem 0 0; }
+    .pam-label { color: #94a3b8; font-size: 0.875rem; display: block; margin-bottom: 0.35rem; }
+    .pam-input {
+        background: #0f172a !important;
+        border: 1px solid #334155 !important;
+        color: #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: 0.6rem 0.85rem !important;
+    }
+    .pam-input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 2px rgba(59,130,246,0.2) !important;
+        outline: none !important;
+    }
+    .pam-input::placeholder { color: #475569 !important; }
+    .pam-alert {
+        background: rgba(127,29,29,0.6);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+        border-radius: 6px;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.875rem;
+    }
+    .pam-btn-login {
+        display: block;
+        background: #3b82f6;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 0.7rem 1rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        letter-spacing: 0.025em;
+    }
+    .pam-btn-login:hover:not(:disabled) { background: #2563eb; }
+    .pam-btn-login:disabled { opacity: 0.65; cursor: not-allowed; }
+</style>
+
+@code {
+    private sealed class LoginModel
+    {
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    private readonly LoginModel _model = new();
+    private string? _error;
+    private bool _loading;
+    private IJSObjectReference? _authModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _authModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/auth.js");
+        var isAuth = await _authModule.InvokeAsync<bool>("isAuthenticated");
+        if (isAuth) Nav.NavigateTo("/", replace: true);
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Username) || string.IsNullOrWhiteSpace(_model.Password))
+        {
+            _error = "Username and password are required.";
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var client = Http.CreateClient("PamApi");
+            var response = await client.PostAsJsonAsync("/api/v1/auth/login",
+                new { username = _model.Username, password = _model.Password });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                if (result?.Success == true && result.Data?.AccessToken != null && _authModule != null)
+                {
+                    await _authModule.InvokeVoidAsync("storeToken",
+                        result.Data.AccessToken,
+                        result.Data.Username ?? _model.Username);
+                    Nav.NavigateTo("/", forceLoad: true);
+                    return;
+                }
+            }
+
+            _error = response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                ? "Invalid username or password."
+                : "Login failed. Please try again.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Cannot connect to PAM service. Check your network connection.";
+        }
+        catch (Exception)
+        {
+            _error = "An unexpected error occurred. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private sealed record LoginData(
+        string? AccessToken, string? RefreshToken,
+        string? Username, string? DisplayName,
+        bool MfaRequired, bool MustChangePassword);
+
+    private sealed record LoginResponse(bool Success, LoginData? Data);
+}

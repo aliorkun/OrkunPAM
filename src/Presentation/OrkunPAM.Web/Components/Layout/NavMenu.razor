@@ -1,6 +1,6 @@
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">OrkunPAM</a>
+        <a class="navbar-brand" href="">🔐 OrkunPAM</a>
     </div>
 </div>
 
@@ -10,26 +10,42 @@
     <nav class="flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
+                <span class="pam-nav-ico" aria-hidden="true">📊</span> Dashboard
             </NavLink>
         </div>
-
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            <NavLink class="nav-link" href="devices">
+                <span class="pam-nav-ico" aria-hidden="true">🖥️</span> Devices
             </NavLink>
         </div>
-
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            <NavLink class="nav-link" href="vault">
+                <span class="pam-nav-ico" aria-hidden="true">🔐</span> Vault
             </NavLink>
         </div>
-
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="terminal">
-                <span class="bi bi-terminal-fill-nav-menu" aria-hidden="true"></span> SSH Terminal
+            <NavLink class="nav-link" href="sessions">
+                <span class="pam-nav-ico" aria-hidden="true">📡</span> Sessions
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="users">
+                <span class="pam-nav-ico" aria-hidden="true">👤</span> Users
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="policies">
+                <span class="pam-nav-ico" aria-hidden="true">📋</span> Policies
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="reports">
+                <span class="pam-nav-ico" aria-hidden="true">📈</span> Reports
             </NavLink>
         </div>
     </nav>
 </div>
+
+<style>
+    .pam-nav-ico { display: inline-block; width: 1.5em; text-align: center; }
+</style>

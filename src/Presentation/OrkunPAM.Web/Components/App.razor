@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -15,6 +15,23 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        function pamUpdateAuthBar() {
+            const user = localStorage.getItem('orkunpam_user');
+            const el  = document.getElementById('pam-topbar-user');
+            const btn = document.getElementById('pam-topbar-logout');
+            if (el)  el.textContent = user || '';
+            if (btn) btn.style.display = user ? 'inline-block' : 'none';
+        }
+        function pamLogout() {
+            localStorage.removeItem('orkunpam_token');
+            localStorage.removeItem('orkunpam_user');
+            window.location.href = '/login';
+        }
+        document.addEventListener('DOMContentLoaded', pamUpdateAuthBar);
+        // Blazor enhanced navigation fires this event on client-side page transitions
+        document.addEventListener('blazor:navigated', pamUpdateAuthBar);
+    </script>
 </body>
 
 </html>
