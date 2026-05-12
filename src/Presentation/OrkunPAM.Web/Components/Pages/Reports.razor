@@ -1,0 +1,460 @@
+@page "/reports"
+@using System.Text
+@using System.Text.Json
+@inject PamApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>Reports — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Reports &amp; Audit</h2>
+</div>
+
+<div style="display:flex;gap:4px;margin-bottom:16px">
+    <button class="pam-btn @(_tab == "audit" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("audit"))">📋 Audit Log</button>
+    <button class="pam-btn @(_tab == "reports" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("reports"))">📊 Reports</button>
+</div>
+
+@if (_tab == "audit")
+{
+    <div class="pam-filters">
+        <select class="pam-input pam-select" @bind="_auditCategory" style="width:140px">
+            <option value="">All Categories</option>
+            <option value="Auth">Auth</option>
+            <option value="User">User</option>
+            <option value="Vault">Vault</option>
+            <option value="Session">Session</option>
+            <option value="Device">Device</option>
+            <option value="Policy">Policy</option>
+            <option value="System">System</option>
+        </select>
+        <input class="pam-input" placeholder="Filter event…"
+               @bind="_auditEventFilter" style="width:160px" />
+        <button class="pam-btn @(_preset == "1d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => ApplyPreset("1d"))">24h</button>
+        <button class="pam-btn @(_preset == "7d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => ApplyPreset("7d"))">7d</button>
+        <button class="pam-btn @(_preset == "30d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => ApplyPreset("30d"))">30d</button>
+        <button class="pam-btn @(_preset == "custom" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => ApplyPreset("custom"))">Custom</button>
+        @if (_preset == "custom")
+        {
+            <input type="date" class="pam-input" @bind="_customFrom" @bind:format="yyyy-MM-dd" style="width:140px" />
+            <input type="date" class="pam-input" @bind="_customTo" @bind:format="yyyy-MM-dd" style="width:140px" />
+        }
+        <button class="pam-btn pam-btn-primary" @onclick="LoadAuditAsync">Search</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="ExportAuditCsvAsync"
+                disabled="@(_auditLogs == null || _auditLogs.Count == 0)">Export CSV</button>
+    </div>
+
+    @if (_auditError != null) { <div class="pam-alert pam-alert-danger">@_auditError</div> }
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_auditLoading)
+            {
+                <div class="pam-loading-text p-4">Loading audit log…</div>
+            }
+            else if (_auditLogs == null || _auditLogs.Count == 0)
+            {
+                <div class="pam-empty p-4">No audit events in selected range.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover" style="font-size:0.85em">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Actor</th>
+                            <th>IP</th>
+                            <th>Category</th>
+                            <th>Event</th>
+                            <th>Target</th>
+                            <th>Outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in _auditLogs)
+                        {
+                            <tr>
+                                <td style="white-space:nowrap">@log.Timestamp.ToLocalTime().ToString("MM/dd HH:mm:ss")</td>
+                                <td>@(log.ActorUsername ?? "—")</td>
+                                <td>@(log.ActorIpAddress ?? "—")</td>
+                                <td><span class="pam-badge">@log.EventCategory</span></td>
+                                <td>@log.EventType</td>
+                                <td>
+                                    @if (log.TargetId != null)
+                                    {
+                                        <span>@log.TargetType:@log.TargetId</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(log.TargetType ?? "—")</span>
+                                    }
+                                </td>
+                                <td><span class="pam-status @OutcomeClass(log.Outcome)">@log.Outcome</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_auditMeta != null && _auditMeta.TotalCount > _auditPageSize)
+                {
+                    <div class="pam-pagination">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_auditPage == 1)" @onclick="AuditPrevPage">← Prev</button>
+                        <span class="pam-page-info">Page @_auditPage / @AuditTotalPages — @_auditMeta.TotalCount events</span>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_auditPage >= AuditTotalPages)" @onclick="AuditNextPage">Next →</button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="pam-filters">
+        <span style="font-size:0.9em;color:#555;line-height:32px">Range:</span>
+        <button class="pam-btn @(_reportPreset == "1d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => _reportPreset = "1d")">24h</button>
+        <button class="pam-btn @(_reportPreset == "7d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => _reportPreset = "7d")">7d</button>
+        <button class="pam-btn @(_reportPreset == "30d" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => _reportPreset = "30d")">30d</button>
+        <button class="pam-btn @(_reportPreset == "custom" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => _reportPreset = "custom")">Custom</button>
+        @if (_reportPreset == "custom")
+        {
+            <input type="date" class="pam-input" @bind="_reportFrom" @bind:format="yyyy-MM-dd" style="width:140px" />
+            <input type="date" class="pam-input" @bind="_reportTo" @bind:format="yyyy-MM-dd" style="width:140px" />
+        }
+    </div>
+
+    @if (_reportsLoading)
+    {
+        <div class="pam-loading-text">Loading reports…</div>
+    }
+    else if (_reports == null || _reports.Count == 0)
+    {
+        <div class="pam-alert pam-alert-info">No reports available.</div>
+    }
+    else
+    {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px">
+            @foreach (var r in _reports)
+            {
+                <div class="pam-card"
+                     style="cursor:pointer;outline:@CardOutline(r.Id)"
+                     @onclick="@(() => RunReportAsync(r))">
+                    <div class="pam-card-body" style="padding:14px">
+                        <div style="font-weight:600;margin-bottom:4px">@r.Name</div>
+                        <div style="font-size:0.8em;color:#888;margin-bottom:8px">@r.Description</div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <span class="pam-badge">@r.Category</span>
+                            @if (_runningReport == r.Id)
+                            {
+                                <span style="font-size:0.75em;color:#666">Running…</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (_reportError != null) { <div class="pam-alert pam-alert-danger">@_reportError</div> }
+
+        @if (_reportResult != null && _selectedReport != null)
+        {
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <strong>@_selectedReport.Name</strong>
+                        <div style="display:flex;gap:6px">
+                            @if (_reportRows.Count > 0)
+                            {
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportReportCsvAsync">Export CSV</button>
+                            }
+                            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="CloseReport">✕</button>
+                        </div>
+                    </div>
+                    @if (_reportSummary.Count > 0)
+                    {
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:16px">
+                            @foreach (var kv in _reportSummary)
+                            {
+                                <div style="background:#f9fafb;border-radius:6px;padding:10px">
+                                    <div style="font-size:0.75em;color:#888;margin-bottom:2px">@kv.Key</div>
+                                    <div style="font-weight:600;font-size:1.05em">@kv.Value</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (_reportRows.Count > 0)
+                    {
+                        <div style="overflow-x:auto">
+                            <table class="pam-table pam-table-hover" style="font-size:0.85em">
+                                <thead>
+                                    <tr>
+                                        @foreach (var col in _reportColumns)
+                                        {
+                                            <th>@FormatKey(col)</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _reportRows)
+                                    {
+                                        <tr>
+                                            @foreach (var col in _reportColumns)
+                                            {
+                                                <td>@row.GetValueOrDefault(col, "—")</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    private string _tab = "audit";
+
+    // ---- Audit Log state ----
+    private string   _preset           = "7d";
+    private DateTime _customFrom       = DateTime.Today.AddDays(-7);
+    private DateTime _customTo         = DateTime.Today;
+    private string   _auditCategory    = "";
+    private string   _auditEventFilter = "";
+    private int      _auditPage        = 1;
+    private const int _auditPageSize   = 50;
+    private bool     _auditLoading;
+    private string?  _auditError;
+    private List<AuditLogDto>? _auditLogs;
+    private PageMeta? _auditMeta;
+    private int AuditTotalPages =>
+        _auditMeta == null ? 1 : (int)Math.Ceiling(_auditMeta.TotalCount / (double)_auditPageSize);
+
+    // ---- Reports state ----
+    private string   _reportPreset = "30d";
+    private DateTime _reportFrom   = DateTime.Today.AddDays(-30);
+    private DateTime _reportTo     = DateTime.Today;
+    private bool     _reportsLoading;
+    private string?  _reportError;
+    private List<ReportDto>? _reports;
+    private ReportDto?       _selectedReport;
+    private string?          _runningReport;
+    private ReportRunResult? _reportResult;
+    private List<(string Key, string Value)> _reportSummary  = [];
+    private List<string>                     _reportColumns  = [];
+    private List<Dictionary<string, string>> _reportRows     = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAuditAsync();
+        await LoadReportsAsync();
+    }
+
+    private void SetTab(string tab) { _tab = tab; }
+
+    // ---- Audit Log ----
+
+    private async Task ApplyPreset(string preset)
+    {
+        _preset = preset;
+        _auditPage = 1;
+        await LoadAuditAsync();
+    }
+
+    private DateTime GetAuditFrom() => _preset switch
+    {
+        "1d"    => DateTime.UtcNow.AddDays(-1),
+        "7d"    => DateTime.UtcNow.AddDays(-7),
+        "30d"   => DateTime.UtcNow.AddDays(-30),
+        "custom" => _customFrom.ToUniversalTime(),
+        _       => DateTime.UtcNow.AddDays(-7)
+    };
+
+    private DateTime GetAuditTo() =>
+        _preset == "custom" ? _customTo.AddDays(1).ToUniversalTime() : DateTime.UtcNow;
+
+    private async Task LoadAuditAsync()
+    {
+        _auditLoading = true; _auditError = null; StateHasChanged();
+        var result = await Api.GetAuditLogsAsync(
+            category: string.IsNullOrEmpty(_auditCategory) ? null : _auditCategory,
+            eventType: string.IsNullOrEmpty(_auditEventFilter) ? null : _auditEventFilter,
+            from: GetAuditFrom(), to: GetAuditTo(),
+            page: _auditPage, pageSize: _auditPageSize);
+        if (result == null) _auditError = "Failed to load audit log.";
+        else { _auditLogs = result.Data; _auditMeta = result.Meta; }
+        _auditLoading = false; StateHasChanged();
+    }
+
+    private async Task AuditPrevPage() { _auditPage--; await LoadAuditAsync(); }
+    private async Task AuditNextPage() { _auditPage++; await LoadAuditAsync(); }
+
+    private async Task ExportAuditCsvAsync()
+    {
+        var result = await Api.GetAuditLogsAsync(
+            category: string.IsNullOrEmpty(_auditCategory) ? null : _auditCategory,
+            eventType: string.IsNullOrEmpty(_auditEventFilter) ? null : _auditEventFilter,
+            from: GetAuditFrom(), to: GetAuditTo(), pageSize: 5000);
+        if (result?.Data == null || result.Data.Count == 0) return;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Timestamp,Actor,IP,Category,Event,Target,Outcome,Details");
+        foreach (var log in result.Data)
+        {
+            var target = log.TargetId != null
+                ? (log.TargetType + ":" + log.TargetId)
+                : (log.TargetType ?? "");
+            sb.AppendLine(
+                "\"" + log.Timestamp.ToLocalTime().ToString("O") + "\"," +
+                "\"" + (log.ActorUsername ?? "") + "\"," +
+                "\"" + (log.ActorIpAddress ?? "") + "\"," +
+                "\"" + log.EventCategory + "\"," +
+                "\"" + log.EventType + "\"," +
+                "\"" + target + "\"," +
+                "\"" + log.Outcome + "\"," +
+                "\"" + (log.Details ?? "").Replace("\"", "\"\"") + "\"");
+        }
+        await JS.InvokeVoidAsync("downloadCsvFile",
+            "audit-log-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
+    }
+
+    private static string OutcomeClass(string outcome) => outcome switch
+    {
+        "Success" => "pam-status-active",
+        "Failure" => "pam-status-error",
+        _         => "pam-status-warn"
+    };
+
+    // ---- Reports ----
+
+    private async Task LoadReportsAsync()
+    {
+        _reportsLoading = true; StateHasChanged();
+        var result = await Api.GetReportsListAsync();
+        _reports = result?.Data ?? [];
+        _reportsLoading = false; StateHasChanged();
+    }
+
+    private DateTime GetReportFrom() => _reportPreset switch
+    {
+        "1d"    => DateTime.UtcNow.AddDays(-1),
+        "7d"    => DateTime.UtcNow.AddDays(-7),
+        "30d"   => DateTime.UtcNow.AddDays(-30),
+        "custom" => _reportFrom.ToUniversalTime(),
+        _       => DateTime.UtcNow.AddDays(-30)
+    };
+
+    private DateTime GetReportTo() =>
+        _reportPreset == "custom" ? _reportTo.AddDays(1).ToUniversalTime() : DateTime.UtcNow;
+
+    private async Task RunReportAsync(ReportDto report)
+    {
+        _selectedReport = report;
+        _runningReport  = report.Id;
+        _reportError    = null;
+        _reportResult   = null;
+        _reportSummary.Clear();
+        _reportColumns.Clear();
+        _reportRows.Clear();
+        StateHasChanged();
+
+        var result = await Api.RunReportAsync(report.Id, GetReportFrom(), GetReportTo());
+        _runningReport = null;
+        if (result == null)
+            _reportError = "Failed to run report or it is not yet implemented.";
+        else
+        {
+            _reportResult = result;
+            ProcessReportResult(result);
+        }
+        StateHasChanged();
+    }
+
+    private void CloseReport() { _reportResult = null; _selectedReport = null; }
+
+    private string CardOutline(string id) =>
+        _selectedReport?.Id == id ? "2px solid #3b82f6" : "none";
+
+    private void ProcessReportResult(ReportRunResult result)
+    {
+        if (result.Data.ValueKind != JsonValueKind.Object) return;
+        foreach (var prop in result.Data.EnumerateObject())
+        {
+            if (prop.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number
+                    or JsonValueKind.True or JsonValueKind.False)
+            {
+                _reportSummary.Add((FormatKey(prop.Name), FormatValue(prop.Value)));
+            }
+            else if (prop.Value.ValueKind == JsonValueKind.Array && _reportRows.Count == 0)
+            {
+                var arr = prop.Value.EnumerateArray().ToList();
+                if (arr.Count > 0 && arr[0].ValueKind == JsonValueKind.Object)
+                {
+                    _reportColumns = arr[0].EnumerateObject().Select(p => p.Name).ToList();
+                    foreach (var item in arr)
+                    {
+                        var row = new Dictionary<string, string>();
+                        foreach (var col in _reportColumns)
+                            if (item.TryGetProperty(col, out var v))
+                                row[col] = FormatValue(v);
+                        _reportRows.Add(row);
+                    }
+                }
+            }
+            else if (prop.Value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var sub in prop.Value.EnumerateObject())
+                    if (sub.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number
+                            or JsonValueKind.True or JsonValueKind.False)
+                        _reportSummary.Add((FormatKey(prop.Name) + " / " + FormatKey(sub.Name), FormatValue(sub.Value)));
+            }
+        }
+    }
+
+    private static string FormatKey(string name)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in name)
+        {
+            if (char.IsUpper(c) && sb.Length > 0) sb.Append(' ');
+            sb.Append(sb.Length == 0 ? char.ToUpper(c) : c);
+        }
+        return sb.ToString();
+    }
+
+    private static string FormatValue(JsonElement v) => v.ValueKind switch
+    {
+        JsonValueKind.True  => "Yes",
+        JsonValueKind.False => "No",
+        JsonValueKind.Null  => "—",
+        JsonValueKind.Number => v.TryGetDouble(out var d)
+            ? (d % 1 == 0 ? ((long)d).ToString() : d.ToString("F2"))
+            : v.ToString(),
+        _ => v.ToString()
+    };
+
+    private async Task ExportReportCsvAsync()
+    {
+        if (_reportColumns.Count == 0 || _reportRows.Count == 0) return;
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Join(",", _reportColumns.Select(c => "\"" + c + "\"")));
+        foreach (var row in _reportRows)
+            sb.AppendLine(string.Join(",", _reportColumns.Select(c =>
+                "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
+        var filename = (_selectedReport?.Id ?? "report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
+        await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
+    }
+}

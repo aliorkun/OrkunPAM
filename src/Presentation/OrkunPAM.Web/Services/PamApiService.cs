@@ -352,6 +352,39 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // Reports & Audit Logs
+    // -----------------------------------------------------------------------
+
+    public async Task<ListResult<ReportDto>?> GetReportsListAsync()
+        => await GetAsync<ListResult<ReportDto>>("/api/v1/reports/");
+
+    public async Task<ReportRunResult?> RunReportAsync(string reportId, DateTime from, DateTime to)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/reports/" + reportId + "/run",
+                new { from, to });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<ReportRunResult>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
+    public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
+        string? category = null, string? eventType = null,
+        DateTime? from = null, DateTime? to = null,
+        int page = 1, int pageSize = 50)
+    {
+        var url = "/api/v1/audit-logs?page=" + page + "&pageSize=" + pageSize;
+        if (!string.IsNullOrEmpty(category)) url += "&category=" + Uri.EscapeDataString(category);
+        if (!string.IsNullOrEmpty(eventType)) url += "&eventType=" + Uri.EscapeDataString(eventType);
+        if (from.HasValue) url += "&from=" + Uri.EscapeDataString(from.Value.ToString("O"));
+        if (to.HasValue) url += "&to=" + Uri.EscapeDataString(to.Value.ToString("O"));
+        return await GetAsync<PagedResult<AuditLogDto>>(url);
+    }
+
+    // -----------------------------------------------------------------------
     // Current user
     // -----------------------------------------------------------------------
 
@@ -522,3 +555,18 @@ public record RdpLaunchResult(
     RdpFileInfo  RdpFile);
 
 public record RdpFileInfo(string Filename, string ContentBase64);
+
+public record ReportDto(string Id, string Name, string Category, string Description);
+public record ReportRunResult(bool Success, System.Text.Json.JsonElement Data, ReportRunMeta? Meta);
+public record ReportRunMeta(string ReportId, DateTime From, DateTime To, DateTime GeneratedAt);
+public record AuditLogDto(
+    long      Id,
+    DateTime  Timestamp,
+    string    EventCategory,
+    string    EventType,
+    string?   ActorUsername,
+    string?   ActorIpAddress,
+    string?   TargetType,
+    string?   TargetId,
+    string?   Details,
+    string    Outcome);
