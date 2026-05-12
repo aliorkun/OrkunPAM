@@ -18,7 +18,13 @@ internal sealed class PamApiClient
     {
         _factory = factory;
         _log = log;
-        _proxySecret = config["PamApi:ProxySecret"] ?? "changeme-in-production";
+        _proxySecret = config["PamApi:ProxySecret"]
+            ?? throw new InvalidOperationException(
+                "PamApi:ProxySecret is not configured. Set via environment variable PAM_PROXY_SECRET or appsettings.");
+
+        if (_proxySecret.Length < 32)
+            throw new InvalidOperationException(
+                "PamApi:ProxySecret must be at least 32 characters. Generate with: openssl rand -base64 32");
     }
 
     /// <summary>Validate PAM username + password. Returns true if valid.</summary>
