@@ -68,6 +68,9 @@ try
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IRotationService, OrkunPAM.Persistence.Services.RotationService>();
 
+    // === Memory Cache (used by RDP token store) ===
+    builder.Services.AddMemoryCache();
+
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
@@ -143,8 +146,6 @@ try
     var signingKey = new RsaSecurityKey(rsaKey);
     builder.Services.AddSingleton(signingKey);
 
-    // Register TokenValidationParameters as singleton for WebSocket JWT validation
-    // (browser WebSocket API cannot set custom headers, so JWT is passed as query param)
     builder.Services.AddSingleton(_ => new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -253,7 +254,6 @@ try
     }
 
     // === Map Module Endpoints (all routed through validation filter) ===
-    // ValidationEndpointFilter validates request bodies against registered FluentValidation validators.
     var api = app.MapGroup("").AddEndpointFilter<ValidationEndpointFilter>();
     api.MapAuthEndpoints();
     api.MapUserEndpoints();

@@ -1,0 +1,131 @@
+using System.Net.Http.Json;
+
+namespace OrkunPAM.RdpProxy;
+
+/// <summary>
+/// Calls the OrkunPAM WebAPI to validate session tokens and retrieve target credentials.
+/// </summary>
+internal sealed class PamApiClient
+{
+    private readonly IHttpClientFactory _factory;
+    private readonly ILogger<PamApiClient> _log;
+    private readonly string _proxySecret;
+
+    public PamApiClient(IHttpClientFactory factory, ILogger<PamApiClient> log, IConfiguration config)
+    {
+        _factory = factory;
+        _log = log;
+        _proxySecret = config["PamApi:ProxySecret"]
+            ?? throw new InvalidOperationException(
+                "PamApi:ProxySecret is not configured. Set via environment variable PAM_PROXY_SECRET or appsettings.");
+
+        if (_proxySecret.Length < 32)
+            throw new InvalidOperationException(
+                "PamApi:ProxySecret must be at least 32 characters.");
+    }
+
+    /// <summary>
+    /// Validates an RDP session token and returns target connection info + credentials.
+    /// Throws <see cref="InvalidOperationException"/> on failure — caller must close connection (fail-closed).
+    /// </summary>
+    internal async Task<RdpSessionInfo> ValidateSessionTokenAsync(string sessionToken, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+
+            // Authenticate as proxy service account to get a JWT
+            var loginResp = await client.PostAsJsonAsync("/api/v1/auth/login",
+                new { username = "proxy-service", password = _proxySecret, mfaCode = (string?)null }, ct);
+
+            string? jwt = null;
+            if (loginResp.IsSuccessStatusCode)
+            {
+                var data = await loginResp.Content.ReadFromJsonAsync<LoginResponse>(ct);
+                jwt = data?.Data?.Token;
+            }
+
+            if (jwt == null)
+            {
+                _log.LogError("Proxy service account login failed — cannot validate session token {Token}", sessionToken[..8]);
+                throw new InvalidOperationException("Proxy service account authentication failed");
+            }
+
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+            // Validate the RDP session token
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sessions/rdp/validate-token");
+            req.Content = JsonContent.Create(new { sessionToken });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+
+            if (!resp.IsSuccessStatusCode)
+                throw new InvalidOperationException(
+                    $"Session token validation failed (HTTP {(int)resp.StatusCode})");
+
+            var result = await resp.Content.ReadFromJsonAsync<SessionTokenResponse>(ct);
+            var info = result?.Data;
+
+            if (info == null || string.IsNullOrEmpty(info.TargetIp))
+                throw new InvalidOperationException("Invalid session token response");
+
+            return info;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Unexpected error validating session token");
+            throw new InvalidOperationException("Session token validation failed", ex);
+        }
+    }
+
+    /// <summary>Reports that a session has ended so the WebAPI can update session status.</summary>
+    internal async Task ReportSessionEndedAsync(string sessionId, int durationSeconds, string recordingPath, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+
+            var loginResp = await client.PostAsJsonAsync("/api/v1/auth/login",
+                new { username = "proxy-service", password = _proxySecret, mfaCode = (string?)null }, ct);
+
+            string? jwt = null;
+            if (loginResp.IsSuccessStatusCode)
+            {
+                var data = await loginResp.Content.ReadFromJsonAsync<LoginResponse>(ct);
+                jwt = data?.Data?.Token;
+            }
+
+            if (jwt == null) return;
+
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/sessions/{sessionId}/end");
+            req.Content = JsonContent.Create(new { durationSeconds, recordingPath });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            await client.SendAsync(req, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to report session end for {SessionId}", sessionId);
+        }
+    }
+
+    // ---- Response DTOs ----
+    private record LoginResponse(LoginData? Data);
+    private record LoginData(string Token);
+    private record SessionTokenResponse(RdpSessionInfo? Data);
+}
+
+internal sealed record RdpSessionInfo(
+    string SessionId,
+    string TargetIp,
+    int TargetPort,
+    string TargetUsername,
+    byte[] TargetPasswordBytes,
+    string? TargetDomain);

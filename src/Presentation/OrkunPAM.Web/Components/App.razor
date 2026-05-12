@@ -31,6 +31,22 @@
         document.addEventListener('DOMContentLoaded', pamUpdateAuthBar);
         // Blazor enhanced navigation fires this event on client-side page transitions
         document.addEventListener('blazor:navigated', pamUpdateAuthBar);
+
+        // Download an RDP launch file from a base64-encoded string
+        function downloadRdpFile(filename, contentBase64) {
+            const binary = atob(contentBase64);
+            const bytes  = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'application/x-rdp' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
     </script>
 </body>
 
