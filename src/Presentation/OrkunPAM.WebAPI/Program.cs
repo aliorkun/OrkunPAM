@@ -206,6 +206,16 @@ try
     }
     Log.Information("Vault encryption engine initialized");
 
+    // === Proxy Secret Validation (fixes #92) ===
+    var proxySecret = builder.Configuration["ProxyService:Secret"] ?? "";
+    if (proxySecret.Length < 32)
+    {
+        Log.Fatal("ProxyService:Secret is not configured or too short (min 32 chars). " +
+                  "Set PAM_PROXYSERVICE__SECRET env var or ProxyService:Secret in config.");
+        return;
+    }
+    Log.Information("Proxy service secret validated");
+
     // === Middleware ===
     app.UseGlobalExceptionHandler();
     app.UseSerilogRequestLogging();

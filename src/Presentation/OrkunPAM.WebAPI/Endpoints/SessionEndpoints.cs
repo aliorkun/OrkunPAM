@@ -3,7 +3,9 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Cryptography;
+using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
+using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 
@@ -136,10 +138,15 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = active, meta = new { activeCount = active.Count } });
         });
 
-        sessions.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        sessions.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db, HttpContext context) =>
         {
             var ps = await db.ProxySessions.FindAsync(id);
             if (ps == null) return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
+
+            var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+            if (!isPrivileged && ps.UserId.ToString() != callerIdStr)
+                return Results.Forbid();
 
             return Results.Ok(new
             {
@@ -182,8 +189,12 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, message = "Session terminated" });
         }).RequireAuthorization();
 
-        sessions.MapGet("/{id:guid}/commands", async (Guid id, OrkunPamDbContext db, int page = 1, int pageSize = 100) =>
+        sessions.MapGet("/{id:guid}/commands", async (Guid id, OrkunPamDbContext db, HttpContext context, int page = 1, int pageSize = 100) =>
         {
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+            if (!isPrivileged)
+                return Results.Forbid();
+
             var total = await db.CommandLogs.Where(cl => cl.SessionId == id).CountAsync();
             var commands = await db.CommandLogs
                 .Where(cl => cl.SessionId == id)
@@ -302,6 +313,10 @@ public static class SessionEndpoints
         if (cred == null)
             return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
 
+        var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
+            return Results.Forbid();
+
         string? password = null;
         if (cred.PasswordEnc != null)
         {
@@ -389,6 +404,10 @@ public static class SessionEndpoints
         if (cred == null)
             return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
 
+        var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
+            return Results.Forbid();
+
         if (cred.PasswordEnc == null)
             return Results.BadRequest(new { success = false, errors = new[] { "Credential has no password" } });
 
@@ -456,6 +475,30 @@ public static class SessionEndpoints
                 }
             }
         });
+    }
+
+    private static async Task<bool> HasCredentialAccessAsync(
+        OrkunPamDbContext db, Guid userId, bool isAdmin, Credential cred)
+    {
+        if (isAdmin) return true;
+
+        var userGroupIds = await db.UserGroups
+            .Where(ug => ug.UserId == userId)
+            .Select(ug => ug.GroupId)
+            .ToListAsync();
+
+        var hasAccess = await db.CredentialPermissions.AnyAsync(p =>
+            (p.CredentialId == cred.Id || p.FolderId == cred.FolderId)
+            && ((p.PrincipalType == PrincipalType.User && p.PrincipalId == userId)
+                || (p.PrincipalType == PrincipalType.Group && userGroupIds.Contains(p.PrincipalId))));
+
+        if (!hasAccess) return false;
+
+        if (cred.RequiresApproval &&
+            !(cred.CheckedOutByUserId == userId && cred.Status == CredentialStatus.CheckedOut))
+            return false;
+
+        return true;
     }
 
     private static string BuildRdpFile(string proxyHost, int proxyPort, string sessionToken, string deviceHostname)
