@@ -30,10 +30,12 @@ internal sealed class SshServerSession
     private byte[] _clientKexInitPayload = [];
     private string _clientVersion = "";
     private byte[]? _sessionId;
+    private readonly string _clientIp;
 
     internal SshServerSession(TcpClient client, SshHostKey hostKey, PamApiClient api,
         SshProxyOptions opts, ILogger log, CancellationToken ct, HashChainStore? hashChain = null)
     {
+        _clientIp  = ((System.Net.IPEndPoint?)client.Client.RemoteEndPoint)?.Address.ToString() ?? "unknown";
         _conn      = new SshConnection(client.GetStream());
         _hostKey   = hostKey;
         _api       = api;
@@ -223,10 +225,12 @@ internal sealed class SshServerSession
                 continue;
             }
 
-            if (!await _api.ValidateUserAsync(pamUser, password, _ct))
+            if (!await _api.ValidateUserAsync(pamUser, password, _ct, _clientIp))
             {
-                _log.LogWarning("PAM auth failure for '{User}'", pamUser);
+                _log.LogWarning("PAM auth failure for '{User}' from {ClientIp}", pamUser, _clientIp);
                 await SendAuthFailureAsync("password");
+                // Exponential backoff per attempt to slow brute-force: 200ms, 400ms, 800ms, 1600ms, 3200ms
+                await Task.Delay(200 << attempt, _ct);
                 continue;
             }
 
@@ -367,8 +371,8 @@ internal sealed class SshServerSession
             return;
         }
 
-        _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={Exec})",
-            clientChanId, pty != null, isExec ? execCmd : "shell");
+        _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={IsExec})",
+            clientChanId, pty != null, isExec);
 
         // Step 4: record + relay
         var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty, _hashChain);
