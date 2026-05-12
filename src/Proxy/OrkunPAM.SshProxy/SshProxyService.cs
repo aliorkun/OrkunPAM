@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,22 @@ internal sealed class SshProxyService : BackgroundService
     private readonly SshHostKey _hostKey;
     private readonly PamApiClient _api;
     private readonly HashChainStore _hashChain;
+
+    // Per-IP connection rate limiter: max 10 connections per 60-second window
+    private readonly ConcurrentDictionary<string, (int count, DateTimeOffset windowStart)> _connTracker = new();
+    private const int MaxConnectionsPerWindow = 10;
+    private static readonly TimeSpan RateLimitWindow = TimeSpan.FromSeconds(60);
+
+    private bool IsConnectionRateLimited(string ip)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var entry = _connTracker.AddOrUpdate(ip,
+            _ => (1, now),
+            (_, old) => now - old.windowStart > RateLimitWindow
+                ? (1, now)
+                : (old.count + 1, old.windowStart));
+        return entry.count > MaxConnectionsPerWindow;
+    }
 
     public SshProxyService(
         ILogger<SshProxyService> log,
@@ -53,7 +70,16 @@ internal sealed class SshProxyService : BackgroundService
                 try { client = await listener.AcceptTcpClientAsync(stoppingToken); }
                 catch (OperationCanceledException) { break; }
 
-                var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+                var remote    = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+                var clientIp  = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.ToString() ?? "unknown";
+
+                if (IsConnectionRateLimited(clientIp))
+                {
+                    _log.LogWarning("Connection from {ClientIp} dropped — rate limit exceeded", clientIp);
+                    client.Dispose();
+                    continue;
+                }
+
                 _log.LogInformation("SSH connection from {Remote}", remote);
 
                 await semaphore.WaitAsync(stoppingToken);
