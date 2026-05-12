@@ -2,6 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
+> Last updated: 2026-05-12
 
 ## Platform (44 items)
 
@@ -12,9 +13,9 @@
 | 3 | Solution shall be deployable On‐Premise and provided as a cloud  offering. |  |  |
 | 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se |  |  |
 | 5 | Solution GUI shall run with updated version of well-known browsers (i.e. Microsoft Edge, Google Chrome, Firefox, Safari) | PC | OrkunPAM.Web (Blazor Server — Edge/Chrome/Firefox) |
-| 6 | Solution shall support SSO (Single-Sign-On) |  | Planned: #45 SAML 2.0/SSO |
+| 6 | Solution shall support SSO (Single-Sign-On) | PC | SAML 2.0 SSO implemented — SamlAuthEndpoints.cs SP-initiated flow, SamlCallback.razor (#45) |
 | 7 | Solution shall support both CLI and web interfaces | PC | Blazor web UI (OrkunPAM.Web) + REST API (OrkunPAM.WebAPI) |
-| 8 | Solution shall support SAML authentication for secure portal access to PAM platform |  |  |
+| 8 | Solution shall support SAML authentication for secure portal access to PAM platform | PC | SAML 2.0 SP-initiated + ACS — SamlAuthEndpoints.cs; XML sig validation, ±5 min clock skew, auto-provision (#45) |
 | 9 | Solution shall support SAML provider configuration on a per-tenant basis, allowing separate identity provider settings f |  |  |
 | 10 | Solution shall support Public Key Infrastructure (PKI) Authentication for secure portal access using digital certificate |  |  |
 | 11 | Solution shall support Windows Authentication for secure portal access |  |  |
@@ -65,7 +66,7 @@
 | 7 | Solution shall support restful API's to CRUD for User/Device/Policy/Secret | PC | UserEndpoints.cs, DeviceEndpoints.cs, PolicyEndpoints.cs, VaultEndpoints.cs |
 | 8 | Solution shall support restful API's to Lock/Unlock for Users | PC | UserEndpoints.cs — lock/unlock endpoints |
 | 9 | Solution shall support restful API'S to integrate any ITSM systems (ticketing systems)  (ServiceNow, OneDesk etc.) |  |  |
-| 10 | Solution shall support SAML Authentication for both SP-initiated and IdP-initiated authentication requests |  |  |
+| 10 | Solution shall support SAML Authentication for both SP-initiated and IdP-initiated authentication requests | PC | SP-initiated done (#45) — GET /saml/login + POST /saml/acs; IdP-initiated planned |
 | 11 | Solution shall support syslog integration with SIEM systems |  |  |
 | 12 | Solution shall support integration with SIEM systems in CEF and Key-Value formats for improved log management and extern |  |  |
 | 13 | Solution shall support SNMP integration with OSS/NMS systems |  |  |
@@ -115,7 +116,7 @@
 | 6 | Solution shall support locking the user accounts of which password was not changed in the defined period of time. |  |  |
 | 7 | Solution shall support sending e-mail in case of a password expiry. |  |  |
 | 8 | Solution shall support locking the user accounts of which were not used in a specific period of time(inactive user). |  |  |
-| 9 | Solution shall support terminating the idle sessions which are not used in a specific period of time. |  |  |
+| 9 | Solution shall support terminating the idle sessions which are not used in a specific period of time. | PC | Policies.razor session tab — idle timeout configurable (#81); enforcement in proxy layer planned |
 | 10 | Solution shall support configuration of the number of maximum login failures. | PC | AuthEndpoints.cs — configurable max login failures |
 | 11 | Solution shall support blocking the user account for a configurable duration after a configurable number of login failur | PC | AuthEndpoints.cs — account lockout after N failures |
 | 12 | Solution shall support creation of alarm messages after a configurable number of login failure. |  |  |
@@ -127,7 +128,7 @@
 | 18 | Solution shall support to change the keys used in encryption and entered by the customer during installation, when neede |  |  |
 | 19 | Solution should use the SSL encrypted communication between the application and database itself |  |  |
 | 20 | Solution shall support TLS v1.3. | PC | Program.cs — Kestrel TLS 1.3 configuration |
-| 21 | Solution shall provide enhanced logging for policy-related actions, including granular details for better auditing and s |  |  |
+| 21 | Solution shall provide enhanced logging for policy-related actions, including granular details for better auditing and s | PC | PolicyEndpoints.cs — audit log on all policy create/update/delete; Policies.razor UI (#81) |
 | 22 | Solution shall support notifications for administrators when recorded sessions are replayed to enhance user activity mon |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -270,7 +271,7 @@
 |---|-------------|--------|-------|
 | 1 | General | Solution shall support MFA (Multi Factor Authentication) when a user attempts to open a CLI/RDP/HTTP/SFTP/SQL sessions t |  |
 | 2 | General | Solution shall support SSL protocol for network management and terminal (console) servers. |  |
-| 3 | General | Solution shall support using TELNET, STELNET, SSH, VNC, RDP, HTTP, HTTPS protocols to login to end devices. | PC | SshProxyService.cs — native SSH (RFC 4253); RDP via RDS Gateway (planned #23) |
+| 3 | General | Solution shall support using TELNET, STELNET, SSH, VNC, RDP, HTTP, HTTPS protocols to login to end devices. | PC | SshProxyService.cs — native SSH (RFC 4253); OrkunPAM.RdpProxy — TCP 3389 relay, TPKT/X.224, .rdp download (#23) |
 | 4 | General | Solution shall be able to manage and interact with multiple remote sessions  for both Remote Desktop Protocol (RDP) ,SSH |  |
 | 5 | General | Solution shall be able to launch and configure sessions across multiple  environments with credentials automatically inj | PC | SshServerSession.cs — vault credential injection to target |
 | 6 | General | Solution shall support native CLI clients like SecureCRT, Putty, MobaXterm etc. |  |
@@ -333,7 +334,7 @@
 | 63 | Logging | Solution shall support command and session based search functionality of session logs. |  |
 | 64 | Logging | Solution shall support periodic archiving of the log files by the system administrator. |  |
 | 65 | Logging | Solution shall support manual and automatic archiving. |  |
-| 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add |  |
+| 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add | PC | RecordingRetentionService — 183-day auto-purge; SHA-256 hash-chain integrity; session ID + IP + timestamp (#23) |
 | 67 | Logging | Users who wire into sessions shall also be logged in session logs |  |
 | 68 | Logging | Solution shall have tamper proof logging capability to prevent and capture any modification or deletion of a log record  |  |
 | 69 | Logging | Solution shall tag any modified log record as "Tampered"  |  |
@@ -348,7 +349,7 @@
 | 78 | User Behavior Analytics | Solution shall support taking automatic action against detected anomalies based on their risk scores and severity. |  |
 | 79 | User Behavior Analytics | Solution shall support sending alarm for detected anomalies to system admins. |  |
 | 80 | User Behavior Analytics | Solution shall support the visualization of user activity through dashboards for quick threat assessment. |  |
-| 81 | RDP | Solution shall support RDP (Remote Desktop Protocol - GUI) connections |  |
+| 81 | RDP | Solution shall support RDP (Remote Desktop Protocol - GUI) connections | PC | OrkunPAM.RdpProxy — TCP 3389, TPKT/X.224 parse, PAM session token, bidirectional relay, .rdp file from Blazor (#23) |
 | 82 | RDP | Solution shall support simultaneous connection of two users to same RDP session. |  |
 | 83 | RDP | Solution shall support "take control" option for admin users on active RDP connections |  |
 | 84 | RDP | Solution shall support "Kill" option for active connections |  |
@@ -375,7 +376,7 @@
 | 105 | RDP | Solution shall support printer sharing of RDP connections |  |
 | 106 | RDP | Solution shall support speaker sharing of RDP connections |  |
 | 107 | RDP | Solution shall support filesharing on an RDP session |  |
-| 108 | RDP | Solution shall support video recording of RDP sessions |  |
+| 108 | RDP | Solution shall support video recording of RDP sessions | PC | OrkunPAM.RdpProxy — binary stream recording with SHA-256 hash-chain integrity (#23) |
 | 109 | RDP | Solution shall support re-playing of recorded RDP sessions |  |
 | 110 | RDP | Solution shall support downloading of recorded RDP sessions video file. |  |
 | 111 | RDP | Solution shall support key-logging in RDP sessions |  |
