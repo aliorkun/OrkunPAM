@@ -25,8 +25,9 @@ Orkun PAM is a Windows-based, modular, API-first Privileged Access Management pl
 - Personal vaults & secure credential sharing
 
 ### Session Management
-- **Native Protocol Proxies:** SSH, RDP, VNC, SQL (10+ DB types), HTTP/HTTPS, SFTP, Telnet
-- **HTML5 Browser Clients:** No plugin/client required for SSH, RDP, VNC, SQL
+- **Native Protocol Proxies (core):** Standalone Windows Services per protocol — SSH (:2222), RDP (:3389), VNC (:5900), SQL (:1433). No third-party proxy libraries; all protocol handling is implemented in native C#.
+- **HTML5 Browser Clients (convenience):** Optional web-based access via Blazor + WebSocket bridge to native proxies. No plugin/client install required.
+- Credential injection: users never see target passwords — vault → proxy → target
 - Session recording (text + video) with OCR search
 - Keystroke logging & command auditing
 - Real-time session shadowing, takeover & termination
@@ -107,8 +108,8 @@ Orkun PAM is a Windows-based, modular, API-first Privileged Access Management pl
 | Frontend | Blazor Server |
 | Database | SQL Server (TDE + Always Encrypted) |
 | Encryption | Custom AES-256-GCM (3-tier key hierarchy: KEK → MK → DEK) |
-| SSH Proxy | SSH.NET (Renci.SshNet) |
-| RDP Proxy | Custom RD Gateway implementation |
+| SSH Proxy | Native C# (RFC 4253/4252/4254 - no third-party library) |
+| RDP Proxy | Native C# (MS-RDPBCGR - no third-party library) |
 | Internal Comms | gRPC |
 | External API | REST (Minimal APIs) |
 | CQRS | MediatR |
