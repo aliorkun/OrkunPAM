@@ -18,7 +18,7 @@
 | #21 | SSH Proxy - native C# | MVP-SESSION | ✅ Kapatıldı |
 | #25 | HTML5 Web SSH Terminal | MVP-SESSION | ✅ Kapatıldı |
 | #47 | Session Recording | MVP-SESSION | ✅ Kapatıldı |
-| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | ⬜ Açık — SONRAKİ ÖNCELİK |
+| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | 🟡 Devam ediyor |
 | #45 | SAML 2.0 / SSO | MVP-AUTH | ⬜ Açık |
 
 **İlerleme:** 3/5 tamamlandı (%60)
@@ -26,9 +26,9 @@
 
 ---
 
-## Sprint 3 - RDP Proxy + Vault UI + Reporting
-**Tarih:** 21-28 Mayıs 2026
-**Hedef:** RDP gateway, vault/device UI sayfaları, temel raporlar
+## Sprint 3 - RDP + Vault + Reporting
+**Tarih:** 21-27 Mayıs 2026
+**Hedef:** RDS Gateway entegrasyonu, vault/device UI, temel raporlar
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
@@ -37,13 +37,14 @@
 | #27 | Temel Raporlar | MVP-REPORTING |
 | #32 | Otomatik Parola Rotasyonu | MVP-VAULT |
 
-**Çıkış kriteri:** RDP bağlantı + kayıt, vault UI, rapor sayfası → v0.4.0-rdp-proxy tag
+**Not:** RDP artık native C# değil, RDS Gateway entegrasyonu. Bu sprint'i önemli ölçüde kısaltır.
+**Çıkış kriteri:** RDP bağlantı + kayıt, vault UI, rapor sayfası → v0.4.0-rdp tag
 
 ---
 
-## Sprint 4 - Enterprise Features + Polish
-**Tarih:** 29 Mayıs - 7 Haziran 2026
-**Hedef:** Enterprise satış için gerekli özellikler
+## Sprint 4 - Enterprise Features + Installer
+**Tarih:** 28 Mayıs - 7 Haziran 2026
+**Hedef:** Enterprise satış için gerekli özellikler + installer
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
@@ -54,25 +55,25 @@
 | #54 | SMTP Bildirim | MVP-INFRA |
 | #39 | Self-Service Portal | MVP-UX |
 | #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION |
-| #64 | SQL Database Proxy | MVP-SESSION |
+| #36 | MSI Installer | MVP-UX |
+| #55 | Backup/DR | MVP-DEPLOYMENT |
 
-**Çıkış kriteri:** Enterprise demo yapılabilir → v0.5.0-enterprise tag
+**Çıkış kriteri:** Enterprise demo yapılabilir, installer çalışıyor → v1.0.0-rc1 tag
 
 ---
 
-## Sprint 5 - Installer + GA Hazırlık
-**Tarih:** 8-15 Haziran 2026
-**Hedef:** Tek MSI installer, dokümantasyon, son testler
+## Sprint 5 - Polish + GA
+**Tarih:** 8-14 Haziran 2026
+**Hedef:** E2E testler, performans, dokümantasyon, son düzeltmeler
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
-| #36 | MSI Installer | MVP-UX |
-| #55 | Backup/DR | MVP-DEPLOYMENT |
+| #64 | SQL Database Proxy | MVP-SESSION |
 | - | E2E testler | Test |
 | - | Performans testleri | Test |
 | - | Dokümantasyon | Docs |
 
-**Çıkış kriteri:** Müşteriye kurulum yapılabilir → v1.0.0-rc1 tag
+**Çıkış kriteri:** Müşteriye kurulum + demo yapılabilir → v1.0.0 tag
 
 ---
 
@@ -83,12 +84,15 @@
 - Sprint dışı issue'lar backlog'da kalır
 - Security critical/high her zaman sprint'i keser (acil fix)
 
+## Mimari Kararlar
+- **SSH Proxy:** Native C# (RFC 4253) — farkımız burada, açık kaynak yok
+- **RDP Proxy:** Microsoft RDS Gateway entegrasyonu — CyberArk yaklaşımı, RemoteApp + session recording + HA dahil
+- **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
+- **AAPM + Threat Analytics:** v2.0.0'a ertelendi
+
 ## Agent Yetkinlik Sınırları (Koordinatör notu)
-Aşağıdaki konular Sonnet agent kapasitesini aşar - manuel müdahale veya Opus gerekir:
+Aşağıdaki konularda Developer agent (Sonnet) takılırsa lokal Opus devralır:
 - **SSH Proxy:** Native SSH protokolü (RFC 4253) - raw socket, key exchange, channel multiplexing
-- **RDP Proxy:** Microsoft RDS Gateway entegrasyonu - COM interop, credential injection, session recording API
-- **Session Recording:** Stream capture, binary format tasarımı, video encoding (RDP), playback engine
+- **RDP/RDS:** COM interop, RDS Gateway API, credential injection
 - **Blazor UI:** Karmaşık component mimarisi, SignalR entegrasyonu, real-time terminal
 - **MSI Installer:** WiX toolset, Windows Service registration, upgrade logic
-
-Bu konularda Developer agent başlar, takılırsa koordinatör (bu session) devralır veya Developer Opus'a geçirilir.

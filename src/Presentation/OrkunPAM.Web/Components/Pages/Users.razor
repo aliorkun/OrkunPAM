@@ -76,12 +76,12 @@
                                     @if (u.Status == "Active")
                                     {
                                         <button class="pam-btn-icon" title="Lock user"
-                                                @onclick="() => SetStatusAsync(u.Id, \"Locked\")">&#x1F512;</button>
+                                                @onclick="@(() => SetStatusAsync(u.Id, "Locked"))">&#x1F512;</button>
                                     }
                                     else
                                     {
                                         <button class="pam-btn-icon" title="Activate user"
-                                                @onclick="() => SetStatusAsync(u.Id, \"Active\")">&#10003;</button>
+                                                @onclick="@(() => SetStatusAsync(u.Id, "Active"))">&#10003;</button>
                                     }
                                 </div>
                             </td>
