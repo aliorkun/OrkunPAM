@@ -9,9 +9,8 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class DiscoveryEndpoints
 {
-    public static void MapDiscoveryEndpoints(this WebApplication app)
+    public static void MapDiscoveryEndpoints(this IEndpointRouteBuilder app)
     {
-        // === Discovery Jobs ===
         var jobs = app.MapGroup("/api/v1/vault/discovery-jobs").WithTags("Discovery");
 
         jobs.MapGet("/", async (OrkunPamDbContext db) =>
@@ -53,7 +52,6 @@ public static class DiscoveryEndpoints
             job.LastRunAtUtc = DateTime.UtcNow;
             job.LastRunResult = scanResult.Message;
 
-            // Create discovered accounts from scan results
             var newAccounts = scanResult.Accounts
                 .Where(a => a.AccountType != "Error")
                 .Select(a => new DiscoveredAccount
@@ -83,7 +81,6 @@ public static class DiscoveryEndpoints
             });
         });
 
-        // === Discovered Accounts ===
         var accounts = app.MapGroup("/api/v1/vault/discovered-accounts").WithTags("Discovery");
 
         accounts.MapGet("/", async (OrkunPamDbContext db, string? status) =>
@@ -112,7 +109,6 @@ public static class DiscoveryEndpoints
             if (account.TakeoverStatus != TakeoverStatus.Pending)
                 return Results.Conflict(new { success = false, errors = new[] { $"Account already {account.TakeoverStatus}" } });
 
-            // Create managed credential from discovered account
             var credential = new Credential
             {
                 FolderId = req.FolderId,
@@ -131,7 +127,7 @@ public static class DiscoveryEndpoints
             account.LinkedCredentialId = credential.Id;
             await db.SaveChangesAsync();
 
-            logger.LogInformation("Account '{AccountName}' taken over → credential {CredId}",
+            logger.LogInformation("Account '{AccountName}' taken over -> credential {CredId}",
                 account.AccountName, credential.Id);
 
             return Results.Ok(new
@@ -151,7 +147,6 @@ public static class DiscoveryEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // === Rotation Policies ===
         var rotation = app.MapGroup("/api/v1/vault/rotation-policies").WithTags("Vault");
 
         rotation.MapGet("/", async (OrkunPamDbContext db) =>
@@ -186,7 +181,6 @@ public static class DiscoveryEndpoints
                 new { success = true, data = new { policy.Id, policy.Name } });
         });
 
-        // Manual rotation trigger
         app.MapPost("/api/v1/vault/credentials/{id:guid}/rotate", async (Guid id,
             OrkunPamDbContext db, OrkunPAM.Persistence.Services.IRotationService rotationService,
             IVaultEncryptionService vault, ILogger<Program> logger) =>
@@ -194,15 +188,13 @@ public static class DiscoveryEndpoints
             var cred = await db.Credentials.FirstOrDefaultAsync(c => c.Id == id);
             if (cred == null) return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
-            // Determine connector from rotation policy or device type
-            var connector = RotationConnector.Ldap; // Default
+            var connector = RotationConnector.Ldap;
             if (cred.RotationPolicyId.HasValue)
             {
                 var policy = await db.RotationPolicies.FindAsync(cred.RotationPolicyId.Value);
                 if (policy != null) connector = policy.ConnectorType;
             }
 
-            // Decrypt current password
             string? currentPassword = null;
             if (cred.PasswordEnc != null)
             {
@@ -210,10 +202,8 @@ public static class DiscoveryEndpoints
                 if (decResult.IsSuccess) currentPassword = decResult.Value;
             }
 
-            // Generate new password
             var newPassword = rotationService.GeneratePassword();
 
-            // Determine target host/port from linked device
             var device = cred.DeviceId.HasValue ? await db.Devices.FindAsync(cred.DeviceId.Value) : null;
             var host = device?.IpAddress ?? device?.Hostname ?? "localhost";
             var port = connector switch
@@ -234,7 +224,6 @@ public static class DiscoveryEndpoints
 
             if (result.Success)
             {
-                // Encrypt and save new password
                 var encResult = vault.EncryptString(newPassword);
                 if (encResult.IsSuccess)
                     cred.PasswordEnc = encResult.Value;

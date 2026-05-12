@@ -7,9 +7,8 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class IntegrationEndpoints
 {
-    public static void MapIntegrationEndpoints(this WebApplication app)
+    public static void MapIntegrationEndpoints(this IEndpointRouteBuilder app)
     {
-        // === Webhooks ===
         var webhooks = app.MapGroup("/api/v1/integrations/webhooks").WithTags("Integrations");
 
         webhooks.MapGet("/", async (OrkunPamDbContext db) =>
@@ -87,7 +86,6 @@ public static class IntegrationEndpoints
             });
         });
 
-        // === ITSM ===
         var itsm = app.MapGroup("/api/v1/integrations/itsm").WithTags("Integrations");
 
         itsm.MapGet("/", async (OrkunPamDbContext db) =>
@@ -177,7 +175,6 @@ public static class IntegrationEndpoints
         itsm.MapPost("/validate-ticket", async (ValidateTicketRequest req, OrkunPamDbContext db,
             OrkunPAM.Persistence.Services.IItsmService itsmService, IVaultEncryptionService vault) =>
         {
-            // Find the ITSM config for this provider (or use default enabled one)
             var cfg = !string.IsNullOrEmpty(req.Provider)
                 ? await db.Set<ItsmConfig>().FirstOrDefaultAsync(c => c.Provider == req.Provider && c.IsEnabled)
                 : await db.Set<ItsmConfig>().FirstOrDefaultAsync(c => c.IsEnabled && c.ValidateTicket);
@@ -216,7 +213,6 @@ public static class IntegrationEndpoints
             });
         });
 
-        // === Notification Channels ===
         var notifications = app.MapGroup("/api/v1/integrations/notifications").WithTags("Integrations");
 
         notifications.MapGet("/", async (OrkunPamDbContext db) =>

@@ -9,11 +9,10 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class SessionEndpoints
 {
-    public static void MapSessionEndpoints(this WebApplication app)
+    public static void MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
         var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions").RequireAuthorization();
 
-        // === Connect (request new session) ===
         sessions.MapPost("/ssh/connect", async (ConnectRequest req, OrkunPamDbContext db,
             IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
         {
@@ -38,7 +37,6 @@ public static class SessionEndpoints
             return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger, context);
         });
 
-        // === List Sessions ===
         sessions.MapGet("/", async (OrkunPamDbContext db, string? status, Guid? userId,
             SessionType? type, DateTime? from, DateTime? to, int page = 1, int pageSize = 50) =>
         {
@@ -69,7 +67,6 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // === Active Sessions ===
         sessions.MapGet("/active", async (OrkunPamDbContext db) =>
         {
             var active = await db.ProxySessions
@@ -87,7 +84,6 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = active, meta = new { activeCount = active.Count } });
         });
 
-        // === Session Detail ===
         sessions.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
         {
             var ps = await db.ProxySessions.FindAsync(id);
@@ -112,7 +108,6 @@ public static class SessionEndpoints
             });
         });
 
-        // === Terminate Session ===
         sessions.MapPost("/{id:guid}/terminate", async (Guid id, TerminateSessionRequest req,
             OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
         {
@@ -135,7 +130,6 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, message = "Session terminated" });
         }).RequireAuthorization();
 
-        // === Command Logs ===
         sessions.MapGet("/{id:guid}/commands", async (Guid id, OrkunPamDbContext db, int page = 1, int pageSize = 100) =>
         {
             var total = await db.CommandLogs.Where(cl => cl.SessionId == id).CountAsync();
@@ -151,7 +145,6 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // === Session Policies ===
         var policies = app.MapGroup("/api/v1/session-policies").WithTags("Sessions");
 
         policies.MapGet("/", async (OrkunPamDbContext db) =>
@@ -170,7 +163,6 @@ public static class SessionEndpoints
 
         policies.MapPost("/", async (CreateSessionPolicyRequest req, OrkunPamDbContext db) =>
         {
-            // Validate CommandFilterRulesJson is well-formed JSON if provided (fixes #29)
             if (!string.IsNullOrEmpty(req.CommandFilterRulesJson))
             {
                 try { System.Text.Json.JsonDocument.Parse(req.CommandFilterRulesJson); }
@@ -250,17 +242,14 @@ public static class SessionEndpoints
         if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
             return Results.Unauthorized();
 
-        // Validate device
         var device = await db.Devices.FindAsync(req.DeviceId);
         if (device == null)
             return Results.NotFound(new { success = false, errors = new[] { $"Device not found: {req.DeviceId}" } });
 
-        // Validate credential
         var cred = await db.Credentials.FindAsync(req.CredentialId);
         if (cred == null)
             return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
 
-        // Decrypt credential for proxy (in real implementation, this goes to proxy via gRPC)
         string? password = null;
         if (cred.PasswordEnc != null)
         {
@@ -274,10 +263,8 @@ public static class SessionEndpoints
             password = decResult.Value;
         }
 
-        // Generate session token
         var sessionToken = Guid.NewGuid().ToString("N");
 
-        // Create session record
         var session = new ProxySession
         {
             UserId = userId,
@@ -314,7 +301,7 @@ public static class SessionEndpoints
                 },
                 proxy = new
                 {
-                    host = "localhost", // In production: PAM proxy hostname
+                    host = "localhost",
                     port = type switch
                     {
                         SessionType.Ssh => 2222,
@@ -324,7 +311,7 @@ public static class SessionEndpoints
                         _ => defaultPort
                     }
                 },
-                credential = new { cred.Username }, // Password NEVER sent to client
+                credential = new { cred.Username },
                 message = $"Connect your {type} client to proxy. Credential injected server-side."
             }
         });

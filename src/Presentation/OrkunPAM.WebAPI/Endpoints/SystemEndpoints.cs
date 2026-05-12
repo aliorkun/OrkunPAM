@@ -7,9 +7,8 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class SystemEndpoints
 {
-    public static void MapSystemEndpoints(this WebApplication app)
+    public static void MapSystemEndpoints(this IEndpointRouteBuilder app)
     {
-        // === System Config ===
         var config = app.MapGroup("/api/v1/system/config").WithTags("System");
 
         config.MapGet("/", async (OrkunPamDbContext db, string? category) =>
@@ -23,7 +22,6 @@ public static class SystemEndpoints
                 .Select(c => new { c.Key, c.Value, c.IsEncrypted, c.Category, c.Description, c.UpdatedAtUtc })
                 .ToListAsync();
 
-            // Mask encrypted values
             var masked = list.Select(c => new
             {
                 c.Key, Value = c.IsEncrypted ? "********" : c.Value,
@@ -71,7 +69,6 @@ public static class SystemEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // === Audit Logs (enhanced) ===
         var audit = app.MapGroup("/api/v1/audit-logs").WithTags("Audit");
 
         audit.MapGet("/", async (OrkunPamDbContext db, string? category, string? eventType,
@@ -104,7 +101,6 @@ public static class SystemEndpoints
             return Results.Ok(new { success = true, data = logs, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // Verify audit log integrity
         audit.MapGet("/verify", async (OrkunPamDbContext db) =>
         {
             var logs = await db.AuditLogs.OrderBy(a => a.Id).Take(1000).ToListAsync();
@@ -139,7 +135,6 @@ public static class SystemEndpoints
             });
         });
 
-        // === Background Jobs ===
         var jobs = app.MapGroup("/api/v1/system/jobs").WithTags("System");
 
         jobs.MapGet("/", async (OrkunPamDbContext db) =>

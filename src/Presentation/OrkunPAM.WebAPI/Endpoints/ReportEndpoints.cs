@@ -6,11 +6,10 @@ namespace OrkunPAM.WebAPI.Endpoints;
 
 public static class ReportEndpoints
 {
-    public static void MapReportEndpoints(this WebApplication app)
+    public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
         var reports = app.MapGroup("/api/v1/reports").WithTags("Reports");
 
-        // === Built-in Reports ===
         reports.MapGet("/", () =>
         {
             var builtIn = new[]
@@ -22,7 +21,7 @@ public static class ReportEndpoints
                 new { Id = "checkout-history", Name = "Checkout History Report", Category = "Audit", Description = "Credential checkouts with reason/duration" },
                 new { Id = "rotation-compliance", Name = "Rotation Compliance Report", Category = "Compliance", Description = "Passwords rotated vs overdue" },
                 new { Id = "orphaned-accounts", Name = "Orphaned Account Report", Category = "Security", Description = "Discovered but unmanaged accounts" },
-                new { Id = "user-access-matrix", Name = "User Access Matrix", Category = "Audit", Description = "User × resource permission matrix" },
+                new { Id = "user-access-matrix", Name = "User Access Matrix", Category = "Audit", Description = "User x resource permission matrix" },
                 new { Id = "mfa-adoption", Name = "MFA Adoption Report", Category = "Security", Description = "Users with/without MFA" },
                 new { Id = "device-inventory", Name = "Device Inventory Report", Category = "Operational", Description = "Devices by type/status" },
                 new { Id = "session-risk", Name = "Session Risk Report", Category = "Security", Description = "Sessions by risk score" },
@@ -34,7 +33,6 @@ public static class ReportEndpoints
             return Results.Ok(new { success = true, data = builtIn });
         });
 
-        // Run a built-in report
         reports.MapPost("/{reportId}/run", async (string reportId, ReportRunRequest? req,
             OrkunPamDbContext db) =>
         {
@@ -58,7 +56,6 @@ public static class ReportEndpoints
             return Results.Ok(new { success = true, data = result, meta = new { reportId, from, to, generatedAt = DateTime.UtcNow } });
         });
 
-        // === Dashboard Widgets ===
         var dashboard = app.MapGroup("/api/v1/dashboard").WithTags("Dashboard");
 
         dashboard.MapGet("/summary", async (OrkunPamDbContext db) =>
@@ -119,8 +116,6 @@ public static class ReportEndpoints
             });
         });
     }
-
-    // === Report Implementations ===
 
     private static async Task<object> GetPasswordAgeReport(OrkunPamDbContext db)
     {
