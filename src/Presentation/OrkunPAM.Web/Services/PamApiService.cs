@@ -71,6 +71,18 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<bool> CreateUserAsync(string username, string? displayName, string? email, string password)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/users",
+                new { username, displayName, email, password, authSource = "Local" });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // -----------------------------------------------------------------------
     // Devices
     // -----------------------------------------------------------------------
@@ -82,6 +94,34 @@ public sealed class PamApiService
         if (!string.IsNullOrEmpty(search)) url += $"&search={Uri.EscapeDataString(search)}";
         if (!string.IsNullOrEmpty(type))   url += $"&type={type}";
         return await GetAsync<PagedResult<DeviceDto>>(url);
+    }
+
+    public async Task<bool> CreateDeviceAsync(
+        string hostname, string? fqdn, string? ipAddress,
+        string type, string protocol, int connectionPort, string? operatingSystem)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/devices",
+                new { hostname, fqdn, ipAddress, type, protocol, connectionPort, operatingSystem });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateDeviceAsync(
+        string id, string hostname, string? fqdn, string? ipAddress,
+        string type, string protocol, int connectionPort, string? operatingSystem)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/devices/{id}",
+                new { hostname, fqdn, ipAddress, type, protocol, connectionPort, operatingSystem });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 
     // -----------------------------------------------------------------------
