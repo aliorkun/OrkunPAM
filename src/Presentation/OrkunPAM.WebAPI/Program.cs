@@ -10,6 +10,7 @@ using OrkunPAM.SharedKernel;
 using OrkunPAM.WebAPI.Endpoints;
 using OrkunPAM.WebAPI.Middleware;
 using OrkunPAM.WebAPI.Validation;
+using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using OrkunPAM.SshProxy;
+using OrkunPAM.SshProxy.Crypto;
 using OrkunPAM.SshProxy.Session;
 using Serilog;
 
@@ -11,8 +12,8 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var builder = Host.CreateApplicationBuilder(args);
-    builder.Services.UseWindowsService(opts => opts.ServiceName = "OrkunPAM SSH Proxy");
-    builder.Host.UseSerilog();
+    builder.Services.AddWindowsService(opts => opts.ServiceName = "OrkunPAM SSH Proxy");
+    builder.Services.AddSerilog();
 
     builder.Services.Configure<SshProxyOptions>(builder.Configuration.GetSection("SshProxy"));
 
