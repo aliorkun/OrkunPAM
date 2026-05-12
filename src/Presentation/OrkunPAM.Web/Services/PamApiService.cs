@@ -26,13 +26,13 @@ public sealed class PamApiService
     // Auth
     // -----------------------------------------------------------------------
 
-    public async Task<LoginResult?> LoginAsync(string username, string password)
+    public async Task<LoginResult?> LoginAsync(string username, string password, string? mfaCode = null)
     {
         var client = _factory.CreateClient("PamApi");
         try
         {
             var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username, password, mfaCode = (string?)null });
+                new { username, password, mfaCode });
             if (!resp.IsSuccessStatusCode) return null;
             return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
         }
@@ -78,6 +78,18 @@ public sealed class PamApiService
         {
             var resp = await client.PostAsJsonAsync("/api/v1/users",
                 new { username, displayName, email, password, authSource = "Local" });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateUserAsync(string id, string? displayName, string? email)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PatchAsJsonAsync($"/api/v1/users/{id}",
+                new { displayName, email });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }

@@ -30,7 +30,7 @@
                     <option value="">— Select credential —</option>
                     @foreach (var c in _creds)
                     {
-                        <option value="@c.Id">@(c.Username ?? "unknown") (@c.CredentialType)</option>
+                        <option value="@c.Id">@(c.Username ?? "unknown") (@c.Type)</option>
                     }
                 </select>
             </div>
