@@ -264,6 +264,7 @@ try
     api.MapPolicyEndpoints();
     api.MapWorkflowEndpoints();
     api.MapLdapSamlEndpoints();
+    api.MapSamlAuthEndpoints();
     api.MapAapmEndpoints();
     api.MapSessionEndpoints();
     api.MapWebSshEndpoints();
