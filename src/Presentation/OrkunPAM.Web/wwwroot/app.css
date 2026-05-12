@@ -289,6 +289,35 @@ html, body {
     .pam-main { margin-left: 0; }
 }
 
+/* ---- Modal ---- */
+.pam-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; padding: 24px;
+}
+.pam-modal {
+    background: #fff; border-radius: 10px; width: 100%; max-width: 520px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden;
+    max-height: 90vh; display: flex; flex-direction: column;
+}
+.pam-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--pam-border); flex-shrink: 0;
+}
+.pam-modal-title { font-size: 15px; font-weight: 600; margin: 0; }
+.pam-modal-body  { padding: 20px; overflow-y: auto; }
+.pam-modal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 14px 20px; border-top: 1px solid var(--pam-border); flex-shrink: 0;
+}
+.pam-close-btn {
+    background: none; border: none; cursor: pointer; font-size: 22px;
+    color: #94a3b8; line-height: 1; padding: 0 4px;
+}
+.pam-close-btn:hover { color: #374151; }
+.w-100-input { width: 100%; display: block; }
+.pam-form-row { display: flex; gap: 12px; }
+
 /* ---- Utilities ---- */
 .mt-3 { margin-top: 16px !important; }
 
@@ -300,7 +329,7 @@ html, body {
 }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 0.75rem; top: 0.5rem; }
 
-/* ---- Blazor validation overrides ---- */
+/* ---- Blazor validation default overrides ---- */
 .valid.modified:not([type=checkbox]) { outline: 1px solid #22c55e; }
 .invalid { outline: 1px solid #ef4444; }
 .validation-message { color: #ef4444; font-size: 12px; }
