@@ -1,98 +1,212 @@
 @page "/policies"
+@rendermode InteractiveServer
 @inject PamApiService Api
 
 <PageTitle>Policies — OrkunPAM</PageTitle>
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Policies</h2>
-    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ New Policy</button>
+    @if (_tab == "list")
+    {
+        <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ New Policy</button>
+    }
 </div>
 
-<div class="pam-filters">
-    <select class="pam-input pam-select" @bind="_typeFilter" @bind:after="LoadAsync">
-        <option value="">All Types</option>
-        <option value="Password">Password</option>
-        <option value="Session">Session</option>
-        <option value="Access">Access</option>
-        <option value="MFA">MFA</option>
-    </select>
+<div class="pam-tabs" style="margin-bottom:1.5rem">
+    <button class="pam-tab @(_tab=="list"?"pam-tab-active":"")"     @onclick="@(() => SwitchTab("list"))">Policy List</button>
+    <button class="pam-tab @(_tab=="password"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("password"))">Password Policy</button>
+    <button class="pam-tab @(_tab=="lockout"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("lockout"))">Account Lockout</button>
+    <button class="pam-tab @(_tab=="session"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("session"))">Session Policy</button>
 </div>
 
-@if (_error != null)
-{
-    <div class="pam-alert pam-alert-danger">@_error</div>
-}
-@if (_successMsg != null)
-{
-    <div class="pam-alert pam-alert-success">@_successMsg</div>
-}
+@if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_successMsg != null) { <div class="pam-alert pam-alert-success">@_successMsg</div> }
 
-<div class="pam-card">
-    <div class="pam-card-body p-0">
-        @if (_loading)
-        {
-            <div class="pam-loading-text p-4">Loading policies…</div>
-        }
-        else if (_policies == null || _policies.Count == 0)
-        {
-            <div class="pam-empty p-4">No policies defined. Create your first policy to enforce access controls.</div>
-        }
-        else
-        {
-            <table class="pam-table pam-table-hover">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Scope</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var p in _policies)
-                    {
-                        <tr>
-                            <td><strong>@p.Name</strong></td>
-                            <td><span class="pam-badge">@p.PolicyType</span></td>
-                            <td><span class="pam-badge pam-badge-secondary">@p.Scope</span></td>
-                            <td>@p.Priority</td>
-                            <td>
-                                @if (p.IsEnabled)
-                                {
-                                    <span class="pam-status pam-status-active">Enabled</span>
-                                }
-                                else
-                                {
-                                    <span class="pam-status pam-status-done">Disabled</span>
-                                }
-                            </td>
-                            <td>
-                                <div class="pam-actions">
-                                    @if (p.IsEnabled)
-                                    {
-                                        <button class="pam-btn-icon" title="Disable policy"
-                                                @onclick="@(() => ToggleAsync(p.Id, false))">&#9646;</button>
-                                    }
-                                    else
-                                    {
-                                        <button class="pam-btn-icon pam-btn-success" title="Enable policy"
-                                                @onclick="@(() => ToggleAsync(p.Id, true))">&#9654;</button>
-                                    }
-                                    <button class="pam-btn-icon pam-btn-danger" title="Delete policy"
-                                            @onclick="@(() => ConfirmDelete(p))">&#128465;</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
+@if (_tab == "list")
+{
+    <div class="pam-filters">
+        <select class="pam-input pam-select" @bind="_typeFilter" @bind:after="LoadPoliciesAsync">
+            <option value="">All Types</option>
+            <option value="Password">Password</option>
+            <option value="Session">Session</option>
+            <option value="Access">Access</option>
+            <option value="MFA">MFA</option>
+        </select>
     </div>
-</div>
 
-<!-- Add Policy Modal -->
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading policies…</div>
+            }
+            else if (_policies == null || _policies.Count == 0)
+            {
+                <div class="pam-empty p-4">No policies defined. Create your first policy to enforce access controls.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th><th>Type</th><th>Scope</th><th>Priority</th><th>Status</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _policies)
+                        {
+                            <tr>
+                                <td><strong>@p.Name</strong></td>
+                                <td><span class="pam-badge">@p.PolicyType</span></td>
+                                <td><span class="pam-badge pam-badge-secondary">@p.Scope</span></td>
+                                <td>@p.Priority</td>
+                                <td>
+                                    @if (p.IsEnabled) { <span class="pam-status pam-status-active">Enabled</span> }
+                                    else              { <span class="pam-status pam-status-done">Disabled</span> }
+                                </td>
+                                <td>
+                                    <div class="pam-actions">
+                                        @if (p.IsEnabled)
+                                        {
+                                            <button class="pam-btn-icon" title="Disable"
+                                                    @onclick="@(() => ToggleAsync(p.Id, false))">&#9646;</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="pam-btn-icon pam-btn-success" title="Enable"
+                                                    @onclick="@(() => ToggleAsync(p.Id, true))">&#9654;</button>
+                                        }
+                                        <button class="pam-btn-icon pam-btn-danger" title="Delete"
+                                                @onclick="@(() => ConfirmDelete(p))">&#128465;</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "password")
+{
+    <div class="pam-card" style="max-width:640px">
+        <div class="pam-card-header"><strong>Password Complexity &amp; Lifetime</strong></div>
+        <div class="pam-card-body">
+            @if (_pwdLoading)
+            {
+                <div class="pam-loading-text">Loading…</div>
+            }
+            else
+            {
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Min length</label>
+                        <input type="number" class="pam-input" style="width:100%" min="1" max="128" @bind="_pwdMinLen" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Max length</label>
+                        <input type="number" class="pam-input" style="width:100%" min="1" max="256" @bind="_pwdMaxLen" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Expiry (days, 0=never)</label>
+                        <input type="number" class="pam-input" style="width:100%" min="0" @bind="_pwdExpiryDays" />
+                    </div>
+                </div>
+                <div class="pam-form-row" style="flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:.75rem">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_pwdReqUpper" /> Require uppercase
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_pwdReqLower" /> Require lowercase
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_pwdReqDigit" /> Require digit
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_pwdReqSpecial" /> Require special char
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_pwdForceChange" /> Force change on first login
+                    </label>
+                </div>
+                <div class="pam-form-group" style="max-width:220px">
+                    <label class="pam-label">Prevent reuse (last N passwords, 0=off)</label>
+                    <input type="number" class="pam-input" style="width:100%" min="0" max="24" @bind="_pwdReuseCount" />
+                </div>
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SavePasswordPolicyAsync" disabled="@_pwdSaving">
+                        @if (_pwdSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "lockout")
+{
+    <div class="pam-card" style="max-width:480px">
+        <div class="pam-card-header"><strong>Account Lockout Policy</strong></div>
+        <div class="pam-card-body">
+            @if (_lockLoading)
+            {
+                <div class="pam-loading-text">Loading…</div>
+            }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-label">Max failed attempts before lockout</label>
+                    <input type="number" class="pam-input" style="width:180px" min="1" max="20" @bind="_lockMaxAttempts" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Lockout duration (minutes, 0=until admin reset)</label>
+                    <input type="number" class="pam-input" style="width:180px" min="0" @bind="_lockDurationMin" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Failed-attempt counter reset window (minutes)</label>
+                    <input type="number" class="pam-input" style="width:180px" min="1" @bind="_lockWindowMin" />
+                </div>
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveLockoutPolicyAsync" disabled="@_lockSaving">
+                        @if (_lockSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "session")
+{
+    <div class="pam-card" style="max-width:480px">
+        <div class="pam-card-header"><strong>Session Policy</strong></div>
+        <div class="pam-card-body">
+            @if (_sessLoading)
+            {
+                <div class="pam-loading-text">Loading…</div>
+            }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-label">Idle session timeout (minutes)</label>
+                    <input type="number" class="pam-input" style="width:180px" min="1" @bind="_sessIdleMin" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Max concurrent sessions per user</label>
+                    <input type="number" class="pam-input" style="width:180px" min="1" @bind="_sessMaxConcurrent" />
+                </div>
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveSessionPolicyAsync" disabled="@_sessSaving">
+                        @if (_sessSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -102,10 +216,7 @@
                 <button class="pam-close-btn" @onclick="CloseAddModal">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                @if (_addError != null)
-                {
-                    <div class="pam-alert pam-alert-danger">@_addError</div>
-                }
+                @if (_addError != null) { <div class="pam-alert pam-alert-danger">@_addError</div> }
                 <div class="pam-form-group">
                     <label class="pam-label">Name *</label>
                     <input class="pam-input w-100-input" @bind="_fName" placeholder="e.g. Global Password Policy" />
@@ -151,7 +262,6 @@
     </div>
 }
 
-<!-- Delete Confirm Modal -->
 @if (_deleteTarget != null)
 {
     <div class="pam-modal-overlay" @onclick="CancelDelete">
@@ -173,11 +283,14 @@
 }
 
 @code {
+    private string _tab = "list";
+
+    // Policy list
     private List<PolicyDto>? _policies;
-    private bool             _loading    = true;
-    private string?          _error;
-    private string?          _successMsg;
-    private string           _typeFilter = "";
+    private bool    _loading    = false;
+    private string? _error;
+    private string? _successMsg;
+    private string  _typeFilter = "";
 
     // Add modal
     private bool    _showAdd;
@@ -192,47 +305,75 @@
     // Delete confirm
     private PolicyDto? _deleteTarget;
 
+    // Password policy
+    private bool _pwdLoading    = false;
+    private bool _pwdSaving     = false;
+    private int  _pwdMinLen     = 12;
+    private int  _pwdMaxLen     = 128;
+    private bool _pwdReqUpper   = true;
+    private bool _pwdReqLower   = true;
+    private bool _pwdReqDigit   = true;
+    private bool _pwdReqSpecial = true;
+    private int  _pwdExpiryDays = 90;
+    private int  _pwdReuseCount = 12;
+    private bool _pwdForceChange = true;
+
+    // Lockout policy
+    private bool _lockLoading     = false;
+    private bool _lockSaving      = false;
+    private int  _lockMaxAttempts = 5;
+    private int  _lockDurationMin = 30;
+    private int  _lockWindowMin   = 15;
+
+    // Session policy
+    private bool _sessLoading       = false;
+    private bool _sessSaving        = false;
+    private int  _sessIdleMin       = 30;
+    private int  _sessMaxConcurrent = 3;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        await LoadAsync();
+        await LoadPoliciesAsync();
     }
 
-    private async Task LoadAsync()
+    private async Task SwitchTab(string tab)
     {
-        _loading = true; _error = null; StateHasChanged();
+        _tab = tab; _error = null; _successMsg = null; StateHasChanged();
+        switch (tab)
+        {
+            case "list":     await LoadPoliciesAsync();        break;
+            case "password": await LoadPasswordPolicyAsync();  break;
+            case "lockout":  await LoadLockoutPolicyAsync();   break;
+            case "session":  await LoadSessionPolicyAsync();   break;
+        }
+    }
+
+    private async Task LoadPoliciesAsync()
+    {
+        _loading = true; StateHasChanged();
         var result = await Api.GetPoliciesAsync(string.IsNullOrEmpty(_typeFilter) ? null : _typeFilter);
-        if (result == null)
-            _error = "Failed to load policies — check API connection.";
-        else
-            _policies = result.Data ?? [];
+        _policies = result?.Data ?? [];
+        if (result == null) _error = "Failed to load policies.";
         _loading = false; StateHasChanged();
     }
 
     private async Task ToggleAsync(string id, bool enable)
     {
-        var ok = await Api.TogglePolicyAsync(id, enable);
-        if (ok)
+        if (await Api.TogglePolicyAsync(id, enable))
         {
             _successMsg = enable ? "Policy enabled." : "Policy disabled.";
-            await LoadAsync();
-            await Task.Delay(3000);
-            _successMsg = null;
-            StateHasChanged();
+            await LoadPoliciesAsync();
+            await Task.Delay(3000); _successMsg = null; StateHasChanged();
         }
-        else
-        {
-            _error = "Failed to update policy.";
-        }
+        else { _error = "Failed to update policy."; StateHasChanged(); }
     }
 
     private void OpenAddModal()
     {
         _fName = ""; _fPolicyType = "Password"; _fScope = "0"; _fPriority = 50; _fPolicyJson = "{}";
-        _addError = null;
-        _showAdd = true;
+        _addError = null; _showAdd = true;
     }
-
     private void CloseAddModal() { _showAdd = false; _addError = null; }
 
     private async Task SubmitAddPolicyAsync()
@@ -240,39 +381,95 @@
         _addError = null;
         if (string.IsNullOrWhiteSpace(_fName))       { _addError = "Name is required."; return; }
         if (string.IsNullOrWhiteSpace(_fPolicyJson)) { _addError = "Policy JSON is required."; return; }
-
-        _addSaving = true;
-        StateHasChanged();
-
-        var ok = await Api.CreatePolicyAsync(
-            _fName.Trim(), _fPolicyType,
-            int.Parse(_fScope),
-            _fPolicyJson.Trim(),
-            _fPriority);
-
+        _addSaving = true; StateHasChanged();
+        var ok = await Api.CreatePolicyAsync(_fName.Trim(), _fPolicyType, int.Parse(_fScope), _fPolicyJson.Trim(), _fPriority);
         _addSaving = false;
-
-        if (!ok)
-        {
-            _addError = "Failed to create policy. Check policy JSON and server logs.";
-            StateHasChanged();
-            return;
-        }
-
-        CloseAddModal();
-        await LoadAsync();
+        if (!ok) { _addError = "Failed to create policy."; StateHasChanged(); return; }
+        CloseAddModal(); await LoadPoliciesAsync();
     }
 
-    private void ConfirmDelete(PolicyDto p)  { _deleteTarget = p; StateHasChanged(); }
-    private void CancelDelete()              { _deleteTarget = null; StateHasChanged(); }
+    private void ConfirmDelete(PolicyDto p) { _deleteTarget = p; StateHasChanged(); }
+    private void CancelDelete()             { _deleteTarget = null; StateHasChanged(); }
 
     private async Task ExecuteDeleteAsync()
     {
         if (_deleteTarget == null) return;
-        var id = _deleteTarget.Id;
-        _deleteTarget = null;
-        var ok = await Api.DeletePolicyAsync(id);
-        if (!ok) _error = "Failed to delete policy.";
-        await LoadAsync();
+        var id = _deleteTarget.Id; _deleteTarget = null;
+        if (!await Api.DeletePolicyAsync(id)) _error = "Failed to delete policy.";
+        await LoadPoliciesAsync();
+    }
+
+    private async Task LoadPasswordPolicyAsync()
+    {
+        _pwdLoading = true; StateHasChanged();
+        var s = await Api.GetPasswordPolicyAsync();
+        if (s != null)
+        {
+            _pwdMinLen = s.MinLength; _pwdMaxLen = s.MaxLength;
+            _pwdReqUpper = s.RequireUppercase; _pwdReqLower = s.RequireLowercase;
+            _pwdReqDigit = s.RequireDigit;     _pwdReqSpecial = s.RequireSpecial;
+            _pwdExpiryDays = s.ExpiryDays;     _pwdReuseCount = s.PreventReuseCount;
+            _pwdForceChange = s.ForceChangeOnFirstLogin;
+        }
+        _pwdLoading = false; StateHasChanged();
+    }
+
+    private async Task SavePasswordPolicyAsync()
+    {
+        _pwdSaving = true; StateHasChanged();
+        var ok = await Api.SavePasswordPolicyAsync(new PasswordPolicySettingsDto(
+            _pwdMinLen, _pwdMaxLen,
+            _pwdReqUpper, _pwdReqLower, _pwdReqDigit, _pwdReqSpecial,
+            _pwdExpiryDays, _pwdReuseCount, _pwdForceChange));
+        _pwdSaving = false;
+        _successMsg = ok ? "Password policy saved." : null;
+        if (!ok) _error = "Failed to save password policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadLockoutPolicyAsync()
+    {
+        _lockLoading = true; StateHasChanged();
+        var s = await Api.GetLockoutPolicyAsync();
+        if (s != null)
+        {
+            _lockMaxAttempts = s.MaxFailedAttempts;
+            _lockDurationMin = s.LockoutMinutes;
+            _lockWindowMin   = s.FailedAttemptWindowMinutes;
+        }
+        _lockLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveLockoutPolicyAsync()
+    {
+        _lockSaving = true; StateHasChanged();
+        var ok = await Api.SaveLockoutPolicyAsync(
+            new LockoutPolicySettingsDto(_lockMaxAttempts, _lockDurationMin, _lockWindowMin));
+        _lockSaving = false;
+        _successMsg = ok ? "Account lockout policy saved." : null;
+        if (!ok) _error = "Failed to save lockout policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadSessionPolicyAsync()
+    {
+        _sessLoading = true; StateHasChanged();
+        var s = await Api.GetSessionPolicyAsync();
+        if (s != null) { _sessIdleMin = s.IdleTimeoutMinutes; _sessMaxConcurrent = s.MaxConcurrentSessions; }
+        _sessLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveSessionPolicyAsync()
+    {
+        _sessSaving = true; StateHasChanged();
+        var ok = await Api.SaveSessionPolicyAsync(
+            new SessionPolicySettingsDto(_sessIdleMin, _sessMaxConcurrent));
+        _sessSaving = false;
+        _successMsg = ok ? "Session policy saved." : null;
+        if (!ok) _error = "Failed to save session policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }
 }

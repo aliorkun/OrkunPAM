@@ -149,7 +149,7 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
-    // Vault — Folders
+    // Vault -- Folders
     // -----------------------------------------------------------------------
 
     public async Task<List<FolderDto>?> GetFoldersAsync()
@@ -178,7 +178,7 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
-    // Vault — Credentials
+    // Vault -- Credentials
     // -----------------------------------------------------------------------
 
     public async Task<PagedResult<CredentialDto>?> GetCredentialsAsync(
@@ -190,10 +190,6 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<CredentialDto>>(url);
     }
 
-    /// <summary>
-    /// Creates a credential. type is the CredentialType enum integer value
-    /// (0=UserPassword, 1=SshKey, 2=ApiKey, 3=Certificate, 4=ConnectionString, 5=Custom).
-    /// </summary>
     public async Task<bool> CreateCredentialAsync(
         string name, int type, string? username, string? password,
         string folderId, string? deviceId, string? description,
@@ -280,6 +276,45 @@ public sealed class PamApiService
     {
         var client = await GetAuthClientAsync();
         try { return (await client.DeleteAsync($"/api/v1/policies/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<PasswordPolicySettingsDto?> GetPasswordPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<PasswordPolicySettingsDto>>("/api/v1/policy/password");
+        return result?.Data;
+    }
+
+    public async Task<bool> SavePasswordPolicyAsync(PasswordPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/policy/password", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<LockoutPolicySettingsDto?> GetLockoutPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<LockoutPolicySettingsDto>>("/api/v1/policy/lockout");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveLockoutPolicyAsync(LockoutPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/policy/lockout", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<SessionPolicySettingsDto?> GetSessionPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<SessionPolicySettingsDto>>("/api/v1/policy/session");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveSessionPolicyAsync(SessionPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/policy/session", s)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
@@ -433,3 +468,25 @@ public record PolicyDto(
     string? ScopeId,
     int     Priority,
     bool    IsEnabled);
+
+public record PolicySettingResult<T>(bool Success, T? Data) where T : class;
+
+public record PasswordPolicySettingsDto(
+    int  MinLength,
+    int  MaxLength,
+    bool RequireUppercase,
+    bool RequireLowercase,
+    bool RequireDigit,
+    bool RequireSpecial,
+    int  ExpiryDays,
+    int  PreventReuseCount,
+    bool ForceChangeOnFirstLogin);
+
+public record LockoutPolicySettingsDto(
+    int MaxFailedAttempts,
+    int LockoutMinutes,
+    int FailedAttemptWindowMinutes);
+
+public record SessionPolicySettingsDto(
+    int IdleTimeoutMinutes,
+    int MaxConcurrentSessions);
