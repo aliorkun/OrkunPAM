@@ -10,110 +10,262 @@
     <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add Credential</button>
 </div>
 
-<div class="pam-filters">
-    <input class="pam-input pam-search" type="search" placeholder="Search credentials…"
-           @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
-    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
-</div>
-
 @if (_error != null)
 {
     <div class="pam-alert pam-alert-danger">@_error</div>
 }
 
-<div class="pam-card">
-    <div class="pam-card-body p-0">
-        @if (_loading)
+<div class="pam-card pam-vault-layout">
+    <!-- Folder Sidebar -->
+    <aside class="pam-vault-sidebar">
+        <div class="pam-vault-folder-item @(_selectedFolderId == null ? "active" : "")"
+             @onclick="() => SelectFolderAsync(null)">
+            <span>📁</span>
+            <span class="pam-vault-folder-name">All Credentials</span>
+            @if (_allTotal > 0)
+            {
+                <span class="pam-vault-folder-count">@_allTotal</span>
+            }
+        </div>
+
+        @if (_folders != null)
         {
-            <div class="pam-loading-text p-4">Loading credentials…</div>
+            @foreach (var root in _folders.Where(f => f.ParentFolderId == null).OrderBy(f => f.Name))
+            {
+                <div class="pam-vault-folder-item @(_selectedFolderId == root.Id ? "active" : "")"
+                     @onclick="() => SelectFolderAsync(root.Id)">
+                    <span>📁</span>
+                    <span class="pam-vault-folder-name">@root.Name</span>
+                    <span class="pam-vault-folder-count">@root.CredentialCount</span>
+                </div>
+                @foreach (var child in _folders.Where(f => f.ParentFolderId == root.Id).OrderBy(f => f.Name))
+                {
+                    <div class="pam-vault-folder-item child @(_selectedFolderId == child.Id ? "active" : "")"
+                         @onclick="() => SelectFolderAsync(child.Id)">
+                        <span>📁</span>
+                        <span class="pam-vault-folder-name">@child.Name</span>
+                        <span class="pam-vault-folder-count">@child.CredentialCount</span>
+                    </div>
+                }
+            }
         }
-        else if (_creds == null || _creds.Count == 0)
-        {
-            <div class="pam-empty p-4">No credentials in vault.</div>
-        }
-        else
-        {
-            <table class="pam-table pam-table-hover">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Username</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Last Rotated</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var c in _creds)
-                    {
+    </aside>
+
+    <!-- Credential Table -->
+    <div class="pam-vault-main">
+        <div class="pam-vault-search-bar">
+            <input class="pam-input pam-search" type="search" placeholder="Search credentials…"
+                   @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+            <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+        </div>
+
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading credentials…</div>
+            }
+            else if (_creds == null || _creds.Count == 0)
+            {
+                <div class="pam-empty p-4">No credentials in this vault location.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
                         <tr>
-                            <td>
-                                <strong>@c.Name</strong>
-                                @if (!string.IsNullOrEmpty(c.Description))
-                                {
-                                    <div class="pam-sub-text">@c.Description</div>
-                                }
-                            </td>
-                            <td>@(c.Username ?? "—")</td>
-                            <td><span class="pam-badge">@c.Type</span></td>
-                            <td>
-                                @if (c.IsCheckedOut)
-                                {
-                                    <span class="pam-status pam-status-warn">Checked Out</span>
-                                }
-                                else
-                                {
-                                    <span class="pam-status @(c.Status == "Active" ? "pam-status-active" : "pam-status-done")">@c.Status</span>
-                                }
-                            </td>
-                            <td>@(c.LastRotatedAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>
-                            <td>
-                                <div class="pam-actions">
-                                    @if (!c.IsCheckedOut)
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Checkout Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _creds)
+                        {
+                            var isCheckedOut = c.IsCheckedOut || c.CheckedOutByUserId != null;
+                            var isMyCheckout = c.CheckedOutByUserId != null
+                                && c.CheckedOutByUserId == _currentUserId;
+                            <tr>
+                                <td>
+                                    <strong>@c.Name</strong>
+                                    @if (c.RequiresApproval)
                                     {
-                                        <button class="pam-btn-icon" title="Checkout credential"
-                                                @onclick="@(() => OpenCheckoutModal(c))">&#128275;</button>
+                                        <span class="pam-badge pam-badge-secondary" style="margin-left:6px" title="Requires approval">✋</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(c.Description))
+                                    {
+                                        <div class="pam-sub-text">@c.Description</div>
+                                    }
+                                </td>
+                                <td>@(c.Username ?? "—")</td>
+                                <td><span class="pam-badge">@c.Type</span></td>
+                                <td>
+                                    @if (isCheckedOut)
+                                    {
+                                        <span class="pam-status pam-status-warning">Checked Out</span>
                                     }
                                     else
                                     {
-                                        <button class="pam-btn-icon pam-btn-warn" title="Check in"
-                                                @onclick="@(() => CheckinAsync(c.Id))">&#128274;</button>
+                                        <span class="pam-status @(c.Status == "Active" ? "pam-status-active" : "pam-status-done")">@c.Status</span>
                                     }
-                                    @if (c.Type == "UserPassword" || c.Type == "SshKey")
+                                </td>
+                                <td>
+                                    @if (isCheckedOut && c.CheckOutExpiresUtc.HasValue)
                                     {
-                                        <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
-                                                @onclick="@(() => ConnectSsh(c.DeviceId, c.Id))">&#9000;</button>
+                                        var expired = c.CheckOutExpiresUtc.Value < DateTime.UtcNow;
+                                        <span class="@(expired ? "pam-status pam-status-error" : "")">
+                                            @c.CheckOutExpiresUtc.Value.ToLocalTime().ToString("MM/dd HH:mm")
+                                        </span>
                                     }
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                                    else
+                                    {
+                                        @:—
+                                    }
+                                </td>
+                                <td>
+                                    <div class="pam-actions">
+                                        @if (!isCheckedOut)
+                                        {
+                                            <button class="pam-btn-icon" title="Checkout credential"
+                                                    @onclick="() => OpenCheckout(c.Id, c.Name)">↗</button>
+                                        }
+                                        @if (isMyCheckout)
+                                        {
+                                            <button class="pam-btn-icon" title="Check in"
+                                                    @onclick="() => CheckinAsync(c.Id)">↙</button>
+                                        }
+                                        @if (!string.IsNullOrEmpty(c.DeviceId))
+                                        {
+                                            <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
+                                                    @onclick="() => Nav.NavigateTo($"/connect?deviceId={c.DeviceId}")">⌨</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
 
-            @if (_meta != null && _meta.TotalCount > _pageSize)
-            {
-                <div class="pam-pagination">
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
-                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount credentials</span>
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
-                </div>
+                @if (_meta != null && _meta.TotalCount > _pageSize)
+                {
+                    <div class="pam-pagination">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                        <span class="pam-page-info">
+                            Page @_page of @TotalPages — @_meta.TotalCount credentials
+                        </span>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                    </div>
+                }
             }
-        }
+        </div>
     </div>
 </div>
+
+<!-- Checkout Modal -->
+@if (_showCheckout)
+{
+    <div class="pam-modal-overlay" @onclick="() => _showCheckout = false">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Checkout — @_coCredName</h3>
+                <button class="pam-close-btn" @onclick="() => _showCheckout = false">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_coError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_coError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Reason</label>
+                    <input class="pam-input w-100-input" @bind="_coReason"
+                           placeholder="e.g. Planned maintenance — INC-1234" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Ticket Number</label>
+                    <input class="pam-input w-100-input" @bind="_coTicket"
+                           placeholder="e.g. INC-1234 or CHG-5678" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Duration (minutes)</label>
+                    <input class="pam-input" style="width:120px" type="number"
+                           min="1" max="1440" @bind="_coDuration" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="() => _showCheckout = false">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitCheckoutAsync" disabled="@_coSaving">
+                    @if (_coSaving) { <span class="pam-spinner-sm"></span> }
+                    Checkout
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Password Reveal Modal -->
+@if (_showReveal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseReveal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Credential Revealed — @_revealName</h3>
+                <button class="pam-close-btn" @onclick="CloseReveal">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-alert pam-alert-warning">
+                    Copy this password now. It will be hidden when you close this dialog.
+                </div>
+                @if (_revealUser != null)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Username</label>
+                        <div class="pam-reveal-field">@_revealUser</div>
+                    </div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Password</label>
+                    <div class="pam-reveal-box">
+                        @if (_passVisible)
+                        {
+                            <div class="pam-reveal-password">@_revealPass</div>
+                        }
+                        else
+                        {
+                            <div class="pam-reveal-password pam-reveal-masked">••••••••••••••••</div>
+                        }
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm" style="align-self:flex-start"
+                                @onclick="() => _passVisible = !_passVisible">
+                            @(_passVisible ? "Hide" : "Reveal")
+                        </button>
+                    </div>
+                </div>
+                @if (_revealExpiry.HasValue)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Checkout expires</label>
+                        <div>@_revealExpiry.Value.ToString("MM/dd/yyyy HH:mm")</div>
+                    </div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="CloseReveal">Done</button>
+            </div>
+        </div>
+    </div>
+}
 
 <!-- Add Credential Modal -->
 @if (_showAdd)
 {
-    <div class="pam-modal-overlay" @onclick="CloseAddModal">
+    <div class="pam-modal-overlay" @onclick="() => _showAdd = false">
         <div class="pam-modal" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
                 <h3 class="pam-modal-title">Add Credential</h3>
-                <button class="pam-close-btn" @onclick="CloseAddModal">&#215;</button>
+                <button class="pam-close-btn" @onclick="() => _showAdd = false">×</button>
             </div>
             <div class="pam-modal-body">
                 @if (_addError != null)
@@ -122,54 +274,60 @@
                 }
                 <div class="pam-form-group">
                     <label class="pam-label">Name *</label>
-                    <input class="pam-input w-100-input" @bind="_fName" placeholder="e.g. root@web-server-01" />
+                    <input class="pam-input w-100-input" @bind="_addName" placeholder="e.g. prod-server root" />
                 </div>
-                <div class="pam-form-group">
-                    <label class="pam-label">Type *</label>
-                    <select class="pam-input w-100-input" @bind="_fType">
-                        <option value="0">Password</option>
-                        <option value="1">SSH Key</option>
-                        <option value="2">API Key</option>
-                        <option value="3">Certificate</option>
-                        <option value="4">Connection String</option>
-                        <option value="5">Custom</option>
-                    </select>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Type *</label>
+                        <select class="pam-input" style="width:100%" @bind="_addType">
+                            <option value="0">User Password</option>
+                            <option value="1">SSH Key</option>
+                            <option value="2">API Key</option>
+                            <option value="3">Certificate</option>
+                            <option value="4">Connection String</option>
+                            <option value="5">Custom</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Folder *</label>
+                        <select class="pam-input" style="width:100%" @bind="_addFolderId">
+                            @if (_folders != null)
+                            {
+                                @foreach (var f in _folders.OrderBy(f => f.Name))
+                                {
+                                    <option value="@f.Id">@f.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
                 </div>
                 <div class="pam-form-group">
                     <label class="pam-label">Username</label>
-                    <input class="pam-input w-100-input" @bind="_fUsername" placeholder="e.g. root, administrator" />
+                    <input class="pam-input w-100-input" @bind="_addUsername" placeholder="e.g. root, admin, sa" />
                 </div>
                 <div class="pam-form-group">
-                    <label class="pam-label">Password / Secret</label>
-                    <input class="pam-input w-100-input" type="password" @bind="_fPassword" />
-                </div>
-                <div class="pam-form-group">
-                    <label class="pam-label">Folder *</label>
-                    @if (_folders == null || _folders.Count == 0)
-                    {
-                        <div class="pam-alert pam-alert-info">
-                            No folders found. <button class="pam-link-btn" @onclick="CreateDefaultFolderAsync">Create default folder</button>
-                        </div>
-                    }
-                    else
-                    {
-                        <select class="pam-input w-100-input" @bind="_fFolderId">
-                            <option value="">— Select folder —</option>
-                            @foreach (var f in _folders)
-                            {
-                                <option value="@f.Id">@f.Name (@f.CredentialCount credentials)</option>
-                            }
-                        </select>
-                    }
+                    <label class="pam-label">Password</label>
+                    <input class="pam-input w-100-input" type="password" @bind="_addPassword" />
                 </div>
                 <div class="pam-form-group">
                     <label class="pam-label">Description</label>
-                    <input class="pam-input w-100-input" @bind="_fDescription" placeholder="Optional description" />
+                    <input class="pam-input w-100-input" @bind="_addDesc" placeholder="Optional description" />
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Max Checkout (min)</label>
+                        <input class="pam-input" style="width:100%" type="number" min="1" @bind="_addMaxMins" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1; justify-content:flex-end; margin-top:28px">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px">
+                            <input type="checkbox" @bind="_addApproval" /> Requires Approval
+                        </label>
+                    </div>
                 </div>
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="CloseAddModal">Cancel</button>
-                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddCredentialAsync" disabled="@_addSaving">
+                <button class="pam-btn pam-btn-secondary" @onclick="() => _showAdd = false">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddAsync" disabled="@_addSaving">
                     @if (_addSaving) { <span class="pam-spinner-sm"></span> }
                     Add Credential
                 </button>
@@ -178,115 +336,98 @@
     </div>
 }
 
-<!-- Checkout Modal -->
-@if (_showCheckout)
-{
-    <div class="pam-modal-overlay" @onclick="CloseCheckoutModal">
-        <div class="pam-modal" @onclick:stopPropagation="true">
-            <div class="pam-modal-header">
-                <h3 class="pam-modal-title">Checkout: @(_checkoutCred?.Name)</h3>
-                <button class="pam-close-btn" @onclick="CloseCheckoutModal">&#215;</button>
-            </div>
-            <div class="pam-modal-body">
-                @if (_checkoutError != null)
-                {
-                    <div class="pam-alert pam-alert-danger">@_checkoutError</div>
-                }
-                @if (_checkoutPassword == null)
-                {
-                    <div class="pam-form-group">
-                        <label class="pam-label">Reason (optional)</label>
-                        <input class="pam-input w-100-input" @bind="_checkoutReason"
-                               placeholder="e.g. Maintenance ticket #1234" />
-                    </div>
-                    <p class="pam-hint">The credential will be checked out to you. Check it back in when done.</p>
-                }
-                else
-                {
-                    <div class="pam-alert pam-alert-success">Credential checked out successfully.</div>
-                    <div class="pam-form-group">
-                        <label class="pam-label">Username</label>
-                        <div class="pam-copy-row">
-                            <input class="pam-input pam-monospace" readonly value="@(_checkoutCred?.Username ?? "—")" />
-                        </div>
-                    </div>
-                    <div class="pam-form-group">
-                        <label class="pam-label">Password</label>
-                        <div class="pam-copy-row">
-                            <input class="pam-input pam-monospace" id="checkout-pw"
-                                   readonly type="@(_showPw ? "text" : "password")"
-                                   value="@_checkoutPassword" />
-                            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ToggleShowPw">
-                                @(_showPw ? "Hide" : "Show")
-                            </button>
-                        </div>
-                    </div>
-                    <p class="pam-hint pam-hint-warn">&#9888; Close this dialog when done. Password is not stored in browser.</p>
-                }
-            </div>
-            <div class="pam-modal-footer">
-                @if (_checkoutPassword == null)
-                {
-                    <button class="pam-btn pam-btn-secondary" @onclick="CloseCheckoutModal">Cancel</button>
-                    <button class="pam-btn pam-btn-primary" @onclick="SubmitCheckoutAsync" disabled="@_checkoutSaving">
-                        @if (_checkoutSaving) { <span class="pam-spinner-sm"></span> }
-                        Checkout
-                    </button>
-                }
-                else
-                {
-                    <button class="pam-btn pam-btn-primary" @onclick="CloseCheckoutModal">Done</button>
-                }
-            </div>
-        </div>
-    </div>
-}
-
 @code {
     private List<CredentialDto>? _creds;
+    private List<FolderDto>?     _folders;
     private PageMeta?            _meta;
     private bool                 _loading  = true;
     private string?              _error;
     private string               _search   = "";
+    private string?              _selectedFolderId;
+    private string?              _currentUserId;
+    private int                  _allTotal;
     private int                  _page     = 1;
     private const int            _pageSize = 20;
 
-    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
-
-    // Add credential modal
-    private bool            _showAdd;
-    private string?         _addError;
-    private bool            _addSaving;
-    private string          _fName        = "";
-    private string          _fType        = "0";
-    private string          _fUsername    = "";
-    private string          _fPassword    = "";
-    private string          _fFolderId    = "";
-    private string          _fDescription = "";
-    private List<FolderDto>? _folders;
-
     // Checkout modal
-    private bool          _showCheckout;
-    private CredentialDto? _checkoutCred;
-    private string        _checkoutReason   = "";
-    private string?       _checkoutPassword;
-    private string?       _checkoutError;
-    private bool          _checkoutSaving;
-    private bool          _showPw;
+    private bool    _showCheckout;
+    private string? _coCredId;
+    private string? _coCredName;
+    private string  _coReason   = "";
+    private string  _coTicket   = "";
+    private int     _coDuration = 60;
+    private bool    _coSaving;
+    private string? _coError;
+
+    // Password reveal modal
+    private bool      _showReveal;
+    private string?   _revealName;
+    private string?   _revealUser;
+    private string?   _revealPass;
+    private DateTime? _revealExpiry;
+    private bool      _passVisible;
+
+    // Add Credential modal
+    private bool    _showAdd;
+    private string  _addName     = "";
+    private int     _addType     = 0;
+    private string  _addFolderId = "";
+    private string  _addUsername = "";
+    private string  _addPassword = "";
+    private string  _addDesc     = "";
+    private int     _addMaxMins  = 60;
+    private bool    _addApproval;
+    private bool    _addSaving;
+    private string? _addError;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        await LoadAsync();
+        var user = await Api.GetCurrentUserAsync();
+        _currentUserId = user?.UserId;
+        await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
+    }
+
+    private async Task LoadFoldersAsync()
+    {
+        _folders = await Api.GetFoldersAsync();
+        if (_folders != null && string.IsNullOrEmpty(_addFolderId))
+            _addFolderId = _folders.FirstOrDefault()?.Id ?? "";
+        StateHasChanged();
     }
 
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
-        var result = await Api.GetCredentialsAsync(search: _search, page: _page, pageSize: _pageSize);
-        if (result == null) _error = "Failed to load vault credentials.";
-        else { _creds = result.Data; _meta = result.Meta; }
+
+        if (_selectedFolderId != null)
+        {
+            var list = await Api.GetFolderCredentialsAsync(_selectedFolderId);
+            if (list == null) _error = "Failed to load credentials.";
+            else              { _creds = list; _meta = null; }
+        }
+        else
+        {
+            var result = await Api.GetCredentialsAsync(search: _search, page: _page, pageSize: _pageSize);
+            if (result == null) _error = "Failed to load credentials.";
+            else
+            {
+                _creds    = result.Data;
+                _meta     = result.Meta;
+                _allTotal = result.Meta?.TotalCount ?? 0;
+            }
+        }
+
         _loading = false; StateHasChanged();
+    }
+
+    private async Task SelectFolderAsync(string? folderId)
+    {
+        _selectedFolderId = folderId;
+        _page = 1; _search = "";
+        await LoadAsync();
     }
 
     private async Task OnSearchKeyUp(KeyboardEventArgs e)
@@ -294,110 +435,96 @@
         if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
     }
 
-    private void ConnectSsh(string? deviceId, string credId)
+    private void OpenCheckout(string credId, string credName)
     {
-        if (!string.IsNullOrEmpty(deviceId))
-            Nav.NavigateTo($"/terminal/{deviceId}/{credId}");
+        _coCredId = credId; _coCredName = credName;
+        _coReason = ""; _coTicket = ""; _coDuration = 60;
+        _coError = null; _coSaving = false;
+        _showCheckout = true;
     }
 
-    private async Task OpenAddModal()
+    private async Task SubmitCheckoutAsync()
     {
-        _fName = _fUsername = _fPassword = _fFolderId = _fDescription = "";
-        _fType = "0";
-        _addError = null;
-        _folders = (await Api.GetFoldersAsync())?.Data ?? [];
+        _coError = null; _coSaving = true; StateHasChanged();
+
+        var result = await Api.CheckoutCredentialAsync(
+            _coCredId!,
+            string.IsNullOrWhiteSpace(_coReason) ? null : _coReason.Trim(),
+            string.IsNullOrWhiteSpace(_coTicket) ? null : _coTicket.Trim(),
+            _coDuration);
+
+        _coSaving = false;
+
+        if (result == null)
+        {
+            _coError = "Checkout failed. The credential may already be checked out or require approval.";
+            StateHasChanged();
+            return;
+        }
+
+        _showCheckout = false;
+        _revealName   = result.Name;
+        _revealUser   = result.Username;
+        _revealPass   = result.Password;
+        _revealExpiry = result.ExpiresAt?.ToLocalTime();
+        _passVisible  = false;
+        _showReveal   = true;
+
+        await LoadAsync();
+    }
+
+    private void CloseReveal()
+    {
+        _showReveal  = false;
+        _revealPass  = null;
+        _passVisible = false;
+    }
+
+    private async Task CheckinAsync(string credId)
+    {
+        var ok = await Api.CheckinCredentialAsync(credId);
+        if (!ok) _error = "Checkin failed — you may not own this checkout.";
+        await LoadAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _addName = ""; _addUsername = ""; _addPassword = ""; _addDesc = "";
+        _addType = 0; _addMaxMins = 60; _addApproval = false;
+        _addFolderId = _selectedFolderId ?? _folders?.FirstOrDefault()?.Id ?? "";
+        _addError = null; _addSaving = false;
         _showAdd = true;
     }
 
-    private void CloseAddModal() { _showAdd = false; _addError = null; }
-
-    private async Task CreateDefaultFolderAsync()
-    {
-        await Api.CreateFolderAsync("General", "Default credential folder");
-        _folders = (await Api.GetFoldersAsync())?.Data ?? [];
-        StateHasChanged();
-    }
-
-    private async Task SubmitAddCredentialAsync()
+    private async Task SubmitAddAsync()
     {
         _addError = null;
-        if (string.IsNullOrWhiteSpace(_fName))     { _addError = "Name is required."; return; }
-        if (string.IsNullOrWhiteSpace(_fFolderId)) { _addError = "Select a folder."; return; }
-        if (!int.TryParse(_fType, out var typeInt)) { _addError = "Invalid type."; return; }
+        if (string.IsNullOrWhiteSpace(_addName))     { _addError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_addFolderId)) { _addError = "Folder is required. Create a folder first."; return; }
 
-        _addSaving = true;
-        StateHasChanged();
+        _addSaving = true; StateHasChanged();
 
         var ok = await Api.CreateCredentialAsync(
-            _fFolderId, _fName.Trim(),
-            string.IsNullOrWhiteSpace(_fDescription) ? null : _fDescription.Trim(),
-            typeInt,
-            string.IsNullOrWhiteSpace(_fUsername) ? null : _fUsername.Trim(),
-            string.IsNullOrWhiteSpace(_fPassword) ? null : _fPassword,
-            null);
+            _addName.Trim(), _addType,
+            string.IsNullOrWhiteSpace(_addUsername) ? null : _addUsername.Trim(),
+            string.IsNullOrWhiteSpace(_addPassword) ? null : _addPassword,
+            _addFolderId,
+            null,
+            string.IsNullOrWhiteSpace(_addDesc) ? null : _addDesc.Trim(),
+            _addMaxMins, _addApproval);
 
         _addSaving = false;
 
         if (!ok)
         {
-            _addError = "Failed to create credential. Check server logs.";
+            _addError = "Failed to create credential.";
             StateHasChanged();
             return;
         }
 
-        CloseAddModal();
-        _page = 1;
-        await LoadAsync();
+        _showAdd = false;
+        await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
     }
-
-    private void OpenCheckoutModal(CredentialDto cred)
-    {
-        _checkoutCred     = cred;
-        _checkoutReason   = "";
-        _checkoutPassword = null;
-        _checkoutError    = null;
-        _showPw           = false;
-        _showCheckout     = true;
-    }
-
-    private void CloseCheckoutModal()
-    {
-        _showCheckout     = false;
-        _checkoutPassword = null;
-        _checkoutCred     = null;
-    }
-
-    private async Task SubmitCheckoutAsync()
-    {
-        if (_checkoutCred == null) return;
-        _checkoutError  = null;
-        _checkoutSaving = true;
-        StateHasChanged();
-
-        var result = await Api.CheckoutCredentialAsync(
-            _checkoutCred.Id,
-            string.IsNullOrWhiteSpace(_checkoutReason) ? null : _checkoutReason.Trim());
-
-        _checkoutSaving = false;
-
-        if (result == null)
-        {
-            _checkoutError = "Checkout failed. Credential may already be checked out or requires approval.";
-            StateHasChanged();
-            return;
-        }
-
-        _checkoutPassword = result.Password ?? "(no password stored)";
-        await LoadAsync();
-    }
-
-    private async Task CheckinAsync(string credId)
-    {
-        await Api.CheckinCredentialAsync(credId);
-        await LoadAsync();
-    }
-
-    private void ToggleShowPw() => _showPw = !_showPw;
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
