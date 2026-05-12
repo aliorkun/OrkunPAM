@@ -109,7 +109,7 @@ Orkun PAM is a Windows-based, modular, API-first Privileged Access Management pl
 | Database | SQL Server (TDE + Always Encrypted) |
 | Encryption | Custom AES-256-GCM (3-tier key hierarchy: KEK → MK → DEK) |
 | SSH Proxy | Native C# (RFC 4253/4252/4254 - no third-party library) |
-| RDP Proxy | Native C# (MS-RDPBCGR - no third-party library) |
+| RDP Proxy | Microsoft RDS Gateway integration (credential injection + session recording) |
 | Internal Comms | gRPC |
 | External API | REST (Minimal APIs) |
 | CQRS | MediatR |

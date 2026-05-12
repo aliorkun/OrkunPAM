@@ -32,7 +32,7 @@
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
-| #23 | RDP Proxy - native C# | MVP-SESSION |
+| #23 | RDP Proxy - Microsoft RDS Gateway entegrasyonu | MVP-SESSION |
 | #20 | Blazor UI (vault, device, session sayfaları) | MVP-UI |
 | #27 | Temel Raporlar | MVP-REPORTING |
 | #32 | Otomatik Parola Rotasyonu | MVP-VAULT |
@@ -86,7 +86,7 @@
 ## Agent Yetkinlik Sınırları (Koordinatör notu)
 Aşağıdaki konular Sonnet agent kapasitesini aşar - manuel müdahale veya Opus gerekir:
 - **SSH Proxy:** Native SSH protokolü (RFC 4253) - raw socket, key exchange, channel multiplexing
-- **RDP Proxy:** Native RDP gateway - TLS, CredSSP, bitmap codec, virtual channels
+- **RDP Proxy:** Microsoft RDS Gateway entegrasyonu - COM interop, credential injection, session recording API
 - **Session Recording:** Stream capture, binary format tasarımı, video encoding (RDP), playback engine
 - **Blazor UI:** Karmaşık component mimarisi, SignalR entegrasyonu, real-time terminal
 - **MSI Installer:** WiX toolset, Windows Service registration, upgrade logic
