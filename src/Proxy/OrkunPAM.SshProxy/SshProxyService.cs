@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.Options;
 using OrkunPAM.SshProxy.Crypto;
 using OrkunPAM.SshProxy.Server;
+using OrkunPAM.SshProxy.Session;
 
 namespace OrkunPAM.SshProxy;
 
@@ -16,17 +17,20 @@ internal sealed class SshProxyService : BackgroundService
     private readonly SshProxyOptions _opts;
     private readonly SshHostKey _hostKey;
     private readonly PamApiClient _api;
+    private readonly HashChainStore _hashChain;
 
     public SshProxyService(
         ILogger<SshProxyService> log,
         IOptions<SshProxyOptions> opts,
         SshHostKey hostKey,
-        PamApiClient api)
+        PamApiClient api,
+        HashChainStore hashChain)
     {
-        _log = log;
-        _opts = opts.Value;
-        _hostKey = hostKey;
-        _api = api;
+        _log       = log;
+        _opts      = opts.Value;
+        _hostKey   = hostKey;
+        _api       = api;
+        _hashChain = hashChain;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -59,7 +63,7 @@ internal sealed class SshProxyService : BackgroundService
                     try
                     {
                         client.NoDelay = true;
-                        var session = new SshServerSession(client, _hostKey, _api, _opts, _log, stoppingToken);
+                        var session = new SshServerSession(client, _hostKey, _api, _opts, _log, stoppingToken, _hashChain);
                         await session.RunAsync();
                     }
                     catch (Exception ex)

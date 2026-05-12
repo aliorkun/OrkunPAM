@@ -7,4 +7,6 @@ public sealed class SshProxyOptions
     public string? KeyDirectory { get; set; }
     public int MaxConcurrentSessions { get; set; } = 100;
     public string RecordingDirectory { get; set; } = "recordings";
+    /// <summary>Recordings older than this many days are automatically deleted. RFP §66 requires ≥6 months.</summary>
+    public int RetentionDays { get; set; } = 183;
 }

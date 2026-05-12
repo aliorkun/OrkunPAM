@@ -22,6 +22,7 @@ internal sealed class SessionRecorder
     private readonly string _recDir;
     private readonly ILogger _log;
     private readonly PtyParams? _pty;
+    private readonly HashChainStore? _hashChain;
 
     private readonly List<(double Elapsed, string Data)> _events = new();
     private DateTime _startUtc;
@@ -29,11 +30,12 @@ internal sealed class SessionRecorder
     private bool _started;
     private bool _stopped;
 
-    internal SessionRecorder(string recDir, ILogger log, PtyParams? pty)
+    internal SessionRecorder(string recDir, ILogger log, PtyParams? pty, HashChainStore? hashChain = null)
     {
-        _recDir = recDir;
-        _log = log;
-        _pty = pty;
+        _recDir    = recDir;
+        _log       = log;
+        _pty       = pty;
+        _hashChain = hashChain;
     }
 
     internal void Start(byte[]? sessionId)
@@ -106,6 +108,9 @@ internal sealed class SessionRecorder
 
             _log.LogInformation("Recording saved: {Path} ({Events} events, {Bytes}B plaintext)",
                 recPath, _events.Count, plaintext.Length);
+
+            if (_hashChain != null)
+                await _hashChain.AppendAsync(_recId, recPath);
         }
         catch (Exception ex)
         {

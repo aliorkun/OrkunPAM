@@ -24,6 +24,7 @@ internal sealed class SshServerSession
     private readonly SshProxyOptions _opts;
     private readonly ILogger _log;
     private readonly CancellationToken _ct;
+    private readonly HashChainStore? _hashChain;
 
     private byte[] _serverKexInitPayload = [];
     private byte[] _clientKexInitPayload = [];
@@ -31,14 +32,15 @@ internal sealed class SshServerSession
     private byte[]? _sessionId;
 
     internal SshServerSession(TcpClient client, SshHostKey hostKey, PamApiClient api,
-        SshProxyOptions opts, ILogger log, CancellationToken ct)
+        SshProxyOptions opts, ILogger log, CancellationToken ct, HashChainStore? hashChain = null)
     {
-        _conn    = new SshConnection(client.GetStream());
-        _hostKey = hostKey;
-        _api     = api;
-        _opts    = opts;
-        _log     = log;
-        _ct      = ct;
+        _conn      = new SshConnection(client.GetStream());
+        _hostKey   = hostKey;
+        _api       = api;
+        _opts      = opts;
+        _log       = log;
+        _ct        = ct;
+        _hashChain = hashChain;
     }
 
     internal async Task RunAsync()
@@ -369,7 +371,7 @@ internal sealed class SshServerSession
             clientChanId, pty != null, isExec ? execCmd : "shell");
 
         // Step 4: record + relay
-        var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty);
+        var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty, _hashChain);
         recorder.Start(_sessionId);
 
         try

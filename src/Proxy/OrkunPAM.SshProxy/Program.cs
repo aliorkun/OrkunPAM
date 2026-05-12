@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using OrkunPAM.SshProxy;
+using OrkunPAM.SshProxy.Session;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -33,6 +35,13 @@ try
 
     builder.Services.AddSingleton<SshHostKey>();
     builder.Services.AddSingleton<PamApiClient>();
+    builder.Services.AddSingleton(sp =>
+    {
+        var opts = sp.GetRequiredService<IOptions<SshProxyOptions>>().Value;
+        var log  = sp.GetRequiredService<ILogger<HashChainStore>>();
+        return new HashChainStore(opts.RecordingDirectory, log);
+    });
+    builder.Services.AddHostedService<RecordingRetentionService>();
     builder.Services.AddHostedService<SshProxyService>();
 
     await builder.Build().RunAsync();
