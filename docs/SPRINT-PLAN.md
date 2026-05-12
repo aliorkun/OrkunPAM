@@ -2,35 +2,26 @@
 
 > Agent'lar bu dosyayı okuyarak hangi sprint'te olduğumuzu ve öncelikleri anlar.
 
-## Aktif Sprint: Sprint 1 - Security Hardening
+## ~~Sprint 1 - Security Hardening~~ ✅ TAMAMLANDI
 **Tarih:** 10-13 Mayıs 2026
-**Hedef:** Tüm security issue'ları kapat, foundation sağlamlaştır
-
-| Issue | Başlık | Severity | Durum |
-|-------|--------|----------|-------|
-| #10 | JWT RSA Key persistence | HIGH | Açık |
-| #18 | Memory zeroing after decrypt | MEDIUM | Açık |
-| #22 | Audit log gap | MEDIUM | Açık |
-| #24 | Stack trace leak | MEDIUM | Açık |
-| #26 | DEK cache expiration | MEDIUM | Açık |
-| #28 | Password reset audit | MEDIUM | Açık |
-| #31 | Sensitive data masking | MEDIUM | Açık |
-
-**Çıkış kriteri:** 0 security HIGH, 0 security MEDIUM → v0.2.0-security-hardened tag
+**Durum:** Tamamlandı — 43 security bulgu fix'lendi (11 critical, 15 high, 13 medium)
+**Tag:** `v0.2.0-security-hardened`
 
 ---
 
-## Sprint 2 - SSH Proxy + Temel UI
+## Aktif Sprint: Sprint 2 - SSH Proxy + Temel UI
 **Tarih:** 14-20 Mayıs 2026
 **Hedef:** Native SSH proxy çalışır durumda, Blazor login + dashboard
 
-| Issue | Başlık | Tip | Atanan |
-|-------|--------|-----|--------|
-| #21 | SSH Proxy - native C# | MVP-SESSION | Developer Agent |
-| #25 | HTML5 Web SSH Terminal | MVP-SESSION | Developer Agent |
-| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | Developer Agent |
-| #45 | SAML 2.0 / SSO | MVP-AUTH | Developer Agent |
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #21 | SSH Proxy - native C# | MVP-SESSION | ✅ Kapatıldı |
+| #25 | HTML5 Web SSH Terminal | MVP-SESSION | ✅ Kapatıldı |
+| #47 | Session Recording | MVP-SESSION | ✅ Kapatıldı |
+| #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | ⬜ Açık — SONRAKİ ÖNCELİK |
+| #45 | SAML 2.0 / SSO | MVP-AUTH | ⬜ Açık |
 
+**İlerleme:** 3/5 tamamlandı (%60)
 **Çıkış kriteri:** SSH ile sunucuya bağlanıp komut çalıştırılabiliyor, Blazor login çalışıyor → v0.3.0-ssh-proxy tag
 
 ---
@@ -42,7 +33,6 @@
 | Issue | Başlık | Tip |
 |-------|--------|-----|
 | #23 | RDP Proxy - native C# | MVP-SESSION |
-| #47 | Session Recording | MVP-SESSION |
 | #20 | Blazor UI (vault, device, session sayfaları) | MVP-UI |
 | #27 | Temel Raporlar | MVP-REPORTING |
 | #32 | Otomatik Parola Rotasyonu | MVP-VAULT |
@@ -63,6 +53,8 @@
 | #40 | Privileged Account Discovery | MVP-DEVICE |
 | #54 | SMTP Bildirim | MVP-INFRA |
 | #39 | Self-Service Portal | MVP-UX |
+| #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION |
+| #64 | SQL Database Proxy | MVP-SESSION |
 
 **Çıkış kriteri:** Enterprise demo yapılabilir → v0.5.0-enterprise tag
 
