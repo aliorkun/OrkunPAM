@@ -1,25 +1,29 @@
 using OrkunPAM.Web.Components;
+using OrkunPAM.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Named HttpClient for server-side calls from Blazor to the PAM WebAPI (e.g. login)
-var apiBase = builder.Configuration["PamApi:BaseUrl"] ?? "https://localhost:5001";
+// PAM API HTTP client (TLS dev bypass in Development only)
 builder.Services.AddHttpClient("PamApi", client =>
 {
-    client.BaseAddress = new Uri(apiBase);
-    client.Timeout = TimeSpan.FromSeconds(15);
+    client.BaseAddress = new Uri(
+        builder.Configuration["PamApi:BaseUrl"] ?? "https://localhost:5001");
+    client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() =>
 {
     var handler = new HttpClientHandler();
-    // Allow self-signed dev cert; production should use a trusted CA or cert pinning
     if (builder.Environment.IsDevelopment())
         handler.ServerCertificateCustomValidationCallback =
             HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
     return handler;
 });
+
+// Scoped per Blazor circuit
+builder.Services.AddScoped<AuthStateService>();
+builder.Services.AddScoped<PamApiService>();
 
 var app = builder.Build();
 

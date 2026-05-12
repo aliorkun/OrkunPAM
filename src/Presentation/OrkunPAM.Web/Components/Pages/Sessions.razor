@@ -1,0 +1,125 @@
+@page "/sessions"
+@rendermode InteractiveServer
+@inject PamApiService Api
+
+<PageTitle>Sessions — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Sessions</h2>
+</div>
+
+<div class="pam-filters">
+    <select class="pam-input pam-select" @bind="_statusFilter" @bind:after="LoadAsync">
+        <option value="">All Sessions</option>
+        <option value="Active">Active</option>
+        <option value="Completed">Completed</option>
+        <option value="Failed">Failed</option>
+    </select>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+<div class="pam-card">
+    <div class="pam-card-body p-0">
+        @if (_loading)
+        {
+            <div class="pam-loading-text p-4">Loading sessions…</div>
+        }
+        else if (_sessions == null || _sessions.Count == 0)
+        {
+            <div class="pam-empty p-4">No sessions found.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Target</th>
+                        <th>Port</th>
+                        <th>Client</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _sessions)
+                    {
+                        <tr>
+                            <td><span class="pam-badge">@s.SessionType</span></td>
+                            <td>@(s.TargetIpAddress ?? "—")</td>
+                            <td>@(s.TargetPort?.ToString() ?? "—")</td>
+                            <td>@(s.ClientIpAddress ?? "—")</td>
+                            <td>
+                                <span class="pam-status @StatusClass(s.Status)">@s.Status</span>
+                            </td>
+                            <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                            <td>@Duration(s)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_meta != null && _meta.TotalCount > _pageSize)
+            {
+                <div class="pam-pagination">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount sessions</span>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<SessionDto>? _sessions;
+    private PageMeta?         _meta;
+    private bool              _loading      = true;
+    private string?           _error;
+    private string            _statusFilter = "";
+    private int               _page         = 1;
+    private const int         _pageSize     = 20;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        var result = await Api.GetSessionsAsync(_statusFilter, _page, _pageSize);
+        if (result == null) _error = "Failed to load sessions.";
+        else { _sessions = result.Data; _meta = result.Meta; }
+        _loading = false; StateHasChanged();
+    }
+
+    private static string StatusClass(string s) => s switch
+    {
+        "Active"    => "pam-status-active",
+        "Completed" => "pam-status-done",
+        _           => "pam-status-error"
+    };
+
+    private static string Duration(SessionDto s)
+    {
+        var end = s.EndedAtUtc ?? DateTime.UtcNow;
+        var dur = end - s.StartedAtUtc;
+        return dur.TotalHours >= 1
+            ? $"{(int)dur.TotalHours}h {dur.Minutes}m"
+            : $"{dur.Minutes}m {dur.Seconds}s";
+    }
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}

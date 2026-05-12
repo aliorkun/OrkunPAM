@@ -1,0 +1,89 @@
+@page "/connect"
+@rendermode InteractiveServer
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Connect — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Connect to Device</h2>
+</div>
+
+<div class="pam-card" style="max-width:560px">
+    <div class="pam-card-body">
+        <div class="pam-form-group">
+            <label class="pam-label">Device</label>
+            <select class="pam-input" @bind="_deviceId" @bind:after="OnDeviceChanged">
+                <option value="">— Select a device —</option>
+                @foreach (var d in _devices)
+                {
+                    <option value="@d.Id">@d.Hostname (@(d.IpAddress ?? ""))</option>
+                }
+            </select>
+        </div>
+
+        @if (_creds.Count > 0)
+        {
+            <div class="pam-form-group">
+                <label class="pam-label">Credential</label>
+                <select class="pam-input" @bind="_credId">
+                    <option value="">— Select credential —</option>
+                    @foreach (var c in _creds)
+                    {
+                        <option value="@c.Id">@(c.Username ?? "unknown") (@c.CredentialType)</option>
+                    }
+                </select>
+            </div>
+        }
+
+        <button class="pam-btn pam-btn-primary"
+                disabled="@(string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_credId))"
+                @onclick="LaunchTerminal">
+            &#9000; Open SSH Terminal
+        </button>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? DeviceId { get; set; }
+
+    private List<DeviceDto>     _devices = [];
+    private List<CredentialDto> _creds   = [];
+    private string              _deviceId = "";
+    private string              _credId   = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var result = await Api.GetDevicesAsync(pageSize: 200);
+        _devices = result?.Data ?? [];
+
+        if (!string.IsNullOrEmpty(DeviceId))
+        {
+            _deviceId = DeviceId;
+            await LoadCredsAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnDeviceChanged()
+    {
+        _credId = "";
+        _creds  = [];
+        if (!string.IsNullOrEmpty(_deviceId))
+            await LoadCredsAsync();
+    }
+
+    private async Task LoadCredsAsync()
+    {
+        var result = await Api.GetCredentialsAsync(deviceId: _deviceId, pageSize: 50);
+        _creds = result?.Data ?? [];
+        StateHasChanged();
+    }
+
+    private void LaunchTerminal()
+    {
+        if (!string.IsNullOrEmpty(_deviceId) && !string.IsNullOrEmpty(_credId))
+            Nav.NavigateTo($"/terminal/{_deviceId}/{_credId}");
+    }
+}

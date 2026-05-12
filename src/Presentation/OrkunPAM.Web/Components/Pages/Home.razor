@@ -1,175 +1,172 @@
 @page "/"
 @rendermode InteractiveServer
-@inject IJSRuntime JS
+@inject PamApiService Api
 @inject NavigationManager Nav
 
 <PageTitle>Dashboard — OrkunPAM</PageTitle>
 
-@if (!_loaded)
-{
-    <div class="d-flex align-items-center justify-content-center" style="min-height:50vh">
-        <div class="text-center">
-            <div class="spinner-border" style="color:#3b82f6;width:2.5rem;height:2.5rem;" role="status">
-                <span class="visually-hidden">Loading…</span>
-            </div>
-            <p class="mt-3" style="color:#64748b;">Loading…</p>
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Dashboard</h2>
+    <span class="pam-page-sub">@DateTime.Now.ToString("dddd, MMMM d yyyy")</span>
+</div>
+
+<!-- Stat Cards -->
+<div class="pam-stat-row">
+    <div class="pam-stat-card pam-stat-blue">
+        <div class="pam-stat-icon">▶</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_activeSessions?.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Active Sessions</div>
         </div>
     </div>
-}
-else
-{
-    <div class="pam-dash">
-        <div class="mb-4">
-            <h2 class="pam-title">Dashboard</h2>
-            <p class="pam-sub">Welcome back, <strong style="color:#e2e8f0;">@_username</strong></p>
+    <div class="pam-stat-card pam-stat-green">
+        <div class="pam-stat-icon">👤</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_totalUsers?.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Total Users</div>
         </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-xl-3">
-                <div class="pam-stat pam-stat-blue">
-                    <span class="pam-stat-ico">📡</span>
-                    <div>
-                        <div class="pam-stat-lbl">Active Sessions</div>
-                        <div class="pam-stat-val">—</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-xl-3">
-                <div class="pam-stat pam-stat-green">
-                    <span class="pam-stat-ico">🖥️</span>
-                    <div>
-                        <div class="pam-stat-lbl">Managed Devices</div>
-                        <div class="pam-stat-val">—</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-xl-3">
-                <div class="pam-stat pam-stat-purple">
-                    <span class="pam-stat-ico">🔑</span>
-                    <div>
-                        <div class="pam-stat-lbl">Vault Credentials</div>
-                        <div class="pam-stat-val">—</div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-xl-3">
-                <div class="pam-stat pam-stat-orange">
-                    <span class="pam-stat-ico">⏳</span>
-                    <div>
-                        <div class="pam-stat-lbl">Pending Approvals</div>
-                        <div class="pam-stat-val">—</div>
-                    </div>
-                </div>
-            </div>
+    </div>
+    <div class="pam-stat-card pam-stat-purple">
+        <div class="pam-stat-icon">🖵</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_totalDevices?.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Managed Devices</div>
         </div>
-
-        <h6 class="pam-sec-hdr mb-3">Quick Access</h6>
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/devices" class="pam-action">
-                    <div class="pam-action-ico">🖥️</div>
-                    <div class="pam-action-name">Devices</div>
-                    <div class="pam-action-desc">Manage target systems</div>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/vault" class="pam-action">
-                    <div class="pam-action-ico">🔐</div>
-                    <div class="pam-action-name">Vault</div>
-                    <div class="pam-action-desc">Credentials &amp; secrets</div>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/sessions" class="pam-action">
-                    <div class="pam-action-ico">📡</div>
-                    <div class="pam-action-name">Sessions</div>
-                    <div class="pam-action-desc">Active &amp; recorded</div>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/users" class="pam-action">
-                    <div class="pam-action-ico">👤</div>
-                    <div class="pam-action-name">Users</div>
-                    <div class="pam-action-desc">Access management</div>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/policies" class="pam-action">
-                    <div class="pam-action-ico">📋</div>
-                    <div class="pam-action-name">Policies</div>
-                    <div class="pam-action-desc">Session &amp; access rules</div>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-3">
-                <a href="/reports" class="pam-action">
-                    <div class="pam-action-ico">📈</div>
-                    <div class="pam-action-name">Reports</div>
-                    <div class="pam-action-desc">Audit &amp; compliance</div>
-                </a>
-            </div>
+    </div>
+    <div class="pam-stat-card pam-stat-orange">
+        <div class="pam-stat-icon">🔑</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_totalCredentials?.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Vault Credentials</div>
         </div>
+    </div>
+</div>
 
-        <div class="pam-card">
-            <div class="pam-card-hdr">Recent Activity</div>
-            <div class="pam-card-body text-center" style="color:#475569;padding:2.5rem 1.25rem;">
-                No recent activity. Start a session to see events here.
+<div class="pam-row">
+    <!-- Recent Sessions -->
+    <div class="pam-card pam-card-lg">
+        <div class="pam-card-header">
+            <h3 class="pam-card-title">Recent Sessions</h3>
+            <a href="/sessions" class="pam-link">View all →</a>
+        </div>
+        <div class="pam-card-body">
+            @if (_sessions == null)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else if (_sessions.Count == 0)
+            {
+                <div class="pam-empty">No sessions yet.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Target</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _sessions)
+                        {
+                            <tr>
+                                <td><span class="pam-badge">@s.SessionType</span></td>
+                                <td>@(s.TargetIpAddress ?? "—")</td>
+                                <td>
+                                    <span class="pam-status @StatusClass(s.Status)">@s.Status</span>
+                                </td>
+                                <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="pam-card pam-card-sm">
+        <div class="pam-card-header">
+            <h3 class="pam-card-title">Quick Actions</h3>
+        </div>
+        <div class="pam-card-body">
+            <a href="/connect" class="pam-action-btn pam-action-ssh">
+                <span>⌨</span> Start SSH Session
+            </a>
+            <a href="/devices" class="pam-action-btn pam-action-device">
+                <span>🖵</span> Add Device
+            </a>
+            <a href="/users" class="pam-action-btn pam-action-user">
+                <span>👤</span> Manage Users
+            </a>
+            <a href="/vault" class="pam-action-btn pam-action-vault">
+                <span>🔑</span> Open Vault
+            </a>
+        </div>
+        <div class="pam-card-header mt-3">
+            <h3 class="pam-card-title">System Status</h3>
+        </div>
+        <div class="pam-card-body">
+            <div class="pam-status-row">
+                <span>SSH Proxy</span>
+                <span class="pam-status pam-status-active">Online</span>
+            </div>
+            <div class="pam-status-row">
+                <span>Vault Engine</span>
+                <span class="pam-status pam-status-active">Online</span>
+            </div>
+            <div class="pam-status-row">
+                <span>Audit Log</span>
+                <span class="pam-status pam-status-active">Online</span>
             </div>
         </div>
     </div>
-}
-
-<style>
-    .pam-dash { padding: 0.25rem 0 1.5rem; }
-    .pam-title { color: #e2e8f0; font-weight: 700; font-size: 1.5rem; margin-bottom: 0; }
-    .pam-sub { color: #64748b; font-size: 0.875rem; margin-top: 0.25rem; }
-    .pam-sec-hdr { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-
-    .pam-stat {
-        display: flex; align-items: center; gap: 0.9rem;
-        background: #1e293b; border: 1px solid #334155;
-        border-radius: 10px; padding: 1rem 1.15rem;
-    }
-    .pam-stat-ico { font-size: 1.65rem; flex-shrink: 0; }
-    .pam-stat-lbl { color: #64748b; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .pam-stat-val { color: #e2e8f0; font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
-    .pam-stat-blue  { border-left: 4px solid #3b82f6; }
-    .pam-stat-green { border-left: 4px solid #22c55e; }
-    .pam-stat-purple { border-left: 4px solid #a855f7; }
-    .pam-stat-orange { border-left: 4px solid #f97316; }
-
-    .pam-action {
-        display: block; text-decoration: none;
-        background: #1e293b; border: 1px solid #334155;
-        border-radius: 10px; padding: 1.15rem; height: 100%;
-        transition: border-color 0.15s, background 0.15s;
-    }
-    .pam-action:hover { border-color: #3b82f6; background: #1d3a5f; }
-    .pam-action-ico { font-size: 1.65rem; margin-bottom: 0.45rem; }
-    .pam-action-name { color: #e2e8f0; font-weight: 600; font-size: 0.9rem; }
-    .pam-action-desc { color: #64748b; font-size: 0.76rem; margin-top: 0.1rem; }
-
-    .pam-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; }
-    .pam-card-hdr { padding: 0.875rem 1.25rem; border-bottom: 1px solid #334155; color: #e2e8f0; font-weight: 600; font-size: 0.9rem; }
-    .pam-card-body { padding: 1.25rem; }
-</style>
+</div>
 
 @code {
-    private bool _loaded;
-    private string _username = "";
-    private IJSObjectReference? _authModule;
+    private int? _activeSessions;
+    private int? _totalUsers;
+    private int? _totalDevices;
+    private int? _totalCredentials;
+    private List<SessionDto>? _sessions;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        _authModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/auth.js");
-        var isAuth = await _authModule.InvokeAsync<bool>("isAuthenticated");
-        if (!isAuth)
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        var tasks = new[]
         {
-            Nav.NavigateTo("/login", replace: true);
-            return;
-        }
-        _username = await _authModule.InvokeAsync<string>("getUsername");
-        _loaded = true;
+            LoadStatAsync("/api/v1/sessions?status=Active",  v => _activeSessions  = v),
+            LoadStatAsync("/api/v1/users",                   v => _totalUsers      = v),
+            LoadStatAsync("/api/v1/devices",                 v => _totalDevices    = v),
+            LoadStatAsync("/api/v1/vault/credentials",       v => _totalCredentials = v),
+        };
+        await Task.WhenAll(tasks);
+
+        var sessions = await Api.GetSessionsAsync(pageSize: 5);
+        _sessions = sessions?.Data ?? [];
+
         StateHasChanged();
     }
+
+    private async Task LoadStatAsync(string path, Action<int> setter)
+    {
+        var count = await Api.GetTotalCountAsync(path);
+        setter(count);
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Active"    => "pam-status-active",
+        "Completed" => "pam-status-done",
+        "Failed"    => "pam-status-error",
+        _           => "pam-status-done"
+    };
 }

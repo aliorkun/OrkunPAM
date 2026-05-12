@@ -1,51 +1,75 @@
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">🔐 OrkunPAM</a>
+@rendermode InteractiveServer
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<div class="pam-sidebar">
+    <div class="pam-brand">
+        <span class="pam-brand-icon">🔐</span>
+        <span class="pam-brand-text">OrkunPAM</span>
+    </div>
+
+    @if (_user != null)
+    {
+        <div class="pam-user-info">
+            <div class="pam-user-avatar">@_user.DisplayName[0]</div>
+            <div class="pam-user-details">
+                <div class="pam-user-name">@_user.DisplayName</div>
+                <div class="pam-user-role">@_user.Username</div>
+            </div>
+        </div>
+    }
+
+    <nav class="pam-nav">
+        <div class="pam-nav-section">OVERVIEW</div>
+        <NavLink class="pam-nav-link" href="/" Match="NavLinkMatch.All">
+            <span class="pam-nav-icon">⊞</span> Dashboard
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/sessions">
+            <span class="pam-nav-icon">▶</span> Active Sessions
+        </NavLink>
+
+        <div class="pam-nav-section">ACCESS</div>
+        <NavLink class="pam-nav-link" href="/vault">
+            <span class="pam-nav-icon">🔑</span> Vault
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/devices">
+            <span class="pam-nav-icon">🖵</span> Devices
+        </NavLink>
+
+        <div class="pam-nav-section">IDENTITY</div>
+        <NavLink class="pam-nav-link" href="/users">
+            <span class="pam-nav-icon">👤</span> Users
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/policies">
+            <span class="pam-nav-icon">📋</span> Policies
+        </NavLink>
+
+        <div class="pam-nav-section">TERMINAL</div>
+        <NavLink class="pam-nav-link" href="/connect">
+            <span class="pam-nav-icon">⌨</span> SSH/RDP Connect
+        </NavLink>
+    </nav>
+
+    <div class="pam-sidebar-footer">
+        <button class="pam-logout-btn" @onclick="LogoutAsync">
+            <span>↩</span> Sign Out
+        </button>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+@code {
+    private AuthUser? _user;
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="pam-nav-ico" aria-hidden="true">📊</span> Dashboard
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="devices">
-                <span class="pam-nav-ico" aria-hidden="true">🖥️</span> Devices
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="vault">
-                <span class="pam-nav-ico" aria-hidden="true">🔐</span> Vault
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="sessions">
-                <span class="pam-nav-ico" aria-hidden="true">📡</span> Sessions
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="users">
-                <span class="pam-nav-ico" aria-hidden="true">👤</span> Users
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="policies">
-                <span class="pam-nav-ico" aria-hidden="true">📋</span> Policies
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="reports">
-                <span class="pam-nav-ico" aria-hidden="true">📈</span> Reports
-            </NavLink>
-        </div>
-    </nav>
-</div>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _user = await Auth.GetUserAsync();
+        StateHasChanged();
+    }
 
-<style>
-    .pam-nav-ico { display: inline-block; width: 1.5em; text-align: center; }
-</style>
+    private async Task LogoutAsync()
+    {
+        await Auth.ClearAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

@@ -1,0 +1,167 @@
+@page "/devices"
+@rendermode InteractiveServer
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Devices — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Devices</h2>
+    <button class="pam-btn pam-btn-primary" @onclick="() => _showAdd = true">+ Add Device</button>
+</div>
+
+<div class="pam-filters">
+    <input class="pam-input pam-search" type="search" placeholder="Search by hostname, IP or FQDN…"
+           @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+    <select class="pam-input pam-select" @bind="_typeFilter" @bind:after="LoadAsync">
+        <option value="">All Types</option>
+        <option value="Server">Server</option>
+        <option value="Workstation">Workstation</option>
+        <option value="NetworkDevice">Network Device</option>
+        <option value="DatabaseServer">Database Server</option>
+    </select>
+    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+<div class="pam-card">
+    <div class="pam-card-body p-0">
+        @if (_loading)
+        {
+            <div class="pam-loading-text p-4">Loading devices…</div>
+        }
+        else if (_devices == null || _devices.Count == 0)
+        {
+            <div class="pam-empty p-4">No devices found.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>IP Address</th>
+                        <th>Type</th>
+                        <th>Protocol</th>
+                        <th>OS</th>
+                        <th>Credentials</th>
+                        <th>Reachable</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _devices)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@d.Hostname</strong>
+                                @if (!string.IsNullOrEmpty(d.Fqdn) && d.Fqdn != d.Hostname)
+                                {
+                                    <div class="pam-sub-text">@d.Fqdn</div>
+                                }
+                            </td>
+                            <td>@(d.IpAddress ?? "—")</td>
+                            <td><span class="pam-badge">@d.Type</span></td>
+                            <td>@d.Protocol@(d.ConnectionPort.HasValue ? $":{d.ConnectionPort}" : "")</td>
+                            <td>@(d.OperatingSystem ?? "—")</td>
+                            <td>
+                                <span class="pam-badge @(d.CredentialCount > 0 ? "pam-badge-success" : "pam-badge-secondary")">
+                                    @d.CredentialCount
+                                </span>
+                            </td>
+                            <td>
+                                @if (d.IsReachable)
+                                { <span class="pam-status pam-status-active">✓</span> }
+                                else
+                                { <span class="pam-status pam-status-error">✗</span> }
+                            </td>
+                            <td>
+                                <span class="pam-status @(d.Status == "Active" ? "pam-status-active" : "pam-status-done")">
+                                    @d.Status
+                                </span>
+                            </td>
+                            <td>
+                                <div class="pam-actions">
+                                    @if (d.Protocol == "Ssh")
+                                    {
+                                        <button class="pam-btn-icon pam-btn-connect" title="Open SSH terminal"
+                                                @onclick="() => ConnectSsh(d.Id)">&#9000;</button>
+                                    }
+                                    <button class="pam-btn-icon" title="View vault">&#128273;</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_meta != null && _meta.TotalCount > _pageSize)
+            {
+                <div class="pam-pagination">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                    <span class="pam-page-info">
+                        Page @_page of @TotalPages — @_meta.TotalCount devices
+                    </span>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<DeviceDto>? _devices;
+    private PageMeta?        _meta;
+    private bool             _loading    = true;
+    private string?          _error;
+    private string           _search     = "";
+    private string           _typeFilter = "";
+    private int              _page       = 1;
+    private const int        _pageSize   = 20;
+    private bool             _showAdd;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error   = null;
+        StateHasChanged();
+
+        var result = await Api.GetDevicesAsync(_search, _typeFilter, _page, _pageSize);
+        if (result == null)
+            _error = "Failed to load devices — check API connection.";
+        else
+        {
+            _devices = result.Data;
+            _meta    = result.Meta;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void ConnectSsh(string deviceId)
+        => Nav.NavigateTo($"/connect?deviceId={deviceId}");
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}

@@ -1,0 +1,122 @@
+@page "/vault"
+@rendermode InteractiveServer
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Vault — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Vault</h2>
+    <button class="pam-btn pam-btn-primary">+ Add Credential</button>
+</div>
+
+<div class="pam-filters">
+    <input class="pam-input pam-search" type="search" placeholder="Search credentials…"
+           @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+<div class="pam-card">
+    <div class="pam-card-body p-0">
+        @if (_loading)
+        {
+            <div class="pam-loading-text p-4">Loading credentials…</div>
+        }
+        else if (_creds == null || _creds.Count == 0)
+        {
+            <div class="pam-empty p-4">No credentials in vault.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Active</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _creds)
+                    {
+                        <tr>
+                            <td><strong>@(c.Username ?? "—")</strong></td>
+                            <td><span class="pam-badge">@c.CredentialType</span></td>
+                            <td>@(c.Description ?? "—")</td>
+                            <td>
+                                @if (c.IsActive) { <span class="pam-status pam-status-active">✓</span> }
+                                else             { <span class="pam-status pam-status-done">✗</span> }
+                            </td>
+                            <td>
+                                <div class="pam-actions">
+                                    <button class="pam-btn-icon" title="Checkout credential">↗</button>
+                                    @if (c.CredentialType == "Ssh")
+                                    {
+                                        <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
+                                                @onclick="() => ConnectSsh(c.DeviceId, c.Id)">&#9000;</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_meta != null && _meta.TotalCount > _pageSize)
+            {
+                <div class="pam-pagination">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount credentials</span>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<CredentialDto>? _creds;
+    private PageMeta?            _meta;
+    private bool                 _loading  = true;
+    private string?              _error;
+    private string               _search   = "";
+    private int                  _page     = 1;
+    private const int            _pageSize = 20;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        var result = await Api.GetCredentialsAsync(search: _search, page: _page, pageSize: _pageSize);
+        if (result == null) _error = "Failed to load vault credentials.";
+        else { _creds = result.Data; _meta = result.Meta; }
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void ConnectSsh(string deviceId, string credId)
+        => Nav.NavigateTo($"/terminal/{deviceId}/{credId}");
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+}
