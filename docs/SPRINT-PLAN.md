@@ -9,9 +9,9 @@
 
 ---
 
-## Aktif Sprint: Sprint 2 - SSH Proxy + Temel UI
+## ~~Sprint 2 - SSH Proxy + Temel UI~~ ✅ TAMAMLANDI
 **Tarih:** 14-20 Mayıs 2026
-**Hedef:** Native SSH proxy çalışır durumda, Blazor login + dashboard
+**Durum:** Tamamlandı — Native SSH proxy, Web terminal, Session recording, Blazor UI, SAML SSO
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
@@ -19,26 +19,27 @@
 | #25 | HTML5 Web SSH Terminal | MVP-SESSION | ✅ Kapatıldı |
 | #47 | Session Recording | MVP-SESSION | ✅ Kapatıldı |
 | #20 | Blazor Admin Dashboard (login, dashboard, nav) | MVP-UI | ✅ Kapatıldı |
-| #45 | SAML 2.0 / SSO | MVP-AUTH | ⬜ Açık |
+| #45 | SAML 2.0 / SSO | MVP-AUTH | ✅ Kapatıldı |
 
-**İlerleme:** 4/5 tamamlandı (%80)
-**Çıkış kriteri:** SSH ile sunucuya bağlanıp komut çalıştırılabiliyor, Blazor login çalışıyor → v0.3.0-ssh-proxy tag
+**İlerleme:** 5/5 tamamlandı (%100) ✅
+**Tag:** `v0.3.0-ssh-proxy`
 
 ---
 
-## Sprint 3 - RDP + Vault + Reporting
+## Aktif Sprint: Sprint 3 - RDP + Vault + Reporting
 **Tarih:** 21-27 Mayıs 2026
-**Hedef:** RDS Gateway entegrasyonu, vault/device UI, temel raporlar
+**Hedef:** RDP Proxy TCP relay, vault/device UI, temel raporlar
 
-| Issue | Başlık | Tip |
-|-------|--------|-----|
-| #23 | RDP Proxy - Microsoft RDS Gateway entegrasyonu | MVP-SESSION |
-| #20 | Blazor UI (vault, device, session sayfaları) | MVP-UI |
-| #27 | Temel Raporlar | MVP-REPORTING |
-| #32 | Otomatik Parola Rotasyonu | MVP-VAULT |
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #23 | RDP Proxy - TCP relay + session token flow | MVP-SESSION | 🔄 IN PROGRESS |
+| #27 | Temel Raporlar | MVP-REPORTING | ⬜ Açık |
+| #32 | Otomatik Parola Rotasyonu | MVP-VAULT | ⬜ Açık |
+| #79 | Onay Akışı Yönetim Paneli | MVP-UI | ⬜ Açık |
 
-**Not:** RDP artık native C# değil, RDS Gateway entegrasyonu. Bu sprint'i önemli ölçüde kısaltır.
-**Çıkış kriteri:** RDP bağlantı + kayıt, vault UI, rapor sayfası → v0.4.0-rdp tag
+**İlerleme:** 0/4 kapatıldı (%0) — #23 aktif geliştirmede
+**Not:** #23 MVP: TCP relay + TPKT/X.224 parsing + session recording. NLA/CredSSP + credential injection v2'ye ertelendi.
+**Çıkış kriteri:** RDP bağlantı çalışıyor (.rdp dosyası indirilip Windows Remote Desktop ile açılabiliyor) → v0.4.0-rdp tag
 
 ---
 
