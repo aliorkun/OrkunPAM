@@ -20,6 +20,8 @@ public class User : SoftDeletableEntity
     public bool IsTemporary { get; set; }
     public DateTime? TemporaryExpiresUtc { get; set; }
     public DateTime? PasswordLastChanged { get; set; }
+    public DateTime? PasswordExpiresAt { get; set; }
+    public bool MustChangePassword { get; set; }
     public DateTime? LastLoginAtUtc { get; set; }
     public string? LastLoginIp { get; set; }
     public int FailedLoginCount { get; set; }
@@ -30,6 +32,7 @@ public class User : SoftDeletableEntity
     // Navigation
     public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public ICollection<UserPasswordHistory> PasswordHistories { get; set; } = new List<UserPasswordHistory>();
 
     public bool IsLocked => Status == UserStatus.Locked ||
                            (LockoutEndUtc.HasValue && LockoutEndUtc > DateTime.UtcNow);
@@ -67,4 +70,13 @@ public class UserRole
     public User User { get; set; } = null!;
     public Guid RoleId { get; set; }
     public Role Role { get; set; } = null!;
+}
+
+public class UserPasswordHistory
+{
+    public long Id { get; set; }
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public string PasswordHash { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

@@ -117,7 +117,7 @@ public static class UserEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             user.Status = UserStatus.Locked;
-            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100);
+            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
             await db.SaveChangesAsync();
 
             await audit.LogAsync("User", "User.Locked", ParseActorId(context),
@@ -148,16 +148,26 @@ public static class UserEndpoints
         });
 
         group.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest req,
-            OrkunPamDbContext db, IPasswordHasher hasher, IAuditService audit, HttpContext context) =>
+            OrkunPamDbContext db, IPasswordHasher hasher, IPasswordPolicyService policy,
+            IAuditService audit, HttpContext context) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
             if (user.AuthSource != AuthSource.Local)
                 return Results.BadRequest(new { success = false, errors = new[] { $"Cannot reset password for {user.AuthSource} user" } });
 
-            user.PasswordHash = hasher.Hash(req.NewPassword);
+            var validation = await policy.ValidateAsync(req.NewPassword, ct: context.RequestAborted);
+            if (validation.IsFailure)
+                return Results.BadRequest(new { success = false, errors = new[] { validation.Error.Message } });
+
+            var newHash = hasher.Hash(req.NewPassword);
+            user.PasswordHash = newHash;
             user.PasswordLastChanged = DateTime.UtcNow;
+            user.PasswordExpiresAt = policy.ComputeExpiry();
+            user.MustChangePassword = true;
             await db.SaveChangesAsync();
+
+            await policy.RecordPasswordAsync(user.Id, newHash, context.RequestAborted);
 
             await audit.LogAsync("User", "User.PasswordReset", ParseActorId(context),
                 context.User.FindFirstValue("username"),
@@ -174,6 +184,7 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, data = new { roles, permissions } });
         });
 
+        // Role assignment
         group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db,
             IAuditService audit, HttpContext context) =>
         {

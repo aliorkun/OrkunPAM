@@ -29,6 +29,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<GroupRole> GroupRoles => Set<GroupRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserPasswordHistory> UserPasswordHistories => Set<UserPasswordHistory>();
 
     // Vault
     public DbSet<VaultFolder> VaultFolders => Set<VaultFolder>();
@@ -145,6 +146,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(rp => new { rp.RoleId, rp.PermissionCode });
             e.HasOne(rp => rp.Permission).WithMany().HasForeignKey(rp => rp.PermissionCode);
+        });
+
+        modelBuilder.Entity<UserPasswordHistory>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.Id).ValueGeneratedOnAdd();
+            e.HasOne(h => h.User).WithMany(u => u.PasswordHistories).HasForeignKey(h => h.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(h => new { h.UserId, h.CreatedAtUtc });
+            e.Property(h => h.PasswordHash).HasMaxLength(512);
         });
 
         modelBuilder.Entity<Group>(e =>

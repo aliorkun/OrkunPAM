@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
+using OrkunPAM.Domain.Enums;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -33,7 +34,9 @@ public static class AuthEndpoints
                     userId = data.UserId,
                     username = data.Username,
                     displayName = data.DisplayName,
-                    mfaRequired = data.MfaRequired
+                    mfaRequired = data.MfaRequired,
+                    mustChangePassword = data.MustChangePassword,
+                    passwordExpired = data.PasswordExpired
                 }
             });
         }).RequireRateLimiting("auth");
@@ -51,6 +54,39 @@ public static class AuthEndpoints
             });
         });
 
+        // Change password — requires authentication; enforces policy + history
+        app.MapPost("/api/v1/auth/change-password", async (ChangePasswordRequest req, OrkunPamDbContext db,
+            IPasswordHasher hasher, IPasswordPolicyService policy, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+            if (user.AuthSource != AuthSource.Local)
+                return Results.BadRequest(new { success = false, errors = new[] { $"Password change not supported for {user.AuthSource} accounts" } });
+
+            if (string.IsNullOrEmpty(user.PasswordHash) || !hasher.Verify(req.CurrentPassword, user.PasswordHash))
+                return Results.Json(new { success = false, errors = new[] { "Current password is incorrect" } }, statusCode: 401);
+
+            var validation = await policy.ValidateAsync(req.NewPassword, userId, context.RequestAborted);
+            if (validation.IsFailure)
+                return Results.BadRequest(new { success = false, errors = new[] { validation.Error.Message } });
+
+            var newHash = hasher.Hash(req.NewPassword);
+            user.PasswordHash = newHash;
+            user.PasswordLastChanged = DateTime.UtcNow;
+            user.PasswordExpiresAt = policy.ComputeExpiry();
+            user.MustChangePassword = false;
+            await db.SaveChangesAsync(context.RequestAborted);
+
+            await policy.RecordPasswordAsync(userId, newHash, context.RequestAborted);
+
+            return Results.Ok(new { success = true, message = "Password changed successfully" });
+        }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
+
+        // MFA Setup - requires authentication; userId taken from JWT to prevent IDOR
         app.MapPost("/api/v1/auth/mfa/setup", async (OrkunPamDbContext db, ITotpService totp,
             IVaultEncryptionService vault, HttpContext context) =>
         {
@@ -83,6 +119,7 @@ public static class AuthEndpoints
             });
         }).RequireAuthorization().WithTags("Auth");
 
+        // MFA Verify & Enable - requires authentication; userId taken from JWT to prevent IDOR
         app.MapPost("/api/v1/auth/mfa/verify", async (MfaVerifyRequest req, OrkunPamDbContext db,
             ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {
@@ -110,6 +147,7 @@ public static class AuthEndpoints
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
         }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
 
+        // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
             IPasswordHasher hasher, ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
         {
@@ -146,5 +184,6 @@ public static class AuthEndpoints
 
 public record LoginRequest(string Username, string Password);
 public record RegisterRequest(string Username, string Password, string? DisplayName, string? Email);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record MfaVerifyRequest(string Code);
 public record MfaDisableRequest(string CurrentPassword, string CurrentMfaCode);

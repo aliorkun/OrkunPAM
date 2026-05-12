@@ -13,13 +13,14 @@ public interface IAuthenticationService
     Task<Result<User>> CreateLocalUserAsync(string username, string password, string? displayName, string? email, CancellationToken ct = default);
 }
 
-public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired);
+public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, bool MustChangePassword, bool PasswordExpired);
 
 public sealed class AuthenticationService : IAuthenticationService
 {
     private readonly OrkunPamDbContext _db;
     private readonly IPasswordHasher _hasher;
     private readonly IJwtTokenService _jwt;
+    private readonly IPasswordPolicyService _policy;
     private readonly ILogger<AuthenticationService> _logger;
 
     // Configurable lockout settings
@@ -27,11 +28,12 @@ public sealed class AuthenticationService : IAuthenticationService
     private const int LockoutMinutes = 30;
 
     public AuthenticationService(OrkunPamDbContext db, IPasswordHasher hasher,
-        IJwtTokenService jwt, ILogger<AuthenticationService> logger)
+        IJwtTokenService jwt, IPasswordPolicyService policy, ILogger<AuthenticationService> logger)
     {
         _db = db;
         _hasher = hasher;
         _jwt = jwt;
+        _policy = policy;
         _logger = logger;
     }
 
@@ -87,6 +89,13 @@ public sealed class AuthenticationService : IAuthenticationService
             return Result<AuthResult>.Failure(Error.Unauthorized("Temporary account has expired"));
         }
 
+        // Determine password policy flags (non-blocking: login succeeds, frontend redirects)
+        bool passwordExpired = user.PasswordExpiresAt.HasValue && user.PasswordExpiresAt < DateTime.UtcNow;
+        bool mustChangePassword = user.MustChangePassword || passwordExpired;
+
+        if (passwordExpired)
+            _logger.LogInformation("User '{Username}' password expired at {Expiry}", username, user.PasswordExpiresAt);
+
         // Collect roles and permissions
         var roles = new HashSet<string>();
         var permissions = new HashSet<string>();
@@ -129,7 +138,7 @@ public sealed class AuthenticationService : IAuthenticationService
             username, ipAddress, string.Join(",", roles));
 
         return Result<AuthResult>.Success(new AuthResult(
-            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired));
+            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mustChangePassword, passwordExpired));
     }
 
     public async Task<Result<User>> CreateLocalUserAsync(string username, string password,
@@ -140,20 +149,28 @@ public sealed class AuthenticationService : IAuthenticationService
         if (await _db.Users.AnyAsync(u => u.NormalizedUsername == normalizedUsername, ct))
             return Result<User>.Failure(Error.Conflict($"Username '{username}' already exists"));
 
+        var policyResult = await _policy.ValidateAsync(password, ct: ct);
+        if (policyResult.IsFailure)
+            return Result<User>.Failure(policyResult.Error);
+
+        var hash = _hasher.Hash(password);
         var user = new User
         {
             Username = username.Trim(),
             NormalizedUsername = normalizedUsername,
             DisplayName = displayName,
             Email = email,
-            PasswordHash = _hasher.Hash(password),
+            PasswordHash = hash,
             AuthSource = AuthSource.Local,
             Status = UserStatus.Active,
-            PasswordLastChanged = DateTime.UtcNow
+            PasswordLastChanged = DateTime.UtcNow,
+            PasswordExpiresAt = _policy.ComputeExpiry()
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
+
+        await _policy.RecordPasswordAsync(user.Id, hash, ct);
 
         _logger.LogInformation("Local user '{Username}' created (Id: {Id})", username, user.Id);
         return Result<User>.Success(user);
