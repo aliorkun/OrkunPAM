@@ -212,7 +212,6 @@
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
-|  |  |  |  |
 
 ## Reporting (46 items)
 
@@ -225,9 +224,9 @@
 | 5 | Solution shall have a dashboard to monitor policy realms |  |  |
 | 6 | Solution shall have a dashboard to monitor the activities taken on Solution itself. (User creation,deletion, policy chan | PC | Dashboard.razor — admin action log widget |
 | 7 | Solution shall have a dashboard to displays information on which passwords are  rotated and by who. Also, dashboard shal |  |  |
-| 8 | Solution shall have view, filter and export functionality for each type of session, activity log and user dashboards.  |  |  |
+| 8 | Solution shall have view, filter and export functionality for each type of session, activity log and user dashboards.  | PC | Reports.razor + AuditLog.razor — session/auth report views and audit log filtering (#27); CSV/PDF export pending |
 | 9 | Solution shall have flexibility of exporting reports to CSV and PDF format.  |  |  |
-| 11 | The solution shall provide a comprehensive audit-trail and reporting for the privileged access. It shall also provide an |  |  |
+| 11 | The solution shall provide a comprehensive audit-trail and reporting for the privileged access. It shall also provide an | PC | AuditLog.razor + AuditService.cs — privileged access audit trail with time/user/action filtering (#27) |
 | 12 | Solution shall support Windows Local Users Audit Report feature. |  |  |
 | 13 | Soluiton shall support to audit Windows target systems to create report to list local user accounts, service accounts an |  |  |
 | 14 | Solution shall support Linux Local Users Audit Report feature. |  |  |
@@ -243,8 +242,8 @@
 | 24 | Solution shall provide ready to use dashboards for Compliancies |  |  |
 | 25 | Solution shall support listing and reporting AWS , Azure and GCP IAM accounts, virtual machines and managed database and |  |  |
 | 26 | Solution shall support listing and reporting security advices for AWS , Azure and GCP IAM accounts, virtual machines and |  |  |
-| 27 | Solution shall support enriched reporting dashboards that are dynamically filtered based on user authorization levels. |  |  |
-| 28 | Solution shall support customizable dashboards to monitor user session data, including session start and end times, appr |  |  |
+| 27 | Solution shall support enriched reporting dashboards that are dynamically filtered based on user authorization levels. | PC | Reports.razor — reporting dashboards filtered by user authorization level (#27) |
+| 28 | Solution shall support customizable dashboards to monitor user session data, including session start and end times, appr | PC | Reports.razor + Sessions.razor — session monitoring with start/end times and status (#27) |
 | 29 | Solution shall support session replay activity reports, providing visibility into sessions that were accessed or reviewe |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -328,7 +327,7 @@
 | 57 | Maintenance Mode | Solution shall support to terminate all active connections automatically on network elements when the maintenance mode s |  |
 | 58 | Logging | Session and command logs shall include the name of the device, IP address, the command that is run, date/time. | PC | SessionRecordingService.cs — logs device, IP, cmd, timestamp |
 | 59 | Logging | The text-based session log files can be downloaded in text .csv and .xls formats. |  |
-| 60 | Logging | Solution shall support logging the access times and durations to the web GUI. |  |
+| 60 | Logging | Solution shall support logging the access times and durations to the web GUI. | PC | AuditLog.razor — web GUI session access times and durations logged (#27) |
 | 61 | Logging | Solution shall support video-like replay of text-based commands of the CLI session logs. These video logs shall contain  | PC | SessionRecordingService.cs — timed command replay |
 | 62 | Logging | Solution shall support the logs inspection and classification functionality. |  |
 | 63 | Logging | Solution shall support command and session based search functionality of session logs. |  |
@@ -787,4 +786,4 @@
 | 11 | Solution shall have upgrade procedures |  |  |
 | 12 | Solution shall provide a scheduled backup capability for archiving configuration and logging data |  |  |
 | 13 | Solution shall provide granular backup and restoration capabilities for critical system components to improve disaster r |  |  |
-| 14 | Solution shall support enriched reporting dashboards for monitoring operational statistics, including session activity a |  |  |
+| 14 | Solution shall support enriched reporting dashboards for monitoring operational statistics, including session activity a | PC | Reports.razor + Dashboard.razor — session activity and operational stats monitoring (#27) |
