@@ -33,7 +33,7 @@ public static class SessionEndpoints
         app.MapPost("/api/v1/sessions/rdp/validate-token",
             async (ValidateRdpTokenRequest req, IMemoryCache cache, IConfiguration config, HttpContext context) =>
         {
-            var secret = config["PamApi:ProxySecret"] ?? "";
+            var secret = config["ProxyService:Secret"] ?? "";
             if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
                 return Results.Unauthorized();
 
@@ -62,7 +62,7 @@ public static class SessionEndpoints
         app.MapPost("/api/v1/sessions/{id:guid}/end",
             async (Guid id, EndSessionRequest req, OrkunPamDbContext db, IConfiguration config, HttpContext context) =>
         {
-            var secret = config["PamApi:ProxySecret"] ?? "";
+            var secret = config["ProxyService:Secret"] ?? "";
             if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
                 return Results.Unauthorized();
 
@@ -427,7 +427,6 @@ public static class SessionEndpoints
             System.Text.Encoding.UTF8.GetBytes(decResult.Value),
             null);
 
-        // Zero the decrypted password string after encoding into byte array
         cache.Set($"rdp:token:{sessionToken}", tokenData,
             TimeSpan.FromSeconds(300));
 
