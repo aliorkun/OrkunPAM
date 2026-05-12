@@ -7,7 +7,7 @@
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Devices</h2>
-    <button class="pam-btn pam-btn-primary" @onclick="() => _showAdd = true">+ Add Device</button>
+    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add Device</button>
 </div>
 
 <div class="pam-filters">
@@ -65,10 +65,10 @@
                                     <div class="pam-sub-text">@d.Fqdn</div>
                                 }
                             </td>
-                            <td>@(d.IpAddress ?? "—")</td>
+                            <td>@(d.IpAddress ?? "&#8212;")</td>
                             <td><span class="pam-badge">@d.Type</span></td>
                             <td>@d.Protocol@(d.ConnectionPort.HasValue ? $":{d.ConnectionPort}" : "")</td>
-                            <td>@(d.OperatingSystem ?? "—")</td>
+                            <td>@(d.OperatingSystem ?? "&#8212;")</td>
                             <td>
                                 <span class="pam-badge @(d.CredentialCount > 0 ? "pam-badge-success" : "pam-badge-secondary")">
                                     @d.CredentialCount
@@ -76,9 +76,9 @@
                             </td>
                             <td>
                                 @if (d.IsReachable)
-                                { <span class="pam-status pam-status-active">✓</span> }
+                                { <span class="pam-status pam-status-active">&#10003;</span> }
                                 else
-                                { <span class="pam-status pam-status-error">✗</span> }
+                                { <span class="pam-status pam-status-error">&#10005;</span> }
                             </td>
                             <td>
                                 <span class="pam-status @(d.Status == "Active" ? "pam-status-active" : "pam-status-done")">
@@ -92,7 +92,8 @@
                                         <button class="pam-btn-icon pam-btn-connect" title="Open SSH terminal"
                                                 @onclick="() => ConnectSsh(d.Id)">&#9000;</button>
                                     }
-                                    <button class="pam-btn-icon" title="View vault">&#128273;</button>
+                                    <button class="pam-btn-icon" title="Edit device"
+                                            @onclick="() => OpenEditModal(d)">&#9998;</button>
                                 </div>
                             </td>
                         </tr>
@@ -104,17 +105,85 @@
             {
                 <div class="pam-pagination">
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                            disabled="@(_page == 1)" @onclick="PrevPage">&#8592; Prev</button>
                     <span class="pam-page-info">
-                        Page @_page of @TotalPages — @_meta.TotalCount devices
+                        Page @_page of @TotalPages &#8212; @_meta.TotalCount devices
                     </span>
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next &#8594;</button>
                 </div>
             }
         }
     </div>
 </div>
+
+<!-- Add / Edit Device Modal -->
+@if (_showModal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_editingId == null ? "Add Device" : "Edit Device")</h3>
+                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Hostname *</label>
+                    <input class="pam-input w-100-input" @bind="_fHostname" placeholder="e.g. web-server-01" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">IP Address</label>
+                    <input class="pam-input w-100-input" @bind="_fIpAddress" placeholder="e.g. 192.168.1.10" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">FQDN</label>
+                    <input class="pam-input w-100-input" @bind="_fFqdn" placeholder="e.g. web-server-01.corp.local" />
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Type *</label>
+                        <select class="pam-input" style="width:100%" @bind="_fType">
+                            <option value="Server">Server</option>
+                            <option value="Workstation">Workstation</option>
+                            <option value="NetworkDevice">Network Device</option>
+                            <option value="DatabaseServer">Database Server</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Protocol *</label>
+                        <select class="pam-input" style="width:100%" @bind="_fProtocol">
+                            <option value="Ssh">SSH</option>
+                            <option value="Rdp">RDP</option>
+                            <option value="Sql">SQL</option>
+                            <option value="Vnc">VNC</option>
+                            <option value="Http">HTTP</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="width:90px">
+                        <label class="pam-label">Port *</label>
+                        <input class="pam-input" style="width:100%" type="number" @bind="_fPort" />
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Operating System</label>
+                    <input class="pam-input w-100-input" @bind="_fOs"
+                           placeholder="e.g. Windows Server 2022, Ubuntu 22.04" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitDeviceAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_editingId == null ? "Add Device" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private List<DeviceDto>? _devices;
@@ -125,7 +194,19 @@
     private string           _typeFilter = "";
     private int              _page       = 1;
     private const int        _pageSize   = 20;
-    private bool             _showAdd;
+
+    // Modal state
+    private bool    _showModal;
+    private string? _editingId;
+    private string? _formError;
+    private bool    _formSaving;
+    private string  _fHostname  = "";
+    private string  _fIpAddress = "";
+    private string  _fFqdn      = "";
+    private string  _fType      = "Server";
+    private string  _fProtocol  = "Ssh";
+    private int     _fPort      = 22;
+    private string  _fOs        = "";
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -161,6 +242,77 @@
 
     private void ConnectSsh(string deviceId)
         => Nav.NavigateTo($"/connect?deviceId={deviceId}");
+
+    private void OpenAddModal()
+    {
+        _editingId = null;
+        _fHostname = _fIpAddress = _fFqdn = _fOs = "";
+        _fType = "Server"; _fProtocol = "Ssh"; _fPort = 22;
+        _formError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(DeviceDto d)
+    {
+        _editingId  = d.Id;
+        _fHostname  = d.Hostname;
+        _fIpAddress = d.IpAddress ?? "";
+        _fFqdn      = d.Fqdn ?? "";
+        _fType      = d.Type;
+        _fProtocol  = d.Protocol;
+        _fPort      = d.ConnectionPort ?? 22;
+        _fOs        = d.OperatingSystem ?? "";
+        _formError  = null;
+        _showModal  = true;
+    }
+
+    private void CloseModal() { _showModal = false; _formError = null; }
+
+    private async Task SubmitDeviceAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fHostname)) { _formError = "Hostname is required."; return; }
+        if (_fPort <= 0 || _fPort > 65535)         { _formError = "Port must be between 1 and 65535."; return; }
+
+        _formSaving = true;
+        StateHasChanged();
+
+        bool ok;
+        if (_editingId == null)
+        {
+            ok = await Api.CreateDeviceAsync(
+                _fHostname.Trim(),
+                string.IsNullOrWhiteSpace(_fFqdn)      ? null : _fFqdn.Trim(),
+                string.IsNullOrWhiteSpace(_fIpAddress) ? null : _fIpAddress.Trim(),
+                _fType, _fProtocol, _fPort,
+                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim());
+        }
+        else
+        {
+            ok = await Api.UpdateDeviceAsync(
+                _editingId,
+                _fHostname.Trim(),
+                string.IsNullOrWhiteSpace(_fFqdn)      ? null : _fFqdn.Trim(),
+                string.IsNullOrWhiteSpace(_fIpAddress) ? null : _fIpAddress.Trim(),
+                _fType, _fProtocol, _fPort,
+                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim());
+        }
+
+        _formSaving = false;
+
+        if (!ok)
+        {
+            _formError = _editingId == null
+                ? "Failed to create device — check for hostname conflicts."
+                : "Failed to save changes — please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        CloseModal();
+        if (_editingId == null) _page = 1;
+        await LoadAsync();
+    }
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
