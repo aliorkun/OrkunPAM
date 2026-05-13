@@ -83,18 +83,25 @@
 
 ---
 
-## Aktif Sprint: Sprint 6 - Polish + GA
+## Aktif Sprint: Sprint 6 - Polish + Proxy Completion + GA
 **Tarih:** 13 Mayıs 2026 (erken başlandı)
-**Hedef:** SQL Proxy, E2E testler, performans, dokümantasyon, son düzeltmeler
+**Hedef:** SQL Proxy ✅, VNC Proxy, HTTP Proxy, E2E testler, performans, dokümantasyon
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #64 | SQL Database Proxy | MVP-SESSION | ✅ Implement tamamlandı |
-| - | E2E testler | Test | 🔲 Bekliyor |
-| - | Performans testleri | Test | 🔲 Bekliyor |
+| #64 | SQL Database Proxy | MVP-SESSION | ✅ Tamamlandı |
+| #101 | VNC Proxy — Native C# RFC 6143 | MVP-PROXY | 🔲 Bekliyor |
+| #102 | HTTP/HTTPS Reverse Proxy — Native C# | MVP-PROXY | 🔲 Bekliyor |
+| #100 | E2E Test Suite + Performance Benchmark | MVP-TEST | 🔲 Bekliyor |
 | - | Dokümantasyon | Docs | 🔲 Bekliyor |
 
-**Çıkış kriteri:** Müşteriye kurulum + demo yapılabilir → v1.0.0 GA tag
+**Çıkış kriteri:** Tüm proxy'ler çalışıyor + E2E yeşil + müşteri demo hazır → v1.0.0 GA tag
+
+**Öncelik sırası:**
+1. #101 VNC Proxy (proxy tamamlama — RFP gap)
+2. #102 HTTP Proxy (proxy tamamlama — RFP gap)
+3. #100 E2E Tests (GA exit criteria)
+4. Dokümantasyon (GA exit criteria)
 
 ---
 
@@ -116,6 +123,8 @@
 - **SSH Proxy:** Native C# (RFC 4253) — farkımız burada, açık kaynak yok
 - **RDP Proxy:** Microsoft RDS Gateway entegrasyonu — CyberArk yaklaşımı, RemoteApp + session recording + HA dahil
 - **SQL Proxy:** Native C# TDS protokol implementasyonu — açık kaynak yok
+- **VNC Proxy:** Native C# RFB protokol (RFC 6143) — açık kaynak yok
+- **HTTP/HTTPS Proxy:** Native C# reverse proxy + CONNECT tunnel — açık kaynak yok
 - **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
 - **AAPM + Threat Analytics:** v2.0.0'a ertelendi
 
@@ -125,3 +134,5 @@ Aşağıdaki konularda Developer agent (Sonnet) takılırsa lokal Opus devralır
 - **RDP/RDS:** COM interop, RDS Gateway API, credential injection
 - **Blazor UI:** Karmaşık component mimarisi, SignalR entegrasyonu, real-time terminal
 - **MSI Installer:** WiX toolset, Windows Service registration, upgrade logic
+- **VNC Proxy:** RFB protokol (RFC 6143) - framebuffer, encoding negotiation, raw socket
+- **HTTP Proxy:** CONNECT tunnel, TLS MitM, credential injection
