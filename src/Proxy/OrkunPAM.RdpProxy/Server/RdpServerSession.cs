@@ -108,6 +108,8 @@ internal sealed class RdpServerSession
 
         _log.LogInformation("RDP session {SessionId}: target connection established", sessionInfo.SessionId);
 
+        var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(ct);
+
         var masterKey = string.IsNullOrEmpty(_opts.RecordingEncryptionKeyBase64)
             ? null : Convert.FromBase64String(_opts.RecordingEncryptionKeyBase64);
         await using var recorder = await RdpSessionRecorder.CreateAsync(
@@ -123,7 +125,7 @@ internal sealed class RdpServerSession
             var startTime = DateTimeOffset.UtcNow;
             try
             {
-                await RelayAsync(clientStream, targetStream, recorder, ct);
+                await RelayAsync(clientStream, targetStream, recorder, ct, idleTimeoutMinutes);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) when (IsExpectedDisconnect(ex))
@@ -149,17 +151,21 @@ internal sealed class RdpServerSession
         NetworkStream client,
         NetworkStream target,
         RdpSessionRecorder recorder,
-        CancellationToken ct)
+        CancellationToken ct,
+        int idleTimeoutMinutes)
     {
         const int BufSize = 65536;
         var buf1 = new byte[BufSize];
         var buf2 = new byte[BufSize];
+        long[] lastActivity = [DateTime.UtcNow.Ticks];
 
-        var clientToTarget = PumpAsync(client, target, buf1, fromTarget: false, recorder, ct);
-        var targetToClient = PumpAsync(target, client, buf2, fromTarget: true,  recorder, ct);
+        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var clientToTarget = PumpAsync(client, target, buf1, fromTarget: false, recorder, idleCts.Token, lastActivity);
+        var targetToClient = PumpAsync(target, client, buf2, fromTarget: true,  recorder, idleCts.Token, lastActivity);
+        var idleWatcher    = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
 
-        await Task.WhenAny(clientToTarget, targetToClient);
-        ct.ThrowIfCancellationRequested();
+        await Task.WhenAny(clientToTarget, targetToClient, idleWatcher);
+        await idleCts.CancelAsync();
     }
 
     private static async Task PumpAsync(
@@ -168,16 +174,37 @@ internal sealed class RdpServerSession
         byte[] buf,
         bool fromTarget,
         RdpSessionRecorder recorder,
-        CancellationToken ct)
+        CancellationToken ct,
+        long[] lastActivityTicks)
     {
         while (!ct.IsCancellationRequested)
         {
             int read = await from.ReadAsync(buf, ct);
             if (read == 0) break;
 
+            Interlocked.Exchange(ref lastActivityTicks[0], DateTime.UtcNow.Ticks);
             await recorder.WriteAsync(fromTarget, buf.AsMemory(0, read));
             await to.WriteAsync(buf.AsMemory(0, read), ct);
         }
+    }
+
+    private static async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks, CancellationTokenSource cts)
+    {
+        var timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        try
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                await Task.Delay(30_000, cts.Token);
+                var idleFor = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - Interlocked.Read(ref lastActivityTicks[0]));
+                if (idleFor >= timeout)
+                {
+                    cts.Cancel();
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private static bool IsExpectedDisconnect(Exception ex) =>
