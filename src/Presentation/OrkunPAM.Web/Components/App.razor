@@ -13,9 +13,46 @@
 </head>
 
 <body>
+    <!-- Static splash screen — renders instantly before Blazor/SignalR connects -->
+    <div id="app-loading">
+        <style>
+            #app-loading {
+                position: fixed; inset: 0; z-index: 9999;
+                background: linear-gradient(135deg, #1a1d23 0%, #252932 100%);
+                display: flex; align-items: center; justify-content: center;
+                flex-direction: column; gap: 16px;
+            }
+            #app-loading .boot-logo { font-size: 48px; }
+            #app-loading .boot-title { font-size: 24px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+            #app-loading .boot-sub { font-size: 13px; color: #8895aa; }
+            #app-loading .boot-spin {
+                width: 32px; height: 32px; margin-top: 8px;
+                border: 3px solid #2a2d38; border-top-color: #4f8ef7;
+                border-radius: 50%; animation: bootspin 0.8s linear infinite;
+            }
+            @@keyframes bootspin { to { transform: rotate(360deg); } }
+        </style>
+        <div class="boot-logo">🔐</div>
+        <div class="boot-title">OrkunPAM</div>
+        <div class="boot-sub">Privileged Access Management</div>
+        <div class="boot-spin"></div>
+    </div>
+
     <Routes @rendermode="@InteractiveServer" />
+
     <script src="_framework/blazor.web.js"></script>
     <script>
+        // Remove splash once Blazor circuit is connected
+        document.addEventListener('blazor:connected', function() {
+            var el = document.getElementById('app-loading');
+            if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(function(){ el.remove(); }, 300); }
+        });
+        // Fallback: remove after 5s even if event doesn't fire
+        setTimeout(function() {
+            var el = document.getElementById('app-loading');
+            if (el) el.remove();
+        }, 5000);
+
         function pamUpdateAuthBar() {
             const user = localStorage.getItem('orkunpam_user');
             const el  = document.getElementById('pam-topbar-user');
@@ -29,7 +66,6 @@
             window.location.href = '/login';
         }
         document.addEventListener('DOMContentLoaded', pamUpdateAuthBar);
-        // Blazor enhanced navigation fires this event on client-side page transitions
         document.addEventListener('blazor:navigated', pamUpdateAuthBar);
 
         // Download an RDP launch file from a base64-encoded string

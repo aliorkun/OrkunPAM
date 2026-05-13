@@ -116,6 +116,19 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 - **Çakışma önleme:** Agent'lar farklı saatlerde çalışır, üst üste binmez
 - **Duplicate:** Tüm agent'lar önce mevcut issue'ları kontrol eder
 
+### Ertelenen Alanlar (v2+ — ŞU AN DOKUNMA)
+Aşağıdaki RFP bölümleri bilinçli olarak ertelendi. Bu alanlarda:
+- PM yeni issue **AÇMAZ**
+- Developer kod **YAZMAZ**
+- Security bu alanları **DENETLEMeZ**
+
+| Alan | RFP Bölümü | Neden Ertelendi |
+|------|-----------|-----------------|
+| Multitenancy | Bölüm 9 | MVP'de tek tenant yeterli |
+| Data Access Manager (DB Proxy) | Bölüm 10 | SQL proxy sonra |
+| Direct Access (TACACS+/RADIUS) | Bölüm 11 | Network cihaz yönetimi sonra |
+| Privileged Task Automation | Bölüm 12 | Otomasyon sonra |
+
 ### Backlog Sağlık Kuralları
 - Toplam açık issue > 35 → PM yeni issue açmayı durdurur
 - Toplam açık issue > 35 → Security sadece critical/high açar
