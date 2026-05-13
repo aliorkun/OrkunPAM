@@ -85,12 +85,12 @@
 
 ## Aktif Sprint: Sprint 6 - Polish + Proxy Completion + GA
 **Tarih:** 13 Mayıs 2026 (erken başlandı)
-**Hedef:** SQL Proxy ✅, VNC Proxy, HTTP Proxy, E2E testler, performans, dokümantasyon
+**Hedef:** SQL Proxy ✅, VNC Proxy ✅, HTTP Proxy, E2E testler, performans, dokümantasyon
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #64 | SQL Database Proxy | MVP-SESSION | ✅ Tamamlandı |
-| #101 | VNC Proxy — Native C# RFC 6143 | MVP-PROXY | 🔲 Bekliyor |
+| #101 | VNC Proxy — Native C# RFC 6143 | MVP-PROXY | ✅ Tamamlandı |
 | #102 | HTTP/HTTPS Reverse Proxy — Native C# | MVP-PROXY | 🔲 Bekliyor |
 | #100 | E2E Test Suite + Performance Benchmark | MVP-TEST | 🔲 Bekliyor |
 | - | Dokümantasyon | Docs | 🔲 Bekliyor |
@@ -98,7 +98,7 @@
 **Çıkış kriteri:** Tüm proxy'ler çalışıyor + E2E yeşil + müşteri demo hazır → v1.0.0 GA tag
 
 **Öncelik sırası:**
-1. #101 VNC Proxy (proxy tamamlama — RFP gap)
+1. ~~#101 VNC Proxy~~ ✅
 2. #102 HTTP Proxy (proxy tamamlama — RFP gap)
 3. #100 E2E Tests (GA exit criteria)
 4. Dokümantasyon (GA exit criteria)
