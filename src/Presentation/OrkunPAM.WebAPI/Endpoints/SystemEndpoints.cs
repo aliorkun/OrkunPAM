@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Persistence;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -147,7 +148,78 @@ public static class SystemEndpoints
                 }).ToListAsync();
             return Results.Ok(new { success = true, data = list });
         });
+
+        // === SMTP Configuration ===
+        var emailGroup = app.MapGroup("/api/v1/system/email").WithTags("System");
+
+        emailGroup.MapGet("/config", async (OrkunPamDbContext db) =>
+        {
+            var configs = await db.SystemConfigs.Where(c => c.Category == "smtp").ToListAsync();
+            var dict = configs.ToDictionary(
+                c => c.Key,
+                c => c.IsEncrypted ? "********" : (c.Value ?? string.Empty));
+            return Results.Ok(new { success = true, data = dict });
+        });
+
+        emailGroup.MapPut("/config", async (SmtpConfigRequest req, OrkunPamDbContext db,
+            IVaultEncryptionService vault) =>
+        {
+            var updates = new Dictionary<string, (string Value, bool IsEncrypted)>
+            {
+                ["smtp.host"]     = (req.Host ?? string.Empty, false),
+                ["smtp.port"]     = ((req.Port ?? 587).ToString(), false),
+                ["smtp.from"]     = (req.From ?? string.Empty, false),
+                ["smtp.fromname"] = (req.FromName ?? string.Empty, false),
+                ["smtp.tls"]      = (req.UseTls ? "true" : "false", false),
+                ["smtp.username"] = (req.Username ?? string.Empty, false)
+            };
+
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                var enc = vault.EncryptString(req.Password, "SystemConfig");
+                if (enc.IsSuccess)
+                    updates["smtp.password"] = (Convert.ToBase64String(enc.Value), true);
+            }
+
+            foreach (var (key, (value, isEncrypted)) in updates)
+            {
+                var cfg = await db.SystemConfigs.FindAsync(key);
+                if (cfg == null)
+                {
+                    db.SystemConfigs.Add(new SystemConfig
+                    {
+                        Key = key, Value = value, IsEncrypted = isEncrypted, Category = "smtp"
+                    });
+                }
+                else
+                {
+                    cfg.Value = value;
+                    cfg.IsEncrypted = isEncrypted;
+                    cfg.UpdatedAtUtc = DateTime.UtcNow;
+                }
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, message = "SMTP configuration saved" });
+        });
+
+        emailGroup.MapPost("/test", async (TestEmailRequest req, IEmailService email) =>
+        {
+            var ok = await email.SendAsync(
+                req.To,
+                "OrkunPAM SMTP Test",
+                "<h3>OrkunPAM SMTP Test</h3><p>If you receive this email, your SMTP configuration is working correctly.</p>");
+
+            return Results.Ok(new
+            {
+                success = ok,
+                message = ok ? "Test email sent successfully" : "Failed — check SMTP configuration and logs"
+            });
+        });
     }
 }
 
 public record UpdateConfigRequest(string Value, string? Category, string? Description, bool IsEncrypted = false);
+public record SmtpConfigRequest(string? Host, int? Port, string? From, string? FromName,
+    string? Username, string? Password, bool UseTls = true);
+public record TestEmailRequest(string To);
