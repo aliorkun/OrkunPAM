@@ -440,6 +440,21 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<AuditLogDto>>(url);
     }
 
+    public async Task<string?> GetSessionsExportCsvAsync(DateTime? from = null, DateTime? to = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var url = "/api/v1/reports/sessions/export?format=csv";
+            if (from.HasValue) url += "&from=" + Uri.EscapeDataString(from.Value.ToString("O"));
+            if (to.HasValue)   url += "&to="   + Uri.EscapeDataString(to.Value.ToString("O"));
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsStringAsync();
+        }
+        catch { return null; }
+    }
+
     // -----------------------------------------------------------------------
     // Current user
     // -----------------------------------------------------------------------

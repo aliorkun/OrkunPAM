@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
@@ -54,6 +55,97 @@ public static class ReportEndpoints
                 return Results.NotFound(new { success = false, errors = new[] { $"Report '{reportId}' not found or not yet implemented" } });
 
             return Results.Ok(new { success = true, data = result, meta = new { reportId, from, to, generatedAt = DateTime.UtcNow } });
+        });
+
+        // -----------------------------------------------------------------------
+        // CSV Export endpoints (RFP Reporting #8, #9)
+        // -----------------------------------------------------------------------
+
+        reports.MapGet("/audit-log/export", async (OrkunPamDbContext db,
+            string? format, DateTime? from, DateTime? to, Guid? userId) =>
+        {
+            format = (format ?? "csv").ToLowerInvariant();
+            if (format != "csv")
+                return Results.BadRequest(new { success = false, errors = new[] { "Supported formats: csv" } });
+
+            var fromDate = from ?? DateTime.UtcNow.AddDays(-30);
+            var toDate   = to   ?? DateTime.UtcNow;
+
+            var query = db.AuditLogs
+                .Where(a => a.Timestamp >= fromDate && a.Timestamp <= toDate);
+            if (userId.HasValue)
+                query = query.Where(a => a.ActorUserId == userId);
+
+            var rows = await query
+                .OrderBy(a => a.Timestamp)
+                .Select(a => new
+                {
+                    a.Timestamp, a.EventCategory, a.EventType,
+                    a.ActorUsername, a.ActorIpAddress,
+                    a.TargetType, a.TargetId,
+                    Outcome = a.Outcome.ToString(), a.Details
+                }).ToListAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Timestamp,EventCategory,EventType,ActorUsername,ActorIpAddress,TargetType,TargetId,Outcome,Details");
+            foreach (var r in rows)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvCell(r.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")),
+                    CsvCell(r.EventCategory), CsvCell(r.EventType),
+                    CsvCell(r.ActorUsername), CsvCell(r.ActorIpAddress),
+                    CsvCell(r.TargetType), CsvCell(r.TargetId),
+                    CsvCell(r.Outcome), CsvCell(r.Details)));
+            }
+
+            var filename = $"audit-log-{fromDate:yyyy-MM-dd}-{toDate:yyyy-MM-dd}.csv";
+            return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", filename);
+        });
+
+        reports.MapGet("/sessions/export", async (OrkunPamDbContext db,
+            string? format, DateTime? from, DateTime? to, Guid? userId) =>
+        {
+            format = (format ?? "csv").ToLowerInvariant();
+            if (format != "csv")
+                return Results.BadRequest(new { success = false, errors = new[] { "Supported formats: csv" } });
+
+            var fromDate = from ?? DateTime.UtcNow.AddDays(-30);
+            var toDate   = to   ?? DateTime.UtcNow;
+
+            var query = db.ProxySessions
+                .Where(s => s.StartedAtUtc >= fromDate && s.StartedAtUtc <= toDate);
+            if (userId.HasValue)
+                query = query.Where(s => s.UserId == userId);
+
+            var rows = await query
+                .OrderBy(s => s.StartedAtUtc)
+                .Select(s => new
+                {
+                    s.Id, s.UserId,
+                    Type   = s.SessionType.ToString(),
+                    Status = s.Status.ToString(),
+                    s.TargetIpAddress, s.TargetPort,
+                    s.StartedAtUtc, s.EndedAtUtc, s.DurationSeconds,
+                    s.ClientIpAddress, s.RiskScore, s.Reason, s.TicketNumber
+                }).ToListAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("SessionId,UserId,Type,Status,TargetIp,TargetPort,StartedAt,EndedAt,DurationSeconds,ClientIp,RiskScore,Reason,TicketNumber");
+            foreach (var r in rows)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvCell(r.Id.ToString()), CsvCell(r.UserId.ToString()),
+                    CsvCell(r.Type), CsvCell(r.Status),
+                    CsvCell(r.TargetIpAddress), CsvCell(r.TargetPort.ToString()),
+                    CsvCell(r.StartedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")),
+                    CsvCell(r.EndedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss")),
+                    CsvCell(r.DurationSeconds?.ToString()),
+                    CsvCell(r.ClientIpAddress), CsvCell(r.RiskScore?.ToString()),
+                    CsvCell(r.Reason), CsvCell(r.TicketNumber)));
+            }
+
+            var filename = $"sessions-{fromDate:yyyy-MM-dd}-{toDate:yyyy-MM-dd}.csv";
+            return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", filename);
         });
 
         var dashboard = app.MapGroup("/api/v1/dashboard").WithTags("Dashboard");
@@ -222,6 +314,14 @@ public static class ReportEndpoints
             overdue = creds.Count(c => c.IsOverdue),
             compliancePercentage = creds.Any() ? Math.Round((double)creds.Count(c => !c.IsOverdue) / creds.Count * 100, 1) : 100
         };
+    }
+
+    // Wraps a value in CSV quotes, escaping embedded quotes
+    private static string CsvCell(string? value)
+    {
+        if (value == null) return "";
+        var s = value.Replace("\"", "\"\"");
+        return s.Contains(',') || s.Contains('"') || s.Contains('\n') ? $"\"{s}\"" : s;
     }
 }
 

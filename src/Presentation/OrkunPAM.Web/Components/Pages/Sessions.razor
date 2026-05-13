@@ -1,10 +1,12 @@
 @page "/sessions"
 @inject PamApiService Api
+@inject IJSRuntime JS
 
 <PageTitle>Sessions — OrkunPAM</PageTitle>
 
-<div class="pam-page-header">
+<div class="pam-page-header" style="display:flex;align-items:center;justify-content:space-between;">
     <h2 class="pam-page-title">Sessions</h2>
+    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportCsvAsync">Export CSV</button>
 </div>
 
 <div class="pam-filters">
@@ -121,4 +123,12 @@
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
+
+    private async Task ExportCsvAsync()
+    {
+        var csv = await Api.GetSessionsExportCsvAsync();
+        if (csv == null) { _error = "Export failed."; StateHasChanged(); return; }
+        await JS.InvokeVoidAsync("downloadCsvFile",
+            "sessions-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", csv);
+    }
 }
