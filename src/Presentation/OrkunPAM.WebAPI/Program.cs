@@ -83,6 +83,10 @@ try
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
+    // === JSON: serialize enums as strings globally ===
+    builder.Services.ConfigureHttpJsonOptions(opts =>
+        opts.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
     // === Swagger ===
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>

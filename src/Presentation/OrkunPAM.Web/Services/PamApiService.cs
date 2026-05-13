@@ -786,6 +786,74 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // Privileged Account Discovery (#40)
+    // -----------------------------------------------------------------------
+
+    public async Task<List<DiscoveryJobDto>?> GetDiscoveryJobsAsync()
+    {
+        var result = await GetAsync<ListResult<DiscoveryJobDto>>("/api/v1/vault/discovery-jobs");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateDiscoveryJobAsync(string name, string discoveryType, string? targetScope, string? schedule)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovery-jobs", new
+            {
+                name,
+                discoveryType,
+                targetScope,
+                schedule,
+                createdBy = (Guid?)null
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<DiscoveryScanResultDto?> RunDiscoveryJobAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/vault/discovery-jobs/" + id + "/run", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DiscoveryScanResultDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<DiscoveredAccountDto>?> GetDiscoveredAccountsAsync(string? status = null)
+    {
+        var url = "/api/v1/vault/discovered-accounts";
+        if (!string.IsNullOrEmpty(status)) url += "?status=" + Uri.EscapeDataString(status);
+        var result = await GetAsync<ListResult<DiscoveredAccountDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<bool> TakeoverAccountAsync(string id, Guid folderId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovered-accounts/" + id + "/takeover",
+                new { folderId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> IgnoreDiscoveredAccountAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/vault/discovered-accounts/" + id + "/ignore", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
 
@@ -1077,3 +1145,12 @@ public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int Tam
 
 // LDAP Config DTOs (#90)
 public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
+
+// Discovery DTOs (#40)
+public record DiscoveryJobDto(Guid Id, string Name, string Type, string? Schedule, DateTime? LastRunAtUtc, bool IsEnabled);
+public record DiscoveredAccountDto(Guid Id, Guid DiscoveryJobId, Guid? DeviceId, string AccountName, string? AccountType, DateTime DiscoveredAtUtc, string Status, Guid? LinkedCredentialId);
+public record DiscoveryScanResultDto(DateTime LastRunAtUtc, int AccountsFound, string Result, List<DiscoveredAccountInfoDto> Accounts);
+public record DiscoveredAccountInfoDto(string AccountName, string AccountType, string? HostName, string? Dn, bool IsEnabled, string Source);
+
+// LDAP Sync DTOs
+public record LdapSyncApplyDto(int UsersAdded, int UsersUpdated, int UsersDisabled, string Message);

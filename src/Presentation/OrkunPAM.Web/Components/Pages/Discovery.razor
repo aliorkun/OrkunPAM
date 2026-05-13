@@ -1,0 +1,422 @@
+@page "/discovery"
+@inject PamApiService Api
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Discovery — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Privileged Account Discovery</h2>
+    <span class="pam-page-sub">Scan your network to find and onboard privileged accounts automatically</span>
+</div>
+
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
+
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "accounts" ? "active" : "")" @onclick="@(() => SetTab("accounts"))">
+        Discovered Accounts
+        @if (_pendingCount > 0) { <span class="pam-badge-count" style="background:#c00">@_pendingCount</span> }
+    </button>
+    <button class="pam-tab @(_tab == "jobs" ? "active" : "")" @onclick="@(() => SetTab("jobs"))">Scan Jobs</button>
+    <button class="pam-tab @(_tab == "new" ? "active" : "")" @onclick="@(() => SetTab("new"))">+ New Scan Job</button>
+</div>
+
+@if (_tab == "accounts")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>Discovered Privileged Accounts</span>
+            <select class="pam-select pam-select-sm" @onchange="@(e => FilterAccountStatus(e.Value?.ToString()))">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="TakenOver">Taken Over</option>
+                <option value="Ignored">Ignored</option>
+            </select>
+        </div>
+        <div class="pam-card-body">
+            @if (_loadingAccounts) { <div class="pam-loading-text">Loading accounts...</div> }
+            else if (_accounts == null || _accounts.Count == 0) { <div class="pam-empty">No discovered accounts found. Run a scan job to discover privileged accounts.</div> }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Account Name</th>
+                            <th>Type</th>
+                            <th>Discovered</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _accounts)
+                        {
+                            <tr>
+                                <td><span class="pam-badge @AccountStatusClass(a.Status)">@a.Status</span></td>
+                                <td><code>@a.AccountName</code></td>
+                                <td>@a.AccountType</td>
+                                <td>@a.DiscoveredAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>
+                                    @if (a.Status == "Pending")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-success" @onclick="@(() => ShowTakeoverDialog(a.Id.ToString()))">Onboard</button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-secondary" @onclick="@(() => IgnoreAsync(a.Id.ToString()))">Ignore</button>
+                                    }
+                                    else if (a.Status == "TakenOver" && a.LinkedCredentialId.HasValue)
+                                    {
+                                        <span class="pam-text-muted">In Vault</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "jobs")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>Discovery Scan Jobs</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loadingJobs) { <div class="pam-loading-text">Loading jobs...</div> }
+            else if (_jobs == null || _jobs.Count == 0) { <div class="pam-empty">No scan jobs defined. Create a new scan job to get started.</div> }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Schedule</th>
+                            <th>Last Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var j in _jobs)
+                        {
+                            <tr>
+                                <td>@j.Name</td>
+                                <td><span class="pam-badge pam-badge-blue">@j.Type</span></td>
+                                <td>@(j.Schedule ?? "Manual")</td>
+                                <td>@(j.LastRunAtUtc.HasValue ? j.LastRunAtUtc.Value.ToString("MM/dd HH:mm") : "Never")</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-xs pam-btn-primary" @onclick="@(() => RunJobAsync(j.Id.ToString()))" disabled="@_running">
+                                        @(_runningJobId == j.Id.ToString() ? "Scanning..." : "Run Scan")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (_lastScanResult != null)
+            {
+                <div class="pam-alert pam-alert-info" style="margin-top:1rem">
+                    <strong>Scan Result:</strong> @_lastScanResult.Result — Found @_lastScanResult.AccountsFound account(s).
+                    @if (_lastScanResult.Accounts != null && _lastScanResult.Accounts.Count > 0)
+                    {
+                        <ul style="margin-top:.5rem">
+                            @foreach (var a in _lastScanResult.Accounts.Take(10))
+                            {
+                                <li><code>@a.AccountName</code> (@a.AccountType) on @a.HostName — @(a.IsEnabled ? "Enabled" : "Disabled")</li>
+                            }
+                        </ul>
+                        @if (_lastScanResult.Accounts.Count > 10)
+                        {
+                            <div>... and @(_lastScanResult.Accounts.Count - 10) more.</div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "new")
+{
+    <div class="pam-card" style="max-width:640px">
+        <div class="pam-card-header">Create Discovery Scan Job</div>
+        <div class="pam-card-body">
+            <div class="pam-form-group">
+                <label class="pam-label">Job Name</label>
+                <input class="pam-input" placeholder="e.g. Corp AD Scan" @bind="_newName" />
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Discovery Type</label>
+                <select class="pam-select" @bind="_newType" @bind:after="OnTypeChanged">
+                    <option value="ActiveDirectory">Active Directory</option>
+                    <option value="WindowsLocal">Windows Local (WinRM)</option>
+                    <option value="Linux">Linux (SSH)</option>
+                    <option value="Database">Database</option>
+                </select>
+            </div>
+
+            @if (_newType == "ActiveDirectory")
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:.85rem">
+                    Scans AD for Domain Admins, Enterprise Admins, Service Accounts, and accounts with adminCount=1.
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">AD Host (LDAP server)</label>
+                    <input class="pam-input" placeholder="corp.example.com" @bind="_adHost" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Base DN</label>
+                    <input class="pam-input" placeholder="DC=corp,DC=example,DC=com" @bind="_adBaseDn" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Bind DN (optional)</label>
+                    <input class="pam-input" placeholder="CN=svc-pam,CN=Users,DC=corp,DC=example,DC=com" @bind="_adBindDn" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Bind Password (optional)</label>
+                    <input class="pam-input" type="password" @bind="_adBindPassword" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Port</label>
+                    <input class="pam-input" type="number" @bind="_adPort" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label"><input type="checkbox" @bind="_adUseSsl" /> Use SSL (LDAPS)</label>
+                </div>
+            }
+            else if (_newType == "WindowsLocal" || _newType == "Linux")
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:.85rem">
+                    @if (_newType == "WindowsLocal") { <span>Probes WinRM (5985/5986) on each target host.</span> }
+                    else { <span>Probes SSH (22) on each target host.</span> }
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Target Hosts (comma-separated)</label>
+                    <input class="pam-input" placeholder="host1.corp.com, 192.168.1.10, 10.0.0.0/24" @bind="_targets" />
+                </div>
+            }
+            else if (_newType == "Database")
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:.85rem">
+                    Probes default DB ports (1433 MSSQL, 3306 MySQL, 5432 PostgreSQL, 1521 Oracle).
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Target Hosts (host or host:port, comma-separated)</label>
+                    <input class="pam-input" placeholder="db01.corp.com:1433, db02.corp.com" @bind="_targets" />
+                </div>
+            }
+
+            <div class="pam-form-group">
+                <label class="pam-label">Schedule (cron, optional)</label>
+                <input class="pam-input" placeholder="e.g. 0 2 * * * (daily at 2 AM)" @bind="_newSchedule" />
+                <span class="pam-text-muted" style="font-size:.8rem">Leave blank for manual-only execution</span>
+            </div>
+
+            <button class="pam-btn pam-btn-primary" @onclick="CreateJobAsync" disabled="@_creating">
+                @(_creating ? "Creating..." : "Create Job")
+            </button>
+        </div>
+    </div>
+}
+
+@if (_showTakeover)
+{
+    <div class="pam-modal-overlay" @onclick="CloseTakeover">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <span>Onboard Account to Vault</span>
+                <button class="pam-modal-close" @onclick="CloseTakeover">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Select a vault folder to store this credential:</p>
+                <select class="pam-select" @bind="_selectedFolderIdStr">
+                    <option value="">— Select Folder —</option>
+                    @if (_folders != null)
+                    {
+                        @foreach (var f in _folders)
+                        {
+                            <option value="@f.Id">@f.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="ConfirmTakeoverAsync" disabled="@(string.IsNullOrEmpty(_selectedFolderIdStr) || _takingOver)">
+                    @(_takingOver ? "Onboarding..." : "Onboard")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseTakeover">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "accounts";
+    private bool _loadingAccounts;
+    private bool _loadingJobs;
+    private bool _running;
+    private bool _creating;
+    private bool _takingOver;
+    private string? _error;
+    private string? _success;
+    private string? _runningJobId;
+    private int _pendingCount;
+
+    private List<DiscoveredAccountDto>? _accounts;
+    private List<DiscoveryJobDto>? _jobs;
+    private DiscoveryScanResultDto? _lastScanResult;
+    private List<FolderDto>? _folders;
+    private string? _accountStatusFilter;
+
+    // Takeover dialog
+    private bool _showTakeover;
+    private string? _takeoverAccountId;
+    private string? _selectedFolderIdStr;
+
+    // New job form
+    private string _newName = string.Empty;
+    private string _newType = "ActiveDirectory";
+    private string? _newSchedule;
+    private string _adHost = string.Empty;
+    private string _adBaseDn = string.Empty;
+    private string? _adBindDn;
+    private string? _adBindPassword;
+    private int _adPort = 389;
+    private bool _adUseSsl;
+    private string _targets = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAccountsAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab; _error = null; _success = null; _lastScanResult = null;
+        if (tab == "accounts") await LoadAccountsAsync();
+        else if (tab == "jobs") await LoadJobsAsync();
+    }
+
+    private async Task FilterAccountStatus(string? status)
+    {
+        _accountStatusFilter = status;
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        _loadingAccounts = true;
+        _accounts = await Api.GetDiscoveredAccountsAsync(_accountStatusFilter);
+        _pendingCount = _accounts?.Count(a => a.Status == "Pending") ?? 0;
+        _loadingAccounts = false;
+    }
+
+    private async Task LoadJobsAsync()
+    {
+        _loadingJobs = true;
+        _jobs = await Api.GetDiscoveryJobsAsync();
+        _loadingJobs = false;
+    }
+
+    private async Task RunJobAsync(string id)
+    {
+        _error = null; _success = null; _lastScanResult = null;
+        _running = true; _runningJobId = id;
+        var result = await Api.RunDiscoveryJobAsync(id);
+        _running = false; _runningJobId = null;
+        if (result != null)
+        {
+            _lastScanResult = result;
+            _success = "Scan completed. " + result.Result;
+            await LoadJobsAsync();
+            await LoadAccountsAsync();
+        }
+        else _error = "Scan failed or timed out.";
+    }
+
+    private async Task CreateJobAsync()
+    {
+        _error = null; _success = null;
+        if (string.IsNullOrWhiteSpace(_newName)) { _error = "Job name is required."; return; }
+
+        string? scopeJson = BuildScopeJson();
+        _creating = true;
+        var ok = await Api.CreateDiscoveryJobAsync(_newName.Trim(), _newType, scopeJson, _newSchedule?.Trim());
+        _creating = false;
+        if (ok)
+        {
+            _success = "Scan job created.";
+            _newName = string.Empty; _newSchedule = null; _targets = string.Empty;
+            _adHost = string.Empty; _adBaseDn = string.Empty; _adBindDn = null; _adBindPassword = null;
+            _tab = "jobs"; await LoadJobsAsync();
+        }
+        else _error = "Failed to create job.";
+    }
+
+    private string? BuildScopeJson()
+    {
+        if (_newType == "ActiveDirectory")
+        {
+            if (string.IsNullOrWhiteSpace(_adHost) || string.IsNullOrWhiteSpace(_adBaseDn)) return null;
+            var dict = new Dictionary<string, object?>
+            {
+                ["host"] = _adHost.Trim(),
+                ["baseDn"] = _adBaseDn.Trim(),
+                ["port"] = _adPort.ToString(),
+                ["useSsl"] = _adUseSsl.ToString().ToLower()
+            };
+            if (!string.IsNullOrWhiteSpace(_adBindDn)) dict["bindDn"] = _adBindDn!.Trim();
+            if (!string.IsNullOrWhiteSpace(_adBindPassword)) dict["bindPassword"] = _adBindPassword!.Trim();
+            return System.Text.Json.JsonSerializer.Serialize(dict);
+        }
+        if (!string.IsNullOrWhiteSpace(_targets))
+            return System.Text.Json.JsonSerializer.Serialize(new { targets = _targets.Trim() });
+        return null;
+    }
+
+    private void OnTypeChanged() { _targets = string.Empty; }
+
+    private async Task ShowTakeoverDialog(string id)
+    {
+        _takeoverAccountId = id;
+        _selectedFolderIdStr = null;
+        _folders ??= await Api.GetFoldersAsync();
+        _showTakeover = true;
+    }
+
+    private void CloseTakeover() { _showTakeover = false; _takeoverAccountId = null; }
+
+    private async Task ConfirmTakeoverAsync()
+    {
+        if (string.IsNullOrEmpty(_takeoverAccountId) || string.IsNullOrEmpty(_selectedFolderIdStr)) return;
+        if (!Guid.TryParse(_selectedFolderIdStr, out var folderId)) return;
+        _takingOver = true;
+        var ok = await Api.TakeoverAccountAsync(_takeoverAccountId, folderId);
+        _takingOver = false;
+        CloseTakeover();
+        if (ok) { _success = "Account onboarded to vault. Set the password via Vault → Rotation."; await LoadAccountsAsync(); }
+        else _error = "Failed to onboard account.";
+    }
+
+    private async Task IgnoreAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.IgnoreDiscoveredAccountAsync(id);
+        if (ok) { _success = "Account marked as ignored."; await LoadAccountsAsync(); }
+        else _error = "Failed to ignore account.";
+    }
+
+    private static string AccountStatusClass(string status) => status switch
+    {
+        "Pending"   => "pam-badge-yellow",
+        "TakenOver" => "pam-badge-green",
+        "Ignored"   => "pam-badge-gray",
+        _           => ""
+    };
+}
