@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
@@ -201,12 +202,15 @@ public static class PolicyEndpoints
 
         pwdGroup.MapPost("/session", async (
             SessionPolicySettings req, OrkunPamDbContext db,
-            IAuditService audit, HttpContext ctx) =>
+            IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             if (req.IdleTimeoutMinutes < 1)
                 return Results.BadRequest(new { success = false, errors = new[] { "idleTimeoutMinutes must be >= 1" } });
 
             await UpsertGlobalPolicyAsync(db, "Session", "Global Session Policy", req);
+
+            // Invalidate cached concurrent limit so proxies and new sessions pick up the update within 5 min
+            cache.Remove("policy:session:global:concurrent");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "SESSION_POLICY_UPDATED", null, null, ip,

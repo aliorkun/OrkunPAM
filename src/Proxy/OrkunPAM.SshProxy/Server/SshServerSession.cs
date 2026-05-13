@@ -56,6 +56,8 @@ internal sealed class SshServerSession
 
             var (pamUser, targetHost, _) = await DoUserAuthAsync();
 
+            var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(_ct);
+
             var (targetIp, targetPort, targetUser, targetPassword) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
@@ -66,7 +68,7 @@ internal sealed class SshServerSession
                 targetIp, targetPort, targetUser, targetPassword, _log);
             await target.ConnectAsync(_ct);
 
-            await RelayAsync(target);
+            await RelayAsync(target, idleTimeoutMinutes);
         }
         catch (OperationCanceledException) { }
         catch (SshException ex) { _log.LogWarning("SSH protocol error: {Msg}", ex.Message); }
@@ -257,7 +259,7 @@ internal sealed class SshServerSession
     // Channel handling: capture client requests, then relay
     // -------------------------------------------------------------------------
 
-    private async Task RelayAsync(SshTargetClient target)
+    private async Task RelayAsync(SshTargetClient target, int idleTimeoutMinutes)
     {
         // Step 1: receive CHANNEL_OPEN from client
         var pkt = await _conn.ReadPacketAsync(_ct);
@@ -372,22 +374,53 @@ internal sealed class SshServerSession
             return;
         }
 
-        _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={IsExec})",
-            clientChanId, pty != null, isExec);
+        _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={IsExec}, idleTimeout={Idle}min)",
+            clientChanId, pty != null, isExec, idleTimeoutMinutes);
 
-        // Step 4: record + relay
+        // Step 4: record + relay with idle timeout enforcement
         var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty, _hashChain);
         recorder.Start(_sessionId);
 
+        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+        long[] lastActivity = [DateTime.UtcNow.Ticks];
+
         try
         {
-            await target.RelayToClientAsync(_conn, clientChanId, recorder, _ct);
+            var relayTask = target.RelayToClientAsync(_conn, clientChanId, recorder, idleCts.Token, lastActivity);
+            var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
+
+            await Task.WhenAny(relayTask, idleTask);
+
+            if (!relayTask.IsCompleted)
+                _log.LogWarning("SSH session channel {ChanId} terminated — idle timeout ({Mins} min) exceeded",
+                    clientChanId, idleTimeoutMinutes);
+
+            await idleCts.CancelAsync();
         }
         finally
         {
             recorder.Stop();
             await recorder.FlushAsync();
         }
+    }
+
+    private static async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks, CancellationTokenSource cts)
+    {
+        var timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        try
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                await Task.Delay(30_000, cts.Token);
+                var idleFor = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - Interlocked.Read(ref lastActivityTicks[0]));
+                if (idleFor >= timeout)
+                {
+                    cts.Cancel();
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task SendChannelSuccessAsync(uint recipientChan)
