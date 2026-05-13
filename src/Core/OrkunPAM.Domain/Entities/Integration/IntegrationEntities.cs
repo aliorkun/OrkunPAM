@@ -34,3 +34,18 @@ public class NotificationConfig : Entity
     public string ConfigJson { get; set; } = "{}"; // SMTP settings, SMS gateway, etc.
     public bool IsEnabled { get; set; } = true;
 }
+
+public class SiemTarget : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string Host { get; set; } = string.Empty;
+    public int Port { get; set; } = 514;
+    public string Protocol { get; set; } = "UDP"; // UDP, TCP, TLS
+    public int Facility { get; set; } = 16; // local0
+    public string Format { get; set; } = "CEF"; // CEF, Syslog-KV
+    public string EventFilterJson { get; set; } = "[]"; // empty = all events
+    public bool IsEnabled { get; set; } = true;
+    public DateTime? LastSentAtUtc { get; set; }
+    public int TotalEventsSent { get; set; }
+    public string? LastError { get; set; }
+}
