@@ -8,7 +8,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | Solution shall support appliance base installation |  |  |
+| 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 — Windows Server single-package deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
 | 3 | Solution shall be deployable On‐Premise and provided as a cloud  offering. |  |  |
 | 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se |  |  |
@@ -18,14 +18,14 @@
 | 8 | Solution shall support SAML authentication for secure portal access to PAM platform | PC | SAML 2.0 SP-initiated + ACS — SamlAuthEndpoints.cs; XML sig validation, ±5 min clock skew, auto-provision (#45) |
 | 9 | Solution shall support SAML provider configuration on a per-tenant basis, allowing separate identity provider settings f |  |  |
 | 10 | Solution shall support Public Key Infrastructure (PKI) Authentication for secure portal access using digital certificate |  |  |
-| 11 | Solution shall support Windows Authentication for secure portal access |  |  |
+| 11 | Solution shall support Windows Authentication fo |  |  |
 | 12 | Solution shall have out of the box management capability for network devices and systems (Juniper, Cisco IOS, Cisco IOS- |  |  |
 | 13 | Solution shall support adapting to different brand/model devices and systems, which will be used in the future. |  |  |
 | 14 | Solution shall have out of the box support for script usage on NAS devices. |  |  |
 | 15 | Solution shall support users to change their passwords and force to create the passwords in a complex way as well as cha |  |  |
 | 16 | Solution shall support to be scaled to serve a carrier grade number of devices and users besides redundancy which lets 9 |  |  |
 | 17 | Solution shall support to active-active redundancy. |  |  |
-| 18 | Solution shall support disaster recovery. |  |  |
+| 18 | Solution shall support disaster recovery. | PC | BackupService.cs — AES-256-GCM encrypted backup/restore, Hangfire scheduler, Blazor UI (#55) |
 | 19 | Solution shall support different software versions of a network device simultaneously. |  |  |
 | 20 | Solution software shall support working on industry standard operating systems such as Unix, Linux, etc. |  |  |
 | 21 | Solution shall be able to work on only one server for minimal installation. | PC | Single .NET 8 host — WebAPI + Blazor + SSH proxy on one Windows Server |
@@ -43,9 +43,9 @@
 | 33 | Solution shall have multi-language support |  |  |
 | 34 | Solution shall support to limit the screens that a user can see | PC | RBAC middleware — menus restricted by role |
 | 35 | Solution shall support preventing users to see the rights assigned to them. | PC | RBAC — users cannot enumerate own role assignments |
-| 36 | Solution shall have a  break-the-glass procedure to a bypass the PAM solution in emergency situations. |  |  |
-| 37 | Solution shall have enhanced break the glass procedure so that credentials shall be restored without restoring the entir |  |  |
-| 38 | Solution shall support granular backup and restoration capabilities to improve disaster recovery and minimize downtime r |  |  |
+| 36 | Solution shall have a  break-the-glass procedure to a bypass the PAM solution in emergency situations. | PC | BreakGlassEndpoints.cs — emergency credential override, admin trigger, full audit trail (#46) |
+| 37 | Solution shall have enhanced break the glass procedure so that credentials shall be restored without restoring the entir | PC | BreakGlassEndpoints.cs — selective credential restore without full system restore (#46) |
+| 38 | Solution shall support granular backup and restoration capabilities to improve disaster recovery and minimize downtime r | PC | BackupService.cs — granular backup/restore: DB, vault keys, config components, AES-256-GCM (#55) |
 | 39 | Solution shall support the customization of the login screen background and logo to align with organizational branding. |  |  |
 | 40 | Solution shall support Windows or Kerberos Authentication for API interactions to enhance security and interoperability. |  |  |
 | 41 | Solution shall provide System Information menu to show system version and other system details |  |  |
@@ -58,7 +58,7 @@
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 1 | Solution shall support plug & play integration with the Active Directory/LDAP servers | PC | LdapService.cs — LDAP bind + group sync |
-| 2 | Solution's Active Directory Integration must allow for a configurable  synchronization schedule to automate onboarding n | PC | LdapService.cs — configurable AD sync schedule |
+| 2 | Solution's Active Directory Integration must allow for a configurable  synchronization schedule to automate onboarding n | FC | LdapScheduledSync.cs — Hangfire cron-based AD sync schedule, configurable interval (#90) |
 | 3 | Solution shall support integration with Active Directory for improved device importing, including enhancements for devic |  |  |
 | 4 | Solution shall support  users to login with username@domain, if there is multi ldap integration. | PC | AuthEndpoints.cs — username@domain LDAP login |
 | 5 | Solution shall offer an extensive web services API with create, read,  update, and delete functions. | PC | UserEndpoints.cs, VaultEndpoints.cs, DeviceEndpoints.cs, PolicyEndpoints.cs |
@@ -67,13 +67,13 @@
 | 8 | Solution shall support restful API's to Lock/Unlock for Users | PC | UserEndpoints.cs — lock/unlock endpoints |
 | 9 | Solution shall support restful API'S to integrate any ITSM systems (ticketing systems)  (ServiceNow, OneDesk etc.) |  |  |
 | 10 | Solution shall support SAML Authentication for both SP-initiated and IdP-initiated authentication requests | PC | SP-initiated done (#45) — GET /saml/login + POST /saml/acs; IdP-initiated planned |
-| 11 | Solution shall support syslog integration with SIEM systems |  |  |
-| 12 | Solution shall support integration with SIEM systems in CEF and Key-Value formats for improved log management and extern |  |  |
+| 11 | Solution shall support syslog integration with SIEM systems | PC | SiemService.cs — native UDP/TCP/TLS Syslog forwarder, configurable target (#63) |
+| 12 | Solution shall support integration with SIEM systems in CEF and Key-Value formats for improved log management and extern | PC | SiemService.cs — CEF and Key-Value (KV) format SIEM message serialization (#63) |
 | 13 | Solution shall support SNMP integration with OSS/NMS systems |  |  |
 | 14 | Solution shall support Windows Authentication |  |  |
 | 15 | Solution shall support integration with  CMDB/Asset management system for onboarding devices and device group hierarchie |  |  |
 | 16 | Solution shall support automatic device discovery and updates from an external Device/Asset management system |  |  |
-| 17 | Solution shall support automatic device discovery by searching given subnets |  |  |
+| 17 | Solution shall support automatic device discovery by searching given subnets | PC | DiscoveryService.cs — subnet scan for auto device discovery (#40) |
 | 18 | Solution shall support importing devices from cloud service providers like AWS, Azure and GCP |  |  |
 | 19 | Solution shall allow system administrators to configure enhanced element type information retrieval via OS tags during d |  |  |
 | 20 | Solution shall support SMPP integration with OSS Systems |  |  |
@@ -114,9 +114,9 @@
 | 4 | Solution shall support creating passwords in a pre-defined complexity. | PC | PasswordPolicy entity — complexity pre-defined per policy |
 | 5 | Solution shall support forcing the users to change their passwords after created by the Admin user. | PC | UserEndpoints.cs — force password change flag on creation |
 | 6 | Solution shall support locking the user accounts of which password was not changed in the defined period of time. |  |  |
-| 7 | Solution shall support sending e-mail in case of a password expiry. |  |  |
+| 7 | Solution shall support sending e-mail in case of a password expiry. | PC | SmtpNotificationService.cs — password expiry email notification to user and admin (#54) |
 | 8 | Solution shall support locking the user accounts of which were not used in a specific period of time(inactive user). |  |  |
-| 9 | Solution shall support terminating the idle sessions which are not used in a specific period of time. | PC | Policies.razor session tab — idle timeout configurable (#81); enforcement in proxy layer planned |
+| 9 | Solution shall support terminating the idle sessions which are not used in a specific period of time. | PC | SessionPolicyService.cs — idle timeout enforcement at runtime; configurable per policy (#84) |
 | 10 | Solution shall support configuration of the number of maximum login failures. | PC | AuthEndpoints.cs — configurable max login failures |
 | 11 | Solution shall support blocking the user account for a configurable duration after a configurable number of login failur | PC | AuthEndpoints.cs — account lockout after N failures |
 | 12 | Solution shall support creation of alarm messages after a configurable number of login failure. |  |  |
@@ -125,7 +125,7 @@
 | 15 | All sensitive data stored within the PAM system must be encrypted in transit and at rest. Encryption mechanism shall sup | PC | CryptoService.cs (AES-256-GCM) + TLS 1.3 transport |
 | 16 | The cryptographic keys that are used to encrypt and decrypt the data within the solution must be backed-up and stored in |  |  |
 | 17 | Data encryption key shall be generated during runtime with complex key generation function | FC | CryptoEngine.cs — DEK generated per secret at runtime |
-| 18 | Solution shall support to change the keys used in encryption and entered by the customer during installation, when neede |  |  |
+| 18 | Solution shall support to change the keys used in encryption and entered by the customer during installation, when neede | PC | EncryptionEndpoints.cs + BYOK.razor — master key rotation via admin panel (#53) |
 | 19 | Solution should use the SSL encrypted communication between the application and database itself |  |  |
 | 20 | Solution shall support TLS v1.3. | PC | Program.cs — Kestrel TLS 1.3 configuration |
 | 21 | Solution shall provide enhanced logging for policy-related actions, including granular details for better auditing and s | PC | PolicyEndpoints.cs — audit log on all policy create/update/delete; Policies.razor UI (#81) |
@@ -177,7 +177,7 @@
 | 9 | Solution shall support Admin users to assign additional roles to user groups | PC | RoleEndpoints.cs — assign roles to groups |
 | 10 | Solution shall support Admin users to delete role definitions. | PC | RoleEndpoints.cs — delete role definitions |
 | 11 | Solution shall support Admin users to change (adding or deleting authorization) defined roles. | PC | RoleEndpoints.cs — add/remove permissions from roles |
-| 12 | Solution shall support creating bulk users automatically such as importing from a file |  |  |
+| 12 | Solution shall support creating bulk users automatically such as importing from a file | PC | BulkUserImport.razor + BulkImportEndpoints.cs — CSV/Excel bulk user import (#85) |
 | 13 | Solution shall support locking all the users in a group and removing the all of the locked users. |  |  |
 | 14 | Solution shall support locking user after a configurable inactivity period |  |  |
 | 15 | Solution shall support changing parameters and values for all of the users in a group. |  |  |
@@ -224,8 +224,8 @@
 | 5 | Solution shall have a dashboard to monitor policy realms |  |  |
 | 6 | Solution shall have a dashboard to monitor the activities taken on Solution itself. (User creation,deletion, policy chan | PC | Dashboard.razor — admin action log widget |
 | 7 | Solution shall have a dashboard to displays information on which passwords are  rotated and by who. Also, dashboard shal | PC | VaultEndpoints.cs — PasswordHistory created on each rotation; Vault.razor ↻ Rotate button with connector/host form (#32) |
-| 8 | Solution shall have view, filter and export functionality for each type of session, activity log and user dashboards.  | PC | Reports.razor + AuditLog.razor — session/auth report views and audit log filtering (#27); CSV/PDF export pending |
-| 9 | Solution shall have flexibility of exporting reports to CSV and PDF format.  |  |  |
+| 8 | Solution shall have view, filter and export functionality for each type of session, activity log and user dashboards.  | PC | Reports.razor + AuditLog.razor — session/auth report views, audit log filtering (#27); CSV/PDF export (#89) |
+| 9 | Solution shall have flexibility of exporting reports to CSV and PDF format.  | PC | Reports.razor + ExportEndpoints.cs — CSV and PDF export with scheduling (#89) |
 | 11 | The solution shall provide a comprehensive audit-trail and reporting for the privileged access. It shall also provide an | PC | AuditLog.razor + AuditService.cs — privileged access audit trail with time/user/action filtering (#27) |
 | 12 | Solution shall support Windows Local Users Audit Report feature. |  |  |
 | 13 | Soluiton shall support to audit Windows target systems to create report to list local user accounts, service accounts an |  |  |
@@ -277,7 +277,7 @@
 | 7 | General | Solution shall support SSH and RDP connections to target servers from any device without any native client or agent inst | PC | Connect.razor + SshProxyService.cs — browser-based SSH terminal |
 | 8 | General | Solution shall support double confirmation of execution of the command that can cause a service interrupt or any request |  |
 | 9 | General | Solution shall support geofence validation through mobile application for the command executions. |  |
-| 10 | General | Solution shall support duration based restriction policy for the sessions |  |
+| 10 | General | Solution shall support duration based restriction policy for the sessions | PC | SessionPolicyService.cs — session duration/timeout enforcement at runtime (#84) |
 | 11 | General | Solution shall have a connection reservation functionalty for future date connections |  |
 | 12 | General | Solution shall support to open SSH/RDP/HTTP sessions via desktop application on user workstation (without logging into P |  |
 | 13 | General | Solution shall support to log users' client IP addresses even if users access the Web GUI through the loadbalancer. |  |
@@ -300,7 +300,7 @@
 | 30 | Policy Enforcement | Solution shall support the capability to request access to more than one privileged account and allow the user to choose |  |
 | 31 | Policy Enforcement | Solution shall support executing commands/scripts in the background before the user's SSH/Telnet session starts. These s |  |
 | 32 | Policy Enforcement | Solution shall support SSH Key forwarding with the SSH-agent feature when connecting to the target device via SSH protoc |  |
-| 33 | Policy Enforcement | Solution shall support to restrict the number of concurrent sessions that a user can initiate. |  |
+| 33 | Policy Enforcement | Solution shall support to restrict the number of concurrent sessions that a user can initiate. | PC | SessionPolicyService.cs — concurrent session limit per policy, enforced at session start (#84) |
 | 34 | Context Aware Enforcement | Solution shall support "context-aware" privilege management on CLI commands. For example, allow "disable" command for in |  |
 | 35 | Session Monitoring | Solution shall support listing of active CLI, RDP/VNC sessions from the web-GUI by the privileged users. | PC | Sessions.razor — active session list from web UI |
 | 36 | Session Monitoring | Solution shall support real-time monitoring of an active CLI/RDP session from the web-GUI by the privileged users(Suppor |  |
@@ -318,8 +318,8 @@
 | 48 | Managerial Approval/Aware | If any user runs a command which is out of his/her privilege level, the system shall send an e-mail to that user and use |  |
 | 49 | Managerial Approval/Aware | Solution shall support sending push-notifications to the mobile users for managerial approval scenarios |  |
 | 50 | Managerial Approval/Aware | Solution shall support managerial approval definition by user group and device group level |  |
-| 51 | Managerial Approval/Aware | Solution shall support multil-level approval workflows. Number of approval levels shall be customized per approval workf |  |
-| 52 | Managerial Approval/Aware | Solution shall enable users to see the progress for a multi-level approval workflow so that user will have information o |  |
+| 51 | Managerial Approval/Aware | Solution shall support multil-level approval workflows. Number of approval levels shall be customized per approval workf | PC | Approvals.razor — multi-level step indicator (Step N/M), configurable levels (#79) |
+| 52 | Managerial Approval/Aware | Solution shall enable users to see the progress for a multi-level approval workflow so that user will have information o | PC | Approvals.razor — step progress indicator visible to requestor (#79) |
 | 53 | Managerial Approval/Aware | Solution shall support to void or escalate administrator approval requests that have not been approved for a certain per |  |
 | 54 | Maintenance Mode | Solution shall support the maintenance window activities to be done just in the defined time frame with only the privile |  |
 | 55 | Maintenance Mode | Solution shall support operational and maintenance mode (Specific Date&Time Frame) of the devices. |  |
@@ -333,9 +333,9 @@
 | 63 | Logging | Solution shall support command and session based search functionality of session logs. |  |
 | 64 | Logging | Solution shall support periodic archiving of the log files by the system administrator. |  |
 | 65 | Logging | Solution shall support manual and automatic archiving. |  |
-| 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add | PC | RecordingRetentionService — 183-day auto-purge; SHA-256 hash-chain integrity; session ID + IP + timestamp (#23) |
+| 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add | FC | RecordingRetentionService — 183-day auto-purge; AuditLogHashChainService — SHA-256 hash-chain integrity (#23, #91) |
 | 67 | Logging | Users who wire into sessions shall also be logged in session logs |  |
-| 68 | Logging | Solution shall have tamper proof logging capability to prevent and capture any modification or deletion of a log record  |  |
+| 68 | Logging | Solution shall have tamper proof logging capability to prevent and capture any modification or deletion of a log record  | PC | AuditLogHashChainService.cs — SHA-256 hash chain, tamper detection on audit log read (#91) |
 | 69 | Logging | Solution shall tag any modified log record as "Tampered"  |  |
 | 70 | Logging | Solution shall support sending notification to administrators when a recorded session replayed |  |
 | 71 | User Behavior Analytics | Solution shall provide a comprehensive threat intelligence module to identify potential insider threats. |  |
@@ -417,7 +417,7 @@
 | 147 | Remote Access | Solution shall support remote access for a user only to authorized devices and only during permitted time periods. |  |
 | 148 | Remote Access | Solution shall support remote access, allowing users to connect to target devices without needing to install any agents  |  |
 | 149 | Remote Access | Solution shall support remote access for users via a temporary connection link. |  |
-| 150 | Remote Access | Solution shall provide just-in-time access capabilities for minimizing attack surfaces during remote access. |  |
+| 150 | Remote Access | Solution shall provide just-in-time access capabilities for minimizing attack surfaces during remote access. | PC | JitEndpoints.cs + JIT.razor — JIT privileged access with time-limited grant/revoke (#38) |
 | 151 | Remote Access | Solution shall support users to log in with MFA along with username and password for remote access. |  |
 | 152 | Remote Access | Solution shall support the installation of the remote access portal on a public or private cloud. |  |
 | 153 | Remote Access | Solution shall provide session recording and playback for all remote access sessions. |  |
@@ -447,9 +447,9 @@
 | 10 | General | Solution shall support storing passwords for files stored in the password vault. |  |
 | 11 | General | Solution shall support to store password with AES 256 encryption. | FC | CryptoService.cs — AES-256-GCM per-credential encryption |
 | 12 | General | Solution shall support to store encryption keys on Hardware Security Module (HSM) devices |  |
-| 13 | General | Solution shall support SSH-Key Management for RSA and OpenSSH key formats |  |
-| 14 | General | Solution shall support auto-detection and onboarding of Windows  Local User & Administrative Accounts |  |
-| 15 | General | Solution shall support auto-detection and onboarding of Linux Local User & Administrative Accounts |  |
+| 13 | General | Solution shall support SSH-Key Management for RSA and OpenSSH key formats | PC | SshKeyEndpoints.cs — RSA/OpenSSH key pair storage, rotation, push to target device (#80) |
+| 14 | General | Solution shall support auto-detection and onboarding of Windows  Local User & Administrative Accounts | PC | DiscoveryService.cs — Windows local user auto-detection and vault import (#40) |
+| 15 | General | Solution shall support auto-detection and onboarding of Linux Local User & Administrative Accounts | PC | DiscoveryService.cs — Linux local account auto-detection and vault import (#40) |
 | 16 | General | Solution shall support auto-detection and onboarding of Unix Local Users & Administrative Accounts  |  |
 | 17 | General | Solution shall support devices which are in public or private cloud (Amazon, Azure, GCP etc) |  |
 | 18 | General | Solution shall support bulk import of devices. |  |
@@ -459,7 +459,7 @@
 | 22 | General | Solution shall support bulk reset of privileged passwords |  |
 | 23 | General | Solution shall support to delete new users on target devices when discovered. |  |
 | 24 | General | Solution shall support logging details of new user when discovered |  |
-| 25 | General | Solution shall report the status of new discovered accounts to inform administrators on whether or not they are managed  |  |
+| 25 | General | Solution shall report the status of new discovered accounts to inform administrators on whether or not they are managed  | PC | DiscoveryService.cs + Discovery.razor — managed/unmanaged discovered account status reporting (#40) |
 | 26 | General | Solution administrator shall not be able to view the passwords for privileged accounts |  |
 | 27 | General | Solution shall have roles and capabilities for secret management such as admin user,normal user, end user and auditor us | PC | RoleEndpoints.cs + Vault.razor — admin/user/auditor roles |
 | 28 | General | Solution shall be able to assign vaulted AD users  for authentication on target servers. |  |
@@ -494,11 +494,11 @@
 | 57 | Logging | Paltform shall support logging password related actions (retrieval, release, reset, comments, ownership modification) | PC | VaultEndpoints.cs — audit log for all vault actions |
 | 58 | Logging | Solution shall log the events for a specific account. (Add/delete to/from a user group) |  |
 | 59 | Logging | Solution shall allow detailed logging of password usage for improved tracking and compliance reporting. |  |
-| 60 | Email Notifications | Solution shall support to send email notification to admins when password seen by user. |  |
-| 61 | Email Notifications | Solution shall support to send email notification to admins when when password reset fails. |  |
-| 62 | Email Notifications | Solution shall support to send email notification to admins when password validation fails (password was changed. but no |  |
-| 63 | Email Notifications | Solution shall support to send email notification to admins when new user found. |  |
-| 64 | Email Notifications | Solution shall support to send email notification to admins when password retrieval requires manager approval. |  |
+| 60 | Email Notifications | Solution shall support to send email notification to admins when password seen by user. | PC | SmtpNotificationService.cs — email to admin when credential viewed/checked out (#54) |
+| 61 | Email Notifications | Solution shall support to send email notification to admins when when password reset fails. | PC | SmtpNotificationService.cs — email to admin on rotation failure (#54) |
+| 62 | Email Notifications | Solution shall support to send email notification to admins when password validation fails (password was changed. but no | PC | SmtpNotificationService.cs — email on password validation failure (#54) |
+| 63 | Email Notifications | Solution shall support to send email notification to admins when new user found. | PC | SmtpNotificationService.cs — email on new discovered account (#54) |
+| 64 | Email Notifications | Solution shall support to send email notification to admins when password retrieval requires manager approval. | PC | SmtpNotificationService.cs — approval request email to manager (#54) |
 | 65 | Aplication to Aplication Password Manager | Solution shall support password managerment for application to application connection |  |
 | 66 | Aplication to Aplication Password Manager | Solution shall support PIN code validation for the client application |  |
 | 67 | Aplication to Aplication Password Manager | Solution shall support application path check and process validation for the client application |  |
@@ -535,13 +535,13 @@
 | 1 | Solution shall support radius server with access challange functionality. |  |  |
 | 2 | Solution shall support MFA (Multi Factor Authentication) online token generation for MFA. | PC | AuthEndpoints.cs — TOTP online token generation |
 | 3 | Solution shall support MFA (Multi Factor Authentication) offline token generation for MFA. |  |  |
-| 4 | Solution shall send QR codes to new onboarded users on PAM |  |  |
+| 4 | Solution shall send QR codes to new onboarded users on PAM | PC | MfaSetup.razor — QR code generation and display on enrollment page, email delivery (#83) |
 | 5 | Solution shall support to send MFA token via SMS. |  |  |
 | 6 | Solution shall support to send MFA token via email. |  |  |
 | 7 | Solution shall support to send MFA token via mobile application. |  |  |
 | 8 | Solution shall support to customizable token expiration duration. |  |  |
 | 9 | Solution shall force user to re-authenticate if user does not enter correct OTP for a configurable time period. |  |  |
-| 10 | Solution shall support to first time registration via QR code. |  |  |
+| 10 | Solution shall support to first time registration via QR code. | PC | MfaSetup.razor — first-time TOTP QR code enrollment flow with secret seed (#83) |
 | 11 | Solution shall allow QR codes for MFA registration to be sent via one-time links with predefined validity durations to e |  |  |
 | 12 | Solution shall support MFA Registration QR Codes to be valid only for a certain period of time. |  |  |
 | 13 | Solution shall support sending MFA registration QR codes via one-time links |  |  |
@@ -616,17 +616,17 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | General | Solution shall support Oracle, Mssql, Mysql, IBM db2, SAP HANA, PostgreSQL, Teradata, Couchbase, Apache Cassandra, Apach |  |
+| 1 | General | Solution shall support Oracle, Mssql, Mysql, IBM db2, SAP HANA, PostgreSQL, Teradata, Couchbase, Apache Cassandra, Apach | PC | SqlProxyService.cs — TDS native C# proxy; MSSQL, MySQL, PostgreSQL connections (#64) |
 | 2 | General | Solution shall support Single Sign On (SSO) for authentication to Oracle and MSSQL |  |
 | 3 | General | Solution shall support native DB clients (TOAD, Navicat, MSSQL Client, etc) |  |
 | 4 | General | Solution shall support SSL Encrypted connections for Oracle. |  |
 | 5 | General | Solution shall support 2FA for Oracle connection. |  |
 | 6 | General | Solution shall support Windows Authentication for MSSQL connection. |  |
 | 7 | General | Solution shall be able to hide the IP:Port and Service Name information of target database for all DB connections. |  |
-| 8 | General | Solution shall support Oracle/MySQL/MSSQL/PostgreSQL/Teradata/Hive/Cassandra/DB2/Hana SQL connections. |  |
-| 9 | General | Solution shall support logging the access times and durations to Oracle/MySQL/MSSQL/ PostgreSQL /Teradata/Hive/Cassandra |  |
-| 10 | General | Solution shall support logging commands in Oracle/MySQL/MSSQL/ PostgreSQL /Teradata/Hive/Cassandra SQL/DB2/Hana connecti |  |
-| 11 | General | Solution shall support policy enforcement on SQL sessions (blocking queries for specific SQL users) for Oracle/MySQL/MSS |  |
+| 8 | General | Solution shall support Oracle/MySQL/MSSQL/PostgreSQL/Teradata/Hive/Cassandra/DB2/Hana SQL connections. | PC | SqlProxyService.cs — TDS proxy supports MSSQL, MySQL, PostgreSQL sessions (#64) |
+| 9 | General | Solution shall support logging the access times and durations to Oracle/MySQL/MSSQL/ PostgreSQL /Teradata/Hive/Cassandra | PC | SqlProxyService.cs — session start/end time and duration logging (#64) |
+| 10 | General | Solution shall support logging commands in Oracle/MySQL/MSSQL/ PostgreSQL /Teradata/Hive/Cassandra SQL/DB2/Hana connecti | PC | SqlProxyService.cs — SQL query logging per session (#64) |
+| 11 | General | Solution shall support policy enforcement on SQL sessions (blocking queries for specific SQL users) for Oracle/MySQL/MSS | PC | SqlProxyService.cs — query blocking policy enforcement (#64) |
 | 12 | General | Solution shall support regular expression based policy definitions for SQL queries. |  |
 | 13 | General | Solution shall support different Oracle JDBC drivers (ojdbc6, ojdbc7, ojdbc8, etc.) |  |
 | 14 | General | Solution shall support different Oracle Installed Clients (OraClient11gHome1, OraClient12Home1, OraClient12Home2, OraCli |  |
@@ -784,6 +784,6 @@
 | 9 | Ssystem logs shall logs for each component of the solution. |  |  |
 | 10 | Solution shall enable changing system log levels. |  |  |
 | 11 | Solution shall have upgrade procedures |  |  |
-| 12 | Solution shall provide a scheduled backup capability for archiving configuration and logging data |  |  |
-| 13 | Solution shall provide granular backup and restoration capabilities for critical system components to improve disaster r |  |  |
+| 12 | Solution shall provide a scheduled backup capability for archiving configuration and logging data | PC | BackupService.cs — Hangfire-scheduled backup for config and log data (#55) |
+| 13 | Solution shall provide granular backup and restoration capabilities for critical system components to improve disaster r | PC | BackupService.cs — granular restore: DB, vault keys, config components, AES-256-GCM encrypted (#55) |
 | 14 | Solution shall support enriched reporting dashboards for monitoring operational statistics, including session activity a | PC | Reports.razor + Dashboard.razor — session activity and operational stats monitoring (#27) |
