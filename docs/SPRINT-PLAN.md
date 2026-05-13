@@ -64,34 +64,35 @@
 
 ---
 
-## Aktif Sprint: Sprint 5 - Ek MVP Features + Audit Chain
+## ~~Sprint 5 - Ek MVP Features + Audit Chain~~ ✅ TAMAMLANDI
 **Tarih:** 25 Mayıs - 4 Haziran 2026
-**Hedef:** Kalan MVP özellikler, tamper-proof audit, MFA enrollment
+**Durum:** Tamamlandı — Tamper-proof audit chain, LDAP sync, CSV export, MFA TOTP, SSH key mgmt
 
-| Issue | Başlık | Tip |
-|-------|--------|-----|
-| #91 | Tamper-Proof Audit Log - Hash Chain | MVP-SECURITY |
-| #90 | LDAP/AD Zamanlanmış Senkronizasyon | MVP-INTEGRATION |
-| #89 | Rapor CSV/PDF Export ve Zamanlama | MVP-REPORTING |
-| #85 | Toplu Kullanıcı İçe Aktarma (CSV) | MVP-USER |
-| #84 | Session Policy Runtime Enforcement | MVP-SECURITY |
-| #83 | MFA TOTP QR Code Enrollment | MVP-AUTH |
-| #80 | SSH Key Yönetimi | MVP-VAULT |
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #91 | Tamper-Proof Audit Log - Hash Chain | MVP-SECURITY | ✅ Kapatıldı |
+| #90 | LDAP/AD Zamanlanmış Senkronizasyon | MVP-INTEGRATION | ✅ Kapatıldı |
+| #89 | Rapor CSV/PDF Export ve Zamanlama | MVP-REPORTING | ✅ Kapatıldı |
+| #85 | Toplu Kullanıcı İçe Aktarma (CSV) | MVP-USER | ✅ Kapatıldı |
+| #84 | Session Policy Runtime Enforcement | MVP-SECURITY | ✅ Kapatıldı |
+| #83 | MFA TOTP QR Code Enrollment | MVP-AUTH | ✅ Kapatıldı |
+| #80 | SSH Key Yönetimi | MVP-VAULT | ✅ Kapatıldı |
 
-**Çıkış kriteri:** Tüm RFP-kritik MVP özellikleri tamamlandı → v1.0.0 tag
+**İlerleme:** 7/7 tamamlandı (%100) ✅
+**Tag:** `v1.0.0-rc2` (atılacak)
 
 ---
 
-## Sprint 6 - Polish + GA
-**Tarih:** 5-14 Haziran 2026
-**Hedef:** E2E testler, performans, dokümantasyon, son düzeltmeler
+## Aktif Sprint: Sprint 6 - Polish + GA
+**Tarih:** 13 Mayıs 2026 (erken başlandı)
+**Hedef:** SQL Proxy, E2E testler, performans, dokümantasyon, son düzeltmeler
 
-| Issue | Başlık | Tip |
-|-------|--------|-----|
-| #64 | SQL Database Proxy | MVP-SESSION (deferred) |
-| - | E2E testler | Test |
-| - | Performans testleri | Test |
-| - | Dokümantasyon | Docs |
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #64 | SQL Database Proxy | MVP-SESSION | ✅ Implement tamamlandı |
+| - | E2E testler | Test | 🔲 Bekliyor |
+| - | Performans testleri | Test | 🔲 Bekliyor |
+| - | Dokümantasyon | Docs | 🔲 Bekliyor |
 
 **Çıkış kriteri:** Müşteriye kurulum + demo yapılabilir → v1.0.0 GA tag
 
@@ -106,13 +107,15 @@
 
 ## Milestone Hedefleri
 - **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Tamamlandı
-- **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ← Şu an buradayız
+- **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ← Tamamlandı
+- **v1.0.0-rc2:** Sprint 5 çıkışı (13 Mayıs 2026) ← Tamamlandı
 - **v1.0.0:** Sprint 6 çıkışı (14 Haziran 2026 hedef)
 - **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ## Mimari Kararlar
 - **SSH Proxy:** Native C# (RFC 4253) — farkımız burada, açık kaynak yok
 - **RDP Proxy:** Microsoft RDS Gateway entegrasyonu — CyberArk yaklaşımı, RemoteApp + session recording + HA dahil
+- **SQL Proxy:** Native C# TDS protokol implementasyonu — açık kaynak yok
 - **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
 - **AAPM + Threat Analytics:** v2.0.0'a ertelendi
 
