@@ -125,6 +125,15 @@ public static class VaultEndpoints
                 encPassword = encResult.Value;
             }
 
+            byte[]? encPrivateKey = null;
+            if (!string.IsNullOrEmpty(req.PrivateKey))
+            {
+                var encPk = vault.EncryptString(req.PrivateKey);
+                if (encPk.IsFailure)
+                    return Results.BadRequest(new { success = false, errors = new[] { $"Encryption failed: {encPk.Error.Message}" } });
+                encPrivateKey = encPk.Value;
+            }
+
             var cred = new Credential
             {
                 FolderId = req.FolderId,
@@ -133,6 +142,7 @@ public static class VaultEndpoints
                 CredentialType = req.Type,
                 Username = req.Username,
                 PasswordEnc = encPassword,
+                PrivateKeyEnc = encPrivateKey,
                 DeviceId = req.DeviceId,
                 Tags = req.Tags,
                 MaxCheckoutMinutes = req.MaxCheckoutMinutes ?? 60,
@@ -212,6 +222,19 @@ public static class VaultEndpoints
                 password = decResult.Value;
             }
 
+            // Decrypt private key (for SSH key credentials)
+            string? privateKey = null;
+            if (cred.PrivateKeyEnc != null)
+            {
+                var pkDec = vault.DecryptString(cred.PrivateKeyEnc);
+                if (pkDec.IsFailure)
+                {
+                    logger.LogError("Failed to decrypt private key for credential {CredId}", id);
+                    return Results.Problem("Decryption failed. Check server logs for details.");
+                }
+                privateKey = pkDec.Value;
+            }
+
             // Record checkout history
             db.CheckOutHistories.Add(new CheckOutHistory
             {
@@ -234,6 +257,7 @@ public static class VaultEndpoints
                 {
                     cred.Id, cred.Name, cred.Username,
                     password,
+                    privateKey,
                     expiresAt = cred.CheckOutExpiresUtc
                 }
             });
@@ -382,21 +406,44 @@ public static class VaultEndpoints
             if (cred == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
-            if (cred.PasswordEnc == null)
-                return Results.Ok(new { success = true, data = new { password = (string?)null } });
-
-            var decResult = vault.DecryptString(cred.PasswordEnc);
-            if (decResult.IsFailure)
+            string? password = null;
+            if (cred.PasswordEnc != null)
             {
-                logger.LogError("proxy-decrypt: decryption failed for credential {CredId}", req.CredentialId);
-                return Results.Problem("Decryption failed");
+                var decResult = vault.DecryptString(cred.PasswordEnc);
+                if (decResult.IsFailure)
+                {
+                    logger.LogError("proxy-decrypt: decryption failed for credential {CredId}", req.CredentialId);
+                    return Results.Problem("Decryption failed");
+                }
+                password = decResult.Value;
+            }
+
+            string? privateKey = null;
+            if (cred.PrivateKeyEnc != null)
+            {
+                var pkDec = vault.DecryptString(cred.PrivateKeyEnc);
+                if (pkDec.IsFailure)
+                {
+                    logger.LogError("proxy-decrypt: private key decryption failed for credential {CredId}", req.CredentialId);
+                    return Results.Problem("Decryption failed");
+                }
+                privateKey = pkDec.Value;
             }
 
             logger.LogInformation("proxy-decrypt: '{Name}' decrypted for purpose '{Purpose}'",
                 cred.Name, req.Purpose);
 
-            return Results.Ok(new { success = true, data = new { password = decResult.Value } });
+            return Results.Ok(new { success = true, data = new { password, privateKey } });
         });
+
+        // === Generate SSH Key Pair ===
+        creds.MapPost("/generate-ssh-key", (HttpContext _) =>
+        {
+            using var rsa = RSA.Create(4096);
+            var privateKeyPem = rsa.ExportRSAPrivateKeyPem();
+            var pubKeyLine    = BuildSshRsaPublicKeyLine(rsa);
+            return Results.Ok(new { success = true, data = new { privateKey = privateKeyPem, publicKey = pubKeyLine } });
+        }).RequireAuthorization();
 
         // === Password Rotation ===
         creds.MapPost("/{id:guid}/rotate", async (Guid id, RotateCredentialRequest req,
@@ -559,15 +606,46 @@ public static class VaultEndpoints
             return Results.Ok(new { success = true, data = new { perm.Id } });
         });
     }
+
+    // -------------------------------------------------------------------------
+    // SSH public key serialization helpers (authorized_keys format)
+    // -------------------------------------------------------------------------
+
+    internal static string BuildSshRsaPublicKeyLine(RSA rsa, string comment = "orkunpam-generated")
+    {
+        var p = rsa.ExportParameters(false);
+        using var ms = new MemoryStream();
+        WriteKeyStr(ms, "ssh-rsa"u8.ToArray());
+        WriteKeyMpInt(ms, p.Exponent!);
+        WriteKeyMpInt(ms, p.Modulus!);
+        return "ssh-rsa " + Convert.ToBase64String(ms.ToArray()) + " " + comment;
+    }
+
+    private static void WriteKeyStr(Stream s, byte[] data)
+    {
+        uint l = (uint)data.Length;
+        s.WriteByte((byte)(l >> 24)); s.WriteByte((byte)(l >> 16));
+        s.WriteByte((byte)(l >> 8));  s.WriteByte((byte)l);
+        s.Write(data);
+    }
+
+    private static void WriteKeyMpInt(Stream s, byte[] bytes)
+    {
+        bool pad = bytes[0] >= 0x80;
+        uint l = (uint)(bytes.Length + (pad ? 1 : 0));
+        s.WriteByte((byte)(l >> 24)); s.WriteByte((byte)(l >> 16));
+        s.WriteByte((byte)(l >> 8));  s.WriteByte((byte)l);
+        if (pad) s.WriteByte(0);
+        s.Write(bytes);
+    }
 }
 
 public record CreateFolderRequest(string Name, string? Description, Guid? ParentFolderId);
 public record CreateCredentialRequest(
     Guid FolderId, string Name, string? Description, CredentialType Type,
-    string? Username, string? Password, Guid? DeviceId, string? Tags,
+    string? Username, string? Password, string? PrivateKey, Guid? DeviceId, string? Tags,
     int? MaxCheckoutMinutes, bool RequiresApproval);
 public record CheckoutRequest(string? Reason, string? TicketNumber, int? DurationMinutes);
 public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
-public record RotateCredentialRequest(string Connector, string? Host, int? Port, string? Domain);

@@ -49,7 +49,7 @@ internal sealed class PamApiClient
     /// Look up a device by hostname/IP and return the SSH credential for it.
     /// Throws InvalidOperationException on any failure — caller must close session (fail-closed).
     /// </summary>
-    internal async Task<(string ip, int port, string user, byte[] password)>
+    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
     {
         try
@@ -116,18 +116,23 @@ internal sealed class PamApiClient
                     $"Credential decryption failed for '{cred.Id}' (HTTP {(int)decryptResp.StatusCode})");
 
             var decryptData = await decryptResp.Content.ReadFromJsonAsync<DecryptResponse>(ct);
-            var password = decryptData?.Data?.Password;
+            var password   = decryptData?.Data?.Password;
+            var privateKey = decryptData?.Data?.PrivateKey;
 
-            if (string.IsNullOrEmpty(password))
-                throw new InvalidOperationException($"Decrypted credential is empty for '{cred.Id}'");
+            if (string.IsNullOrEmpty(password) && string.IsNullOrEmpty(privateKey))
+                throw new InvalidOperationException($"Decrypted credential has neither password nor private key for '{cred.Id}'");
 
-            // Convert to byte[] immediately so callers can zero the buffer after use (#70)
-            var passwordBytes = System.Text.Encoding.UTF8.GetBytes(password);
+            // Convert password to byte[] immediately so callers can zero the buffer after use
+            var passwordBytes = string.IsNullOrEmpty(password)
+                ? []
+                : System.Text.Encoding.UTF8.GetBytes(password);
+
             return (
                 device.IpAddress ?? targetHost,
                 device.ConnectionPort ?? 22,
                 cred.Username ?? throw new InvalidOperationException("Credential has no username"),
-                passwordBytes);
+                passwordBytes,
+                string.IsNullOrEmpty(privateKey) ? null : privateKey);
         }
         catch (InvalidOperationException)
         {
@@ -171,7 +176,7 @@ internal sealed class PamApiClient
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
-    private record DecryptData(string Password);
+    private record DecryptData(string? Password, string? PrivateKey);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
     private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
 }
