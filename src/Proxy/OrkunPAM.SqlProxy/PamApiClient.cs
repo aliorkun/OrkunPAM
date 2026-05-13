@@ -20,6 +20,13 @@ internal sealed class PamApiClient
             ?? throw new InvalidOperationException(
                 "PamApi:ProxySecret is not configured. Set via environment variable PAM_PROXY_SECRET or appsettings.");
 
+        // Reject empty or known placeholder values — deployment with default fails fast at startup
+        if (string.IsNullOrWhiteSpace(_proxySecret) ||
+            _proxySecret.Equals("changeme-generate-with-openssl-rand-base64-32", StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "PamApi:ProxySecret is not configured or uses a known default. " +
+                "Generate with: openssl rand -base64 32");
+
         if (_proxySecret.Length < 32)
             throw new InvalidOperationException(
                 "PamApi:ProxySecret must be at least 32 characters. Generate with: openssl rand -base64 32");

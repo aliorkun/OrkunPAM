@@ -67,7 +67,7 @@ internal sealed class SqlServerSession
         sessionCts.CancelAfter(SessionTimeout);
         var ct = sessionCts.Token;
 
-        // ── 1. PreLogin with client ─────────────────────────────────────────────
+        // ── 1. PreLogin with client ───────────────────────────────────────
         var clientPrelogin = await TdsPacket.ReadMessageAsync(clientStream, ct);
         if (clientPrelogin == null)
         {
@@ -79,7 +79,7 @@ internal sealed class SqlServerSession
         var preLoginResponse = TdsPreLogin.BuildResponseNotSup();
         await TdsPacket.WritePacketAsync(clientStream, TdsPacket.TypePreLogin, preLoginResponse, ct);
 
-        // ── 2. Read Login7 from client (plaintext) ────────────────────────────────────────
+        // ── 2. Read Login7 from client (plaintext) ──────────────────────────────────────────────
         var clientLogin = await TdsPacket.ReadMessageAsync(clientStream, ct);
         if (clientLogin == null || clientLogin.Value.type != TdsPacket.TypeLogin7)
         {
@@ -111,7 +111,7 @@ internal sealed class SqlServerSession
         _log.LogInformation("SQL from {ClientIp}: user={User} target={Target} db={Db}",
             clientIp, pamUser, targetHost, database);
 
-        // ── 3. Authenticate PAM user ─────────────────────────────────────────────
+        // ── 3. Authenticate PAM user ───────────────────────────────────────────
         if (string.IsNullOrEmpty(pamPassword) ||
             !await _api.ValidateUserAsync(pamUser, pamPassword, ct))
         {
@@ -120,7 +120,7 @@ internal sealed class SqlServerSession
             return;
         }
 
-        // ── 4. Get vault credentials ─────────────────────────────────────────────
+        // ── 4. Get vault credentials ─────────────────────────────────────────
         string targetIp, sqlUser, sqlPassword;
         int    targetPort;
         try
@@ -137,7 +137,7 @@ internal sealed class SqlServerSession
 
         _log.LogInformation("SQL session {User}→{TargetIp}:{TargetPort} db={Db}", pamUser, targetIp, targetPort, database);
 
-        // ── 5. Connect to real SQL Server ──────────────────────────────────────────────
+        // ── 5. Connect to real SQL Server ──────────────────────────────────────────────────────
         TcpClient? targetClient = null;
         try
         {
@@ -179,7 +179,7 @@ internal sealed class SqlServerSession
                 return;
             }
 
-            // ── 5b. Login7 with vault credentials to target ───────────────────────────────
+            // ── 5b. Login7 with vault credentials to target ───────────────────────────────────────────
             var vaultLogin7 = TdsLogin7.BuildWithCredentials(
                 loginPayload, sqlUser, sqlPassword,
                 targetServerName: targetIp,
@@ -190,7 +190,7 @@ internal sealed class SqlServerSession
             // Zero vault password from memory
             Array.Clear(vaultLogin7, 0, vaultLogin7.Length);
 
-            // ── 6. Forward target's login response to client ──────────────────────────────
+            // ── 6. Forward target's login response to client ──────────────────────────────────────────────
             var loginAck = await TdsPacket.ReadMessageAsync(targetStream, ct);
             if (loginAck == null)
             {
@@ -209,7 +209,7 @@ internal sealed class SqlServerSession
             var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(ct);
             var startTime = DateTimeOffset.UtcNow;
 
-            // ── 7 & 8. Relay + inspect ───────────────────────────────────────────────────────
+            // ── 7 & 8. Relay + inspect ───────────────────────────────────────────────────────────────────────────────────
             try
             {
                 await RelayAsync(clientStream, targetStream, sessionId, pamUser,
@@ -234,7 +234,7 @@ internal sealed class SqlServerSession
         }
     }
 
-    // ── Relay loop ──────────────────────────────────────────────────────────────────
+    // ── Relay loop ──────────────────────────────────────────────────────────────────────────────
 
     private async Task RelayAsync(
         NetworkStream clientStream,
@@ -348,7 +348,7 @@ internal sealed class SqlServerSession
         catch (OperationCanceledException) { }
     }
 
-    // ── SQL text extraction ───────────────────────────────────────────────────────
+    // ── SQL text extraction ────────────────────────────────────────────────────────────────────────────
 
     private static string ExtractSqlText(byte[] payload)
     {
@@ -375,23 +375,32 @@ internal sealed class SqlServerSession
         return Ucs2Le.GetString(payload, offset, byteCount).Trim();
     }
 
-    // ── DDL blocking ─────────────────────────────────────────────────────────────
+    // ── DDL blocking ─────────────────────────────────────────────────────────────────────────────
+
+    private static readonly System.Text.RegularExpressions.Regex LeadingBlockComment =
+        new(@"^(/\*.*?\*/\s*)+", System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static bool IsDangerousDdl(string sql)
     {
         if (string.IsNullOrWhiteSpace(sql)) return false;
 
-        var upper = sql.TrimStart().ToUpperInvariant();
+        // XP_CMDSHELL check is global — present anywhere in the query
+        if (sql.Contains(BlockedSubstring, StringComparison.OrdinalIgnoreCase)) return true;
 
-        foreach (var prefix in BlockedPrefixes)
-            if (upper.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        // Check every semicolon-separated statement individually to prevent multi-statement bypass
+        foreach (var segment in sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            // Strip leading block comments (/* ... */) before prefix matching
+            var stripped = LeadingBlockComment.Replace(segment.ToUpperInvariant(), "").TrimStart();
 
-        if (upper.Contains(BlockedSubstring, StringComparison.Ordinal)) return true;
+            foreach (var prefix in BlockedPrefixes)
+                if (stripped.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        }
 
         return false;
     }
 
-    // ── TDS error responses ─────────────────────────────────────────────────────────────
+    // ── TDS error responses ──────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Send a TDS login failure (Error token 0xAA + Done token 0xFD) to the client.

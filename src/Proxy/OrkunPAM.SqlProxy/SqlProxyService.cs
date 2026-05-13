@@ -95,6 +95,14 @@ internal sealed class SqlProxyService : BackgroundService
     private bool IsRateLimited(string ip)
     {
         var now = DateTimeOffset.UtcNow;
+
+        // Remove expired window entry before AddOrUpdate so expired IPs don't accumulate forever
+        if (_connTracker.TryGetValue(ip, out var existing) &&
+            now - existing.windowStart > RateLimitWindow)
+        {
+            _connTracker.TryRemove(ip, out _);
+        }
+
         var entry = _connTracker.AddOrUpdate(ip,
             _ => (1, now),
             (_, old) => now - old.windowStart > RateLimitWindow
