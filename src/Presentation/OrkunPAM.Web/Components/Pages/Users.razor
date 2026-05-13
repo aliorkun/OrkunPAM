@@ -6,7 +6,10 @@
 
 <div class="pam-page-header">
     <h2 class="pam-page-title">Users</h2>
-    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add User</button>
+    <div style="display:flex;gap:.5rem">
+        <button class="pam-btn pam-btn-secondary" @onclick="OpenImportModal">&#8679; Bulk Import</button>
+        <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add User</button>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -70,13 +73,13 @@
                                 {
                                     <span class="pam-status pam-status-active">✅ On</span>
                                     <button class="pam-btn-icon" title="Reset MFA"
-                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">🔄</button>
+                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">&#x1F504;</button>
                                 }
                                 else
                                 {
                                     <span class="pam-status pam-status-done">Off</span>
                                     <button class="pam-btn-icon" title="Send MFA Setup Link"
-                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">🔑</button>
+                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">&#x1F511;</button>
                                 }
                             </td>
                             <td>@(u.LastLoginAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>
@@ -228,6 +231,63 @@
     </div>
 }
 
+<!-- Bulk Import Modal -->
+@if (_showImport)
+{
+    <div class="pam-modal-overlay" @onclick="CloseImportModal">
+        <div class="pam-modal" @onclick:stopPropagation="true" style="max-width:520px">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Bulk User Import (CSV)</h3>
+                <button class="pam-close-btn" @onclick="CloseImportModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p class="pam-text-muted" style="font-size:.85rem">
+                    Upload a CSV file. Max 5 MB. Imported users will be required to change their password on first login.
+                </p>
+                <div class="pam-form-group">
+                    <a href="/api/v1/users/import/template" download="users-import-template.csv"
+                       class="pam-btn pam-btn-secondary pam-btn-sm" style="font-size:.8rem">
+                        &#8595; Download Template
+                    </a>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">CSV File</label>
+                    <InputFile OnChange="OnImportFileSelected" accept=".csv" class="pam-input" />
+                </div>
+                @if (_importError != null)
+                {
+                    <div class="pam-alert pam-alert-error">@_importError</div>
+                }
+                @if (_importResult != null)
+                {
+                    <div class="pam-alert @(_importResult.Failed == 0 ? "pam-alert-success" : "pam-alert-warning")" style="margin-top:.5rem">
+                        Imported @_importResult.Imported users. @(_importResult.Failed > 0 ? $"{_importResult.Failed} failed." : "")
+                    </div>
+                    @if (_importResult.Errors.Count > 0)
+                    {
+                        <table class="pam-table" style="font-size:.8rem;margin-top:.5rem">
+                            <thead><tr><th>Row</th><th>Username</th><th>Reason</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _importResult.Errors)
+                                {
+                                    <tr><td>@e.Row</td><td>@e.Username</td><td>@e.Reason</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseImportModal">Close</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitImportAsync"
+                        disabled="@(_importFile == null || _importSaving)">
+                    @(_importSaving ? "Importing…" : "Import")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<UserDto>? _users;
     private PageMeta?      _meta;
@@ -251,6 +311,13 @@
     // MFA modal state
     private string?   _mfaSetupToken;
     private DateTime? _mfaSetupExpiry;
+
+    // Import modal state
+    private bool                    _showImport;
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _importFile;
+    private bool                    _importSaving;
+    private string?                 _importError;
+    private ImportResultDto?        _importResult;
 
     // Edit modal state
     private bool    _showEdit;
@@ -393,6 +460,45 @@
     }
 
     private void CloseMfaModal() { _mfaSetupToken = null; _mfaSetupExpiry = null; }
+
+    private void OpenImportModal()
+    {
+        _importFile   = null;
+        _importError  = null;
+        _importResult = null;
+        _showImport   = true;
+    }
+
+    private void CloseImportModal() { _showImport = false; }
+
+    private void OnImportFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _importFile  = e.File;
+        _importError = null;
+        _importResult = null;
+    }
+
+    private async Task SubmitImportAsync()
+    {
+        if (_importFile == null) return;
+        _importSaving = true;
+        _importError  = null;
+        _importResult = null;
+        StateHasChanged();
+
+        var result = await Api.BulkImportUsersAsync(_importFile);
+        _importSaving = false;
+
+        if (result == null)
+            _importError = "Import failed — please check the file format and try again.";
+        else
+            _importResult = result;
+
+        if (_importResult?.Failed == 0 && _importResult?.Imported > 0)
+            await LoadAsync();
+
+        StateHasChanged();
+    }
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
