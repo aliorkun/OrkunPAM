@@ -140,6 +140,29 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>Returns (IdleTimeoutMinutes, MaxConcurrentSessions) from the global session policy. Falls back to safe defaults on any error.</summary>
+    internal async Task<(int IdleTimeoutMinutes, int MaxConcurrentSessions)> GetSessionPolicyAsync(CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var resp = await client.GetAsync("/api/v1/policy/session", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var data = await resp.Content.ReadFromJsonAsync<SessionPolicyResponse>(ct);
+                var p = data?.Data;
+                if (p != null)
+                    return (p.IdleTimeoutMinutes > 0 ? p.IdleTimeoutMinutes : 30,
+                            p.MaxConcurrentSessions > 0 ? p.MaxConcurrentSessions : 3);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to fetch session policy — using defaults (30 min idle)");
+        }
+        return (30, 3);
+    }
+
     // Response DTOs
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);
@@ -149,4 +172,6 @@ internal sealed class PamApiClient
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
     private record DecryptData(string Password);
+    private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
+    private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
 }

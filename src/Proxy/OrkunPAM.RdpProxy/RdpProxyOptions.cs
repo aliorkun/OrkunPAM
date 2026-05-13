@@ -25,6 +25,8 @@ public sealed class RdpProxyOptions
 
     /// <summary>Session token TTL in seconds. Tokens are created by the WebAPI when a user launches an RDP session.</summary>
     public int SessionTokenTtlSeconds { get; set; } = 300;
+    /// <summary>Fallback idle timeout in minutes. Overridden at runtime by the global Session Policy fetched from the API.</summary>
+    public int IdleTimeoutMinutes { get; set; } = 30;
 
     /// <summary>
     /// Base64-encoded 32-byte AES-256 master key used to wrap per-session recording content keys.
