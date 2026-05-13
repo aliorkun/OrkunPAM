@@ -1,0 +1,363 @@
+@page "/jit"
+@inject PamApiService Api
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>JIT Access — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Just-In-Time Privileged Access</h2>
+    <span class="pam-page-sub">Zero standing privileges — request time-bounded access to resources</span>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+@if (_success != null)
+{
+    <div class="pam-alert pam-alert-success">@_success</div>
+}
+
+<!-- Tabs -->
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "all" ? "active" : "")"
+            @onclick="@(() => SetTab("all"))">
+        All Requests
+        @if (_activeCount > 0)
+        {
+            <span class="pam-badge-count" style="background:#c00">@_activeCount</span>
+        }
+    </button>
+    <button class="pam-tab @(_tab == "my" ? "active" : "")"
+            @onclick="@(() => SetTab("my"))">
+        My Requests
+    </button>
+    <button class="pam-tab @(_tab == "new" ? "active" : "")"
+            @onclick="@(() => SetTab("new"))">
+        + New Request
+    </button>
+</div>
+
+<!-- All Requests Tab (Admin) -->
+@if (_tab == "all")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>JIT Access Requests</span>
+            <select class="pam-select pam-select-sm" @onchange="@(e => FilterStatus(e.Value?.ToString()))">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Active">Active</option>
+                <option value="Expired">Expired</option>
+                <option value="Revoked">Revoked</option>
+                <option value="Denied">Denied</option>
+            </select>
+        </div>
+        <div class="pam-card-body">
+            @if (_loading)
+            {
+                <div class="pam-loading-text">Loading requests...</div>
+            }
+            else if (_allRequests == null || _allRequests.Count == 0)
+            {
+                <div class="pam-empty">No JIT access requests found.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Requester</th>
+                            <th>IP</th>
+                            <th>Resource</th>
+                            <th>Duration</th>
+                            <th>Reason</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _allRequests)
+                        {
+                            <tr>
+                                <td><span class="pam-badge @StatusClass(r.Status)">@r.Status</span></td>
+                                <td>@r.RequesterUsername</td>
+                                <td><code>@r.RequesterIpAddress</code></td>
+                                <td>@r.ResourceType@(r.ResourceName != null ? ": " + r.ResourceName : "")</td>
+                                <td>@r.RequestedDurationMinutes min</td>
+                                <td title="@r.Reason">@Truncate(r.Reason, 40)</td>
+                                <td>@r.CreatedAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>@(r.ExpiresAtUtc.HasValue ? r.ExpiresAtUtc.Value.ToString("MM/dd HH:mm") : "—")</td>
+                                <td>
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-success"
+                                                @onclick="@(() => ApproveAsync(r.Id))">Approve</button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                                @onclick="@(() => DenyAsync(r.Id))">Deny</button>
+                                    }
+                                    else if (r.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-warning"
+                                                @onclick="@(() => RevokeAsync(r.Id))">Revoke</button>
+                                        @if (r.ExtensionRequested)
+                                        {
+                                            <button class="pam-btn pam-btn-xs pam-btn-info"
+                                                    @onclick="@(() => ApproveExtensionAsync(r.Id))">
+                                                +Ext (@(r.ExtensionRequestedMinutes)m)
+                                            </button>
+                                        }
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<!-- My Requests Tab -->
+@if (_tab == "my")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>My JIT Access Requests</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loading)
+            {
+                <div class="pam-loading-text">Loading your requests...</div>
+            }
+            else if (_myRequests == null || _myRequests.Count == 0)
+            {
+                <div class="pam-empty">You have no JIT access requests.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Resource</th>
+                            <th>Duration</th>
+                            <th>Reason</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _myRequests)
+                        {
+                            <tr>
+                                <td><span class="pam-badge @StatusClass(r.Status)">@r.Status</span></td>
+                                <td>@r.ResourceType@(r.ResourceName != null ? ": " + r.ResourceName : "")</td>
+                                <td>@r.RequestedDurationMinutes min</td>
+                                <td title="@r.Reason">@Truncate(r.Reason, 40)</td>
+                                <td>@r.CreatedAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>@(r.ExpiresAtUtc.HasValue ? r.ExpiresAtUtc.Value.ToString("MM/dd HH:mm") : "—")</td>
+                                <td>
+                                    @if (r.Status == "Active" && !r.ExtensionRequested)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-info"
+                                                @onclick="@(() => RequestExtensionAsync(r.Id))">
+                                            Request Extension
+                                        </button>
+                                    }
+                                    else if (r.ExtensionRequested)
+                                    {
+                                        <span class="pam-text-muted">Extension pending</span>
+                                    }
+                                    @if (r.Status == "Denied" && r.DenyReason != null)
+                                    {
+                                        <span class="pam-text-muted" title="@r.DenyReason">Denied: @Truncate(r.DenyReason, 30)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<!-- New Request Tab -->
+@if (_tab == "new")
+{
+    <div class="pam-card" style="max-width:600px">
+        <div class="pam-card-header">Request JIT Access</div>
+        <div class="pam-card-body">
+            <div class="pam-form-group">
+                <label class="pam-label">Resource Type</label>
+                <select class="pam-select" @bind="_reqResourceType">
+                    <option value="Device">Device</option>
+                    <option value="Credential">Credential</option>
+                    <option value="System">System</option>
+                    <option value="Database">Database</option>
+                </select>
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Resource Name (optional)</label>
+                <input class="pam-input" placeholder="e.g. prod-db-01" @bind="_reqResourceName" />
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Duration</label>
+                <select class="pam-select" @bind="_reqDuration">
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="240">4 hours</option>
+                    <option value="480">8 hours</option>
+                </select>
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Business Justification</label>
+                <textarea class="pam-input" rows="4"
+                    placeholder="Explain why you need this access (min 10 chars)..."
+                    @bind="_reqReason"></textarea>
+            </div>
+            <button class="pam-btn pam-btn-primary" @onclick="SubmitRequestAsync" disabled="@_submitting">
+                @(_submitting ? "Submitting..." : "Submit Request")
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "all";
+    private bool _loading;
+    private bool _submitting;
+    private string? _error;
+    private string? _success;
+    private int _activeCount;
+    private List<JitRequestDto>? _allRequests;
+    private List<JitRequestDto>? _myRequests;
+    private string? _filterStatus;
+
+    // New request form
+    private string _reqResourceType = "Device";
+    private string? _reqResourceName;
+    private int _reqDuration = 60;
+    private string _reqReason = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAllAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        _error = null;
+        _success = null;
+        if (tab == "all") await LoadAllAsync();
+        else if (tab == "my") await LoadMyAsync();
+    }
+
+    private async Task FilterStatus(string? status)
+    {
+        _filterStatus = status;
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _loading = true;
+        _allRequests = await Api.GetJitRequestsAsync(_filterStatus);
+        _activeCount = _allRequests?.Count(r => r.Status == "Active") ?? 0;
+        _loading = false;
+    }
+
+    private async Task LoadMyAsync()
+    {
+        _loading = true;
+        _myRequests = await Api.GetMyJitRequestsAsync();
+        _loading = false;
+    }
+
+    private async Task ApproveAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.ApproveJitRequestAsync(id);
+        if (ok) { _success = "Request approved."; await LoadAllAsync(); }
+        else _error = "Failed to approve request.";
+    }
+
+    private async Task DenyAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.DenyJitRequestAsync(id, "Denied by admin");
+        if (ok) { _success = "Request denied."; await LoadAllAsync(); }
+        else _error = "Failed to deny request.";
+    }
+
+    private async Task RevokeAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.RevokeJitRequestAsync(id, "Revoked by admin");
+        if (ok) { _success = "Access revoked."; await LoadAllAsync(); }
+        else _error = "Failed to revoke access.";
+    }
+
+    private async Task ApproveExtensionAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.ApproveJitExtensionAsync(id);
+        if (ok) { _success = "Extension approved."; await LoadAllAsync(); }
+        else _error = "Failed to approve extension.";
+    }
+
+    private async Task RequestExtensionAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.RequestJitExtensionAsync(id, 60, "Need more time");
+        if (ok) { _success = "Extension request submitted."; await LoadMyAsync(); }
+        else _error = "Failed to submit extension request.";
+    }
+
+    private async Task SubmitRequestAsync()
+    {
+        _error = null; _success = null;
+        if (string.IsNullOrWhiteSpace(_reqReason) || _reqReason.Trim().Length < 10)
+        {
+            _error = "Reason must be at least 10 characters.";
+            return;
+        }
+        _submitting = true;
+        var ok = await Api.SubmitJitRequestAsync(_reqResourceType, _reqResourceName, _reqReason.Trim(), _reqDuration);
+        _submitting = false;
+        if (ok)
+        {
+            _success = "JIT access request submitted. Awaiting admin approval.";
+            _reqReason = string.Empty;
+            _reqResourceName = null;
+            _tab = "my";
+            await LoadMyAsync();
+        }
+        else _error = "Failed to submit request.";
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Active"  => "pam-badge-green",
+        "Pending" => "pam-badge-yellow",
+        "Expired" => "pam-badge-gray",
+        "Revoked" => "pam-badge-gray",
+        "Denied"  => "pam-badge-red",
+        _         => ""
+    };
+
+    private static string Truncate(string? s, int max)
+    {
+        if (s == null) return "";
+        return s.Length <= max ? s : s[..max] + "…";
+    }
+}

@@ -48,3 +48,5 @@ public enum RotationConnector { WinRm, Ssh, Ldap, Snmp, SqlServer, Oracle, MySql
 public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
 
 public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2, Revoked = 3 }
+
+public enum JitAccessStatus : byte { Pending = 0, Approved = 1, Active = 2, Expired = 3, Revoked = 4, Denied = 5 }

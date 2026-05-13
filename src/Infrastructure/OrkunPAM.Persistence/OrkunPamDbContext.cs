@@ -97,6 +97,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 
     // Security
     public DbSet<BreakGlassEvent> BreakGlassEvents => Set<BreakGlassEvent>();
+    public DbSet<JitAccessRequest> JitAccessRequests => Set<JitAccessRequest>();
 
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
@@ -321,6 +322,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 
     public override Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
+        // Auto-set audit fields
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {
             if (entry.State == EntityState.Modified)
