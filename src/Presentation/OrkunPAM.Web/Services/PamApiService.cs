@@ -4,10 +4,6 @@ using System.Text.Json;
 
 namespace OrkunPAM.Web.Services;
 
-/// <summary>
-/// Thin API client for PAM Web API. Injects Bearer token from AuthStateService.
-/// All methods return null on HTTP error to let pages show friendly error state.
-/// </summary>
 public sealed class PamApiService
 {
     private readonly IHttpClientFactory _factory;
@@ -148,9 +144,6 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<SessionDto>>(url);
     }
 
-    /// <summary>
-    /// Creates an RDP session and returns token + .rdp file content for the browser to download.
-    /// </summary>
     public async Task<RdpLaunchResult?> LaunchRdpSessionAsync(string deviceId, string credentialId,
         string? reason = null, string? ticketNumber = null)
     {
@@ -457,6 +450,100 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // Break-Glass (#46)
+    // -----------------------------------------------------------------------
+
+    public async Task<BreakGlassSubmitResult?> SubmitBreakGlassAsync(
+        string resourceType, Guid? resourceId, string? resourceName,
+        string emergencyReason, string? ticketNumber, int expiresInMinutes = 60)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/break-glass", new
+            {
+                resourceType, resourceId, resourceName,
+                emergencyReason, ticketNumber, expiresInMinutes
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<BreakGlassSubmitResult>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<PagedResult<BreakGlassDto>?> GetBreakGlassEventsAsync(
+        string? status = null, int page = 1, int pageSize = 50)
+    {
+        var url = $"/api/v1/break-glass?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
+        return await GetAsync<PagedResult<BreakGlassDto>>(url);
+    }
+
+    public async Task<ListResult<BreakGlassDto>?> GetMyBreakGlassEventsAsync()
+        => await GetAsync<ListResult<BreakGlassDto>>("/api/v1/break-glass/my");
+
+    public async Task<bool> AcknowledgeBreakGlassAsync(string id, string? notes)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/break-glass/{id}/acknowledge",
+                new { notes });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RevokeBreakGlassAsync(string id, string? notes = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/break-glass/{id}/revoke",
+                new { notes });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // -----------------------------------------------------------------------
+    // SMTP (#54)
+    // -----------------------------------------------------------------------
+
+    public async Task<bool> SaveSmtpConfigAsync(string host, int port, string from,
+        string? fromName, string? username, string? password, bool useTls)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/email/config",
+                new { host, port, from, fromName, username, password, useTls });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<Dictionary<string, string>?> GetSmtpConfigAsync()
+    {
+        var result = await GetAsync<SingleResult<Dictionary<string, string>>>("/api/v1/system/email/config");
+        return result?.Data;
+    }
+
+    public async Task<(bool Success, string Message)> TestSmtpAsync(string to)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/email/test", new { to });
+            if (!resp.IsSuccessStatusCode) return (false, "HTTP error");
+            var result = await resp.Content.ReadFromJsonAsync<SmtpTestResult>(JsonOpts);
+            return (result?.Success ?? false, result?.Message ?? "No response");
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
 
@@ -651,3 +738,22 @@ public record PendingApprovalDto(
     int       StepOrder,
     DateTime  CreatedAtUtc,
     DateTime? ExpiresAtUtc);
+
+public record BreakGlassDto(
+    string    Id,
+    string    RequesterUsername,
+    string?   RequesterIpAddress,
+    string    ResourceType,
+    string?   ResourceId,
+    string?   ResourceName,
+    string    EmergencyReason,
+    string?   TicketNumber,
+    string    Status,
+    DateTime  CreatedAtUtc,
+    DateTime  ExpiresAtUtc,
+    DateTime? AcknowledgedAtUtc,
+    string?   AcknowledgedByUsername,
+    string?   AcknowledgementNotes);
+
+public record BreakGlassSubmitResult(string Id, string Status, DateTime ExpiresAtUtc);
+public record SmtpTestResult(bool Success, string? Message);
