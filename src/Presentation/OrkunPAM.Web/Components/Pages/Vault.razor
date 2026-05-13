@@ -128,12 +128,17 @@
                                         @if (!isCheckedOut)
                                         {
                                             <button class="pam-btn-icon" title="Checkout credential"
-                                                    @onclick="() => OpenCheckout(c.Id, c.Name)">↗</button>
+                                                    @onclick="@(() => OpenCheckout(c.Id, c.Name)">↗</button>
                                         }
                                         @if (isMyCheckout)
                                         {
                                             <button class="pam-btn-icon" title="Check in"
-                                                    @onclick="() => CheckinAsync(c.Id)">↙</button>
+                                                    @onclick="@(() => CheckinAsync(c.Id))">↙</button>
+                                        }
+                                        @if (c.Type == "UserPassword")
+                                        {
+                                            <button class="pam-btn-icon pam-btn-rotate" title="Rotate password"
+                                                    @onclick="@(() => OpenRotateModal(c.Id, c.Name))">↻</button>
                                         }
                                         @if (!string.IsNullOrEmpty(c.DeviceId))
                                         {
@@ -335,6 +340,68 @@
     </div>
 }
 
+<!-- Rotate Password Modal -->
+@if (_showRotate)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showRotate = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Rotate Password — @_rotCredName</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showRotate = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_rotError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_rotError</div>
+                }
+                @if (_rotSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success">@_rotSuccess</div>
+                }
+                <div class="pam-alert pam-alert-warning">
+                    A new random password will be generated and pushed to the target system.
+                    The vault will be updated automatically on success.
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Connector *</label>
+                    <select class="pam-input" style="width:100%" @bind="_rotConnector">
+                        <option value="Ssh">SSH (Linux/Unix)</option>
+                        <option value="WinRm">WinRM (Windows Local Admin)</option>
+                        <option value="Ldap">LDAP / Active Directory</option>
+                        <option value="SqlServer">SQL Server</option>
+                        <option value="MySql">MySQL</option>
+                        <option value="PostgreSql">PostgreSQL</option>
+                    </select>
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:2">
+                        <label class="pam-label">Host (leave blank to use device)</label>
+                        <input class="pam-input" style="width:100%" @bind="_rotHost"
+                               placeholder="192.168.1.10 or server.domain.com" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Port</label>
+                        <input class="pam-input" style="width:100%" type="number"
+                               min="1" max="65535" @bind="_rotPort" placeholder="default" />
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Domain (for LDAP/AD only)</label>
+                    <input class="pam-input" style="width:100%" @bind="_rotDomain"
+                           placeholder="e.g. corp.example.com" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRotate = false)">Cancel</button>
+                <button class="pam-btn pam-btn-warning" @onclick="SubmitRotateAsync" disabled="@_rotSaving">
+                    @if (_rotSaving) { <span class="pam-spinner-sm"></span> }
+                    Rotate Password
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<CredentialDto>? _creds;
     private List<FolderDto>?     _folders;
@@ -378,6 +445,18 @@
     private bool    _addApproval;
     private bool    _addSaving;
     private string? _addError;
+
+    // Rotate Password modal
+    private bool    _showRotate;
+    private string? _rotCredId;
+    private string? _rotCredName;
+    private string  _rotConnector = "Ssh";
+    private string  _rotHost      = "";
+    private int?    _rotPort;
+    private string  _rotDomain    = "";
+    private bool    _rotSaving;
+    private string? _rotError;
+    private string? _rotSuccess;
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -527,6 +606,40 @@
 
         _showAdd = false;
         await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
+    }
+
+    private void OpenRotateModal(string credId, string credName)
+    {
+        _rotCredId = credId; _rotCredName = credName;
+        _rotConnector = "Ssh"; _rotHost = ""; _rotPort = null; _rotDomain = "";
+        _rotError = null; _rotSuccess = null; _rotSaving = false;
+        _showRotate = true;
+    }
+
+    private async Task SubmitRotateAsync()
+    {
+        _rotError = null; _rotSuccess = null; _rotSaving = true; StateHasChanged();
+
+        var ok = await Api.RotateCredentialAsync(
+            _rotCredId!,
+            _rotConnector,
+            string.IsNullOrWhiteSpace(_rotHost) ? null : _rotHost.Trim(),
+            _rotPort,
+            string.IsNullOrWhiteSpace(_rotDomain) ? null : _rotDomain.Trim());
+
+        _rotSaving = false;
+
+        if (ok)
+        {
+            _rotSuccess = "Password rotated successfully. The vault has been updated.";
+            await LoadAsync();
+        }
+        else
+        {
+            _rotError = "Rotation failed. Ensure the connector settings match the target system and that the current password is correct.";
+        }
+
+        StateHasChanged();
     }
 
     private async Task PrevPage() { _page--; await LoadAsync(); }

@@ -4,6 +4,7 @@ using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -397,6 +398,136 @@ public static class VaultEndpoints
             return Results.Ok(new { success = true, data = new { password = decResult.Value } });
         });
 
+        // === Password Rotation ===
+        creds.MapPost("/{id:guid}/rotate", async (Guid id, RotateCredentialRequest req,
+            OrkunPamDbContext db, IVaultEncryptionService vault, IRotationService rotation,
+            ILogger<Program> logger, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var cred = await db.Credentials
+                .Include(c => c.RotationPolicy)
+                .FirstOrDefaultAsync(c => c.Id == id);
+            if (cred == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            if (cred.CredentialType != CredentialType.UserPassword)
+                return Results.BadRequest(new { success = false, errors = new[] { "Only UserPassword credentials support rotation" } });
+
+            // Resolve connection details: explicit request params override device lookup
+            string? host = req.Host;
+            int port = req.Port ?? 0;
+            RotationConnector connector;
+
+            if (!Enum.TryParse<RotationConnector>(req.Connector, true, out connector))
+                return Results.BadRequest(new { success = false, errors = new[] { $"Unknown connector '{req.Connector}'. Valid: WinRm, Ssh, Ldap, SqlServer, MySql, PostgreSql" } });
+
+            if (string.IsNullOrEmpty(host) && cred.DeviceId.HasValue)
+            {
+                var device = await db.Devices.FindAsync(cred.DeviceId.Value);
+                if (device != null)
+                {
+                    host = device.Fqdn ?? device.IpAddress ?? device.Hostname;
+                    port = port == 0 ? (device.ConnectionPort ?? 0) : port;
+                }
+            }
+
+            if (string.IsNullOrEmpty(host))
+                return Results.BadRequest(new { success = false, errors = new[] { "Host is required when credential has no associated device" } });
+
+            // Decrypt current password
+            string? currentPassword = null;
+            if (cred.PasswordEnc != null)
+            {
+                var decResult = vault.DecryptString(cred.PasswordEnc);
+                if (decResult.IsFailure)
+                    return Results.Problem("Failed to decrypt current password");
+                currentPassword = decResult.Value;
+            }
+
+            // Generate new password
+            var newPassword = rotation.GeneratePassword(length: 24);
+
+            var target = new RotationTarget(
+                Host: host,
+                Port: port,
+                Username: cred.Username ?? "",
+                CurrentPassword: currentPassword,
+                NewPassword: newPassword,
+                Domain: req.Domain);
+
+            // Mark as rotating
+            cred.Status = CredentialStatus.Rotating;
+            await db.SaveChangesAsync();
+
+            var rotResult = await rotation.RotatePasswordAsync(connector, target);
+
+            if (rotResult.Success)
+            {
+                // Encrypt and save new password
+                var encResult = vault.EncryptString(newPassword);
+                if (encResult.IsFailure)
+                {
+                    cred.Status = CredentialStatus.Active;
+                    await db.SaveChangesAsync();
+                    return Results.Problem("Rotation succeeded on target but failed to encrypt new password");
+                }
+
+                // Archive old password in history
+                if (cred.PasswordEnc != null)
+                {
+                    db.PasswordHistories.Add(new PasswordHistory
+                    {
+                        CredentialId = id,
+                        PasswordEnc = cred.PasswordEnc,
+                        ChangedBy = userId,
+                        ChangeReason = PasswordChangeReason.OnDemand
+                    });
+                }
+
+                cred.PasswordEnc = encResult.Value;
+                cred.LastRotatedAtUtc = DateTime.UtcNow;
+                cred.Version++;
+                cred.Status = CredentialStatus.Active;
+
+                if (cred.RotationPolicy != null)
+                    cred.NextRotationAtUtc = DateTime.UtcNow.AddDays(cred.RotationPolicy.IntervalDays);
+
+                await db.SaveChangesAsync();
+
+                logger.LogInformation("Password rotated for credential '{Name}' via {Connector} by user {UserId}",
+                    cred.Name, connector, userId);
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        cred.Id, cred.Name,
+                        connector = connector.ToString(),
+                        responseTimeMs = rotResult.ResponseTimeMs,
+                        lastRotatedAt = cred.LastRotatedAtUtc
+                    }
+                });
+            }
+            else
+            {
+                cred.Status = CredentialStatus.Active;
+                await db.SaveChangesAsync();
+
+                logger.LogWarning("Password rotation failed for credential '{Name}': {Error}", cred.Name, rotResult.Message);
+
+                return Results.UnprocessableEntity(new
+                {
+                    success = false,
+                    errors = new[] { $"Rotation failed: {rotResult.Message}" },
+                    data = new { connector = connector.ToString(), rotResult.ResponseTimeMs }
+                });
+            }
+        }).RequireAuthorization();
+
         // === Vault Permissions ===
         var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault").RequireAuthorization();
 
@@ -439,3 +570,4 @@ public record CheckoutRequest(string? Reason, string? TicketNumber, int? Duratio
 public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
+public record RotateCredentialRequest(string Connector, string? Host, int? Port, string? Domain);

@@ -1,0 +1,360 @@
+@page "/approvals"
+@inject PamApiService Api
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Approvals — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Approval Requests</h2>
+    <span class="pam-page-sub">Review and act on pending access requests</span>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+@if (_success != null)
+{
+    <div class="pam-alert pam-alert-success">@_success</div>
+}
+
+<!-- Tabs -->
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "pending" ? "active" : "")"
+            @onclick="@(() => SetTab("pending"))">
+        Pending
+        @if (_pendingList != null && _pendingList.Count > 0)
+        {
+            <span class="pam-badge-count">@_pendingList.Count</span>
+        }
+    </button>
+    <button class="pam-tab @(_tab == "history" ? "active" : "")"
+            @onclick="@(() => SetTab("history"))">
+        History
+    </button>
+</div>
+
+<!-- Pending Tab -->
+@if (_tab == "pending")
+{
+    <div class="pam-card">
+        <div class="pam-card-body">
+            @if (_loading)
+            {
+                <div class="pam-loading-text">Loading pending requests...</div>
+            }
+            else if (_pendingList == null || _pendingList.Count == 0)
+            {
+                <div class="pam-empty">No pending approvals. You are all caught up.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Resource</th>
+                            <th>Requested By</th>
+                            <th>Reason</th>
+                            <th>Step</th>
+                            <th>Requested</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in _pendingList)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="pam-badge">@req.ResourceType</span>
+                                    @if (req.ResourceId != null)
+                                    {
+                                        <span class="pam-text-muted"> @req.ResourceId[..8]…</span>
+                                    }
+                                </td>
+                                <td>@(req.RequesterId?.Length >= 8 ? req.RequesterId[..8] + "…" : req.RequesterId ?? "—")</td>
+                                <td>@(req.Reason ?? "—")</td>
+                                <td><span class="pam-badge-step">Step @(req.StepOrder + 1)</span></td>
+                                <td>@req.CreatedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td>
+                                    @if (req.ExpiresAtUtc.HasValue)
+                                    {
+                                        var remaining = req.ExpiresAtUtc.Value - DateTime.UtcNow;
+                                        <span class="@(remaining.TotalHours < 1 ? "pam-text-danger" : "")">
+                                            @FormatTimeRemaining(req.ExpiresAtUtc.Value)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>No expiry</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button class="pam-btn pam-btn-success pam-btn-sm"
+                                            @onclick="@(() => OpenDecisionModal(req.RequestId, true))">
+                                        Approve
+                                    </button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => OpenDecisionModal(req.RequestId, false))">
+                                        Deny
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<!-- History Tab -->
+@if (_tab == "history")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <div class="pam-filter-row">
+                <select class="pam-input pam-input-sm" @bind="_historyStatus" @bind:after="LoadHistoryAsync">
+                    <option value="">All Statuses</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Denied">Denied</option>
+                    <option value="Expired">Expired</option>
+                </select>
+            </div>
+        </div>
+        <div class="pam-card-body">
+            @if (_historyLoading)
+            {
+                <div class="pam-loading-text">Loading history...</div>
+            }
+            else if (_historyList == null || _historyList.Count == 0)
+            {
+                <div class="pam-empty">No approval history yet.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Resource</th>
+                            <th>Requester</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Requested</th>
+                            <th>Completed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in _historyList)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="pam-badge">@req.ResourceType</span>
+                                </td>
+                                <td>@(req.RequesterId?.Length >= 8 ? req.RequesterId[..8] + "…" : req.RequesterId ?? "—")</td>
+                                <td>@(req.Reason ?? "—")</td>
+                                <td>
+                                    <span class="pam-status @StatusClass(req.Status)">@req.Status</span>
+                                </td>
+                                <td>@req.CreatedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td>@(req.CompletedAtUtc.HasValue ? req.CompletedAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm") : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div class="pam-pagination">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_historyPage <= 1)"
+                            @onclick="@(() => GoHistoryPageAsync(_historyPage - 1))">
+                        ← Prev
+                    </button>
+                    <span>Page @_historyPage of @_historyTotalPages</span>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            disabled="@(_historyPage >= _historyTotalPages)"
+                            @onclick="@(() => GoHistoryPageAsync(_historyPage + 1))">
+                        Next →
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Approve/Deny Modal -->
+@if (_showModal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>@(_approving ? "Approve Request" : "Deny Request")</h3>
+                <button class="pam-modal-close" @onclick="CloseModal">✕</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (!_approving)
+                {
+                    <div class="pam-alert pam-alert-warning">
+                        This will permanently deny the access request.
+                    </div>
+                }
+                <div class="pam-field">
+                    <label class="pam-label">Comments @(_approving ? "(optional)" : "(required)")</label>
+                    <textarea class="pam-input" rows="3" placeholder="Add a comment..."
+                              @bind="_modalComment"></textarea>
+                </div>
+                @if (_modalError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_modalError</div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn @(_approving ? "pam-btn-success" : "pam-btn-danger")"
+                        disabled="@_submitting"
+                        @onclick="SubmitDecisionAsync">
+                    @(_submitting ? "Submitting..." : (_approving ? "Confirm Approve" : "Confirm Deny"))
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "pending";
+    private bool _loading = true;
+    private bool _historyLoading = false;
+    private string? _error;
+    private string? _success;
+
+    private List<PendingApprovalDto>? _pendingList;
+    private List<ApprovalRequestDto>? _historyList;
+
+    private string _historyStatus = "";
+    private int _historyPage = 1;
+    private int _historyTotalPages = 1;
+    private const int PageSize = 20;
+
+    private bool _showModal;
+    private bool _approving;
+    private string? _modalRequestId;
+    private string? _modalComment;
+    private string? _modalError;
+    private bool _submitting;
+
+    private string? _currentUserId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var user = await Auth.GetUserAsync();
+        if (user == null) { Nav.NavigateTo("/login", forceLoad: true); return; }
+        _currentUserId = user.UserId;
+        await LoadPendingAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        _error = null;
+        _success = null;
+        if (tab == "history" && _historyList == null)
+            await LoadHistoryAsync();
+    }
+
+    private async Task LoadPendingAsync()
+    {
+        _loading = true;
+        _error = null;
+        if (_currentUserId != null)
+            _pendingList = await Api.GetPendingApprovalsAsync(_currentUserId);
+        _loading = false;
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _historyLoading = true;
+        var result = await Api.GetApprovalsAsync(
+            string.IsNullOrEmpty(_historyStatus) ? null : _historyStatus,
+            _historyPage, PageSize);
+        _historyList = result?.Data;
+        var total = result?.Meta?.TotalCount ?? 0;
+        _historyTotalPages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
+        _historyLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task GoHistoryPageAsync(int page)
+    {
+        _historyPage = page;
+        await LoadHistoryAsync();
+    }
+
+    private void OpenDecisionModal(string requestId, bool approve)
+    {
+        _modalRequestId = requestId;
+        _approving = approve;
+        _modalComment = null;
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _submitting = false;
+    }
+
+    private async Task SubmitDecisionAsync()
+    {
+        if (!_approving && string.IsNullOrWhiteSpace(_modalComment))
+        {
+            _modalError = "A comment is required when denying a request.";
+            return;
+        }
+
+        _submitting = true;
+        _modalError = null;
+
+        bool ok;
+        if (_approving)
+            ok = await Api.ApproveRequestAsync(_modalRequestId!, _modalComment);
+        else
+            ok = await Api.DenyRequestAsync(_modalRequestId!, _modalComment);
+
+        _submitting = false;
+
+        if (ok)
+        {
+            _showModal = false;
+            _success = _approving ? "Request approved successfully." : "Request denied.";
+            await LoadPendingAsync();
+            if (_historyList != null) await LoadHistoryAsync();
+            StateHasChanged();
+        }
+        else
+        {
+            _modalError = "Failed to submit decision. You may not have permission or the request is no longer pending.";
+        }
+    }
+
+    private static string FormatTimeRemaining(DateTime expiresAt)
+    {
+        var remaining = expiresAt - DateTime.UtcNow;
+        if (remaining.TotalDays >= 1) return $"{(int)remaining.TotalDays}d remaining";
+        if (remaining.TotalHours >= 1) return $"{(int)remaining.TotalHours}h remaining";
+        if (remaining.TotalMinutes >= 1) return $"{(int)remaining.TotalMinutes}m remaining";
+        return "Expiring soon";
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Approved" => "pam-status-active",
+        "Denied"   => "pam-status-error",
+        "Expired"  => "pam-status-done",
+        _          => "pam-status-done"
+    };
+}

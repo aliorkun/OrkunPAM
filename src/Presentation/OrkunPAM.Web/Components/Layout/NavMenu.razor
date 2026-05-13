@@ -1,5 +1,6 @@
 @inject AuthStateService Auth
 @inject NavigationManager Nav
+@inject PamApiService Api
 
 <div class="pam-sidebar">
     <div class="pam-brand">
@@ -43,6 +44,15 @@
             <span class="pam-nav-icon">📋</span> Policies
         </NavLink>
 
+        <div class="pam-nav-section">WORKFLOW</div>
+        <NavLink class="pam-nav-link" href="/approvals">
+            <span class="pam-nav-icon">✅</span> Approvals
+            @if (_pendingCount > 0)
+            {
+                <span class="pam-nav-badge @(_pendingCount > 0 ? "pam-nav-badge-red" : "")">@_pendingCount</span>
+            }
+        </NavLink>
+
         <div class="pam-nav-section">REPORTING</div>
         <NavLink class="pam-nav-link" href="/reports">
             <span class="pam-nav-icon">📊</span> Reports
@@ -63,11 +73,13 @@
 
 @code {
     private AuthUser? _user;
+    private int _pendingCount;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         _user = await Auth.GetUserAsync();
+        _pendingCount = await Api.GetPendingApprovalCountAsync();
         StateHasChanged();
     }
 

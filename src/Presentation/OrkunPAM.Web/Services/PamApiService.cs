@@ -351,6 +351,62 @@ public sealed class PamApiService
         return result?.Meta?.TotalCount ?? 0;
     }
 
+    public async Task<List<PendingApprovalDto>?> GetPendingApprovalsAsync(string approverId)
+    {
+        var result = await GetAsync<SimpleResult<PendingApprovalDto>>(
+            "/api/v1/approval-requests/pending?approverId=" + Uri.EscapeDataString(approverId));
+        return result?.Data;
+    }
+
+    public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalsAsync(
+        string? status = null, int page = 1, int pageSize = 20)
+    {
+        var url = "/api/v1/approval-requests?page=" + page + "&pageSize=" + pageSize;
+        if (!string.IsNullOrEmpty(status)) url += "&status=" + Uri.EscapeDataString(status);
+        return await GetAsync<PagedResult<ApprovalRequestDto>>(url);
+    }
+
+    public async Task<bool> ApproveRequestAsync(string id, string? comments)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync(
+                "/api/v1/approval-requests/" + id + "/approve",
+                new { comments });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DenyRequestAsync(string id, string? comments)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync(
+                "/api/v1/approval-requests/" + id + "/deny",
+                new { comments });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RotateCredentialAsync(
+        string credentialId, string connector,
+        string? host = null, int? port = null, string? domain = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync(
+                "/api/v1/vault/credentials/" + credentialId + "/rotate",
+                new { connector, host, port, domain });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // -----------------------------------------------------------------------
     // Reports & Audit Logs
     // -----------------------------------------------------------------------
@@ -570,3 +626,28 @@ public record AuditLogDto(
     string?   TargetId,
     string?   Details,
     string    Outcome);
+
+public record ApprovalRequestDto(
+    string    Id,
+    string?   WorkflowId,
+    string?   RequesterId,
+    string    ResourceType,
+    string?   ResourceId,
+    int       CurrentStep,
+    string    Status,
+    string?   Reason,
+    string?   TicketNumber,
+    DateTime? ExpiresAtUtc,
+    DateTime  CreatedAtUtc,
+    DateTime? CompletedAtUtc);
+
+public record PendingApprovalDto(
+    long      StepId,
+    string    RequestId,
+    string    ResourceType,
+    string?   ResourceId,
+    string?   Reason,
+    string?   RequesterId,
+    int       StepOrder,
+    DateTime  CreatedAtUtc,
+    DateTime? ExpiresAtUtc);
