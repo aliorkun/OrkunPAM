@@ -4,6 +4,10 @@ using System.Text.Json;
 
 namespace OrkunPAM.Web.Services;
 
+/// <summary>
+/// Thin API client for PAM Web API. Injects Bearer token from AuthStateService.
+/// All methods return null on HTTP error to let pages show friendly error state.
+/// </summary>
 public sealed class PamApiService
 {
     private readonly IHttpClientFactory _factory;
@@ -144,6 +148,9 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<SessionDto>>(url);
     }
 
+    /// <summary>
+    /// Creates an RDP session and returns token + .rdp file content for the browser to download.
+    /// </summary>
     public async Task<RdpLaunchResult?> LaunchRdpSessionAsync(string deviceId, string credentialId,
         string? reason = null, string? ticketNumber = null)
     {
@@ -544,6 +551,44 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // Encryption / BYOK (#53)
+    // -----------------------------------------------------------------------
+
+    public async Task<KeyStatusDto?> GetEncryptionStatusAsync()
+    {
+        var result = await GetAsync<SingleResult<KeyStatusDto>>("/api/v1/system/encryption/status");
+        return result?.Data;
+    }
+
+    public async Task<(bool Ok, string? Message)> RotateEncryptionKeyAsync(
+        string newPassphrase, string confirmPassphrase)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/encryption/rotate",
+                new { newPassphrase, confirmPassphrase });
+            if (!resp.IsSuccessStatusCode) return (false, "HTTP error " + (int)resp.StatusCode);
+            var r = await resp.Content.ReadFromJsonAsync<SimpleMessageResult>(JsonOpts);
+            return (r?.Success ?? false, r?.Message);
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    public async Task<string?> ExportKeyBackupAsync(string backupPassphrase)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/encryption/backup",
+                new { backupPassphrase });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsStringAsync();
+        }
+        catch { return null; }
+    }
+
+    // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
 
@@ -757,3 +802,13 @@ public record BreakGlassDto(
 
 public record BreakGlassSubmitResult(string Id, string Status, DateTime ExpiresAtUtc);
 public record SmtpTestResult(bool Success, string? Message);
+
+// Encryption / BYOK DTOs
+public record KeyStatusDto(
+    int       Version,
+    DateTime? InitializedAtUtc,
+    int       RotationCount,
+    bool      IsInitialized,
+    int       DekCacheTtlMinutes);
+
+public record SimpleMessageResult(bool Success, string? Message);

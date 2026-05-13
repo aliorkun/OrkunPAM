@@ -245,6 +245,7 @@ try
         vault = keyStore.IsInitialized ? "initialized" : "not_initialized"
     })).WithTags("System").AllowAnonymous();
 
+    // === Vault Encryption Test Endpoint (dev only) ===
     if (app.Environment.IsDevelopment())
     {
         app.MapPost("/api/v1/vault/test-encrypt", (string plaintext, IVaultEncryptionService vault) =>
@@ -287,6 +288,7 @@ try
     api.MapIntegrationEndpoints();
     api.MapImportEndpoints();
     api.MapBreakGlassEndpoints();
+    api.MapEncryptionEndpoints();
     api.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
