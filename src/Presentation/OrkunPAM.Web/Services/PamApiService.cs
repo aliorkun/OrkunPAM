@@ -216,17 +216,30 @@ public sealed class PamApiService
     public async Task<bool> CreateCredentialAsync(
         string name, int type, string? username, string? password,
         string folderId, string? deviceId, string? description,
-        int maxCheckoutMinutes, bool requiresApproval)
+        int maxCheckoutMinutes, bool requiresApproval, string? privateKey = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
             var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials",
-                new { folderId, name, description, type, username, password,
+                new { folderId, name, description, type, username, password, privateKey,
                       deviceId, maxCheckoutMinutes, requiresApproval });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
+    }
+
+    public async Task<SshKeyPairDto?> GenerateSshKeyPairAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/vault/credentials/generate-ssh-key", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<SshKeyPairDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
     }
 
     public async Task<CheckoutResultDto?> CheckoutCredentialAsync(
@@ -910,6 +923,7 @@ public record CheckoutResultDto(
     string    Name,
     string?   Username,
     string?   Password,
+    string?   PrivateKey,
     DateTime? ExpiresAt);
 
 public record PolicyDto(
@@ -1055,9 +1069,11 @@ public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
 public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
 public record ImportRowError(int Row, string Username, string Reason);
 
+// SSH Key DTOs (#80)
+public record SshKeyPairDto(string PrivateKey, string PublicKey);
+
 // Audit Integrity DTOs (#91)
 public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int TamperedCount, long? FirstTamperedId, string Message);
 
 // LDAP Config DTOs (#90)
 public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
-public record LdapSyncApplyDto(string Message, int Created, int Updated, int Locked, DateTime? LastSync);
