@@ -48,7 +48,19 @@
         <button class="pam-btn pam-btn-primary" @onclick="LoadAuditAsync">Search</button>
         <button class="pam-btn pam-btn-secondary" @onclick="ExportAuditCsvAsync"
                 disabled="@(_auditLogs == null || _auditLogs.Count == 0)">Export CSV</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="VerifyIntegrityAsync">Verify Integrity</button>
     </div>
+
+    @if (_integrityResult != null)
+    {
+        <div class="pam-alert @(_integrityResult.IntegrityValid ? "pam-alert-info" : "pam-alert-danger")" style="margin-bottom:8px">
+            @(_integrityResult.IntegrityValid ? "✓" : "⚠") @_integrityResult.Message
+            @if (!_integrityResult.IntegrityValid)
+            {
+                <span> (checked @_integrityResult.EntriesChecked entries, @_integrityResult.TamperedCount tampered)</span>
+            }
+        </div>
+    }
 
     @if (_auditError != null) { <div class="pam-alert pam-alert-danger">@_auditError</div> }
 
@@ -95,7 +107,10 @@
                                         <span>@(log.TargetType ?? "—")</span>
                                     }
                                 </td>
-                                <td><span class="pam-status @OutcomeClass(log.Outcome)">@log.Outcome</span></td>
+                                <td>
+                                    <span class="pam-status @OutcomeClass(log.Outcome)">@log.Outcome</span>
+                                    @if (log.IsTampered) { <span class="pam-badge" style="background:#dc3545;color:#fff;margin-left:4px">⚠ TAMPERED</span> }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -226,6 +241,7 @@ else
 
 @code {
     private string _tab = "audit";
+    private AuditVerifyResult? _integrityResult;
 
     // ---- Audit Log state ----
     private string   _preset           = "7d";
@@ -329,6 +345,15 @@ else
         }
         await JS.InvokeVoidAsync("downloadCsvFile",
             "audit-log-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
+    }
+
+    private async Task VerifyIntegrityAsync()
+    {
+        _integrityResult = null; StateHasChanged();
+        _integrityResult = await Api.VerifyAuditIntegrityAsync();
+        if (_integrityResult != null && !_integrityResult.IntegrityValid)
+            await LoadAuditAsync();
+        StateHasChanged();
     }
 
     private static string OutcomeClass(string outcome) => outcome switch

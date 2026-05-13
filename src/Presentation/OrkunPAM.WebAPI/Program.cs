@@ -74,6 +74,12 @@ try
     // === JIT Expiry Background Service (#38) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.JitExpiryService>();
 
+    // === LDAP Scheduled Sync (#90) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.LdapPamSyncService>();
+
+    // === Audit Integrity Daily Job (#91) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AuditIntegrityJob>();
+
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 

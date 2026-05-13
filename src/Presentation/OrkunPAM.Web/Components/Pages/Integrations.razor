@@ -1,0 +1,149 @@
+@page "/integrations"
+@inject PamApiService Api
+
+<PageTitle>Integrations — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Integrations</h2>
+</div>
+
+<div style="display:flex;gap:4px;margin-bottom:16px">
+    <button class="pam-btn @(_tab == "ldap" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("ldap"))">🔗 LDAP / AD</button>
+</div>
+
+@if (_tab == "ldap")
+{
+    @if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+    @if (_syncMsg != null) { <div class="pam-alert pam-alert-info">@_syncMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <strong>Add LDAP Configuration</strong>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                <input class="pam-input" placeholder="Name" @bind="_newName" />
+                <input class="pam-input" placeholder="Host (e.g. dc.corp.local)" @bind="_newHost" />
+                <input class="pam-input" placeholder="Port (389 / 636)" type="number" @bind="_newPort" />
+                <input class="pam-input" placeholder="Base DN (e.g. DC=corp,DC=local)" @bind="_newBaseDn" />
+                <input class="pam-input" placeholder="Bind DN (optional)" @bind="_newBindDn" />
+                <input class="pam-input" placeholder="Sync Interval (minutes)" type="number" @bind="_newInterval" />
+            </div>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+                <label><input type="checkbox" @bind="_newUseSsl" /> Use SSL (LDAPS)</label>
+                <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="AddConfigAsync"
+                        disabled="@_saving">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading configurations…</div>
+            }
+            else if (_configs == null || _configs.Count == 0)
+            {
+                <div class="pam-empty p-4">No LDAP configurations. Add one above to enable AD synchronization.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Host</th>
+                            <th>Port</th>
+                            <th>Base DN</th>
+                            <th>Interval</th>
+                            <th>Last Sync</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _configs)
+                        {
+                            <tr>
+                                <td>@c.Name</td>
+                                <td>@c.Host</td>
+                                <td>@c.Port</td>
+                                <td style="font-size:0.8em;max-width:200px;overflow:hidden;text-overflow:ellipsis">@c.BaseDn</td>
+                                <td>@c.SyncIntervalMinutes min</td>
+                                <td>@(c.LastSyncAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
+                                <td><span class="pam-status @(c.IsEnabled ? "pam-status-active" : "pam-status-error")">@(c.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => SyncNowAsync(c.Id))"
+                                            disabled="@(_syncing == c.Id)">
+                                        @(_syncing == c.Id ? "Syncing…" : "Sync Now")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "ldap";
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _syncMsg;
+    private string? _syncing;
+    private List<LdapConfigDto>? _configs;
+
+    // New config form fields
+    private string _newName = "";
+    private string _newHost = "";
+    private int _newPort = 389;
+    private string _newBaseDn = "";
+    private string _newBindDn = "";
+    private int _newInterval = 60;
+    private bool _newUseSsl = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private void SetTab(string tab) { _tab = tab; }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        _configs = await Api.GetLdapConfigsAsync();
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task AddConfigAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName) || string.IsNullOrWhiteSpace(_newHost) || string.IsNullOrWhiteSpace(_newBaseDn))
+        {
+            _error = "Name, Host and Base DN are required.";
+            StateHasChanged();
+            return;
+        }
+        _saving = true; _error = null; StateHasChanged();
+        var ok = await Api.CreateLdapConfigAsync(_newName, _newHost, _newPort, _newUseSsl,
+            _newBaseDn, string.IsNullOrWhiteSpace(_newBindDn) ? null : _newBindDn, _newInterval);
+        _saving = false;
+        if (ok) { _newName = _newHost = _newBaseDn = _newBindDn = ""; await LoadAsync(); }
+        else { _error = "Failed to create LDAP configuration."; StateHasChanged(); }
+    }
+
+    private async Task SyncNowAsync(string configId)
+    {
+        _syncing = configId; _syncMsg = null; _error = null; StateHasChanged();
+        var result = await Api.SyncLdapNowAsync(configId);
+        _syncing = null;
+        if (result == null) { _error = "Sync request failed."; }
+        else { _syncMsg = $"Sync complete — Created: {result.Created}, Updated: {result.Updated}, Locked: {result.Locked}"; await LoadAsync(); }
+        StateHasChanged();
+    }
+}

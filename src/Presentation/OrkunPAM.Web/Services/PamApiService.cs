@@ -440,6 +440,44 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<AuditLogDto>>(url);
     }
 
+    public async Task<AuditVerifyResult?> VerifyAuditIntegrityAsync()
+    {
+        var result = await GetAsync<SingleResult<AuditVerifyResult>>("/api/v1/audit-logs/verify");
+        return result?.Data;
+    }
+
+    public async Task<List<LdapConfigDto>?> GetLdapConfigsAsync()
+    {
+        var result = await GetAsync<ListResult<LdapConfigDto>>("/api/v1/ldap-configs");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateLdapConfigAsync(string name, string host, int port, bool useSsl,
+        string baseDn, string? bindDn, int syncIntervalMinutes)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/ldap-configs",
+                new { name, host, port, useSsl, baseDn, bindDn, syncIntervalMinutes });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<LdapSyncApplyDto?> SyncLdapNowAsync(string configId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/ldap-configs/{configId}/sync", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<LdapSyncApplyDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
     public async Task<string?> GetSessionsExportCsvAsync(DateTime? from = null, DateTime? to = null)
     {
         var client = await GetAuthClientAsync();
@@ -927,7 +965,8 @@ public record AuditLogDto(
     string?   TargetType,
     string?   TargetId,
     string?   Details,
-    string    Outcome);
+    string    Outcome,
+    bool      IsTampered = false);
 
 public record ApprovalRequestDto(
     string    Id,
@@ -1015,3 +1054,10 @@ public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
 // Bulk Import DTOs (#85)
 public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
 public record ImportRowError(int Row, string Username, string Reason);
+
+// Audit Integrity DTOs (#91)
+public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int TamperedCount, long? FirstTamperedId, string Message);
+
+// LDAP Config DTOs (#90)
+public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
+public record LdapSyncApplyDto(string Message, int Created, int Updated, int Locked, DateTime? LastSync);
