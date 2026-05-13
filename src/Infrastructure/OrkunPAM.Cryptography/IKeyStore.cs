@@ -23,6 +23,15 @@ public interface IKeyStore
     /// <summary>Create a new DEK for a given purpose.</summary>
     Result<int> CreateDataEncryptionKey(string purpose);
 
-    /// <summary>Rotate the master key. All DEKs are re-encrypted with the new MK.</summary>
-    Result RotateMasterKey();
+    /// <summary>Rotate the master key using a new passphrase. All DEKs are re-encrypted with new MK.</summary>
+    Result RotateMasterKey(string newPassphrase);
+
+    /// <summary>Return current key status: version, initialization time, rotation count.</summary>
+    KeyStatus GetKeyStatus();
+
+    /// <summary>Export the master key as an AES-256-GCM encrypted JSON blob protected by backupPassphrase.</summary>
+    Result<byte[]> ExportEncryptedBackup(string backupPassphrase);
 }
+
+/// <summary>Snapshot of the current master key state.</summary>
+public record KeyStatus(int Version, DateTime? InitializedAtUtc, int RotationCount, bool IsInitialized);
