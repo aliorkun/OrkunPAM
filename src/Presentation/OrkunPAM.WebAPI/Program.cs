@@ -68,6 +68,9 @@ try
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IRotationService, OrkunPAM.Persistence.Services.RotationService>();
 
+    // === Email / SMTP (#54) ===
+    builder.Services.AddScoped<IEmailService, OrkunPAM.Persistence.Services.SmtpEmailService>();
+
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
@@ -242,7 +245,6 @@ try
         vault = keyStore.IsInitialized ? "initialized" : "not_initialized"
     })).WithTags("System").AllowAnonymous();
 
-    // === Vault Encryption Test Endpoint (dev only) ===
     if (app.Environment.IsDevelopment())
     {
         app.MapPost("/api/v1/vault/test-encrypt", (string plaintext, IVaultEncryptionService vault) =>
@@ -284,6 +286,7 @@ try
     api.MapAnalyticsEndpoints();
     api.MapIntegrationEndpoints();
     api.MapImportEndpoints();
+    api.MapBreakGlassEndpoints();
     api.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
