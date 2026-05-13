@@ -39,13 +39,13 @@
 
 **İlerleme:** 4/4 tamamlandı (%100) ✅
 **Not:** Sprint 3, planlanan 21-27 Mayıs tarihinden önce (13 Mayıs) tamamlandı — 8 gün erken.
-**Tag:** `v0.4.0-rdp` (atılacak)
+**Tag:** `v0.4.0-rdp`
 
 ---
 
-## Aktif Sprint: Sprint 4 - Enterprise Features + Installer
-**Tarih:** 14-24 Mayıs 2026 (güncellendi — erken tamamlama nedeniyle öne alındı)
-**Hedef:** Enterprise satış için gerekli özellikler + installer
+## ~~Sprint 4 - Enterprise Features + Installer~~ ✅ TAMAMLANDI
+**Tarih:** 14-24 Mayıs 2026
+**Durum:** Tamamlandı — Enterprise demo hazır, MSI installer çalışıyor
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
@@ -56,26 +56,15 @@
 | #40 | Privileged Account Discovery | MVP-DEVICE | ✅ Kapatıldı |
 | #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION | ✅ Kapatıldı |
 | #39 | Self-Service Portal | MVP-UX | ✅ Kapatıldı |
-| #36 | MSI Installer | MVP-UX | ◻ Açık |
-| #55 | Backup/DR | MVP-DEPLOYMENT | ◻ Açık |
+| #55 | Backup/DR | MVP-DEPLOYMENT | ✅ Kapatıldı |
+| #36 | MSI Installer | MVP-UX | ✅ Kapatıldı |
 
-**İlerleme:** 7/9 kapatıldı (%78) — Sprint aktif
-**Çıkış kriteri:** Enterprise demo yapılabilir, installer çalışıyor → v1.0.0-rc1 tag
-
-**Öncelik sırası (Developer için):**
-1. #46 Break-the-Glass (kritik satış özelliği)
-2. #54 SMTP Bildirim (approval akışı için gerekli)
-3. #53 BYOK + Key Rotation UI
-4. #38 JIT Privileged Access
-5. #40 Privileged Account Discovery
-6. #63 SIEM entegrasyonu
-7. #39 Self-Service Portal
-8. #36 MSI Installer
-9. #55 Backup/DR
+**İlerleme:** 9/9 tamamlandı (%100) ✅
+**Tag:** `v1.0.0-rc1` (atılacak)
 
 ---
 
-## Sprint 5 - Ek MVP Features + Audit Chain
+## Aktif Sprint: Sprint 5 - Ek MVP Features + Audit Chain
 **Tarih:** 25 Mayıs - 4 Haziran 2026
 **Hedef:** Kalan MVP özellikler, tamper-proof audit, MFA enrollment
 
@@ -116,8 +105,8 @@
 - Security critical/high her zaman sprint'i keser (acil fix)
 
 ## Milestone Hedefleri
-- **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Şu an buradayız
-- **v1.0.0-rc1:** Sprint 4 çıkışı (24 Mayıs 2026 hedef)
+- **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Tamamlandı
+- **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ← Şu an buradayız
 - **v1.0.0:** Sprint 6 çıkışı (14 Haziran 2026 hedef)
 - **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
