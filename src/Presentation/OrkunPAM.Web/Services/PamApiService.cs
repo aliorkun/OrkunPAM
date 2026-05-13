@@ -744,6 +744,30 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
+
+    // -----------------------------------------------------------------------
+    // Bulk User Import (#85)
+    // -----------------------------------------------------------------------
+
+    public async Task<ImportResultDto?> BulkImportUsersAsync(
+        Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            using var content = new MultipartFormDataContent();
+            var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var sc = new StreamContent(stream);
+            sc.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+            content.Add(sc, "file", file.Name);
+
+            var resp = await client.PostAsync("/api/v1/users/import", content);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ImportResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -972,3 +996,7 @@ public record JitListResult(bool Success, List<JitRequestDto>? Data);
 // MFA Enrollment DTOs (#83)
 public record MfaEnrollmentDto(string Username, string Secret, string QrUri);
 public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
+
+// Bulk Import DTOs (#85)
+public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
+public record ImportRowError(int Row, string Username, string Reason);
