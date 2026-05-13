@@ -71,6 +71,9 @@ try
     // === Email / SMTP (#54) ===
     builder.Services.AddScoped<IEmailService, OrkunPAM.Persistence.Services.SmtpEmailService>();
 
+    // === JIT Expiry Background Service (#38) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.JitExpiryService>();
+
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
@@ -288,6 +291,7 @@ try
     api.MapIntegrationEndpoints();
     api.MapImportEndpoints();
     api.MapBreakGlassEndpoints();
+    api.MapJitEndpoints();
     api.MapEncryptionEndpoints();
     api.MapSystemEndpoints();
 

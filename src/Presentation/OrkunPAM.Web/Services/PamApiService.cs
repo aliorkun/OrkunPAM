@@ -589,6 +589,94 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // JIT Access (#38)
+    // -----------------------------------------------------------------------
+
+    public async Task<List<JitRequestDto>?> GetJitRequestsAsync(string? status = null)
+    {
+        var url = "/api/v1/jit/requests";
+        if (!string.IsNullOrEmpty(status)) url += "?status=" + Uri.EscapeDataString(status);
+        var result = await GetAsync<JitListResult>(url);
+        return result?.Data;
+    }
+
+    public async Task<List<JitRequestDto>?> GetMyJitRequestsAsync()
+    {
+        var result = await GetAsync<JitListResult>("/api/v1/jit/requests/my");
+        return result?.Data;
+    }
+
+    public async Task<bool> SubmitJitRequestAsync(
+        string resourceType, string? resourceName, string reason, int durationMinutes)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/jit/requests", new
+            {
+                resourceType,
+                resourceId = (Guid?)null,
+                resourceName,
+                reason,
+                durationMinutes
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ApproveJitRequestAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/jit/requests/" + id + "/approve", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DenyJitRequestAsync(string id, string? reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/deny",
+                new { reason })).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RevokeJitRequestAsync(string id, string? reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/revoke",
+                new { reason })).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RequestJitExtensionAsync(string id, int additionalMinutes, string? reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/extend",
+                new { additionalMinutes, reason })).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ApproveJitExtensionAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            return (await client.PostAsync(
+                "/api/v1/jit/requests/" + id + "/approve-extension", null)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
 
@@ -812,3 +900,28 @@ public record KeyStatusDto(
     int       DekCacheTtlMinutes);
 
 public record SimpleMessageResult(bool Success, string? Message);
+
+// JIT Access DTOs (#38)
+public record JitRequestDto(
+    string    Id,
+    string    RequesterUsername,
+    string?   RequesterIpAddress,
+    string    ResourceType,
+    string?   ResourceId,
+    string?   ResourceName,
+    string    Reason,
+    int       RequestedDurationMinutes,
+    string    Status,
+    DateTime  CreatedAtUtc,
+    DateTime? ApprovedAtUtc,
+    string?   ApprovedByUsername,
+    DateTime? ActivatedAtUtc,
+    DateTime? ExpiresAtUtc,
+    string?   DenyReason,
+    string?   RevokeReason,
+    string?   RevokedByUsername,
+    bool      ExtensionRequested,
+    int?      ExtensionRequestedMinutes,
+    string?   ExtensionReason);
+
+public record JitListResult(bool Success, List<JitRequestDto>? Data);
