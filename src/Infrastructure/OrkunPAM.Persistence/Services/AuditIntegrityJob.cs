@@ -18,6 +18,7 @@ public sealed class AuditIntegrityJob : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Initial delay on startup
         await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -56,7 +57,10 @@ public sealed class AuditIntegrityJob : BackgroundService
         }
 
         if (tamperedCount > 0)
+        {
             await db.SaveChangesAsync(ct);
+            _logger.LogWarning("Audit integrity: {Count} tampered entries detected", tamperedCount);
+        }
 
         await audit.LogAsync("System", "AUDIT_INTEGRITY_CHECK", null, "System", null,
             null, null,
