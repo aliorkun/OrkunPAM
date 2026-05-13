@@ -1,5 +1,6 @@
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -240,9 +241,26 @@ public sealed class SiemForwarderService : BackgroundService, ISiemForwarderServ
                 using (var tcp = new TcpClient())
                 {
                     await tcp.ConnectAsync(target.Host, target.Port, ct);
-                    using var ssl = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false,
-                        userCertificateValidationCallback: (_, _, _, _) => true);
-                    await ssl.AuthenticateAsClientAsync(target.Host);
+                    RemoteCertificateValidationCallback? validationCallback = null;
+                    if (!string.IsNullOrEmpty(target.CaCertThumbprint))
+                    {
+                        var expectedThumbprint = target.CaCertThumbprint.Replace(":", "").Replace(" ", "").ToUpperInvariant();
+                        validationCallback = (_, cert, _, errors) =>
+                            cert != null &&
+                            cert.GetCertHashString().Equals(expectedThumbprint, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else if (target.AllowSelfSigned)
+                    {
+                        validationCallback = (_, _, _, errors) =>
+                            (errors & ~(SslPolicyErrors.RemoteCertificateChainErrors)) == SslPolicyErrors.None;
+                    }
+                    using var ssl = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false);
+                    await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                    {
+                        TargetHost = target.Host,
+                        EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+                        RemoteCertificateValidationCallback = validationCallback
+                    });
                     await ssl.WriteAsync(bytes, ct);
                 }
                 break;

@@ -48,4 +48,7 @@ public class SiemTarget : AuditableEntity
     public DateTime? LastSentAtUtc { get; set; }
     public int TotalEventsSent { get; set; }
     public string? LastError { get; set; }
+    // TLS options — only applies when Protocol == "TLS"
+    public bool AllowSelfSigned { get; set; } = false;
+    public string? CaCertThumbprint { get; set; } // SHA-1 thumbprint for cert pinning (optional)
 }
