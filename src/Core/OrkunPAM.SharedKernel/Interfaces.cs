@@ -39,3 +39,9 @@ public interface ICurrentUserService
     IReadOnlyList<string> Permissions { get; }
     bool HasPermission(string permissionCode);
 }
+
+public interface IEmailService
+{
+    Task<bool> SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default);
+    Task<bool> TestConnectionAsync(CancellationToken ct = default);
+}

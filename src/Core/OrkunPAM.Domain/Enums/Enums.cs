@@ -46,3 +46,5 @@ public enum TakeoverStatus : byte { Pending = 0, TakenOver = 1, Ignored = 2 }
 public enum RotationConnector { WinRm, Ssh, Ldap, Snmp, SqlServer, Oracle, MySql, PostgreSql }
 
 public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
+
+public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2, Revoked = 3 }
