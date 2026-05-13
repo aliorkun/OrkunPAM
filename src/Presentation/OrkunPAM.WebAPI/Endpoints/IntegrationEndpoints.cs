@@ -10,7 +10,7 @@ public static class IntegrationEndpoints
 {
     public static void MapIntegrationEndpoints(this IEndpointRouteBuilder app)
     {
-        var webhooks = app.MapGroup("/api/v1/integrations/webhooks").WithTags("Integrations");
+        var webhooks = app.MapGroup("/api/v1/integrations/webhooks").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         webhooks.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -87,7 +87,7 @@ public static class IntegrationEndpoints
             });
         });
 
-        var itsm = app.MapGroup("/api/v1/integrations/itsm").WithTags("Integrations");
+        var itsm = app.MapGroup("/api/v1/integrations/itsm").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         itsm.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -214,7 +214,7 @@ public static class IntegrationEndpoints
             });
         });
 
-        var notifications = app.MapGroup("/api/v1/integrations/notifications").WithTags("Integrations");
+        var notifications = app.MapGroup("/api/v1/integrations/notifications").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         notifications.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -249,7 +249,7 @@ public static class IntegrationEndpoints
         });
 
         // === SIEM Syslog/CEF (#63) ===
-        var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations");
+        var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         siem.MapGet("/", async (OrkunPamDbContext db) =>
         {

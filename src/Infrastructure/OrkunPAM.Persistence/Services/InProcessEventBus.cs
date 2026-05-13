@@ -37,21 +37,34 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
     {
         _processingTask = Task.Run(async () =>
         {
-            await foreach (var evt in _channel.Reader.ReadAllAsync(_cts.Token))
+            while (!_cts.Token.IsCancellationRequested)
             {
-                foreach (var handler in _handlers)
+                try
                 {
-                    try
+                    await foreach (var evt in _channel.Reader.ReadAllAsync(_cts.Token))
                     {
-                        await handler(evt, _cts.Token);
+                        foreach (var handler in _handlers)
+                        {
+                            try
+                            {
+                                await handler(evt, _cts.Token);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Event handler failed for {EventType}", evt.EventType);
+                            }
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Event handler failed for {EventType}", evt.EventType);
-                    }
+                    break; // channel writer completed cleanly
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Event bus processing loop crashed, restarting in 1s");
+                    await Task.Delay(TimeSpan.FromSeconds(1), _cts.Token).ConfigureAwait(false);
                 }
             }
-        });
+        }, _cts.Token);
 
         _logger.LogInformation("Event bus started with {HandlerCount} handlers", _handlers.Count);
     }

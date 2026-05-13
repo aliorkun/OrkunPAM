@@ -167,16 +167,22 @@ public sealed class SiemForwarderService : BackgroundService, ISiemForwarderServ
         var header = BuildSyslogHeader(target.Facility, syslogSeverity, entry.Timestamp, entry.EventType);
 
         var kv = new StringBuilder();
-        kv.Append("event_type=\"").Append(entry.EventType).Append("\" ");
-        if (!string.IsNullOrEmpty(entry.ActorUsername)) kv.Append("user=\"").Append(entry.ActorUsername).Append("\" ");
-        if (!string.IsNullOrEmpty(entry.ActorIpAddress)) kv.Append("src_ip=\"").Append(entry.ActorIpAddress).Append("\" ");
-        if (!string.IsNullOrEmpty(entry.TargetType)) kv.Append("target_type=\"").Append(entry.TargetType).Append("\" ");
-        if (!string.IsNullOrEmpty(entry.TargetId)) kv.Append("target_id=\"").Append(entry.TargetId).Append("\" ");
+        kv.Append("event_type=\"").Append(EscapeKv(entry.EventType)).Append("\" ");
+        if (!string.IsNullOrEmpty(entry.ActorUsername)) kv.Append("user=\"").Append(EscapeKv(entry.ActorUsername)).Append("\" ");
+        if (!string.IsNullOrEmpty(entry.ActorIpAddress)) kv.Append("src_ip=\"").Append(EscapeKv(entry.ActorIpAddress)).Append("\" ");
+        if (!string.IsNullOrEmpty(entry.TargetType)) kv.Append("target_type=\"").Append(EscapeKv(entry.TargetType)).Append("\" ");
+        if (!string.IsNullOrEmpty(entry.TargetId)) kv.Append("target_id=\"").Append(EscapeKv(entry.TargetId)).Append("\" ");
         kv.Append("outcome=\"").Append(entry.Outcome).Append("\" ");
         kv.Append("category=\"").Append(entry.EventCategory).Append('"');
 
         return header + " " + kv.ToString().TrimEnd();
     }
+
+    private static string EscapeKv(string value) =>
+        value.Replace("\\", "\\\\")
+             .Replace("\"", "\\\"")
+             .Replace("\n", "\\n")
+             .Replace("\r", "\\r");
 
     private static int GetSyslogSeverity(AuditLogEntry entry)
     {

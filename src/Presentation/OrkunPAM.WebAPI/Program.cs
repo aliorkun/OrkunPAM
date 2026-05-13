@@ -204,7 +204,8 @@ try
     builder.Services.AddAuthorizationBuilder()
         .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .Build());
+            .Build())
+        .AddPolicy("AdminPolicy", p => p.RequireRole("Admin", "SecurityAdmin"));
 
     var app = builder.Build();
 
