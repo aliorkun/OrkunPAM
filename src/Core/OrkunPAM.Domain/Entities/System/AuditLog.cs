@@ -1,4 +1,5 @@
 using OrkunPAM.Domain.Enums;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Domain.Entities.System;
 
@@ -42,4 +43,18 @@ public class BackgroundJob
     public string? LastRunResult { get; set; }
     public bool IsEnabled { get; set; } = true;
     public string? ConfigurationJson { get; set; }
+}
+
+public class BackupRecord : AuditableEntity
+{
+    public string FileName { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public string Scope { get; set; } = "All"; // All, VaultOnly, UsersOnly, PoliciesOnly
+    public long FileSizeBytes { get; set; }
+    public string? IntegrityHash { get; set; }
+    public bool IntegrityVerified { get; set; }
+    public string Status { get; set; } = "Pending"; // Pending, InProgress, Completed, Failed
+    public string? ErrorMessage { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
+    public string InitiatedBy { get; set; } = "system";
 }

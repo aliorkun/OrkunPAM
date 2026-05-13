@@ -80,6 +80,10 @@ try
     // === Audit Integrity Daily Job (#91) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AuditIntegrityJob>();
 
+    // === Backup / DR (#55) ===
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.IBackupService, OrkunPAM.Persistence.Services.BackupService>();
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BackupSchedulerService>();
+
     // === SIEM Syslog/CEF Forwarder (#63) ===
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.SiemForwarderService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.ISiemForwarderService>(
@@ -310,6 +314,7 @@ try
     api.MapBreakGlassEndpoints();
     api.MapJitEndpoints();
     api.MapEncryptionEndpoints();
+    api.MapBackupEndpoints();
     api.MapSystemEndpoints();
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));

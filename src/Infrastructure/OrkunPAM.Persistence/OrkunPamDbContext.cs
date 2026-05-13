@@ -102,6 +102,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // SIEM (#63)
     public DbSet<SiemTarget> SiemTargets => Set<SiemTarget>();
 
+    // Backup (#55)
+    public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

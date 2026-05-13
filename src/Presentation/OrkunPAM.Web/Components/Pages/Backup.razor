@@ -1,0 +1,345 @@
+@page "/backup"
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Backup &amp; DR — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Backup &amp; Disaster Recovery</h2>
+    <span class="pam-page-sub">Create, schedule, verify and restore encrypted backups</span>
+</div>
+
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
+
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "backups" ? "active" : "")" @onclick="@(() => SetTab("backups"))">Backup History</button>
+    <button class="pam-tab @(_tab == "create" ? "active" : "")" @onclick="@(() => SetTab("create"))">+ Create Backup</button>
+    <button class="pam-tab @(_tab == "restore" ? "active" : "")" @onclick="@(() => SetTab("restore"))">Restore</button>
+    <button class="pam-tab @(_tab == "schedule" ? "active" : "")" @onclick="@(() => SetTab("schedule"))">Schedule</button>
+</div>
+
+@* ===== BACKUP HISTORY ===== *@
+@if (_tab == "backups")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>Backup History</span>
+            <button class="pam-btn pam-btn-sm pam-btn-secondary" @onclick="LoadBackupsAsync">Refresh</button>
+        </div>
+        <div class="pam-card-body">
+            @if (_loading) { <div class="pam-loading-text">Loading backups...</div> }
+            else if (_backups == null || _backups.Count == 0) { <div class="pam-empty">No backups found. Create your first backup.</div> }
+            else
+            {
+                <table class="pam-table">
+                    <thead><tr><th>File</th><th>Scope</th><th>Size</th><th>Status</th><th>Integrity</th><th>Created</th><th>By</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in _backups)
+                        {
+                            <tr>
+                                <td><code style="font-size:11px">@b.FileName</code></td>
+                                <td><span class="pam-badge pam-badge-blue">@b.Scope</span></td>
+                                <td>@FormatSize(b.FileSizeBytes)</td>
+                                <td>
+                                    @if (b.Status == "Completed")
+                                    { <span class="pam-badge pam-badge-green">Completed</span> }
+                                    else if (b.Status == "InProgress")
+                                    { <span class="pam-badge pam-badge-yellow">In Progress</span> }
+                                    else if (b.Status == "Failed")
+                                    { <span class="pam-badge pam-badge-red" title="@b.ErrorMessage">Failed</span> }
+                                    else
+                                    { <span class="pam-badge">@b.Status</span> }
+                                </td>
+                                <td>
+                                    @if (b.IntegrityVerified)
+                                    { <span class="pam-badge pam-badge-green">Verified</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-gray">Unverified</span> }
+                                </td>
+                                <td>@b.CreatedAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>@b.InitiatedBy</td>
+                                <td>
+                                    @if (b.Status == "Completed")
+                                    {
+                                        <a class="pam-btn pam-btn-xs pam-btn-secondary" href="@Api.GetBackupDownloadUrl(b.Id)" target="_blank">Download</a>
+                                        <button class="pam-btn pam-btn-xs pam-btn-info" @onclick="@(() => VerifyBackupAsync(b.Id))">Verify</button>
+                                    }
+                                    <button class="pam-btn pam-btn-xs pam-btn-danger" @onclick="@(() => DeleteBackupAsync(b.Id))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@* ===== CREATE BACKUP ===== *@
+@if (_tab == "create")
+{
+    <div class="pam-card" style="max-width:560px">
+        <div class="pam-card-header">Create Encrypted Backup</div>
+        <div class="pam-card-body">
+            <div class="pam-alert" style="background:#fff8e1;border:1px solid #ffc107;color:#856404;padding:10px;border-radius:4px;margin-bottom:16px">
+                Backups are encrypted with AES-256-GCM using your passphrase. Store the passphrase securely — it cannot be recovered.
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Backup Scope</label>
+                <select class="pam-select" @bind="_createScope">
+                    <option value="All">All (Vault + Users + Policies)</option>
+                    <option value="VaultOnly">Vault Only (credentials + folders)</option>
+                    <option value="UsersOnly">Users Only</option>
+                    <option value="PoliciesOnly">Policies Only</option>
+                </select>
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Encryption Passphrase (min 8 chars)</label>
+                <input class="pam-input" type="password" placeholder="Strong passphrase..." @bind="_createPassphrase" />
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Confirm Passphrase</label>
+                <input class="pam-input" type="password" placeholder="Repeat passphrase..." @bind="_createPassphraseConfirm" />
+            </div>
+            <button class="pam-btn pam-btn-primary" @onclick="CreateBackupAsync" disabled="@_submitting">
+                @(_submitting ? "Creating backup..." : "Create Backup")
+            </button>
+        </div>
+    </div>
+}
+
+@* ===== RESTORE ===== *@
+@if (_tab == "restore")
+{
+    <div class="pam-card" style="max-width:560px">
+        <div class="pam-card-header">Restore from Backup</div>
+        <div class="pam-card-body">
+            <div class="pam-alert" style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:10px;border-radius:4px;margin-bottom:16px">
+                Warning: Restore will write data into the current database. Use "Skip Existing" to add only missing records, or "Overwrite" to replace existing data.
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Backup File (.pambackup)</label>
+                <InputFile OnChange="OnFileSelected" accept=".pambackup" class="pam-input" />
+                @if (_restoreFileName != null) { <span class="pam-text-muted" style="font-size:12px">Selected: @_restoreFileName (@FormatSize(_restoreFileBytes?.Length ?? 0))</span> }
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Decryption Passphrase</label>
+                <input class="pam-input" type="password" placeholder="Passphrase used during backup..." @bind="_restorePassphrase" />
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Conflict Strategy</label>
+                <select class="pam-select" @bind="_conflictStrategy">
+                    <option value="SkipExisting">Skip Existing (add only new records)</option>
+                    <option value="Overwrite">Overwrite (replace existing with backup data)</option>
+                </select>
+            </div>
+            <button class="pam-btn pam-btn-warning" @onclick="DoRestoreAsync" disabled="@(_submitting || _restoreFileBytes == null)">
+                @(_submitting ? "Restoring..." : "Start Restore")
+            </button>
+        </div>
+    </div>
+
+    @if (_restoreResult != null)
+    {
+        <div class="pam-card" style="max-width:560px;border-left:4px solid #28a745">
+            <div class="pam-card-header">Restore Result</div>
+            <div class="pam-card-body">
+                <p><strong>Objects Restored:</strong> @_restoreResult.RestoredCount</p>
+                <p>@_restoreResult.Message</p>
+            </div>
+        </div>
+    }
+}
+
+@* ===== SCHEDULE ===== *@
+@if (_tab == "schedule")
+{
+    <div class="pam-card" style="max-width:560px">
+        <div class="pam-card-header">Automatic Backup Schedule</div>
+        <div class="pam-card-body">
+            @if (_scheduleLoading) { <div class="pam-loading-text">Loading schedule...</div> }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-label">
+                        <input type="checkbox" @bind="_schedEnabled" style="margin-right:6px" />
+                        Enable Automatic Backups
+                    </label>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Run Hour (UTC, 0-23)</label>
+                    <input class="pam-input" type="number" min="0" max="23" @bind="_schedHourUtc" />
+                    <span class="pam-text-muted" style="font-size:12px">Backup runs once per day at this UTC hour</span>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Backup Scope</label>
+                    <select class="pam-select" @bind="_schedScope">
+                        <option value="All">All</option>
+                        <option value="VaultOnly">Vault Only</option>
+                        <option value="UsersOnly">Users Only</option>
+                        <option value="PoliciesOnly">Policies Only</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Encryption Passphrase (leave blank to keep existing)</label>
+                    <input class="pam-input" type="password" placeholder="Passphrase for scheduled backups..." @bind="_schedPassphrase" />
+                </div>
+                <button class="pam-btn pam-btn-primary" @onclick="SaveScheduleAsync" disabled="@_submitting">
+                    @(_submitting ? "Saving..." : "Save Schedule")
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "backups";
+    private bool _loading;
+    private bool _submitting;
+    private string? _error;
+    private string? _success;
+
+    private List<BackupRecordDto>? _backups;
+
+    private string _createScope = "All";
+    private string _createPassphrase = string.Empty;
+    private string _createPassphraseConfirm = string.Empty;
+
+    private byte[]? _restoreFileBytes;
+    private string? _restoreFileName;
+    private string _restorePassphrase = string.Empty;
+    private string _conflictStrategy = "SkipExisting";
+    private BackupRestoreResultDto? _restoreResult;
+
+    private bool _scheduleLoading;
+    private bool _schedEnabled;
+    private int _schedHourUtc = 2;
+    private string _schedScope = "All";
+    private string _schedPassphrase = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadBackupsAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab; _error = null; _success = null;
+        if (tab == "backups") await LoadBackupsAsync();
+        else if (tab == "schedule") await LoadScheduleAsync();
+    }
+
+    private async Task LoadBackupsAsync()
+    {
+        _loading = true;
+        _backups = await Api.GetBackupsAsync();
+        _loading = false;
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        _scheduleLoading = true;
+        var sched = await Api.GetBackupScheduleAsync();
+        if (sched != null)
+        {
+            _schedEnabled = sched.Enabled;
+            _schedHourUtc = sched.HourUtc;
+            _schedScope = sched.Scope;
+        }
+        _scheduleLoading = false;
+    }
+
+    private async Task CreateBackupAsync()
+    {
+        _error = null; _success = null;
+        if (string.IsNullOrWhiteSpace(_createPassphrase) || _createPassphrase.Length < 8)
+        { _error = "Passphrase must be at least 8 characters."; return; }
+        if (_createPassphrase != _createPassphraseConfirm)
+        { _error = "Passphrases do not match."; return; }
+
+        _submitting = true;
+        var record = await Api.CreateBackupAsync(_createScope, _createPassphrase);
+        _submitting = false;
+
+        if (record != null)
+        {
+            _success = $"Backup created: {record.FileName} ({FormatSize(record.FileSizeBytes)})";
+            _createPassphrase = string.Empty; _createPassphraseConfirm = string.Empty;
+            _tab = "backups"; await LoadBackupsAsync();
+        }
+        else _error = "Backup creation failed. Check server logs.";
+    }
+
+    private async Task VerifyBackupAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.VerifyBackupAsync(id);
+        if (ok) { _success = "Backup integrity verified successfully."; await LoadBackupsAsync(); }
+        else _error = "Integrity check failed — backup file may be corrupt or missing.";
+    }
+
+    private async Task DeleteBackupAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.DeleteBackupAsync(id);
+        if (ok) { _success = "Backup deleted."; await LoadBackupsAsync(); }
+        else _error = "Failed to delete backup.";
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024).CopyToAsync(ms);
+        _restoreFileBytes = ms.ToArray();
+        _restoreFileName = file.Name;
+    }
+
+    private async Task DoRestoreAsync()
+    {
+        _error = null; _success = null; _restoreResult = null;
+        if (_restoreFileBytes == null) { _error = "Please select a backup file."; return; }
+        if (string.IsNullOrWhiteSpace(_restorePassphrase)) { _error = "Passphrase is required."; return; }
+
+        _submitting = true;
+        var (success, error, restoredCount) = await Api.RestoreBackupAsync(
+            _restoreFileBytes, _restoreFileName ?? "backup.pambackup", _restorePassphrase, _conflictStrategy);
+        _submitting = false;
+
+        if (success)
+        {
+            _restoreResult = new BackupRestoreResultDto(restoredCount, $"Restore completed — {restoredCount} objects restored.");
+            _success = _restoreResult.Message;
+        }
+        else _error = error ?? "Restore failed.";
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        _error = null; _success = null;
+        if (_schedEnabled && string.IsNullOrEmpty(_schedPassphrase))
+        {
+            var existing = await Api.GetBackupScheduleAsync();
+            if (existing == null)
+            { _error = "A passphrase is required to enable scheduled backups."; return; }
+        }
+
+        _submitting = true;
+        var ok = await Api.SaveBackupScheduleAsync(_schedEnabled, _schedHourUtc, _schedScope,
+            string.IsNullOrEmpty(_schedPassphrase) ? null : _schedPassphrase);
+        _submitting = false;
+
+        if (ok) _success = "Backup schedule saved.";
+        else _error = "Failed to save schedule.";
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("F1") + " KB";
+        return (bytes / (1024.0 * 1024)).ToString("F1") + " MB";
+    }
+}
