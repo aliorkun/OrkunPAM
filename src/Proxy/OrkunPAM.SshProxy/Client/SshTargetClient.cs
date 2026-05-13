@@ -335,17 +335,17 @@ internal sealed class SshTargetClient : IDisposable
 
     internal async Task RelayToClientAsync(
         SshConnection clientConn, uint clientSideChanId,
-        SessionRecorder? recorder, CancellationToken ct)
+        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks = null)
     {
-        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct), ct);
-        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct), ct);
+        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct, lastActivityTicks), ct);
+        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct, lastActivityTicks), ct);
         await Task.WhenAny(t2c, c2t);
     }
 
     // Receives data from target → forwards to client connection
     private async Task TargetToClientLoopAsync(
         SshConnection clientConn, uint clientSideChanId,
-        SessionRecorder? recorder, CancellationToken ct)
+        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -372,6 +372,8 @@ internal sealed class SshTargetClient : IDisposable
                     await _conn.SendAsync(adj, ct);
 
                     recorder?.WriteOutput(data);
+                    if (lastActivityTicks != null)
+                        Interlocked.Exchange(ref lastActivityTicks[0], DateTime.UtcNow.Ticks);
                     break;
                 }
                 case Msg.ChannelExtData:
@@ -451,7 +453,7 @@ internal sealed class SshTargetClient : IDisposable
 
     // Receives data from client connection → forwards to target
     private async Task ClientToTargetLoopAsync(
-        SshConnection clientConn, uint clientSideChanId, CancellationToken ct)
+        SshConnection clientConn, uint clientSideChanId, CancellationToken ct, long[]? lastActivityTicks)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -476,6 +478,8 @@ internal sealed class SshTargetClient : IDisposable
                     SshEncoding.WriteUInt32(adj, clientSideChanId);
                     SshEncoding.WriteUInt32(adj, (uint)data.Length);
                     await clientConn.SendAsync(adj, ct);
+                    if (lastActivityTicks != null)
+                        Interlocked.Exchange(ref lastActivityTicks[0], DateTime.UtcNow.Ticks);
                     break;
                 }
                 case Msg.ChannelRequest:
