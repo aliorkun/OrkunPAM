@@ -26,55 +26,85 @@
 
 ---
 
-## Aktif Sprint: Sprint 3 - RDP + Vault + Reporting
+## ~~Sprint 3 - RDP + Vault + Reporting~~ ✅ TAMAMLANDI
 **Tarih:** 21-27 Mayıs 2026
-**Hedef:** RDP Proxy TCP relay, vault/device UI, temel raporlar
+**Durum:** Tamamlandı — RDP Proxy TCP relay, Raporlar & Audit UI, Parola Rotasyonu, Onay Akışı UI
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #23 | RDP Proxy - TCP relay + session token flow | MVP-SESSION | 🔄 IN PROGRESS |
-| #27 | Temel Raporlar | MVP-REPORTING | ⬜ Açık |
-| #32 | Otomatik Parola Rotasyonu | MVP-VAULT | ⬜ Açık |
-| #79 | Onay Akışı Yönetim Paneli | MVP-UI | ⬜ Açık |
+| #23 | RDP Proxy - TCP relay + session token flow | MVP-SESSION | ✅ Kapatıldı |
+| #27 | Temel Raporlar | MVP-REPORTING | ✅ Kapatıldı |
+| #32 | Otomatik Parola Rotasyonu | MVP-VAULT | ✅ Kapatıldı |
+| #79 | Onay Akışı Yönetim Paneli | MVP-UI | ✅ Kapatıldı |
 
-**İlerleme:** 0/4 kapatıldı (%0) — #23 aktif geliştirmede
-**Not:** #23 MVP: TCP relay + TPKT/X.224 parsing + session recording. NLA/CredSSP + credential injection v2'ye ertelendi.
-**Çıkış kriteri:** RDP bağlantı çalışıyor (.rdp dosyası indirilip Windows Remote Desktop ile açılabiliyor) → v0.4.0-rdp tag
+**İlerleme:** 4/4 tamamlandı (%100) ✅
+**Not:** Sprint 3, planlanan 21-27 Mayıs tarihinden önce (13 Mayıs) tamamlandı — 8 gün erken.
+**Tag:** `v0.4.0-rdp` (atılacak)
 
 ---
 
-## Sprint 4 - Enterprise Features + Installer
-**Tarih:** 28 Mayıs - 7 Haziran 2026
+## Aktif Sprint: Sprint 4 - Enterprise Features + Installer
+**Tarih:** 14-24 Mayıs 2026 (güncellendi — erken tamamlama nedeniyle öne alındı)
 **Hedef:** Enterprise satış için gerekli özellikler + installer
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #46 | Break-the-Glass acil erişim | MVP-SECURITY | ⬜ Açık |
+| #38 | JIT Privileged Access | MVP-SECURITY | ⬜ Açık |
+| #53 | BYOK + Key Rotation UI | MVP-SECURITY | ⬜ Açık |
+| #40 | Privileged Account Discovery | MVP-DEVICE | ⬜ Açık |
+| #54 | SMTP Bildirim | MVP-INFRA | ⬜ Açık |
+| #39 | Self-Service Portal | MVP-UX | ⬜ Açık |
+| #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION | ⬜ Açık |
+| #36 | MSI Installer | MVP-UX | ⬜ Açık |
+| #55 | Backup/DR | MVP-DEPLOYMENT | ⬜ Açık |
+
+**İlerleme:** 0/9 kapatıldı (%0) — Sprint aktif
+**Çıkış kriteri:** Enterprise demo yapılabilir, installer çalışıyor → v1.0.0-rc1 tag
+
+**Öncelik sırası (Developer için):**
+1. #46 Break-the-Glass (kritik satış özelliği)
+2. #54 SMTP Bildirim (approval akışı için gerekli)
+3. #53 BYOK + Key Rotation UI
+4. #38 JIT Privileged Access
+5. #40 Privileged Account Discovery
+6. #63 SIEM entegrasyonu
+7. #39 Self-Service Portal
+8. #36 MSI Installer
+9. #55 Backup/DR
+
+---
+
+## Sprint 5 - Ek MVP Features + Audit Chain
+**Tarih:** 25 Mayıs - 4 Haziran 2026
+**Hedef:** Kalan MVP özellikler, tamper-proof audit, MFA enrollment
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
-| #46 | Break-the-Glass acil erişim | MVP-SECURITY |
-| #38 | JIT Privileged Access | MVP-SECURITY |
-| #53 | BYOK + Key Rotation UI | MVP-SECURITY |
-| #40 | Privileged Account Discovery | MVP-DEVICE |
-| #54 | SMTP Bildirim | MVP-INFRA |
-| #39 | Self-Service Portal | MVP-UX |
-| #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION |
-| #36 | MSI Installer | MVP-UX |
-| #55 | Backup/DR | MVP-DEPLOYMENT |
+| #91 | Tamper-Proof Audit Log - Hash Chain | MVP-SECURITY |
+| #90 | LDAP/AD Zamanlanmış Senkronizasyon | MVP-INTEGRATION |
+| #89 | Rapor CSV/PDF Export ve Zamanlama | MVP-REPORTING |
+| #85 | Toplu Kullanıcı İçe Aktarma (CSV) | MVP-USER |
+| #84 | Session Policy Runtime Enforcement | MVP-SECURITY |
+| #83 | MFA TOTP QR Code Enrollment | MVP-AUTH |
+| #80 | SSH Key Yönetimi | MVP-VAULT |
 
-**Çıkış kriteri:** Enterprise demo yapılabilir, installer çalışıyor → v1.0.0-rc1 tag
+**Çıkış kriteri:** Tüm RFP-kritik MVP özellikleri tamamlandı → v1.0.0 tag
 
 ---
 
-## Sprint 5 - Polish + GA
-**Tarih:** 8-14 Haziran 2026
+## Sprint 6 - Polish + GA
+**Tarih:** 5-14 Haziran 2026
 **Hedef:** E2E testler, performans, dokümantasyon, son düzeltmeler
 
 | Issue | Başlık | Tip |
 |-------|--------|-----|
-| #64 | SQL Database Proxy | MVP-SESSION |
+| #64 | SQL Database Proxy | MVP-SESSION (deferred) |
 | - | E2E testler | Test |
 | - | Performans testleri | Test |
 | - | Dokümantasyon | Docs |
 
-**Çıkış kriteri:** Müşteriye kurulum + demo yapılabilir → v1.0.0 tag
+**Çıkış kriteri:** Müşteriye kurulum + demo yapılabilir → v1.0.0 GA tag
 
 ---
 
@@ -84,6 +114,12 @@
 - Developer agent "Aktif Sprint" bölümündeki issue'lara odaklanır
 - Sprint dışı issue'lar backlog'da kalır
 - Security critical/high her zaman sprint'i keser (acil fix)
+
+## Milestone Hedefleri
+- **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Şu an buradayız
+- **v1.0.0-rc1:** Sprint 4 çıkışı (24 Mayıs 2026 hedef)
+- **v1.0.0:** Sprint 6 çıkışı (14 Haziran 2026 hedef)
+- **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ## Mimari Kararlar
 - **SSH Proxy:** Native C# (RFC 4253) — farkımız burada, açık kaynak yok
