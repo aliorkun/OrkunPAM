@@ -478,6 +478,64 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // -----------------------------------------------------------------------
+    // SIEM (#63)
+    // -----------------------------------------------------------------------
+
+    public async Task<List<SiemTargetDto>?> GetSiemTargetsAsync()
+    {
+        var result = await GetAsync<ListResult<SiemTargetDto>>("/api/v1/integrations/siem");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateSiemTargetAsync(string name, string host, int port,
+        string protocol, string format, int facility)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/integrations/siem",
+                new { name, host, port, protocol, format, facility, eventFilterJson = "[]" });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteSiemTargetAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.DeleteAsync("/api/v1/integrations/siem/" + id);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleSiemTargetAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/integrations/siem/" + id + "/toggle", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<(bool Success, string? Error, long Ms)> TestSiemTargetAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/integrations/siem/" + id + "/test", null);
+            if (!resp.IsSuccessStatusCode) return (false, "HTTP " + (int)resp.StatusCode, 0);
+            var r = await resp.Content.ReadFromJsonAsync<SiemTestResult>(JsonOpts);
+            return (r?.Success ?? false, r?.Data?.Error, r?.Data?.ResponseTimeMs ?? 0);
+        }
+        catch (Exception ex) { return (false, ex.Message, 0); }
+    }
+
     public async Task<LdapSyncApplyDto?> SyncLdapNowAsync(string configId)
     {
         var client = await GetAuthClientAsync();
@@ -1154,3 +1212,11 @@ public record DiscoveredAccountInfoDto(string AccountName, string AccountType, s
 
 // LDAP Sync DTOs
 public record LdapSyncApplyDto(int UsersAdded, int UsersUpdated, int UsersDisabled, string Message);
+
+// SIEM DTOs (#63)
+public record SiemTargetDto(
+    string Id, string Name, string Host, int Port,
+    string Protocol, string Format, int Facility,
+    bool IsEnabled, DateTime? LastSentAtUtc, int TotalEventsSent, string? LastError);
+public record SiemTestResultData(bool Success, string? Error, long ResponseTimeMs);
+public record SiemTestResult(bool Success, SiemTestResultData? Data);

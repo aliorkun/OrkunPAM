@@ -80,6 +80,13 @@ try
     // === Audit Integrity Daily Job (#91) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AuditIntegrityJob>();
 
+    // === SIEM Syslog/CEF Forwarder (#63) ===
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.SiemForwarderService>();
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.ISiemForwarderService>(
+        sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.SiemForwarderService>());
+    builder.Services.AddHostedService(
+        sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.SiemForwarderService>());
+
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -246,9 +247,73 @@ public static class IntegrationEndpoints
                 message = $"Test {req.Channel} notification sent to {req.Recipient} (placeholder)"
             });
         });
+
+        // === SIEM Syslog/CEF (#63) ===
+        var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations");
+
+        siem.MapGet("/", async (OrkunPamDbContext db) =>
+        {
+            var list = await db.SiemTargets
+                .OrderBy(t => t.Name)
+                .Select(t => new
+                {
+                    t.Id, t.Name, t.Host, t.Port, t.Protocol, t.Format, t.Facility,
+                    t.IsEnabled, t.LastSentAtUtc, t.TotalEventsSent, t.LastError
+                }).ToListAsync();
+            return Results.Ok(new { success = true, data = list });
+        });
+
+        siem.MapPost("/", async (CreateSiemTargetRequest req, OrkunPamDbContext db) =>
+        {
+            var target = new SiemTarget
+            {
+                Name = req.Name,
+                Host = req.Host,
+                Port = req.Port,
+                Protocol = req.Protocol,
+                Format = req.Format,
+                Facility = req.Facility,
+                EventFilterJson = req.EventFilterJson ?? "[]"
+            };
+            db.SiemTargets.Add(target);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/v1/integrations/siem/{target.Id}",
+                new { success = true, data = new { target.Id, target.Name } });
+        });
+
+        siem.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var target = await db.SiemTargets.FindAsync(id);
+            if (target == null) return Results.NotFound(new { success = false, errors = new[] { "SIEM target not found" } });
+            db.SiemTargets.Remove(target);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        });
+
+        siem.MapPost("/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var target = await db.SiemTargets.FindAsync(id);
+            if (target == null) return Results.NotFound(new { success = false, errors = new[] { "SIEM target not found" } });
+            target.IsEnabled = !target.IsEnabled;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, data = new { target.Id, target.IsEnabled } });
+        });
+
+        siem.MapPost("/{id:guid}/test", async (Guid id,
+            ISiemForwarderService siemForwarder, ILogger<Program> logger) =>
+        {
+            logger.LogInformation("Testing SIEM target {Id}", id);
+            var (success, error, ms) = await siemForwarder.TestTargetAsync(id);
+            return Results.Ok(new
+            {
+                success,
+                data = new { targetId = id, responseTimeMs = ms, error, message = success ? "Test message sent successfully" : error }
+            });
+        });
     }
 }
 
+public record CreateSiemTargetRequest(string Name, string Host, int Port, string Protocol, string Format, int Facility, string? EventFilterJson);
 public record CreateWebhookRequest(string Name, string Url, string? Secret, string? EventTypes, int? TimeoutSeconds, int? RetryCount);
 public record CreateItsmConfigRequest(string Name, string Provider, string BaseUrl, string? Username, string? ApiKey, string? Password, bool RequireTicket, bool ValidateTicket);
 public record ValidateTicketRequest(string TicketNumber, string? Provider);
