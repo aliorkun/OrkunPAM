@@ -589,6 +589,49 @@ public sealed class PamApiService
     }
 
     // -----------------------------------------------------------------------
+    // MFA Enrollment (#83)
+    // -----------------------------------------------------------------------
+
+    public async Task<MfaEnrollmentDto?> GetMfaEnrollmentAsync(string token)
+    {
+        var result = await GetAsync<SingleResult<MfaEnrollmentDto>>(
+            "/api/v1/auth/mfa/enrollment?token=" + Uri.EscapeDataString(token));
+        return result?.Data;
+    }
+
+    public async Task<bool> ConfirmMfaEnrollmentAsync(string token, string code)
+    {
+        var client = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/enrollment/confirm",
+                new { token, code });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ResetUserMfaAsync(string userId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/users/{userId}/mfa/reset", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<MfaSetupLinkDto?> GenerateMfaSetupLinkAsync(string userId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/users/{userId}/mfa/send-setup", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<MfaSetupLinkDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    // -----------------------------------------------------------------------
     // JIT Access (#38)
     // -----------------------------------------------------------------------
 
@@ -925,3 +968,7 @@ public record JitRequestDto(
     string?   ExtensionReason);
 
 public record JitListResult(bool Success, List<JitRequestDto>? Data);
+
+// MFA Enrollment DTOs (#83)
+public record MfaEnrollmentDto(string Username, string Secret, string QrUri);
+public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);

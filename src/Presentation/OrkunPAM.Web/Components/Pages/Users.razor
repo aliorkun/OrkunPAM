@@ -1,5 +1,6 @@
 @page "/users"
 @inject PamApiService Api
+@inject NavigationManager Nav
 
 <PageTitle>Users — OrkunPAM</PageTitle>
 
@@ -66,9 +67,17 @@
                             </td>
                             <td>
                                 @if (u.MfaEnabled)
-                                { <span class="pam-status pam-status-active">On</span> }
+                                {
+                                    <span class="pam-status pam-status-active">✅ On</span>
+                                    <button class="pam-btn-icon" title="Reset MFA"
+                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">🔄</button>
+                                }
                                 else
-                                { <span class="pam-status pam-status-done">Off</span> }
+                                {
+                                    <span class="pam-status pam-status-done">Off</span>
+                                    <button class="pam-btn-icon" title="Send MFA Setup Link"
+                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">🔑</button>
+                                }
                             </td>
                             <td>@(u.LastLoginAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>
                             <td>
@@ -193,6 +202,32 @@
     </div>
 }
 
+<!-- MFA Setup Link Modal -->
+@if (_mfaSetupToken != null)
+{
+    <div class="pam-modal-overlay" @onclick="CloseMfaModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">MFA Setup Link Generated</h3>
+                <button class="pam-close-btn" @onclick="CloseMfaModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p class="pam-text-muted" style="font-size:.85rem">Share this link with the user. It is valid for 24 hours and can only be used once.</p>
+                <div class="pam-form-group">
+                    <label class="pam-label">Enrollment Link</label>
+                    <code style="display:block;background:#0d1117;padding:.5rem;border-radius:4px;word-break:break-all;font-size:.8rem;color:#79c0ff">
+                        @(Nav.BaseUri.TrimEnd('/') + "/mfa-setup?token=" + _mfaSetupToken)
+                    </code>
+                </div>
+                <p class="pam-text-muted" style="font-size:.8rem">Expires: @(_mfaSetupExpiry?.ToString("yyyy-MM-dd HH:mm") ?? "24h from now") UTC</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="CloseMfaModal">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<UserDto>? _users;
     private PageMeta?      _meta;
@@ -212,6 +247,10 @@
     private string  _fEmail           = "";
     private string  _fPassword        = "";
     private string  _fPasswordConfirm = "";
+
+    // MFA modal state
+    private string?   _mfaSetupToken;
+    private DateTime? _mfaSetupExpiry;
 
     // Edit modal state
     private bool    _showEdit;
@@ -334,6 +373,26 @@
         CloseEditModal();
         await LoadAsync();
     }
+
+    private async Task ResetMfaAsync(string userId, string username)
+    {
+        _error = null;
+        var ok = await Api.ResetUserMfaAsync(userId);
+        if (ok) await LoadAsync();
+        else _error = $"Failed to reset MFA for {username}.";
+    }
+
+    private async Task SendMfaSetupAsync(string userId)
+    {
+        _error = null;
+        var result = await Api.GenerateMfaSetupLinkAsync(userId);
+        if (result == null) { _error = "Failed to generate MFA setup link."; return; }
+        _mfaSetupToken  = result.EnrollmentToken;
+        _mfaSetupExpiry = result.ExpiresAt;
+        StateHasChanged();
+    }
+
+    private void CloseMfaModal() { _mfaSetupToken = null; _mfaSetupExpiry = null; }
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
