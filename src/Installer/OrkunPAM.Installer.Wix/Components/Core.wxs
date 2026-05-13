@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Fragment>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLDIR" Name="OrkunPAM">
+        <Directory Id="APIINSTALLDIR" Name="API" />
+        <Directory Id="WEBINSTALLDIR" Name="Web" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="OrkunPAM">
+        <Directory Id="LOGSDIR" Name="logs" />
+        <Directory Id="BACKUPSDIR" Name="backups" />
+        <Directory Id="KEYSDIR" Name="keys" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="OrkunPAM" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Component Id="C_DataDirectories" Guid="D3A4B5C6-E7F8-9012-CDEF-333333333333"
+               Directory="DATADIR">
+      <CreateFolder Directory="DATADIR">
+        <util:PermissionEx User="LocalSystem" GenericAll="yes" Domain="[MACHINENAME]" />
+        <util:PermissionEx User="Administrators" GenericAll="yes" Domain="[MACHINENAME]" />
+      </CreateFolder>
+      <CreateFolder Directory="LOGSDIR" />
+      <CreateFolder Directory="BACKUPSDIR" />
+      <CreateFolder Directory="KEYSDIR">
+        <util:PermissionEx User="LocalSystem" GenericAll="yes" Domain="[MACHINENAME]" />
+      </CreateFolder>
+      <RegistryValue
+        Root="HKLM"
+        Key="SOFTWARE\OrkunPAM"
+        Name="DataDirectory"
+        Type="string"
+        Value="[DATADIR]"
+        KeyPath="yes" />
+    </Component>
+
+    <ComponentGroup Id="CG_Shortcuts">
+      <Component Id="C_StartMenuShortcut" Guid="E4A5B6C7-F8G9-0123-DEFA-444444444444"
+                 Directory="ApplicationProgramsFolder">
+        <Shortcut
+          Id="SC_StartMenu"
+          Name="OrkunPAM Management Console"
+          Description="Open OrkunPAM web management console"
+          Target="[WEBPORT]"
+          WorkingDirectory="WEBINSTALLDIR" />
+        <Shortcut
+          Id="SC_StartMenu_Uninstall"
+          Name="Uninstall OrkunPAM"
+          Description="Uninstall OrkunPAM"
+          Target="[SystemFolder]msiexec.exe"
+          Arguments="/x [ProductCode]" />
+        <RemoveFolder Id="RF_AppProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="SOFTWARE\OrkunPAM"
+          Name="StartMenuInstalled"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+  </Fragment>
+
+</Wix>

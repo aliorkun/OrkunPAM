@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Fragment>
+
+    <DirectoryRef Id="APIINSTALLDIR">
+      <Component Id="C_ApiService" Guid="B1A2C3D4-E5F6-7890-ABCD-111111111111">
+        <File Id="OrkunPAM.WebAPI.exe"
+              Source="!(bind.TargetPath.OrkunPAM.WebAPI)"
+              KeyPath="yes" />
+        <ServiceInstall
+          Id="SvcInstall_API"
+          Name="OrkunPAM-API"
+          DisplayName="OrkunPAM API Service"
+          Description="OrkunPAM Privileged Access Management - REST API and Vault Engine"
+          Type="ownProcess"
+          Start="auto"
+          Account="LocalSystem"
+          ErrorControl="normal"
+          Interactive="no"
+          Arguments="--urls http://+:[APIPORT]" />
+        <ServiceControl
+          Id="SvcControl_API"
+          Name="OrkunPAM-API"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+        <util:FirewallException
+          Id="FW_API"
+          Name="OrkunPAM API ([APIPORT])"
+          Protocol="tcp"
+          Port="[APIPORT]"
+          Scope="localSubnet" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="WEBINSTALLDIR">
+      <Component Id="C_WebService" Guid="C2A3B4D5-E6F7-8901-BCDE-222222222222">
+        <File Id="OrkunPAM.Web.exe"
+              Source="!(bind.TargetPath.OrkunPAM.Web)"
+              KeyPath="yes" />
+        <ServiceInstall
+          Id="SvcInstall_Web"
+          Name="OrkunPAM-Web"
+          DisplayName="OrkunPAM Web Console"
+          Description="OrkunPAM Privileged Access Management - Web Management Console"
+          Type="ownProcess"
+          Start="auto"
+          Account="LocalSystem"
+          ErrorControl="normal"
+          Interactive="no"
+          Arguments="--urls https://+:[WEBPORT]" />
+        <ServiceControl
+          Id="SvcControl_Web"
+          Name="OrkunPAM-Web"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+        <util:FirewallException
+          Id="FW_Web"
+          Name="OrkunPAM Web Console ([WEBPORT])"
+          Protocol="tcp"
+          Port="[WEBPORT]"
+          Scope="localSubnet" />
+      </Component>
+    </DirectoryRef>
+
+    <ComponentGroup Id="CG_ApiService">
+      <ComponentRef Id="C_ApiService" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="CG_WebService">
+      <ComponentRef Id="C_WebService" />
+    </ComponentGroup>
+
+  </Fragment>
+
+</Wix>

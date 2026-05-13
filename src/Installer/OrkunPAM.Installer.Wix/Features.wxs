@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+
+    <Feature
+      Id="ProductFeature"
+      Title="OrkunPAM"
+      Description="Installs the complete OrkunPAM PAM solution."
+      Level="1"
+      AllowAbsent="no"
+      Display="expand">
+
+      <Feature
+        Id="Feature_Core"
+        Title="OrkunPAM API Service"
+        Description="Core REST API and vault engine. Required component."
+        Level="1"
+        AllowAbsent="no">
+        <ComponentGroupRef Id="CG_ApiService" />
+        <ComponentGroupRef Id="CG_Config" />
+        <ComponentRef Id="C_DataDirectories" />
+      </Feature>
+
+      <Feature
+        Id="Feature_WebUI"
+        Title="Web Management Console"
+        Description="Blazor-based web management interface."
+        Level="1"
+        AllowAbsent="yes">
+        <ComponentGroupRef Id="CG_WebService" />
+      </Feature>
+
+      <Feature
+        Id="Feature_Shortcuts"
+        Title="Desktop and Start Menu Shortcuts"
+        Description="Creates shortcuts to open the management console."
+        Level="1"
+        AllowAbsent="yes">
+        <ComponentGroupRef Id="CG_Shortcuts" />
+      </Feature>
+
+    </Feature>
+
+  </Fragment>
+
+</Wix>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+
+    <Component Id="C_ApiConfig" Guid="F5A6B7C8-G9H0-1234-EFAB-555555555555"
+               Directory="APIINSTALLDIR">
+      <File Id="ApiAppSettings"
+            Name="appsettings.Production.json"
+            Source="Templates\appsettings.API.json.template"
+            KeyPath="yes" />
+    </Component>
+
+    <Component Id="C_WebConfig" Guid="A6B7C8D9-H0I1-2345-FABC-666666666666"
+               Directory="WEBINSTALLDIR">
+      <File Id="WebAppSettings"
+            Name="appsettings.Production.json"
+            Source="Templates\appsettings.Web.json.template"
+            KeyPath="yes" />
+    </Component>
+
+    <Component Id="C_RegistryEntries" Guid="B7C8D9E0-I1J2-3456-ABCD-777777777777"
+               Directory="INSTALLDIR">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\OrkunPAM">
+        <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLDIR]" />
+        <RegistryValue Name="ApiPort" Type="string" Value="[APIPORT]" />
+        <RegistryValue Name="WebPort" Type="string" Value="[WEBPORT]" />
+        <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" KeyPath="yes" />
+      </RegistryKey>
+    </Component>
+
+    <ComponentGroup Id="CG_Config">
+      <ComponentRef Id="C_ApiConfig" />
+      <ComponentRef Id="C_WebConfig" />
+      <ComponentRef Id="C_RegistryEntries" />
+    </ComponentGroup>
+
+  </Fragment>
+
+</Wix>

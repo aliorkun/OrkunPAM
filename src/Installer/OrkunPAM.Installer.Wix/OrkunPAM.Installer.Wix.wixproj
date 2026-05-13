@@ -1,0 +1,37 @@
+<Project Sdk="WixToolset.Sdk/4.0.5">
+
+  <PropertyGroup>
+    <OutputName>OrkunPAM-Setup</OutputName>
+    <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>x64</Platforms>
+    <InstallerVersion>500</InstallerVersion>
+    <HarvestDirectory>$(MSBuildProjectDirectory)\harvest</HarvestDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.5" />
+    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.5" />
+    <PackageReference Include="WixToolset.Netfx.wixext" Version="4.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Presentation\OrkunPAM.WebAPI\OrkunPAM.WebAPI.csproj">
+      <Name>OrkunPAM.WebAPI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Presentation\OrkunPAM.Web\OrkunPAM.Web.csproj">
+      <Name>OrkunPAM.Web</Name>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Package.wxs" />
+    <Compile Include="Features.wxs" />
+    <Compile Include="Components\Core.wxs" />
+    <Compile Include="Components\Services.wxs" />
+    <Compile Include="Components\Config.wxs" />
+    <Compile Include="UI\WizardDialogs.wxs" />
+  </ItemGroup>
+
+</Project>

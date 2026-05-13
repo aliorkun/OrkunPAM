@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Fragment>
+
+    <UI Id="WixUI_OrkunPAM">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="9" Bold="yes" />
+
+      <UIRef Id="WixUI_Common" />
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg" Order="2">1</Publish>
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ConfigDlg">1</Publish>
+      <Publish Dialog="ConfigDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg">1</Publish>
+      <Publish Dialog="ConfigDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ConfigDlg">NOT Installed</Publish>
+      <Publish Dialog="VerifyReadyDlg" Control="Install" Event="EndDialog" Value="Return">1</Publish>
+    </UI>
+
+    <UI>
+      <Dialog Id="ConfigDlg" Width="370" Height="270" Title="[ProductName] - Configuration">
+
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>{\WixUI_Font_Title}Service Configuration</Text>
+        </Control>
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes">
+          <Text>Configure ports and initial administrator account.</Text>
+        </Control>
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="ApiPortLabel" Type="Text" X="20" Y="60" Width="120" Height="12"><Text>API Service Port:</Text></Control>
+        <Control Id="ApiPortEdit" Type="Edit" X="150" Y="57" Width="60" Height="18" Property="APIPORT" Indirect="no" />
+
+        <Control Id="WebPortLabel" Type="Text" X="20" Y="82" Width="120" Height="12"><Text>Web Console Port (HTTPS):</Text></Control>
+        <Control Id="WebPortEdit" Type="Edit" X="150" Y="79" Width="60" Height="18" Property="WEBPORT" Indirect="no" />
+
+        <Control Id="AdminUserLabel" Type="Text" X="20" Y="108" Width="120" Height="12"><Text>Admin Username:</Text></Control>
+        <Control Id="AdminUserEdit" Type="Edit" X="150" Y="105" Width="140" Height="18" Property="ADMINUSER" Indirect="no" />
+
+        <Control Id="AdminPwdLabel" Type="Text" X="20" Y="130" Width="120" Height="12"><Text>Admin Password:</Text></Control>
+        <Control Id="AdminPwdEdit" Type="Edit" X="150" Y="127" Width="140" Height="18" Property="ADMINPASSWORD" Indirect="no" Password="yes" />
+
+        <Control Id="VaultPhraseLabel" Type="Text" X="20" Y="152" Width="120" Height="12"><Text>Vault Passphrase:</Text></Control>
+        <Control Id="VaultPhraseEdit" Type="Edit" X="150" Y="149" Width="140" Height="18" Property="VAULTPASSPHRASE" Indirect="no" Password="yes" />
+        <Control Id="VaultPhraseHint" Type="Text" X="150" Y="170" Width="190" Height="12">
+          <Text>{\WixUI_Font_Normal}Leave blank to auto-generate</Text>
+        </Control>
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&amp;Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="&amp;Next">
+          <Publish Event="SpawnDialog" Value="MsiRMFilesInUse">NOT (ADMINUSER AND ADMINPASSWORD AND (LEN(ADMINPASSWORD) >= 8))</Publish>
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+        </Control>
+
+      </Dialog>
+    </UI>
+
+  </Fragment>
+
+</Wix>

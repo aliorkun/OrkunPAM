@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <Package
+    Name="OrkunPAM"
+    Version="!(bind.FileVersion.OrkunPAM.WebAPI.exe)"
+    Manufacturer="OrkunPAM"
+    UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+    Language="1033"
+    Codepage="1252"
+    InstallerVersion="500"
+    Compressed="yes"
+    Scope="perMachine">
+
+    <SummaryInformation
+      Keywords="OrkunPAM Privileged Access Management PAM"
+      Description="OrkunPAM Enterprise Privileged Access Management"
+      Comments="Enterprise PAM solution" />
+
+    <MajorUpgrade
+      AllowDowngrades="no"
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer version of OrkunPAM is already installed. Uninstall it first." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <FeatureRef Id="ProductFeature" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/aliorkun/OrkunPAM" />
+    <Property Id="ARPCONTACT" Value="support@orkunpam.com" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <Property Id="APIPORT" Value="5050" />
+    <Property Id="WEBPORT" Value="5001" />
+    <Property Id="ADMINUSER" Value="admin" />
+    <Property Id="ADMINPASSWORD" Value="" />
+    <Property Id="VAULTPASSPHRASE" Value="" />
+    <Property Id="INSTALLDIR" Value="[ProgramFiles64Folder]OrkunPAM\" />
+    <Property Id="DATADIR" Value="[CommonAppDataFolder]OrkunPAM\" />
+
+    <Launch
+      Condition="Privileged"
+      Message="You must be an administrator to install OrkunPAM." />
+
+    <Launch
+      Condition="VersionNT64"
+      Message="OrkunPAM requires a 64-bit version of Windows." />
+
+    <Launch
+      Condition="VersionNT &gt;= 1000"
+      Message="OrkunPAM requires Windows 10 / Windows Server 2016 or later." />
+
+    <Launch
+      Condition="NETFRAMEWORK48 OR DOTNET8PRESENT"
+      Message="OrkunPAM requires .NET 8 Runtime. Download it from https://aka.ms/dotnet/8/download" />
+
+    <RegistrySearch
+      Id="DotNet8Search"
+      Root="HKLM"
+      Key="SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost"
+      Name="Version"
+      Variable="DOTNET8PRESENT"
+      Result="value" />
+
+    <UIRef Id="WixUI_OrkunPAM" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <CustomActionRef Id="CA_GenerateVaultKey" />
+    <CustomActionRef Id="CA_CreateAdminUser" />
+    <CustomActionRef Id="CA_WriteConfig" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CA_WriteConfig" Before="InstallFinalize">NOT Installed</Custom>
+      <Custom Action="CA_GenerateVaultKey" After="CA_WriteConfig">NOT Installed AND VAULTPASSPHRASE = ""</Custom>
+      <Custom Action="CA_CreateAdminUser" After="CA_GenerateVaultKey">NOT Installed AND ADMINUSER &lt;&gt; "" AND ADMINPASSWORD &lt;&gt; ""</Custom>
+    </InstallExecuteSequence>
+
+  </Package>
+
+</Wix>
