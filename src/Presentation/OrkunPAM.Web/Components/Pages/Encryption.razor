@@ -9,16 +9,9 @@
     <span class="pam-page-sub">BYOK — Manage the master encryption key that protects all vault credentials</span>
 </div>
 
-@if (_error != null)
-{
-    <div class="pam-alert pam-alert-danger">@_error</div>
-}
-@if (_success != null)
-{
-    <div class="pam-alert pam-alert-success">@_success</div>
-}
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
 
-<!-- Status Card -->
 <div class="pam-card" style="max-width:680px;margin-bottom:1.5rem">
     <div class="pam-card-header">Master Key Status</div>
     <div class="pam-card-body">
@@ -30,54 +23,23 @@
         {
             <table class="pam-table">
                 <tbody>
-                    <tr>
-                        <td style="width:200px;font-weight:600">Status</td>
-                        <td>
-                            @if (_status.IsInitialized)
-                            {
-                                <span class="pam-badge pam-badge-success">Initialized</span>
-                            }
-                            else
-                            {
-                                <span class="pam-badge pam-badge-danger">Not Initialized</span>
-                            }
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight:600">Key Version</td>
-                        <td>v@(_status.Version)</td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight:600">Initialized At</td>
-                        <td>@(_status.InitializedAtUtc.HasValue ? _status.InitializedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—")</td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight:600">Rotation Count</td>
-                        <td>@_status.RotationCount rotation(s)</td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight:600">DEK Cache TTL</td>
-                        <td>@_status.DekCacheTtlMinutes minutes</td>
-                    </tr>
+                    <tr><td style="width:200px;font-weight:600">Status</td>
+                        <td>@if (_status.IsInitialized) { <span class="pam-badge pam-badge-success">Initialized</span> } else { <span class="pam-badge pam-badge-danger">Not Initialized</span> }</td></tr>
+                    <tr><td style="font-weight:600">Key Version</td><td>v@(_status.Version)</td></tr>
+                    <tr><td style="font-weight:600">Initialized At</td><td>@(_status.InitializedAtUtc.HasValue ? _status.InitializedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—")</td></tr>
+                    <tr><td style="font-weight:600">Rotation Count</td><td>@_status.RotationCount rotation(s)</td></tr>
+                    <tr><td style="font-weight:600">DEK Cache TTL</td><td>@_status.DekCacheTtlMinutes minutes</td></tr>
                 </tbody>
             </table>
         }
     </div>
 </div>
 
-<!-- Tabs -->
 <div class="pam-tabs">
-    <button class="pam-tab @(_tab == "rotate" ? "active" : "")"
-            @onclick="@(() => SetTab("rotate"))">
-        Rotate Master Key
-    </button>
-    <button class="pam-tab @(_tab == "backup" ? "active" : "")"
-            @onclick="@(() => SetTab("backup"))">
-        Export Key Backup
-    </button>
+    <button class="pam-tab @(_tab == "rotate" ? "active" : "")" @onclick="@(() => SetTab("rotate"))">Rotate Master Key</button>
+    <button class="pam-tab @(_tab == "backup" ? "active" : "")" @onclick="@(() => SetTab("backup"))">Export Key Backup</button>
 </div>
 
-<!-- Rotate Tab -->
 @if (_tab == "rotate")
 {
     <div class="pam-card" style="max-width:540px">
@@ -85,24 +47,18 @@
         <div class="pam-card-body">
             <div class="pam-alert pam-alert-danger" style="margin-bottom:1rem">
                 <strong>Warning:</strong> Key rotation re-encrypts all in-memory data encryption keys.
-                After rotation, the <strong>new passphrase</strong> must be set as the startup passphrase
-                (env var <code>ORKUNPAM_VAULT_PASSPHRASE</code>). This action is audit-logged.
+                After rotation, set the new passphrase as <code>ORKUNPAM_VAULT_PASSPHRASE</code>. This action is audit-logged.
             </div>
-
             <div class="pam-form-group">
                 <label class="pam-label">New Passphrase <span class="pam-text-muted">(min 16 characters)</span></label>
-                <input type="password" class="pam-input" @bind="_newPassphrase"
-                       placeholder="Enter new master passphrase..." />
+                <input type="password" class="pam-input" @bind="_newPassphrase" placeholder="Enter new master passphrase..." />
             </div>
             <div class="pam-form-group">
                 <label class="pam-label">Confirm Passphrase</label>
-                <input type="password" class="pam-input" @bind="_confirmPassphrase"
-                       placeholder="Confirm new master passphrase..." />
+                <input type="password" class="pam-input" @bind="_confirmPassphrase" placeholder="Confirm new master passphrase..." />
             </div>
-
             <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
-                <button class="pam-btn pam-btn-danger" @onclick="RotateKeyAsync"
-                        disabled="@_submitting">
+                <button class="pam-btn pam-btn-danger" @onclick="RotateKeyAsync" disabled="@_submitting">
                     @(_submitting ? "Rotating…" : "Rotate Master Key")
                 </button>
             </div>
@@ -110,7 +66,6 @@
     </div>
 }
 
-<!-- Backup Tab -->
 @if (_tab == "backup")
 {
     <div class="pam-card" style="max-width:540px">
@@ -118,23 +73,17 @@
         <div class="pam-card-body">
             <p class="pam-text-muted" style="margin-bottom:1rem">
                 The master key will be exported as an AES-256-GCM encrypted JSON file.
-                Store it in a secure, offline location. You will need both the file
-                and the backup passphrase to restore the key.
+                Store it in a secure, offline location.
             </p>
-
             <div class="pam-form-group">
                 <label class="pam-label">Backup Passphrase <span class="pam-text-muted">(min 12 characters)</span></label>
-                <input type="password" class="pam-input" @bind="_backupPassphrase"
-                       placeholder="Enter passphrase to protect the backup..." />
+                <input type="password" class="pam-input" @bind="_backupPassphrase" placeholder="Enter passphrase to protect the backup..." />
             </div>
-
             <div style="margin-top:1.25rem">
-                <button class="pam-btn pam-btn-primary" @onclick="ExportBackupAsync"
-                        disabled="@_submitting">
+                <button class="pam-btn pam-btn-primary" @onclick="ExportBackupAsync" disabled="@_submitting">
                     @(_submitting ? "Exporting…" : "Download Encrypted Backup")
                 </button>
             </div>
-
             @if (_backupJson != null)
             {
                 <div style="margin-top:1.25rem">
@@ -153,14 +102,9 @@
     private bool _submitting;
     private string? _error;
     private string? _success;
-
     private KeyStatusDto? _status;
-
-    // Rotate form
     private string? _newPassphrase;
     private string? _confirmPassphrase;
-
-    // Backup form
     private string? _backupPassphrase;
     private string? _backupJson;
 
@@ -172,87 +116,37 @@
 
     private async Task LoadStatusAsync()
     {
-        _loading = true;
-        StateHasChanged();
+        _loading = true; StateHasChanged();
         _status = await Api.GetEncryptionStatusAsync();
-        _loading = false;
-        StateHasChanged();
+        _loading = false; StateHasChanged();
     }
 
-    private void SetTab(string tab)
-    {
-        _tab = tab;
-        _error = null;
-        _success = null;
-        _backupJson = null;
-        StateHasChanged();
-    }
+    private void SetTab(string tab) { _tab = tab; _error = null; _success = null; _backupJson = null; StateHasChanged(); }
 
     private async Task RotateKeyAsync()
     {
-        _error = null;
-        _success = null;
-
+        _error = null; _success = null;
         if (string.IsNullOrWhiteSpace(_newPassphrase) || _newPassphrase!.Length < 16)
-        {
-            _error = "New passphrase must be at least 16 characters.";
-            return;
-        }
+        { _error = "New passphrase must be at least 16 characters."; return; }
         if (_newPassphrase != _confirmPassphrase)
-        {
-            _error = "Passphrases do not match.";
-            return;
-        }
-
-        _submitting = true;
-        StateHasChanged();
-
+        { _error = "Passphrases do not match."; return; }
+        _submitting = true; StateHasChanged();
         var (ok, msg) = await Api.RotateEncryptionKeyAsync(_newPassphrase, _confirmPassphrase!);
         _submitting = false;
-
-        if (ok)
-        {
-            _success = msg ?? "Master key rotated successfully. Update ORKUNPAM_VAULT_PASSPHRASE before restarting.";
-            _newPassphrase = null;
-            _confirmPassphrase = null;
-            await LoadStatusAsync();
-        }
-        else
-        {
-            _error = msg ?? "Failed to rotate master key.";
-            StateHasChanged();
-        }
+        if (ok) { _success = msg ?? "Master key rotated successfully."; _newPassphrase = null; _confirmPassphrase = null; await LoadStatusAsync(); }
+        else { _error = msg ?? "Failed to rotate master key."; StateHasChanged(); }
     }
 
     private async Task ExportBackupAsync()
     {
-        _error = null;
-        _success = null;
-        _backupJson = null;
-
+        _error = null; _success = null; _backupJson = null;
         if (string.IsNullOrWhiteSpace(_backupPassphrase) || _backupPassphrase!.Length < 12)
-        {
-            _error = "Backup passphrase must be at least 12 characters.";
-            return;
-        }
-
-        _submitting = true;
-        StateHasChanged();
-
+        { _error = "Backup passphrase must be at least 12 characters."; return; }
+        _submitting = true; StateHasChanged();
         var json = await Api.ExportKeyBackupAsync(_backupPassphrase!);
         _submitting = false;
-
-        if (json != null)
-        {
-            _backupJson = json;
-            _success = "Key backup exported. Copy the JSON above and store it in a secure, offline location.";
-            _backupPassphrase = null;
-        }
-        else
-        {
-            _error = "Failed to export key backup.";
-        }
-
+        if (json != null) { _backupJson = json; _success = "Key backup exported. Store it in a secure, offline location."; _backupPassphrase = null; }
+        else _error = "Failed to export key backup.";
         StateHasChanged();
     }
 }

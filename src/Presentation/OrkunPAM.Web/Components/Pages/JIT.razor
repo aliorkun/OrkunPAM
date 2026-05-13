@@ -10,36 +10,18 @@
     <span class="pam-page-sub">Zero standing privileges — request time-bounded access to resources</span>
 </div>
 
-@if (_error != null)
-{
-    <div class="pam-alert pam-alert-danger">@_error</div>
-}
-@if (_success != null)
-{
-    <div class="pam-alert pam-alert-success">@_success</div>
-}
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
 
-<!-- Tabs -->
 <div class="pam-tabs">
-    <button class="pam-tab @(_tab == "all" ? "active" : "")"
-            @onclick="@(() => SetTab("all"))">
+    <button class="pam-tab @(_tab == "all" ? "active" : "")" @onclick="@(() => SetTab("all"))">
         All Requests
-        @if (_activeCount > 0)
-        {
-            <span class="pam-badge-count" style="background:#c00">@_activeCount</span>
-        }
+        @if (_activeCount > 0) { <span class="pam-badge-count" style="background:#c00">@_activeCount</span> }
     </button>
-    <button class="pam-tab @(_tab == "my" ? "active" : "")"
-            @onclick="@(() => SetTab("my"))">
-        My Requests
-    </button>
-    <button class="pam-tab @(_tab == "new" ? "active" : "")"
-            @onclick="@(() => SetTab("new"))">
-        + New Request
-    </button>
+    <button class="pam-tab @(_tab == "my" ? "active" : "")" @onclick="@(() => SetTab("my"))">My Requests</button>
+    <button class="pam-tab @(_tab == "new" ? "active" : "")" @onclick="@(() => SetTab("new"))">+ New Request</button>
 </div>
 
-<!-- All Requests Tab (Admin) -->
 @if (_tab == "all")
 {
     <div class="pam-card">
@@ -55,30 +37,12 @@
             </select>
         </div>
         <div class="pam-card-body">
-            @if (_loading)
-            {
-                <div class="pam-loading-text">Loading requests...</div>
-            }
-            else if (_allRequests == null || _allRequests.Count == 0)
-            {
-                <div class="pam-empty">No JIT access requests found.</div>
-            }
+            @if (_loading) { <div class="pam-loading-text">Loading requests...</div> }
+            else if (_allRequests == null || _allRequests.Count == 0) { <div class="pam-empty">No JIT access requests found.</div> }
             else
             {
                 <table class="pam-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Requester</th>
-                            <th>IP</th>
-                            <th>Resource</th>
-                            <th>Duration</th>
-                            <th>Reason</th>
-                            <th>Created</th>
-                            <th>Expires</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Status</th><th>Requester</th><th>IP</th><th>Resource</th><th>Duration</th><th>Reason</th><th>Created</th><th>Expires</th><th>Actions</th></tr></thead>
                     <tbody>
                         @foreach (var r in _allRequests)
                         {
@@ -94,21 +58,15 @@
                                 <td>
                                     @if (r.Status == "Pending")
                                     {
-                                        <button class="pam-btn pam-btn-xs pam-btn-success"
-                                                @onclick="@(() => ApproveAsync(r.Id))">Approve</button>
-                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
-                                                @onclick="@(() => DenyAsync(r.Id))">Deny</button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-success" @onclick="@(() => ApproveAsync(r.Id))">Approve</button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger" @onclick="@(() => DenyAsync(r.Id))">Deny</button>
                                     }
                                     else if (r.Status == "Active")
                                     {
-                                        <button class="pam-btn pam-btn-xs pam-btn-warning"
-                                                @onclick="@(() => RevokeAsync(r.Id))">Revoke</button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-warning" @onclick="@(() => RevokeAsync(r.Id))">Revoke</button>
                                         @if (r.ExtensionRequested)
                                         {
-                                            <button class="pam-btn pam-btn-xs pam-btn-info"
-                                                    @onclick="@(() => ApproveExtensionAsync(r.Id))">
-                                                +Ext (@(r.ExtensionRequestedMinutes)m)
-                                            </button>
+                                            <button class="pam-btn pam-btn-xs pam-btn-info" @onclick="@(() => ApproveExtensionAsync(r.Id))">+Ext (@(r.ExtensionRequestedMinutes)m)</button>
                                         }
                                     }
                                 </td>
@@ -121,36 +79,17 @@
     </div>
 }
 
-<!-- My Requests Tab -->
 @if (_tab == "my")
 {
     <div class="pam-card">
-        <div class="pam-card-header">
-            <span>My JIT Access Requests</span>
-        </div>
+        <div class="pam-card-header">My JIT Access Requests</div>
         <div class="pam-card-body">
-            @if (_loading)
-            {
-                <div class="pam-loading-text">Loading your requests...</div>
-            }
-            else if (_myRequests == null || _myRequests.Count == 0)
-            {
-                <div class="pam-empty">You have no JIT access requests.</div>
-            }
+            @if (_loading) { <div class="pam-loading-text">Loading your requests...</div> }
+            else if (_myRequests == null || _myRequests.Count == 0) { <div class="pam-empty">You have no JIT access requests.</div> }
             else
             {
                 <table class="pam-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Resource</th>
-                            <th>Duration</th>
-                            <th>Reason</th>
-                            <th>Created</th>
-                            <th>Expires</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Status</th><th>Resource</th><th>Duration</th><th>Reason</th><th>Created</th><th>Expires</th><th>Actions</th></tr></thead>
                     <tbody>
                         @foreach (var r in _myRequests)
                         {
@@ -164,15 +103,9 @@
                                 <td>
                                     @if (r.Status == "Active" && !r.ExtensionRequested)
                                     {
-                                        <button class="pam-btn pam-btn-xs pam-btn-info"
-                                                @onclick="@(() => RequestExtensionAsync(r.Id))">
-                                            Request Extension
-                                        </button>
+                                        <button class="pam-btn pam-btn-xs pam-btn-info" @onclick="@(() => RequestExtensionAsync(r.Id))">Request Extension</button>
                                     }
-                                    else if (r.ExtensionRequested)
-                                    {
-                                        <span class="pam-text-muted">Extension pending</span>
-                                    }
+                                    else if (r.ExtensionRequested) { <span class="pam-text-muted">Extension pending</span> }
                                     @if (r.Status == "Denied" && r.DenyReason != null)
                                     {
                                         <span class="pam-text-muted" title="@r.DenyReason">Denied: @Truncate(r.DenyReason, 30)</span>
@@ -187,7 +120,6 @@
     </div>
 }
 
-<!-- New Request Tab -->
 @if (_tab == "new")
 {
     <div class="pam-card" style="max-width:600px">
@@ -218,9 +150,7 @@
             </div>
             <div class="pam-form-group">
                 <label class="pam-label">Business Justification</label>
-                <textarea class="pam-input" rows="4"
-                    placeholder="Explain why you need this access (min 10 chars)..."
-                    @bind="_reqReason"></textarea>
+                <textarea class="pam-input" rows="4" placeholder="Explain why you need this access (min 10 chars)..." @bind="_reqReason"></textarea>
             </div>
             <button class="pam-btn pam-btn-primary" @onclick="SubmitRequestAsync" disabled="@_submitting">
                 @(_submitting ? "Submitting..." : "Submit Request")
@@ -239,8 +169,6 @@
     private List<JitRequestDto>? _allRequests;
     private List<JitRequestDto>? _myRequests;
     private string? _filterStatus;
-
-    // New request form
     private string _reqResourceType = "Device";
     private string? _reqResourceName;
     private int _reqDuration = 60;
@@ -255,18 +183,12 @@
 
     private async Task SetTab(string tab)
     {
-        _tab = tab;
-        _error = null;
-        _success = null;
+        _tab = tab; _error = null; _success = null;
         if (tab == "all") await LoadAllAsync();
         else if (tab == "my") await LoadMyAsync();
     }
 
-    private async Task FilterStatus(string? status)
-    {
-        _filterStatus = status;
-        await LoadAllAsync();
-    }
+    private async Task FilterStatus(string? status) { _filterStatus = status; await LoadAllAsync(); }
 
     private async Task LoadAllAsync()
     {
@@ -327,20 +249,15 @@
     {
         _error = null; _success = null;
         if (string.IsNullOrWhiteSpace(_reqReason) || _reqReason.Trim().Length < 10)
-        {
-            _error = "Reason must be at least 10 characters.";
-            return;
-        }
+        { _error = "Reason must be at least 10 characters."; return; }
         _submitting = true;
         var ok = await Api.SubmitJitRequestAsync(_reqResourceType, _reqResourceName, _reqReason.Trim(), _reqDuration);
         _submitting = false;
         if (ok)
         {
             _success = "JIT access request submitted. Awaiting admin approval.";
-            _reqReason = string.Empty;
-            _reqResourceName = null;
-            _tab = "my";
-            await LoadMyAsync();
+            _reqReason = string.Empty; _reqResourceName = null;
+            _tab = "my"; await LoadMyAsync();
         }
         else _error = "Failed to submit request.";
     }

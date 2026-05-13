@@ -12,7 +12,6 @@
     </div>
 </div>
 
-<!-- Filters -->
 <div class="pam-filters">
     <input class="pam-input pam-search" type="search" placeholder="Search by name, username or email…"
            @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
@@ -73,13 +72,13 @@
                                 {
                                     <span class="pam-status pam-status-active">✅ On</span>
                                     <button class="pam-btn-icon" title="Reset MFA"
-                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">&#x1F504;</button>
+                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">🔄</button>
                                 }
                                 else
                                 {
                                     <span class="pam-status pam-status-done">Off</span>
                                     <button class="pam-btn-icon" title="Send MFA Setup Link"
-                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">&#x1F511;</button>
+                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">🔑</button>
                                 }
                             </td>
                             <td>@(u.LastLoginAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>
@@ -104,7 +103,6 @@
                 </tbody>
             </table>
 
-            <!-- Pagination -->
             @if (_meta != null && _meta.TotalCount > _pageSize)
             {
                 <div class="pam-pagination">
@@ -121,7 +119,6 @@
     </div>
 </div>
 
-<!-- Add User Modal -->
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseModal">
@@ -131,10 +128,7 @@
                 <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                @if (_formError != null)
-                {
-                    <div class="pam-alert pam-alert-danger">@_formError</div>
-                }
+                @if (_formError != null) { <div class="pam-alert pam-alert-danger">@_formError</div> }
                 <div class="pam-form-group">
                     <label class="pam-label">Username *</label>
                     <input class="pam-input w-100-input" @bind="_fUsername" placeholder="e.g. john.doe" />
@@ -158,16 +152,12 @@
             </div>
             <div class="pam-modal-footer">
                 <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
-                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddUserAsync" disabled="@_formSaving">
-                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
-                    Create User
-                </button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddUserAsync" disabled="@_formSaving">Create User</button>
             </div>
         </div>
     </div>
 }
 
-<!-- Edit User Modal -->
 @if (_showEdit)
 {
     <div class="pam-modal-overlay" @onclick="CloseEditModal">
@@ -177,10 +167,7 @@
                 <button class="pam-close-btn" @onclick="CloseEditModal">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                @if (_editError != null)
-                {
-                    <div class="pam-alert pam-alert-danger">@_editError</div>
-                }
+                @if (_editError != null) { <div class="pam-alert pam-alert-danger">@_editError</div> }
                 <div class="pam-form-group">
                     <label class="pam-label">Username</label>
                     <input class="pam-input w-100-input" value="@_eUsername" disabled />
@@ -196,16 +183,12 @@
             </div>
             <div class="pam-modal-footer">
                 <button class="pam-btn pam-btn-secondary" @onclick="CloseEditModal">Cancel</button>
-                <button class="pam-btn pam-btn-primary" @onclick="SubmitEditUserAsync" disabled="@_editSaving">
-                    @if (_editSaving) { <span class="pam-spinner-sm"></span> }
-                    Save Changes
-                </button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitEditUserAsync" disabled="@_editSaving">Save Changes</button>
             </div>
         </div>
     </div>
 }
 
-<!-- MFA Setup Link Modal -->
 @if (_mfaSetupToken != null)
 {
     <div class="pam-modal-overlay" @onclick="CloseMfaModal">
@@ -231,7 +214,6 @@
     </div>
 }
 
-<!-- Bulk Import Modal -->
 @if (_showImport)
 {
     <div class="pam-modal-overlay" @onclick="CloseImportModal">
@@ -241,40 +223,21 @@
                 <button class="pam-close-btn" @onclick="CloseImportModal">&#215;</button>
             </div>
             <div class="pam-modal-body">
-                <p class="pam-text-muted" style="font-size:.85rem">
-                    Upload a CSV file. Max 5 MB. Imported users will be required to change their password on first login.
-                </p>
+                <p class="pam-text-muted" style="font-size:.85rem">Upload a CSV file. Max 5 MB. Imported users will be required to change their password on first login.</p>
                 <div class="pam-form-group">
                     <a href="/api/v1/users/import/template" download="users-import-template.csv"
-                       class="pam-btn pam-btn-secondary pam-btn-sm" style="font-size:.8rem">
-                        &#8595; Download Template
-                    </a>
+                       class="pam-btn pam-btn-secondary pam-btn-sm" style="font-size:.8rem">&#8595; Download Template</a>
                 </div>
                 <div class="pam-form-group">
                     <label class="pam-label">CSV File</label>
                     <InputFile OnChange="OnImportFileSelected" accept=".csv" class="pam-input" />
                 </div>
-                @if (_importError != null)
-                {
-                    <div class="pam-alert pam-alert-error">@_importError</div>
-                }
+                @if (_importError != null) { <div class="pam-alert pam-alert-error">@_importError</div> }
                 @if (_importResult != null)
                 {
                     <div class="pam-alert @(_importResult.Failed == 0 ? "pam-alert-success" : "pam-alert-warning")" style="margin-top:.5rem">
                         Imported @_importResult.Imported users. @(_importResult.Failed > 0 ? $"{_importResult.Failed} failed." : "")
                     </div>
-                    @if (_importResult.Errors.Count > 0)
-                    {
-                        <table class="pam-table" style="font-size:.8rem;margin-top:.5rem">
-                            <thead><tr><th>Row</th><th>Username</th><th>Reason</th></tr></thead>
-                            <tbody>
-                                @foreach (var e in _importResult.Errors)
-                                {
-                                    <tr><td>@e.Row</td><td>@e.Username</td><td>@e.Reason</td></tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
                 }
             </div>
             <div class="pam-modal-footer">
@@ -298,7 +261,6 @@
     private int            _page         = 1;
     private const int      _pageSize     = 20;
 
-    // Add modal state
     private bool    _showAdd;
     private string? _formError;
     private bool    _formSaving;
@@ -308,18 +270,15 @@
     private string  _fPassword        = "";
     private string  _fPasswordConfirm = "";
 
-    // MFA modal state
     private string?   _mfaSetupToken;
     private DateTime? _mfaSetupExpiry;
 
-    // Import modal state
     private bool                    _showImport;
     private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _importFile;
     private bool                    _importSaving;
     private string?                 _importError;
     private ImportResultDto?        _importResult;
 
-    // Edit modal state
     private bool    _showEdit;
     private string  _eUserId      = "";
     private string  _eUsername    = "";
@@ -338,21 +297,11 @@
 
     private async Task LoadAsync()
     {
-        _loading = true;
-        _error   = null;
-        StateHasChanged();
-
+        _loading = true; _error = null; StateHasChanged();
         var result = await Api.GetUsersAsync(_search, _statusFilter, _page, _pageSize);
-        if (result == null)
-            _error = "Failed to load users — check API connection.";
-        else
-        {
-            _users = result.Data;
-            _meta  = result.Meta;
-        }
-
-        _loading = false;
-        StateHasChanged();
+        if (result == null) _error = "Failed to load users — check API connection.";
+        else { _users = result.Data; _meta = result.Meta; }
+        _loading = false; StateHasChanged();
     }
 
     private async Task OnSearchKeyUp(KeyboardEventArgs e)
@@ -366,13 +315,7 @@
         await LoadAsync();
     }
 
-    private void OpenAddModal()
-    {
-        _fUsername = _fDisplayName = _fEmail = _fPassword = _fPasswordConfirm = "";
-        _formError = null;
-        _showAdd   = true;
-    }
-
+    private void OpenAddModal() { _fUsername = _fDisplayName = _fEmail = _fPassword = _fPasswordConfirm = ""; _formError = null; _showAdd = true; }
     private void CloseModal() { _showAdd = false; _formError = null; }
 
     private async Task SubmitAddUserAsync()
@@ -381,64 +324,27 @@
         if (string.IsNullOrWhiteSpace(_fUsername))   { _formError = "Username is required."; return; }
         if (string.IsNullOrWhiteSpace(_fPassword))   { _formError = "Password is required."; return; }
         if (_fPassword != _fPasswordConfirm)          { _formError = "Passwords do not match."; return; }
-
-        _formSaving = true;
-        StateHasChanged();
-
-        var ok = await Api.CreateUserAsync(
-            _fUsername.Trim(),
+        _formSaving = true; StateHasChanged();
+        var ok = await Api.CreateUserAsync(_fUsername.Trim(),
             string.IsNullOrWhiteSpace(_fDisplayName) ? null : _fDisplayName.Trim(),
-            string.IsNullOrWhiteSpace(_fEmail)       ? null : _fEmail.Trim(),
-            _fPassword);
-
+            string.IsNullOrWhiteSpace(_fEmail)       ? null : _fEmail.Trim(), _fPassword);
         _formSaving = false;
-
-        if (!ok)
-        {
-            _formError = "Failed to create user — check username uniqueness and password policy.";
-            StateHasChanged();
-            return;
-        }
-
-        CloseModal();
-        _page = 1;
-        await LoadAsync();
+        if (!ok) { _formError = "Failed to create user — check username uniqueness and password policy."; StateHasChanged(); return; }
+        CloseModal(); _page = 1; await LoadAsync();
     }
 
-    private void OpenEditModal(UserDto u)
-    {
-        _eUserId      = u.Id;
-        _eUsername    = u.Username;
-        _eDisplayName = u.DisplayName ?? "";
-        _eEmail       = u.Email ?? "";
-        _editError    = null;
-        _showEdit     = true;
-    }
-
+    private void OpenEditModal(UserDto u) { _eUserId = u.Id; _eUsername = u.Username; _eDisplayName = u.DisplayName ?? ""; _eEmail = u.Email ?? ""; _editError = null; _showEdit = true; }
     private void CloseEditModal() { _showEdit = false; _editError = null; }
 
     private async Task SubmitEditUserAsync()
     {
-        _editError  = null;
-        _editSaving = true;
-        StateHasChanged();
-
-        var ok = await Api.UpdateUserAsync(
-            _eUserId,
+        _editError = null; _editSaving = true; StateHasChanged();
+        var ok = await Api.UpdateUserAsync(_eUserId,
             string.IsNullOrWhiteSpace(_eDisplayName) ? null : _eDisplayName.Trim(),
             string.IsNullOrWhiteSpace(_eEmail)        ? null : _eEmail.Trim());
-
         _editSaving = false;
-
-        if (!ok)
-        {
-            _editError = "Failed to save changes — please try again.";
-            StateHasChanged();
-            return;
-        }
-
-        CloseEditModal();
-        await LoadAsync();
+        if (!ok) { _editError = "Failed to save changes — please try again."; StateHasChanged(); return; }
+        CloseEditModal(); await LoadAsync();
     }
 
     private async Task ResetMfaAsync(string userId, string username)
@@ -461,42 +367,23 @@
 
     private void CloseMfaModal() { _mfaSetupToken = null; _mfaSetupExpiry = null; }
 
-    private void OpenImportModal()
-    {
-        _importFile   = null;
-        _importError  = null;
-        _importResult = null;
-        _showImport   = true;
-    }
-
+    private void OpenImportModal() { _importFile = null; _importError = null; _importResult = null; _showImport = true; }
     private void CloseImportModal() { _showImport = false; }
 
     private void OnImportFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
     {
-        _importFile  = e.File;
-        _importError = null;
-        _importResult = null;
+        _importFile = e.File; _importError = null; _importResult = null;
     }
 
     private async Task SubmitImportAsync()
     {
         if (_importFile == null) return;
-        _importSaving = true;
-        _importError  = null;
-        _importResult = null;
-        StateHasChanged();
-
+        _importSaving = true; _importError = null; _importResult = null; StateHasChanged();
         var result = await Api.BulkImportUsersAsync(_importFile);
         _importSaving = false;
-
-        if (result == null)
-            _importError = "Import failed — please check the file format and try again.";
-        else
-            _importResult = result;
-
-        if (_importResult?.Failed == 0 && _importResult?.Imported > 0)
-            await LoadAsync();
-
+        if (result == null) _importError = "Import failed — please check the file format and try again.";
+        else _importResult = result;
+        if (_importResult?.Failed == 0 && _importResult?.Imported > 0) await LoadAsync();
         StateHasChanged();
     }
 

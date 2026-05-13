@@ -12,9 +12,9 @@
 
 <div style="display:flex;gap:4px;margin-bottom:16px">
     <button class="pam-btn @(_tab == "audit" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("audit"))">📋 Audit Log</button>
+            @onclick="@(() => SetTab("audit"))">&#x1F4CB; Audit Log</button>
     <button class="pam-btn @(_tab == "reports" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("reports"))">📊 Reports</button>
+            @onclick="@(() => SetTab("reports"))">&#x1F4CA; Reports</button>
 </div>
 
 @if (_tab == "audit")
@@ -281,8 +281,6 @@ else
 
     private void SetTab(string tab) { _tab = tab; }
 
-    // ---- Audit Log ----
-
     private async Task ApplyPreset(string preset)
     {
         _preset = preset;
@@ -362,8 +360,6 @@ else
         "Failure" => "pam-status-error",
         _         => "pam-status-warn"
     };
-
-    // ---- Reports ----
 
     private async Task LoadReportsAsync()
     {

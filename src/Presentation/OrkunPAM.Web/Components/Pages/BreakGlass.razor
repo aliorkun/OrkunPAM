@@ -10,32 +10,19 @@
     <span class="pam-page-sub">Emergency privileged access — fully audited and alerted</span>
 </div>
 
-@if (_error != null)
-{
-    <div class="pam-alert pam-alert-danger">@_error</div>
-}
-@if (_success != null)
-{
-    <div class="pam-alert pam-alert-success">@_success</div>
-}
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
 
 <div class="pam-tabs">
     <button class="pam-tab @(_tab == "all" ? "active" : "")"
             @onclick="@(() => SetTab("all"))">
         All Events
-        @if (_activeCount > 0)
-        {
-            <span class="pam-badge-count" style="background:#c00">@_activeCount</span>
-        }
+        @if (_activeCount > 0) { <span class="pam-badge-count" style="background:#c00">@_activeCount</span> }
     </button>
     <button class="pam-tab @(_tab == "my" ? "active" : "")"
-            @onclick="@(() => SetTab("my"))">
-        My Requests
-    </button>
+            @onclick="@(() => SetTab("my"))">My Requests</button>
     <button class="pam-tab @(_tab == "new" ? "active" : "")"
-            @onclick="@(() => SetTab("new"))">
-        + New Request
-    </button>
+            @onclick="@(() => SetTab("new"))">+ New Request</button>
 </div>
 
 @if (_tab == "all")
@@ -52,24 +39,12 @@
             </select>
         </div>
         <div class="pam-card-body">
-            @if (_loading)
-            {
-                <div class="pam-loading-text">Loading events...</div>
-            }
-            else if (_allEvents == null || _allEvents.Count == 0)
-            {
-                <div class="pam-empty">No break-glass events found.</div>
-            }
+            @if (_loading) { <div class="pam-loading-text">Loading events...</div> }
+            else if (_allEvents == null || _allEvents.Count == 0) { <div class="pam-empty">No break-glass events found.</div> }
             else
             {
                 <table class="pam-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th><th>User</th><th>IP</th><th>Resource</th>
-                            <th>Reason</th><th>Ticket</th><th>Created</th><th>Expires</th>
-                            <th>Acknowledged By</th><th>Actions</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Status</th><th>User</th><th>IP</th><th>Resource</th><th>Reason</th><th>Ticket</th><th>Created</th><th>Expires</th><th>Acknowledged By</th><th>Actions</th></tr></thead>
                     <tbody>
                         @foreach (var evt in _allEvents)
                         {
@@ -77,32 +52,18 @@
                                 <td><span class="pam-badge @GetStatusClass(evt.Status)">@evt.Status</span></td>
                                 <td><strong>@evt.RequesterUsername</strong></td>
                                 <td class="pam-text-muted">@(evt.RequesterIpAddress ?? "—")</td>
-                                <td>
-                                    <span class="pam-badge">@evt.ResourceType</span>
-                                    @if (!string.IsNullOrEmpty(evt.ResourceName)) { <span> @evt.ResourceName</span> }
-                                </td>
-                                <td title="@evt.EmergencyReason">
-                                    @(evt.EmergencyReason.Length > 40 ? evt.EmergencyReason[..40] + "…" : evt.EmergencyReason)
-                                </td>
+                                <td><span class="pam-badge">@evt.ResourceType</span> @evt.ResourceName</td>
+                                <td title="@evt.EmergencyReason">@(evt.EmergencyReason.Length > 40 ? evt.EmergencyReason[..40] + "…" : evt.EmergencyReason)</td>
                                 <td>@(evt.TicketNumber ?? "—")</td>
                                 <td>@evt.CreatedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
-                                <td class="@(evt.ExpiresAtUtc < DateTime.UtcNow ? "pam-text-danger" : "")">
-                                    @evt.ExpiresAtUtc.ToLocalTime().ToString("MM/dd HH:mm")
-                                </td>
+                                <td class="@(evt.ExpiresAtUtc < DateTime.UtcNow ? "pam-text-danger" : "")">@evt.ExpiresAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
                                 <td>@(evt.AcknowledgedByUsername ?? "—")</td>
                                 <td>
                                     @if (evt.Status == "Active")
                                     {
-                                        <button class="pam-btn pam-btn-sm pam-btn-success"
-                                                @onclick="@(() => ShowAcknowledge(evt.Id))">
-                                            Acknowledge
-                                        </button>
-                                        <button class="pam-btn pam-btn-sm pam-btn-danger"
-                                                @onclick="@(() => RevokeAsync(evt.Id))">
-                                            Revoke
-                                        </button>
+                                        <button class="pam-btn pam-btn-sm pam-btn-success" @onclick="@(() => ShowAcknowledge(evt.Id))">Acknowledge</button>
+                                        <button class="pam-btn pam-btn-sm pam-btn-danger" @onclick="@(() => RevokeAsync(evt.Id))">Revoke</button>
                                     }
-                                    else { <span class="pam-text-muted">—</span> }
                                 </td>
                             </tr>
                         }
@@ -118,34 +79,21 @@
     <div class="pam-card">
         <div class="pam-card-header">My Break-Glass History</div>
         <div class="pam-card-body">
-            @if (_myEvents == null || _myEvents.Count == 0)
-            {
-                <div class="pam-empty">You have no break-glass requests.</div>
-            }
+            @if (_myEvents == null || _myEvents.Count == 0) { <div class="pam-empty">You have no break-glass requests.</div> }
             else
             {
                 <table class="pam-table">
-                    <thead>
-                        <tr>
-                            <th>Status</th><th>Resource</th><th>Reason</th><th>Ticket</th>
-                            <th>Created</th><th>Expires</th><th>Acknowledged By</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Status</th><th>Resource</th><th>Reason</th><th>Ticket</th><th>Created</th><th>Expires</th><th>Acknowledged By</th></tr></thead>
                     <tbody>
                         @foreach (var evt in _myEvents)
                         {
                             <tr>
                                 <td><span class="pam-badge @GetStatusClass(evt.Status)">@evt.Status</span></td>
-                                <td>
-                                    <span class="pam-badge">@evt.ResourceType</span>
-                                    @if (!string.IsNullOrEmpty(evt.ResourceName)) { <span> @evt.ResourceName</span> }
-                                </td>
+                                <td><span class="pam-badge">@evt.ResourceType</span> @evt.ResourceName</td>
                                 <td>@evt.EmergencyReason</td>
                                 <td>@(evt.TicketNumber ?? "—")</td>
                                 <td>@evt.CreatedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
-                                <td class="@(evt.ExpiresAtUtc < DateTime.UtcNow ? "pam-text-danger" : "")">
-                                    @evt.ExpiresAtUtc.ToLocalTime().ToString("MM/dd HH:mm")
-                                </td>
+                                <td>@evt.ExpiresAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
                                 <td>@(evt.AcknowledgedByUsername ?? "—")</td>
                             </tr>
                         }
@@ -163,7 +111,6 @@
         <div class="pam-card-body">
             <div class="pam-alert pam-alert-danger" style="margin-bottom:1rem">
                 <strong>Warning:</strong> All break-glass access is logged, alerted to administrators, and subject to post-incident review.
-                Use only in genuine emergencies when normal access channels are unavailable.
             </div>
             <div class="pam-form-group">
                 <label class="pam-label">Resource Type *</label>
@@ -180,8 +127,7 @@
             </div>
             <div class="pam-form-group">
                 <label class="pam-label">Emergency Reason * <span class="pam-text-muted">(min 10 chars)</span></label>
-                <textarea class="pam-input" rows="3" @bind="_newReason"
-                          placeholder="Describe the emergency situation in detail..."></textarea>
+                <textarea class="pam-input" rows="3" @bind="_newReason" placeholder="Describe the emergency situation in detail..."></textarea>
             </div>
             <div class="pam-form-group">
                 <label class="pam-label">Incident / Ticket Number</label>
@@ -215,8 +161,7 @@
             <div class="pam-modal-body">
                 <div class="pam-form-group">
                     <label class="pam-label">Review Notes</label>
-                    <textarea class="pam-input" rows="3" @bind="_ackNotes"
-                              placeholder="Describe your post-incident review findings..."></textarea>
+                    <textarea class="pam-input" rows="3" @bind="_ackNotes" placeholder="Describe your post-incident review findings..."></textarea>
                 </div>
             </div>
             <div class="pam-modal-footer">
@@ -254,13 +199,11 @@
 
     private async Task LoadAllEventsAsync()
     {
-        _loading = true;
-        StateHasChanged();
+        _loading = true; StateHasChanged();
         var result = await Api.GetBreakGlassEventsAsync(_statusFilter);
         _allEvents = result?.Data ?? new();
         _activeCount = _allEvents.Count(e => e.Status == "Active");
-        _loading = false;
-        StateHasChanged();
+        _loading = false; StateHasChanged();
     }
 
     private async Task LoadMyEventsAsync()
@@ -288,14 +231,9 @@
     {
         _error = null;
         if (string.IsNullOrWhiteSpace(_newReason) || _newReason.Trim().Length < 10)
-        {
-            _error = "Emergency reason must be at least 10 characters.";
-            return;
-        }
-        _submitting = true;
-        StateHasChanged();
-        var result = await Api.SubmitBreakGlassAsync(
-            _newResourceType, null, _newResourceName, _newReason, _newTicket, _newDuration);
+        { _error = "Emergency reason must be at least 10 characters."; return; }
+        _submitting = true; StateHasChanged();
+        var result = await Api.SubmitBreakGlassAsync(_newResourceType, null, _newResourceName, _newReason, _newTicket, _newDuration);
         _submitting = false;
         if (result != null)
         {
@@ -303,11 +241,7 @@
             _newReason = null; _newTicket = null; _newResourceName = null;
             await SetTab("my");
         }
-        else
-        {
-            _error = "Failed to activate break-glass access. Please try again or contact an administrator.";
-            StateHasChanged();
-        }
+        else { _error = "Failed to activate break-glass access."; StateHasChanged(); }
     }
 
     private void ShowAcknowledge(string id) { _acknowledgeEventId = id; _ackNotes = null; StateHasChanged(); }
@@ -318,14 +252,16 @@
         if (_acknowledgeEventId == null) return;
         var ok = await Api.AcknowledgeBreakGlassAsync(_acknowledgeEventId, _ackNotes);
         _acknowledgeEventId = null;
-        if (ok) _success = "Event acknowledged."; else _error = "Failed to acknowledge event.";
+        if (ok) _success = "Event acknowledged.";
+        else _error = "Failed to acknowledge event.";
         await LoadAllEventsAsync();
     }
 
     private async Task RevokeAsync(string id)
     {
         var ok = await Api.RevokeBreakGlassAsync(id);
-        if (ok) _success = "Break-glass access revoked."; else _error = "Failed to revoke event.";
+        if (ok) _success = "Break-glass access revoked.";
+        else _error = "Failed to revoke event.";
         await LoadAllEventsAsync();
     }
 
