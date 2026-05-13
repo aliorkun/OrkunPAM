@@ -13,6 +13,7 @@ public static class BreakGlassEndpoints
     {
         var bg = app.MapGroup("/api/v1/break-glass").WithTags("BreakGlass");
 
+        // Submit emergency access request — grants immediate access, fully audited
         bg.MapPost("/", async (BreakGlassRequest req, OrkunPamDbContext db,
             HttpContext ctx, IEmailService? email, ILogger<Program> logger) =>
         {
@@ -51,8 +52,10 @@ public static class BreakGlassEndpoints
                 new { success = true, data = new { evt.Id, Status = evt.Status.ToString(), evt.ExpiresAtUtc } });
         }).RequireAuthorization();
 
+        // List all break-glass events (paginated, admin view)
         bg.MapGet("/", async (OrkunPamDbContext db, string? status, int page = 1, int pageSize = 50) =>
         {
+            // Auto-expire stale active events
             var now = DateTime.UtcNow;
             var stale = await db.BreakGlassEvents
                 .Where(e => e.Status == BreakGlassStatus.Active && e.ExpiresAtUtc < now)
@@ -84,6 +87,7 @@ public static class BreakGlassEndpoints
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
         }).RequireAuthorization();
 
+        // My break-glass events
         bg.MapGet("/my", async (OrkunPamDbContext db, HttpContext ctx) =>
         {
             var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -106,6 +110,7 @@ public static class BreakGlassEndpoints
             return Results.Ok(new { success = true, data = list });
         }).RequireAuthorization();
 
+        // Acknowledge — admin confirms they have reviewed the event post-facto
         bg.MapPost("/{id:guid}/acknowledge", async (Guid id, AcknowledgeBreakGlassRequest req,
             OrkunPamDbContext db, HttpContext ctx, ILogger<Program> logger) =>
         {
@@ -131,6 +136,7 @@ public static class BreakGlassEndpoints
             return Results.Ok(new { success = true });
         }).RequireAuthorization();
 
+        // Revoke — admin immediately terminates an active break-glass session
         bg.MapPost("/{id:guid}/revoke", async (Guid id, AcknowledgeBreakGlassRequest req,
             OrkunPamDbContext db, HttpContext ctx, ILogger<Program> logger) =>
         {
