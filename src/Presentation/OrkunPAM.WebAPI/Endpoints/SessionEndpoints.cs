@@ -18,9 +18,9 @@ public static class SessionEndpoints
         var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions").RequireAuthorization();
 
         sessions.MapPost("/ssh/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, IMemoryCache cache, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Ssh, 2222, db, vault, logger, context);
+            return await CreateSession(req, SessionType.Ssh, 2222, db, vault, logger, cache, context);
         });
 
         sessions.MapPost("/rdp/connect", async (ConnectRequest req, OrkunPamDbContext db,
@@ -80,15 +80,15 @@ public static class SessionEndpoints
         }).WithTags("Sessions").AllowAnonymous();
 
         sessions.MapPost("/vnc/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, IMemoryCache cache, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Vnc, 5900, db, vault, logger, context);
+            return await CreateSession(req, SessionType.Vnc, 5900, db, vault, logger, cache, context);
         });
 
         sessions.MapPost("/sql/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
+            IVaultEncryptionService vault, ILogger<Program> logger, IMemoryCache cache, HttpContext context) =>
         {
-            return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger, context);
+            return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger, cache, context);
         });
 
         sessions.MapGet("/", async (OrkunPamDbContext db, string? status, Guid? userId,
@@ -299,7 +299,8 @@ public static class SessionEndpoints
     }
 
     private static async Task<IResult> CreateSession(ConnectRequest req, SessionType type, int defaultPort,
-        OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context)
+        OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger,
+        IMemoryCache cache, HttpContext context)
     {
         var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
@@ -312,6 +313,19 @@ public static class SessionEndpoints
         var cred = await db.Credentials.FindAsync(req.CredentialId);
         if (cred == null)
             return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
+
+        // Concurrent session limit check
+        var concurrentLimit = await GetMaxConcurrentSessionsAsync(db, cache);
+        var activeCount = await db.ProxySessions
+            .CountAsync(ps => ps.UserId == userId && ps.Status == SessionStatus.Active);
+        if (activeCount >= concurrentLimit)
+        {
+            logger.LogWarning("Session rejected for user {UserId}: concurrent limit {Limit} reached (active={Active})",
+                userId, concurrentLimit, activeCount);
+            return Results.Json(
+                new { success = false, errors = new[] { $"Concurrent session limit ({concurrentLimit}) reached" } },
+                statusCode: 429);
+        }
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
@@ -408,6 +422,19 @@ public static class SessionEndpoints
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
 
+        // Concurrent session limit check
+        var rdpConcurrentLimit = await GetMaxConcurrentSessionsAsync(db, cache);
+        var rdpActiveCount = await db.ProxySessions
+            .CountAsync(ps => ps.UserId == userId && ps.Status == SessionStatus.Active);
+        if (rdpActiveCount >= rdpConcurrentLimit)
+        {
+            logger.LogWarning("RDP session rejected for user {UserId}: concurrent limit {Limit} reached (active={Active})",
+                userId, rdpConcurrentLimit, rdpActiveCount);
+            return Results.Json(
+                new { success = false, errors = new[] { $"Concurrent session limit ({rdpConcurrentLimit}) reached" } },
+                statusCode: 429);
+        }
+
         if (cred.PasswordEnc == null)
             return Results.BadRequest(new { success = false, errors = new[] { "Credential has no password" } });
 
@@ -475,6 +502,31 @@ public static class SessionEndpoints
                 }
             }
         });
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions PolicyJsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
+
+    private static async Task<int> GetMaxConcurrentSessionsAsync(OrkunPamDbContext db, IMemoryCache cache)
+    {
+        const string CacheKey = "policy:session:global:concurrent";
+        if (cache.TryGetValue<int>(CacheKey, out var cached) && cached > 0)
+            return cached;
+
+        var p = await db.Policies.FirstOrDefaultAsync(
+            x => x.PolicyType == "Session" && x.Scope == PolicyScope.Global);
+        var limit = 3;
+        if (p?.PolicyJson != null)
+        {
+            try
+            {
+                var s = System.Text.Json.JsonSerializer.Deserialize<SessionPolicySettings>(p.PolicyJson, PolicyJsonOpts);
+                if (s?.MaxConcurrentSessions > 0) limit = s.MaxConcurrentSessions;
+            }
+            catch { }
+        }
+        cache.Set(CacheKey, limit, TimeSpan.FromMinutes(5));
+        return limit;
     }
 
     private static async Task<bool> HasCredentialAccessAsync(

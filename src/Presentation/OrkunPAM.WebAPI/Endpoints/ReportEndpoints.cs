@@ -321,7 +321,7 @@ public static class ReportEndpoints
     {
         if (value == null) return "";
         var s = value.Replace("\"", "\"\"");
-        return s.Contains(',') || s.Contains('"') || s.Contains('\n') ? $"\"{s}\"" : s;
+        return s.Contains(',') || s.Contains('"') || s.Contains('\n') ? $"\"{ s}\"" : s;
     }
 }
 
