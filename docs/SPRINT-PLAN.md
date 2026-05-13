@@ -49,17 +49,17 @@
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #46 | Break-the-Glass acil erişim | MVP-SECURITY | ⬜ Açık |
-| #38 | JIT Privileged Access | MVP-SECURITY | ⬜ Açık |
-| #53 | BYOK + Key Rotation UI | MVP-SECURITY | ⬜ Açık |
-| #40 | Privileged Account Discovery | MVP-DEVICE | ⬜ Açık |
-| #54 | SMTP Bildirim | MVP-INFRA | ⬜ Açık |
-| #39 | Self-Service Portal | MVP-UX | ⬜ Açık |
-| #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION | ⬜ Açık |
-| #36 | MSI Installer | MVP-UX | ⬜ Açık |
-| #55 | Backup/DR | MVP-DEPLOYMENT | ⬜ Açık |
+| #46 | Break-the-Glass acil erişim | MVP-SECURITY | ✅ Kapatıldı |
+| #54 | SMTP Bildirim | MVP-INFRA | ✅ Kapatıldı |
+| #53 | BYOK + Key Rotation UI | MVP-SECURITY | ✅ Kapatıldı |
+| #38 | JIT Privileged Access | MVP-SECURITY | ✅ Kapatıldı |
+| #40 | Privileged Account Discovery | MVP-DEVICE | ✅ Kapatıldı |
+| #63 | SIEM Syslog/CEF Entegrasyonu | MVP-INTEGRATION | ✅ Kapatıldı |
+| #39 | Self-Service Portal | MVP-UX | ✅ Kapatıldı |
+| #36 | MSI Installer | MVP-UX | ◻ Açık |
+| #55 | Backup/DR | MVP-DEPLOYMENT | ◻ Açık |
 
-**İlerleme:** 0/9 kapatıldı (%0) — Sprint aktif
+**İlerleme:** 7/9 kapatıldı (%78) — Sprint aktif
 **Çıkış kriteri:** Enterprise demo yapılabilir, installer çalışıyor → v1.0.0-rc1 tag
 
 **Öncelik sırası (Developer için):**

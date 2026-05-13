@@ -1,0 +1,464 @@
+@page "/portal"
+@inject PamApiService Api
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>My Portal — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Self-Service Portal</h2>
+    <span class="pam-page-sub">Your devices, credentials and access requests in one place</span>
+</div>
+
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
+
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "devices" ? "active" : "")" @onclick="@(() => SetTab("devices"))">
+        My Devices
+        @if (_devices != null) { <span class="pam-badge-count">@_devices.Count</span> }
+    </button>
+    <button class="pam-tab @(_tab == "vault" ? "active" : "")" @onclick="@(() => SetTab("vault"))">
+        My Vault
+        @if (_credentials != null) { <span class="pam-badge-count">@_credentials.Count</span> }
+    </button>
+    <button class="pam-tab @(_tab == "requests" ? "active" : "")" @onclick="@(() => SetTab("requests"))">
+        My Requests
+        @if (_activeJit > 0) { <span class="pam-badge-count" style="background:#c00">@_activeJit</span> }
+    </button>
+    <button class="pam-tab @(_tab == "jit" ? "active" : "")" @onclick="@(() => SetTab("jit"))">+ Request Access</button>
+</div>
+
+@* ===== MY DEVICES ===== *@
+@if (_tab == "devices")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>Accessible Devices</span>
+            <input class="pam-input pam-input-sm" style="max-width:240px" placeholder="Filter by hostname..." @bind="_deviceFilter" @bind:event="oninput" />
+        </div>
+        <div class="pam-card-body">
+            @if (_loading) { <div class="pam-loading-text">Loading devices...</div> }
+            else if (_devices == null || _devices.Count == 0) { <div class="pam-empty">No devices assigned to you.</div> }
+            else
+            {
+                var filtered = string.IsNullOrWhiteSpace(_deviceFilter)
+                    ? _devices
+                    : _devices.Where(d => d.Hostname.Contains(_deviceFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+                <table class="pam-table">
+                    <thead><tr><th>Hostname</th><th>IP Address</th><th>Type</th><th>Protocol</th><th>OS</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in filtered)
+                        {
+                            <tr>
+                                <td><strong>@d.Hostname</strong>@(d.Fqdn != null ? " (" + d.Fqdn + ")" : "")</td>
+                                <td><code>@(d.IpAddress ?? "—")</code></td>
+                                <td>@d.Type</td>
+                                <td><span class="pam-badge pam-badge-blue">@d.Protocol</span></td>
+                                <td>@(d.OperatingSystem ?? "—")</td>
+                                <td>
+                                    @if (d.IsReachable)
+                                    { <span class="pam-badge pam-badge-green">Online</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-gray">Offline</span> }
+                                </td>
+                                <td>
+                                    @if (d.Protocol == "SSH" || d.Protocol == "ssh")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-primary" @onclick="@(() => ConnectSsh(d))">SSH Connect</button>
+                                    }
+                                    else if (d.Protocol == "RDP" || d.Protocol == "rdp")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-info" @onclick="@(() => ConnectRdp(d))">RDP Connect</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-secondary" @onclick="@(() => Nav.NavigateTo("/connect"))">Connect</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@* ===== MY VAULT ===== *@
+@if (_tab == "vault")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>My Credentials</span>
+            <input class="pam-input pam-input-sm" style="max-width:240px" placeholder="Filter by name..." @bind="_credFilter" @bind:event="oninput" />
+        </div>
+        <div class="pam-card-body">
+            @if (_loading) { <div class="pam-loading-text">Loading credentials...</div> }
+            else if (_credentials == null || _credentials.Count == 0) { <div class="pam-empty">No credentials accessible to you.</div> }
+            else
+            {
+                var filtered = string.IsNullOrWhiteSpace(_credFilter)
+                    ? _credentials
+                    : _credentials.Where(c => c.Name.Contains(_credFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+                <table class="pam-table">
+                    <thead><tr><th>Name</th><th>Username</th><th>Type</th><th>Status</th><th>Last Rotated</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in filtered)
+                        {
+                            <tr>
+                                <td><strong>@c.Name</strong>@(c.Description != null ? " — " + c.Description : "")</td>
+                                <td><code>@(c.Username ?? "—")</code></td>
+                                <td>@c.Type</td>
+                                <td>
+                                    @if (c.IsCheckedOut)
+                                    { <span class="pam-badge pam-badge-yellow">Checked Out</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-green">Available</span> }
+                                </td>
+                                <td>@(c.LastRotatedAtUtc.HasValue ? c.LastRotatedAtUtc.Value.ToString("MM/dd/yyyy") : "Never")</td>
+                                <td>
+                                    @if (!c.IsCheckedOut)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-primary" @onclick="@(() => ShowCheckoutDialog(c))">Check Out</button>
+                                    }
+                                    else if (c.CheckedOutByUserId == _myUserId)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-warning" @onclick="@(() => CheckinAsync(c.Id))">Check In</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="pam-text-muted">In use</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    @if (_checkedOutCred != null)
+    {
+        <div class="pam-card" style="max-width:520px;border-left:4px solid #28a745">
+            <div class="pam-card-header">Credential: @_checkedOutCred.Name</div>
+            <div class="pam-card-body">
+                <div class="pam-form-group">
+                    <label class="pam-label">Username</label>
+                    <code class="pam-copyable">@(_checkedOutCred.Username ?? "—")</code>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Password</label>
+                    @if (_showPassword)
+                    {
+                        <code class="pam-copyable">@_checkedOutCred.Password</code>
+                        <button class="pam-btn pam-btn-xs pam-btn-secondary" style="margin-left:8px" @onclick="@(() => _showPassword = false)">Hide</button>
+                    }
+                    else
+                    {
+                        <span class="pam-text-muted">••••••••</span>
+                        <button class="pam-btn pam-btn-xs pam-btn-secondary" style="margin-left:8px" @onclick="@(() => _showPassword = true)">Reveal</button>
+                    }
+                </div>
+                @if (_checkedOutCred.ExpiresAt.HasValue)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Expires</label>
+                        <span>@_checkedOutCred.ExpiresAt.Value.ToString("MM/dd/yyyy HH:mm") UTC</span>
+                    </div>
+                }
+                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="@(() => { _checkedOutCred = null; _showPassword = false; })">Close</button>
+            </div>
+        </div>
+    }
+}
+
+@* ===== CHECKOUT DIALOG ===== *@
+@if (_checkoutTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _checkoutTarget = null)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">Check Out: @_checkoutTarget.Name</div>
+            <div class="pam-modal-body">
+                <div class="pam-form-group">
+                    <label class="pam-label">Reason</label>
+                    <textarea class="pam-input" rows="3" placeholder="Business justification (min 5 chars)..." @bind="_checkoutReason"></textarea>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Duration</label>
+                    <select class="pam-select" @bind="_checkoutDuration">
+                        <option value="30">30 minutes</option>
+                        <option value="60">1 hour</option>
+                        <option value="120">2 hours</option>
+                        <option value="240">4 hours</option>
+                        <option value="480">8 hours</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Ticket # (optional)</label>
+                    <input class="pam-input" placeholder="e.g. INC0012345" @bind="_checkoutTicket" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="DoCheckoutAsync" disabled="@_submitting">
+                    @(_submitting ? "Checking out..." : "Check Out")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _checkoutTarget = null)">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== MY REQUESTS ===== *@
+@if (_tab == "requests")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">My JIT Access Requests</div>
+        <div class="pam-card-body">
+            @if (_loading) { <div class="pam-loading-text">Loading your requests...</div> }
+            else if (_myRequests == null || _myRequests.Count == 0) { <div class="pam-empty">You have no JIT access requests.</div> }
+            else
+            {
+                <table class="pam-table">
+                    <thead><tr><th>Status</th><th>Resource</th><th>Duration</th><th>Reason</th><th>Created</th><th>Expires</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _myRequests)
+                        {
+                            <tr>
+                                <td><span class="pam-badge @JitStatusClass(r.Status)">@r.Status</span></td>
+                                <td>@r.ResourceType@(r.ResourceName != null ? ": " + r.ResourceName : "")</td>
+                                <td>@r.RequestedDurationMinutes min</td>
+                                <td title="@r.Reason">@Truncate(r.Reason, 40)</td>
+                                <td>@r.CreatedAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>@(r.ExpiresAtUtc.HasValue ? r.ExpiresAtUtc.Value.ToString("MM/dd HH:mm") : "—")</td>
+                                <td>
+                                    @if (r.Status == "Active" && !r.ExtensionRequested)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-info" @onclick="@(() => RequestExtensionAsync(r.Id))">Extend</button>
+                                    }
+                                    else if (r.ExtensionRequested)
+                                    {
+                                        <span class="pam-text-muted">Extension pending</span>
+                                    }
+                                    @if (r.Status == "Denied" && r.DenyReason != null)
+                                    {
+                                        <span class="pam-text-muted" title="@r.DenyReason">Denied: @Truncate(r.DenyReason, 25)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@* ===== REQUEST ACCESS (JIT) ===== *@
+@if (_tab == "jit")
+{
+    <div class="pam-card" style="max-width:600px">
+        <div class="pam-card-header">Request Privileged Access</div>
+        <div class="pam-card-body">
+            <div class="pam-form-group">
+                <label class="pam-label">Resource Type</label>
+                <select class="pam-select" @bind="_jitResourceType">
+                    <option value="Device">Device</option>
+                    <option value="Credential">Credential</option>
+                    <option value="System">System</option>
+                    <option value="Database">Database</option>
+                </select>
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Resource Name (optional)</label>
+                <input class="pam-input" placeholder="e.g. prod-db-01" @bind="_jitResourceName" />
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Duration</label>
+                <select class="pam-select" @bind="_jitDuration">
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="240">4 hours</option>
+                    <option value="480">8 hours</option>
+                </select>
+            </div>
+            <div class="pam-form-group">
+                <label class="pam-label">Business Justification</label>
+                <textarea class="pam-input" rows="4" placeholder="Explain why you need this access (min 10 chars)..." @bind="_jitReason"></textarea>
+            </div>
+            <button class="pam-btn pam-btn-primary" @onclick="SubmitJitAsync" disabled="@_submitting">
+                @(_submitting ? "Submitting..." : "Submit Request")
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "devices";
+    private bool _loading;
+    private bool _submitting;
+    private string? _error;
+    private string? _success;
+    private string? _myUserId;
+
+    private List<DeviceDto>? _devices;
+    private string _deviceFilter = string.Empty;
+
+    private List<CredentialDto>? _credentials;
+    private string _credFilter = string.Empty;
+    private CredentialDto? _checkoutTarget;
+    private string _checkoutReason = string.Empty;
+    private string? _checkoutTicket;
+    private int _checkoutDuration = 60;
+    private CheckoutResultDto? _checkedOutCred;
+    private bool _showPassword;
+
+    private List<JitRequestDto>? _myRequests;
+    private int _activeJit;
+
+    private string _jitResourceType = "Device";
+    private string? _jitResourceName;
+    private int _jitDuration = 60;
+    private string _jitReason = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var user = await Auth.GetUserAsync();
+        _myUserId = user?.UserId;
+        await LoadDevicesAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab; _error = null; _success = null;
+        if (tab == "devices") await LoadDevicesAsync();
+        else if (tab == "vault") await LoadCredentialsAsync();
+        else if (tab == "requests") await LoadMyRequestsAsync();
+    }
+
+    private async Task LoadDevicesAsync()
+    {
+        _loading = true;
+        var result = await Api.GetDevicesAsync();
+        _devices = result?.Data ?? [];
+        _loading = false;
+    }
+
+    private async Task LoadCredentialsAsync()
+    {
+        _loading = true;
+        var result = await Api.GetCredentialsAsync();
+        _credentials = result?.Data ?? [];
+        _loading = false;
+    }
+
+    private async Task LoadMyRequestsAsync()
+    {
+        _loading = true;
+        _myRequests = await Api.GetMyJitRequestsAsync();
+        _activeJit = _myRequests?.Count(r => r.Status == "Active") ?? 0;
+        _loading = false;
+    }
+
+    private void ConnectSsh(DeviceDto d)
+    {
+        var ip = d.IpAddress ?? d.Hostname;
+        var port = d.ConnectionPort ?? 22;
+        Nav.NavigateTo($"/connect?host={Uri.EscapeDataString(ip)}&port={port}&protocol=SSH");
+    }
+
+    private void ConnectRdp(DeviceDto d)
+    {
+        var ip = d.IpAddress ?? d.Hostname;
+        var port = d.ConnectionPort ?? 3389;
+        Nav.NavigateTo($"/connect?host={Uri.EscapeDataString(ip)}&port={port}&protocol=RDP");
+    }
+
+    private void ShowCheckoutDialog(CredentialDto c)
+    {
+        _checkoutTarget = c;
+        _checkoutReason = string.Empty;
+        _checkoutTicket = null;
+        _checkoutDuration = 60;
+        _error = null;
+    }
+
+    private async Task DoCheckoutAsync()
+    {
+        if (_checkoutTarget == null) return;
+        if (string.IsNullOrWhiteSpace(_checkoutReason) || _checkoutReason.Trim().Length < 5)
+        { _error = "Reason must be at least 5 characters."; return; }
+
+        _submitting = true;
+        var result = await Api.CheckoutCredentialAsync(_checkoutTarget.Id, _checkoutReason.Trim(), _checkoutTicket, _checkoutDuration);
+        _submitting = false;
+
+        _checkoutTarget = null;
+        if (result != null)
+        {
+            _success = "Credential checked out successfully.";
+            _checkedOutCred = result;
+            _showPassword = false;
+            await LoadCredentialsAsync();
+        }
+        else
+        {
+            _error = "Checkout failed. You may not have permission or the credential is unavailable.";
+        }
+    }
+
+    private async Task CheckinAsync(string credId)
+    {
+        _error = null; _success = null;
+        var ok = await Api.CheckinCredentialAsync(credId);
+        if (ok) { _success = "Credential checked in."; _checkedOutCred = null; await LoadCredentialsAsync(); }
+        else _error = "Failed to check in credential.";
+    }
+
+    private async Task RequestExtensionAsync(string id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.RequestJitExtensionAsync(id, 60, "Need more time");
+        if (ok) { _success = "Extension request submitted."; await LoadMyRequestsAsync(); }
+        else _error = "Failed to submit extension request.";
+    }
+
+    private async Task SubmitJitAsync()
+    {
+        _error = null; _success = null;
+        if (string.IsNullOrWhiteSpace(_jitReason) || _jitReason.Trim().Length < 10)
+        { _error = "Justification must be at least 10 characters."; return; }
+
+        _submitting = true;
+        var ok = await Api.SubmitJitRequestAsync(_jitResourceType, _jitResourceName, _jitReason.Trim(), _jitDuration);
+        _submitting = false;
+
+        if (ok)
+        {
+            _success = "JIT access request submitted. Awaiting admin approval.";
+            _jitReason = string.Empty; _jitResourceName = null;
+            _tab = "requests"; await LoadMyRequestsAsync();
+        }
+        else _error = "Failed to submit request.";
+    }
+
+    private static string JitStatusClass(string status) => status switch
+    {
+        "Active"  => "pam-badge-green",
+        "Pending" => "pam-badge-yellow",
+        "Expired" => "pam-badge-gray",
+        "Revoked" => "pam-badge-gray",
+        "Denied"  => "pam-badge-red",
+        _         => ""
+    };
+
+    private static string Truncate(string? s, int max)
+    {
+        if (s == null) return "";
+        return s.Length <= max ? s : s[..max] + "…";
+    }
+}
