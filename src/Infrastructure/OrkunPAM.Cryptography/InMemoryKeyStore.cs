@@ -271,7 +271,7 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
         }
     }
 
-    // ── Private helpers ──────────────────────────────────────────────
+    // ── Private helpers ──────────────────────────────────────────────────────
 
     private byte[] EncryptWithKey(byte[] key, byte[] plaintext)
     {
@@ -345,7 +345,7 @@ public sealed class InMemoryKeyStore : IKeyStore, IDisposable
         _dekCache.Clear();
     }
 
-    // ── Nested persistence types ───────────────────────────────────────────
+    // ── Nested persistence types ─────────────────────────────────────────────
 
     private sealed class KeystoreMetadata
     {

@@ -8,7 +8,7 @@ namespace OrkunPAM.WebAPI.Endpoints;
 public static class LdapSamlEndpoints
 {
     // RFC 4514: DN type (attribute) names are alphanumeric or hyphen
-    private static readonly Regex DnTypeRegex = new(@"^[\w\-]+=", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex DnTypeRegex = new(@"^[\w\-]+=" , RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static bool IsValidLdapFilter(string? filter)
     {
