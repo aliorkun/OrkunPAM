@@ -4,10 +4,6 @@ using System.Text.Json;
 
 namespace OrkunPAM.Web.Services;
 
-/// <summary>
-/// Thin API client for PAM Web API. Injects Bearer token from AuthStateService.
-/// All methods return null on HTTP error to let pages show friendly error state.
-/// </summary>
 public sealed class PamApiService
 {
     private readonly IHttpClientFactory _factory;
@@ -22,10 +18,6 @@ public sealed class PamApiService
         _auth    = auth;
     }
 
-    // -----------------------------------------------------------------------
-    // Auth
-    // -----------------------------------------------------------------------
-
     public async Task<LoginResult?> LoginAsync(string username, string password, string? mfaCode = null)
     {
         var client = _factory.CreateClient("PamApi");
@@ -38,10 +30,6 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
-
-    // -----------------------------------------------------------------------
-    // Users
-    // -----------------------------------------------------------------------
 
     public async Task<PagedResult<UserDto>?> GetUsersAsync(
         string? search = null, string? status = null, int page = 1, int pageSize = 20)
@@ -95,10 +83,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Devices
-    // -----------------------------------------------------------------------
-
     public async Task<PagedResult<DeviceDto>?> GetDevicesAsync(
         string? search = null, string? type = null, int page = 1, int pageSize = 20)
     {
@@ -136,10 +120,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Sessions
-    // -----------------------------------------------------------------------
-
     public async Task<PagedResult<SessionDto>?> GetSessionsAsync(
         string? status = null, int page = 1, int pageSize = 20)
     {
@@ -148,9 +128,6 @@ public sealed class PamApiService
         return await GetAsync<PagedResult<SessionDto>>(url);
     }
 
-    /// <summary>
-    /// Creates an RDP session and returns token + .rdp file content for the browser to download.
-    /// </summary>
     public async Task<RdpLaunchResult?> LaunchRdpSessionAsync(string deviceId, string credentialId,
         string? reason = null, string? ticketNumber = null)
     {
@@ -170,10 +147,6 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
-
-    // -----------------------------------------------------------------------
-    // Vault -- Folders
-    // -----------------------------------------------------------------------
 
     public async Task<List<FolderDto>?> GetFoldersAsync()
     {
@@ -199,10 +172,6 @@ public sealed class PamApiService
         }
         catch { return false; }
     }
-
-    // -----------------------------------------------------------------------
-    // Vault -- Credentials
-    // -----------------------------------------------------------------------
 
     public async Task<PagedResult<CredentialDto>?> GetCredentialsAsync(
         string? deviceId = null, string? search = null, int page = 1, int pageSize = 20)
@@ -268,10 +237,6 @@ public sealed class PamApiService
         }
         catch { return false; }
     }
-
-    // -----------------------------------------------------------------------
-    // Policies
-    // -----------------------------------------------------------------------
 
     public async Task<SimpleResult<PolicyDto>?> GetPoliciesAsync(string? type = null)
     {
@@ -354,10 +319,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Approvals
-    // -----------------------------------------------------------------------
-
     public async Task<int> GetPendingApprovalCountAsync()
     {
         var result = await GetAsync<PagedResult<object>>("/api/v1/approval-requests?status=Pending&pageSize=1");
@@ -420,10 +381,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Reports & Audit Logs
-    // -----------------------------------------------------------------------
-
     public async Task<ListResult<ReportDto>?> GetReportsListAsync()
         => await GetAsync<ListResult<ReportDto>>("/api/v1/reports/");
 
@@ -477,10 +434,6 @@ public sealed class PamApiService
         }
         catch { return false; }
     }
-
-    // -----------------------------------------------------------------------
-    // SIEM (#63)
-    // -----------------------------------------------------------------------
 
     public async Task<List<SiemTargetDto>?> GetSiemTargetsAsync()
     {
@@ -536,6 +489,87 @@ public sealed class PamApiService
         catch (Exception ex) { return (false, ex.Message, 0); }
     }
 
+    // === Backup (#55) ===
+    public async Task<List<BackupRecordDto>?> GetBackupsAsync()
+    {
+        var result = await GetAsync<ListResult<BackupRecordDto>>("/api/v1/system/backup");
+        return result?.Data;
+    }
+
+    public async Task<BackupRecordDto?> CreateBackupAsync(string scope, string passphrase)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/backup",
+                new { scope, passphrase, initiatedBy = "admin" });
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BackupRecordDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteBackupAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.DeleteAsync($"/api/v1/system/backup/{id}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> VerifyBackupAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/system/backup/{id}/verify", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public string GetBackupDownloadUrl(string id) => $"/api/v1/system/backup/{id}/download";
+
+    public async Task<BackupScheduleDto?> GetBackupScheduleAsync()
+    {
+        var result = await GetAsync<SingleResult<BackupScheduleDto>>("/api/v1/system/backup/schedule");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveBackupScheduleAsync(bool enabled, int hourUtc, string scope, string? passphrase)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/backup/schedule",
+                new { enabled, hourUtc, scope, passphrase });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<(bool Success, string? Error, int RestoredCount)> RestoreBackupAsync(
+        byte[] fileBytes, string fileName, string passphrase, string conflictStrategy)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new ByteArrayContent(fileBytes), "file", fileName);
+            form.Add(new StringContent(passphrase), "passphrase");
+            form.Add(new StringContent(conflictStrategy), "conflictStrategy");
+            var resp = await client.PostAsync("/api/v1/system/backup/restore", form);
+            if (!resp.IsSuccessStatusCode) return (false, "HTTP " + (int)resp.StatusCode, 0);
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BackupRestoreResultDto>>(JsonOpts);
+            return (true, null, r?.Data?.RestoredCount ?? 0);
+        }
+        catch (Exception ex) { return (false, ex.Message, 0); }
+    }
+
     public async Task<LdapSyncApplyDto?> SyncLdapNowAsync(string configId)
     {
         var client = await GetAuthClientAsync();
@@ -564,25 +598,13 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // -----------------------------------------------------------------------
-    // Current user
-    // -----------------------------------------------------------------------
-
     public async Task<AuthUser?> GetCurrentUserAsync() => await _auth.GetUserAsync();
-
-    // -----------------------------------------------------------------------
-    // Dashboard stats helpers
-    // -----------------------------------------------------------------------
 
     public async Task<int> GetTotalCountAsync(string path)
     {
         var result = await GetAsync<PagedResultMeta>($"{path}?pageSize=1");
         return result?.Meta?.TotalCount ?? 0;
     }
-
-    // -----------------------------------------------------------------------
-    // Break-Glass (#46)
-    // -----------------------------------------------------------------------
 
     public async Task<BreakGlassSubmitResult?> SubmitBreakGlassAsync(
         string resourceType, Guid? resourceId, string? resourceName,
@@ -638,10 +660,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // SMTP (#54)
-    // -----------------------------------------------------------------------
-
     public async Task<bool> SaveSmtpConfigAsync(string host, int port, string from,
         string? fromName, string? username, string? password, bool useTls)
     {
@@ -673,10 +691,6 @@ public sealed class PamApiService
         }
         catch (Exception ex) { return (false, ex.Message); }
     }
-
-    // -----------------------------------------------------------------------
-    // Encryption / BYOK (#53)
-    // -----------------------------------------------------------------------
 
     public async Task<KeyStatusDto?> GetEncryptionStatusAsync()
     {
@@ -711,10 +725,6 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
-
-    // -----------------------------------------------------------------------
-    // MFA Enrollment (#83)
-    // -----------------------------------------------------------------------
 
     public async Task<MfaEnrollmentDto?> GetMfaEnrollmentAsync(string token)
     {
@@ -754,10 +764,6 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
-
-    // -----------------------------------------------------------------------
-    // JIT Access (#38)
-    // -----------------------------------------------------------------------
 
     public async Task<List<JitRequestDto>?> GetJitRequestsAsync(string? status = null)
     {
@@ -843,10 +849,6 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Privileged Account Discovery (#40)
-    // -----------------------------------------------------------------------
-
     public async Task<List<DiscoveryJobDto>?> GetDiscoveryJobsAsync()
     {
         var result = await GetAsync<ListResult<DiscoveryJobDto>>("/api/v1/vault/discovery-jobs");
@@ -860,10 +862,7 @@ public sealed class PamApiService
         {
             var resp = await client.PostAsJsonAsync("/api/v1/vault/discovery-jobs", new
             {
-                name,
-                discoveryType,
-                targetScope,
-                schedule,
+                name, discoveryType, targetScope, schedule,
                 createdBy = (Guid?)null
             });
             return resp.IsSuccessStatusCode;
@@ -911,9 +910,24 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // -----------------------------------------------------------------------
-    // Private helpers
-    // -----------------------------------------------------------------------
+    public async Task<ImportResultDto?> BulkImportUsersAsync(
+        Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            using var content = new MultipartFormDataContent();
+            var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var sc = new StreamContent(stream);
+            sc.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
+            content.Add(sc, "file", file.Name);
+            var resp = await client.PostAsync("/api/v1/users/import", content);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ImportResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
 
     private async Task<HttpClient> GetAuthClientAsync()
     {
@@ -936,35 +950,7 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
-
-    // -----------------------------------------------------------------------
-    // Bulk User Import (#85)
-    // -----------------------------------------------------------------------
-
-    public async Task<ImportResultDto?> BulkImportUsersAsync(
-        Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            using var content = new MultipartFormDataContent();
-            var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-            using var sc = new StreamContent(stream);
-            sc.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
-            content.Add(sc, "file", file.Name);
-
-            var resp = await client.PostAsync("/api/v1/users/import", content);
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ImportResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
 }
-
-// ---------------------------------------------------------------------------
-// DTOs matching PAM API response envelope
-// ---------------------------------------------------------------------------
 
 public record LoginResult(bool Success, LoginData? Data);
 public record LoginData(
@@ -1152,7 +1138,6 @@ public record BreakGlassDto(
 public record BreakGlassSubmitResult(string Id, string Status, DateTime ExpiresAtUtc);
 public record SmtpTestResult(bool Success, string? Message);
 
-// Encryption / BYOK DTOs
 public record KeyStatusDto(
     int       Version,
     DateTime? InitializedAtUtc,
@@ -1162,7 +1147,6 @@ public record KeyStatusDto(
 
 public record SimpleMessageResult(bool Success, string? Message);
 
-// JIT Access DTOs (#38)
 public record JitRequestDto(
     string    Id,
     string    RequesterUsername,
@@ -1187,36 +1171,36 @@ public record JitRequestDto(
 
 public record JitListResult(bool Success, List<JitRequestDto>? Data);
 
-// MFA Enrollment DTOs (#83)
 public record MfaEnrollmentDto(string Username, string Secret, string QrUri);
 public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
 
-// Bulk Import DTOs (#85)
 public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
 public record ImportRowError(int Row, string Username, string Reason);
 
-// SSH Key DTOs (#80)
 public record SshKeyPairDto(string PrivateKey, string PublicKey);
 
-// Audit Integrity DTOs (#91)
 public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int TamperedCount, long? FirstTamperedId, string Message);
 
-// LDAP Config DTOs (#90)
 public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
 
-// Discovery DTOs (#40)
 public record DiscoveryJobDto(Guid Id, string Name, string Type, string? Schedule, DateTime? LastRunAtUtc, bool IsEnabled);
 public record DiscoveredAccountDto(Guid Id, Guid DiscoveryJobId, Guid? DeviceId, string AccountName, string? AccountType, DateTime DiscoveredAtUtc, string Status, Guid? LinkedCredentialId);
 public record DiscoveryScanResultDto(DateTime LastRunAtUtc, int AccountsFound, string Result, List<DiscoveredAccountInfoDto> Accounts);
 public record DiscoveredAccountInfoDto(string AccountName, string AccountType, string? HostName, string? Dn, bool IsEnabled, string Source);
 
-// LDAP Sync DTOs
 public record LdapSyncApplyDto(int UsersAdded, int UsersUpdated, int UsersDisabled, string Message);
 
-// SIEM DTOs (#63)
 public record SiemTargetDto(
     string Id, string Name, string Host, int Port,
     string Protocol, string Format, int Facility,
     bool IsEnabled, DateTime? LastSentAtUtc, int TotalEventsSent, string? LastError);
 public record SiemTestResultData(bool Success, string? Error, long ResponseTimeMs);
 public record SiemTestResult(bool Success, SiemTestResultData? Data);
+
+public record BackupRecordDto(
+    string Id, string FileName, string Scope, long FileSizeBytes,
+    string? IntegrityHash, bool IntegrityVerified,
+    string Status, string? ErrorMessage,
+    DateTime? CompletedAtUtc, DateTime CreatedAtUtc, string InitiatedBy);
+public record BackupScheduleDto(bool Enabled, int HourUtc, string Scope);
+public record BackupRestoreResultDto(int RestoredCount, string Message);
