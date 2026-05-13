@@ -10,6 +10,7 @@ using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Entities.Vault;
+using OrkunPAM.Domain.Entities.Security;
 using OrkunPAM.Domain.Entities.Workflow;
 using OrkunPAM.SharedKernel;
 
@@ -93,6 +94,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
     public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
     public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
+
+    // Security
+    public DbSet<BreakGlassEvent> BreakGlassEvents => Set<BreakGlassEvent>();
 
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
@@ -317,7 +321,6 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 
     public override Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
-        // Auto-set audit fields
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {
             if (entry.State == EntityState.Modified)
