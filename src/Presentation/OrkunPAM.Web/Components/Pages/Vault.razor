@@ -221,7 +221,7 @@
             </div>
             <div class="pam-modal-body">
                 <div class="pam-alert pam-alert-warning">
-                    Copy this password now. It will be hidden when you close this dialog.
+                    Copy this credential now. It will be cleared when you close this dialog.
                 </div>
                 @if (_revealUser != null)
                 {
@@ -230,23 +230,34 @@
                         <div class="pam-reveal-field">@_revealUser</div>
                     </div>
                 }
-                <div class="pam-form-group">
-                    <label class="pam-label">Password</label>
-                    <div class="pam-reveal-box">
-                        @if (_passVisible)
-                        {
-                            <div class="pam-reveal-password">@(_revealPass != null ? new string(_revealPass) : "")</div>
-                        }
-                        else
-                        {
-                            <div class="pam-reveal-password pam-reveal-masked">••••••••••••••••</div>
-                        }
-                        <button class="pam-btn pam-btn-secondary pam-btn-sm" style="align-self:flex-start"
-                                @onclick="() => _passVisible = !_passVisible">
-                            @(_passVisible ? "Hide" : "Reveal")
-                        </button>
+                @if (_revealPrivKey != null)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Private Key (PEM)</label>
+                        <textarea class="pam-input w-100-input" rows="8" readonly
+                                  style="font-size:0.75em;font-family:monospace">@new string(_revealPrivKey)</textarea>
                     </div>
-                </div>
+                }
+                else
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Password</label>
+                        <div class="pam-reveal-box">
+                            @if (_passVisible)
+                            {
+                                <div class="pam-reveal-password">@(_revealPass != null ? new string(_revealPass) : "")</div>
+                            }
+                            else
+                            {
+                                <div class="pam-reveal-password pam-reveal-masked">••••••••••••••••</div>
+                            }
+                            <button class="pam-btn pam-btn-secondary pam-btn-sm" style="align-self:flex-start"
+                                    @onclick="() => _passVisible = !_passVisible">
+                                @(_passVisible ? "Hide" : "Reveal")
+                            </button>
+                        </div>
+                    </div>
+                }
                 @if (_revealExpiry.HasValue)
                 {
                     <div class="pam-form-group">
@@ -309,10 +320,37 @@
                     <label class="pam-label">Username</label>
                     <input class="pam-input w-100-input" @bind="_addUsername" placeholder="e.g. root, admin, sa" />
                 </div>
-                <div class="pam-form-group">
-                    <label class="pam-label">Password</label>
-                    <input class="pam-input w-100-input" type="password" @bind="_addPassword" />
-                </div>
+                @if (_addType != 1)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Password</label>
+                        <input class="pam-input w-100-input" type="password" @bind="_addPassword" />
+                    </div>
+                }
+                @if (_addType == 1)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Private Key (PEM)</label>
+                        <textarea class="pam-input w-100-input" rows="6" @bind="_addPrivateKey"
+                                  style="font-size:0.75em;font-family:monospace"
+                                  placeholder="Paste RSA private key PEM, or click Generate below"></textarea>
+                    </div>
+                    <div class="pam-form-group">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm" type="button"
+                                @onclick="GenerateKeyPairAsync" disabled="@_genSaving">
+                            @if (_genSaving) { <span class="pam-spinner-sm"></span> }
+                            Generate RSA 4096 Key Pair
+                        </button>
+                    </div>
+                    @if (_genPubKey != null)
+                    {
+                        <div class="pam-form-group">
+                            <label class="pam-label" style="color:#059669">Public Key — copy to ~/.ssh/authorized_keys on target</label>
+                            <textarea class="pam-input w-100-input" rows="3" readonly
+                                      style="font-size:0.75em;font-family:monospace">@_genPubKey</textarea>
+                        </div>
+                    }
+                }
                 <div class="pam-form-group">
                     <label class="pam-label">Description</label>
                     <input class="pam-input w-100-input" @bind="_addDesc" placeholder="Optional description" />
@@ -430,21 +468,25 @@
     private string?   _revealName;
     private string?   _revealUser;
     private char[]?   _revealPass;
+    private char[]?   _revealPrivKey;
     private DateTime? _revealExpiry;
     private bool      _passVisible;
 
     // Add Credential modal
     private bool    _showAdd;
-    private string  _addName     = "";
-    private int     _addType     = 0;
-    private string  _addFolderId = "";
-    private string  _addUsername = "";
-    private string  _addPassword = "";
-    private string  _addDesc     = "";
-    private int     _addMaxMins  = 60;
+    private string  _addName       = "";
+    private int     _addType       = 0;
+    private string  _addFolderId   = "";
+    private string  _addUsername   = "";
+    private string  _addPassword   = "";
+    private string  _addPrivateKey = "";
+    private string  _addDesc       = "";
+    private int     _addMaxMins    = 60;
     private bool    _addApproval;
     private bool    _addSaving;
     private string? _addError;
+    private string? _genPubKey;
+    private bool    _genSaving;
 
     // Rotate Password modal
     private bool    _showRotate;
@@ -540,13 +582,14 @@
             return;
         }
 
-        _showCheckout = false;
-        _revealName   = result.Name;
-        _revealUser   = result.Username;
-        _revealPass   = result.Password?.ToCharArray();
-        _revealExpiry = result.ExpiresAt?.ToLocalTime();
-        _passVisible  = false;
-        _showReveal   = true;
+        _showCheckout  = false;
+        _revealName    = result.Name;
+        _revealUser    = result.Username;
+        _revealPass    = result.Password?.ToCharArray();
+        _revealPrivKey = result.PrivateKey?.ToCharArray();
+        _revealExpiry  = result.ExpiresAt?.ToLocalTime();
+        _passVisible   = false;
+        _showReveal    = true;
 
         await LoadAsync();
     }
@@ -557,6 +600,11 @@
         {
             System.Runtime.InteropServices.MemoryMarshal.AsBytes(_revealPass.AsSpan()).Clear();
             _revealPass = null;
+        }
+        if (_revealPrivKey != null)
+        {
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(_revealPrivKey.AsSpan()).Clear();
+            _revealPrivKey = null;
         }
         _showReveal  = false;
         _passVisible = false;
@@ -573,6 +621,7 @@
     {
         _addName = ""; _addUsername = ""; _addPassword = ""; _addDesc = "";
         _addType = 0; _addMaxMins = 60; _addApproval = false;
+        _addPrivateKey = ""; _genPubKey = null; _genSaving = false;
         _addFolderId = _selectedFolderId ?? _folders?.FirstOrDefault()?.Id ?? "";
         _addError = null; _addSaving = false;
         _showAdd = true;
@@ -593,7 +642,8 @@
             _addFolderId,
             null,
             string.IsNullOrWhiteSpace(_addDesc) ? null : _addDesc.Trim(),
-            _addMaxMins, _addApproval);
+            _addMaxMins, _addApproval,
+            string.IsNullOrWhiteSpace(_addPrivateKey) ? null : _addPrivateKey.Trim());
 
         _addSaving = false;
 
@@ -606,6 +656,19 @@
 
         _showAdd = false;
         await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
+    }
+
+    private async Task GenerateKeyPairAsync()
+    {
+        _genSaving = true; _genPubKey = null; StateHasChanged();
+        var kp = await Api.GenerateSshKeyPairAsync();
+        _genSaving = false;
+        if (kp != null)
+        {
+            _addPrivateKey = kp.PrivateKey;
+            _genPubKey     = kp.PublicKey;
+        }
+        StateHasChanged();
     }
 
     private void OpenRotateModal(string credId, string credName)
