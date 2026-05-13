@@ -147,6 +147,64 @@ public static class AuthEndpoints
             return Results.Ok(new { success = true, message = "MFA enabled successfully" });
         }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
 
+        // MFA Enrollment — anonymous, token-based (admin sends link to user)
+        // GET /api/v1/auth/mfa/enrollment?token= — validate token, generate secret + QR URI
+        app.MapGet("/api/v1/auth/mfa/enrollment", async (string token, OrkunPamDbContext db,
+            ITotpService totp, IVaultEncryptionService vault) =>
+        {
+            if (!Guid.TryParse(token, out var tokenGuid))
+                return Results.BadRequest(new { success = false, error = "Invalid token." });
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.MfaEnrollmentToken == tokenGuid);
+            if (user == null || user.MfaEnrollmentTokenExpiry == null || user.MfaEnrollmentTokenExpiry < DateTime.UtcNow)
+                return Results.BadRequest(new { success = false, error = "Token expired or invalid." });
+
+            var (secret, qrUri) = totp.GenerateSecret(user.Username);
+            var secretBytes = TotpService.Base32Decode(secret);
+            try
+            {
+                var encResult = vault.Encrypt(secretBytes, "MfaSecret");
+                if (encResult.IsFailure) return Results.Problem("Failed to protect MFA secret");
+                user.MfaSecret = encResult.Value;
+            }
+            finally { CryptographicOperations.ZeroMemory(secretBytes); }
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { success = true, data = new { username = user.Username, secret, qrUri } });
+        }).AllowAnonymous().WithTags("Auth");
+
+        // POST /api/v1/auth/mfa/enrollment/confirm — validate token + TOTP code, enable MFA
+        app.MapPost("/api/v1/auth/mfa/enrollment/confirm", async (MfaEnrollmentConfirmRequest req,
+            OrkunPamDbContext db, ITotpService totp, IVaultEncryptionService vault) =>
+        {
+            if (!Guid.TryParse(req.Token, out var tokenGuid))
+                return Results.BadRequest(new { success = false, error = "Invalid token." });
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.MfaEnrollmentToken == tokenGuid);
+            if (user == null || user.MfaEnrollmentTokenExpiry == null || user.MfaEnrollmentTokenExpiry < DateTime.UtcNow)
+                return Results.BadRequest(new { success = false, error = "Token expired or invalid." });
+
+            if (user.MfaSecret == null)
+                return Results.BadRequest(new { success = false, error = "Open the setup link first to load the QR code." });
+
+            var decResult = vault.Decrypt(user.MfaSecret);
+            if (decResult.IsFailure) return Results.Problem("Failed to verify MFA secret");
+            bool valid;
+            try { valid = totp.ValidateCode(decResult.Value, req.Code); }
+            finally { CryptographicOperations.ZeroMemory(decResult.Value); }
+
+            if (!valid)
+                return Results.BadRequest(new { success = false, error = "Invalid TOTP code. Check your authenticator app." });
+
+            user.MfaEnabled = true;
+            user.MfaEnrollmentToken = null;
+            user.MfaEnrollmentTokenExpiry = null;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { success = true, message = "MFA enrollment complete. You can now log in with your authenticator." });
+        }).AllowAnonymous().WithTags("Auth").RequireRateLimiting("auth");
+
         // MFA Disable
         app.MapPost("/api/v1/auth/mfa/disable", async (MfaDisableRequest req, OrkunPamDbContext db,
             IPasswordHasher hasher, ITotpService totp, IVaultEncryptionService vault, HttpContext context) =>
@@ -187,3 +245,4 @@ public record RegisterRequest(string Username, string Password, string? DisplayN
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public record MfaVerifyRequest(string Code);
 public record MfaDisableRequest(string CurrentPassword, string CurrentMfaCode);
+public record MfaEnrollmentConfirmRequest(string Token, string Code);

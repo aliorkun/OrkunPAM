@@ -1,0 +1,150 @@
+@page "/mfa-setup"
+@inject PamApiService Api
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.WebUtilities
+
+<PageTitle>MFA Setup — OrkunPAM</PageTitle>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0d1117">
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:2rem;width:100%;max-width:440px">
+        <div style="text-align:center;margin-bottom:1.5rem">
+            <div style="font-size:2.5rem;margin-bottom:.5rem">🔐</div>
+            <h2 style="color:#e6edf3;margin:0;font-size:1.4rem">Set Up Authenticator</h2>
+            <p style="color:#8b949e;margin:.5rem 0 0;font-size:.9rem">Secure your OrkunPAM account with two-factor authentication</p>
+        </div>
+
+        @if (_error != null)
+        {
+            <div style="background:#3d1a1a;border:1px solid #f85149;border-radius:6px;padding:.75rem 1rem;color:#f85149;margin-bottom:1rem;font-size:.9rem">
+                @_error
+            </div>
+        }
+
+        @if (_done)
+        {
+            <div style="background:#1a3d1a;border:1px solid #3fb950;border-radius:6px;padding:1.5rem;text-align:center;color:#3fb950">
+                <div style="font-size:2rem;margin-bottom:.5rem">✅</div>
+                <strong>MFA enrollment complete!</strong>
+                <p style="margin:.5rem 0 0;font-size:.9rem;color:#8b949e">Your authenticator app is now linked. Redirecting to login…</p>
+            </div>
+        }
+        else if (_step == "loading")
+        {
+            <div style="text-align:center;color:#8b949e;padding:2rem">Loading setup…</div>
+        }
+        else if (_step == "invalid")
+        {
+            <div style="text-align:center;color:#f85149;padding:2rem">
+                <div style="font-size:2rem;margin-bottom:.5rem">⚠️</div>
+                <strong>Invalid or expired link.</strong>
+                <p style="color:#8b949e;font-size:.9rem">Contact your administrator to generate a new setup link.</p>
+            </div>
+        }
+        else if (_step == "scan")
+        {
+            <div>
+                <p style="color:#8b949e;font-size:.85rem;margin-bottom:1rem">
+                    Setting up MFA for <strong style="color:#e6edf3">@_username</strong>
+                </p>
+
+                <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:1rem;margin-bottom:1rem">
+                    <p style="color:#8b949e;font-size:.8rem;margin:0 0 .5rem">
+                        <strong>Step 1:</strong> Open your authenticator app (Google Authenticator, Microsoft Authenticator, Authy) and add a new account.
+                    </p>
+                    <p style="color:#8b949e;font-size:.8rem;margin:0 0 .75rem">
+                        <strong>Step 2:</strong> Tap "Add account" → "Enter manually" and type in the secret below, <em>or</em> tap "Scan QR code" and use the link.
+                    </p>
+                    <div style="margin-bottom:.75rem">
+                        <label style="color:#8b949e;font-size:.75rem;display:block;margin-bottom:.25rem">Manual entry secret (Base32):</label>
+                        <div style="display:flex;gap:.5rem">
+                            <code style="background:#161b22;border:1px solid #30363d;border-radius:4px;padding:.4rem .6rem;font-size:.85rem;color:#79c0ff;flex:1;word-break:break-all">@_secret</code>
+                        </div>
+                    </div>
+                    <a href="@_qrUri" style="display:block;background:#21262d;border:1px solid #30363d;border-radius:4px;padding:.5rem .75rem;color:#58a6ff;text-decoration:none;font-size:.8rem;text-align:center">
+                        📱 Open in Authenticator App (mobile)
+                    </a>
+                </div>
+
+                <div style="margin-bottom:1rem">
+                    <label style="color:#8b949e;font-size:.85rem;display:block;margin-bottom:.4rem">
+                        <strong>Step 3:</strong> Enter the 6-digit code from your app to confirm:
+                    </label>
+                    <input style="width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:.65rem .75rem;color:#e6edf3;font-size:1.4rem;letter-spacing:.3rem;text-align:center;box-sizing:border-box"
+                           type="text" inputmode="numeric" maxlength="6" placeholder="000000"
+                           @bind="_code" @bind:event="oninput" />
+                </div>
+
+                <button style="width:100%;background:@(_confirming ? "#21262d" : "#238636");border:1px solid @(_confirming ? "#30363d" : "#2ea043");border-radius:6px;padding:.75rem;color:#fff;font-size:1rem;cursor:pointer;font-weight:600"
+                        @onclick="ConfirmAsync" disabled="@_confirming">
+                    @(_confirming ? "Verifying…" : "Confirm & Enable MFA")
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string _step = "loading";
+    private string? _error;
+    private bool _done;
+    private bool _confirming;
+    private string? _token;
+    private string? _username;
+    private string? _secret;
+    private string? _qrUri;
+    private string _code = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (!QueryHelpers.ParseQuery(uri.Query).TryGetValue("token", out var tokenVal))
+        {
+            _step = "invalid";
+            StateHasChanged();
+            return;
+        }
+        _token = tokenVal.ToString();
+        var result = await Api.GetMfaEnrollmentAsync(_token);
+        if (result == null)
+        {
+            _step = "invalid";
+        }
+        else
+        {
+            _username = result.Username;
+            _secret   = result.Secret;
+            _qrUri    = result.QrUri;
+            _step     = "scan";
+        }
+        StateHasChanged();
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_code) || _code.Length != 6)
+        {
+            _error = "Enter the 6-digit code from your authenticator app.";
+            return;
+        }
+        _confirming = true;
+        StateHasChanged();
+
+        var ok = await Api.ConfirmMfaEnrollmentAsync(_token!, _code.Trim());
+        _confirming = false;
+
+        if (ok)
+        {
+            _done = true;
+            StateHasChanged();
+            await Task.Delay(2500);
+            Nav.NavigateTo("/login");
+        }
+        else
+        {
+            _error = "Invalid code or the link has expired. Try scanning the QR code again or contact your admin.";
+            StateHasChanged();
+        }
+    }
+}

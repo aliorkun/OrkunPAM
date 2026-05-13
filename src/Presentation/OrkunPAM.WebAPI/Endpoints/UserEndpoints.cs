@@ -117,7 +117,7 @@ public static class UserEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             user.Status = UserStatus.Locked;
-            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
+            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100);
             await db.SaveChangesAsync();
 
             await audit.LogAsync("User", "User.Locked", ParseActorId(context),
@@ -175,6 +175,51 @@ public static class UserEndpoints
                 "User", id.ToString(), new { targetUsername = user.Username, adminReset = true });
 
             return Results.Ok(new { success = true, message = "Password reset successfully" });
+        });
+
+        // Admin MFA management
+        group.MapPost("/{id:guid}/mfa/reset", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            user.MfaEnabled = false;
+            user.MfaSecret = null;
+            user.MfaEnrollmentToken = null;
+            user.MfaEnrollmentTokenExpiry = null;
+            await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.MfaReset", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(), new { targetUsername = user.Username });
+
+            return Results.Ok(new { success = true, message = $"MFA reset for '{user.Username}'. User must re-enroll." });
+        });
+
+        group.MapPost("/{id:guid}/mfa/send-setup", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            var token = Guid.NewGuid();
+            user.MfaEnrollmentToken = token;
+            user.MfaEnrollmentTokenExpiry = DateTime.UtcNow.AddHours(24);
+            await db.SaveChangesAsync();
+
+            await audit.LogAsync("User", "User.MfaEnrollmentLinkGenerated", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", id.ToString(),
+                new { targetUsername = user.Username, expiry = user.MfaEnrollmentTokenExpiry });
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new { enrollmentToken = token.ToString(), expiresAt = user.MfaEnrollmentTokenExpiry }
+            });
         });
 
         group.MapGet("/{id:guid}/permissions", async (Guid id, IPermissionService perms) =>
