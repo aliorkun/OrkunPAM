@@ -18,6 +18,7 @@ public class AuditLogEntry
     public string? TraceId { get; set; }
     public byte[]? PreviousHash { get; set; }
     public byte[]? EntryHash { get; set; }
+    public bool IsTampered { get; set; }
 }
 
 public class SystemConfig

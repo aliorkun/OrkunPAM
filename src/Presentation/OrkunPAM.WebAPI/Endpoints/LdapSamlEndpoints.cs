@@ -150,34 +150,29 @@ public static class LdapSamlEndpoints
         });
 
         ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Identity.Services.ILdapService ldapService, ILogger<Program> logger) =>
+            OrkunPAM.Identity.Services.ILdapService ldapService,
+            OrkunPAM.Persistence.Services.IAuditService audit,
+            ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
 
-            string? bindPassword = null; // Will be decrypted from l.BindPasswordEnc
+            var applyResult = await OrkunPAM.Persistence.Services.LdapPamSyncService.ApplySyncAsync(
+                l, db, ldapService, audit, CancellationToken.None);
 
-            var result = await ldapService.SyncUsersAndGroupsAsync(
-                l.Host, l.Port, l.UseSsl, l.BindDn, bindPassword,
-                l.BaseDn, l.UserSearchFilter, l.GroupSearchFilter, l.UserAttributeMapping);
-
-            l.LastSyncAtUtc = DateTime.UtcNow;
-            await db.SaveChangesAsync();
-
-            logger.LogInformation("LDAP sync completed for '{Name}'. Users: {Users}, Groups: {Groups}",
-                l.Name, result.UsersFound, result.GroupsFound);
+            logger.LogInformation("LDAP manual sync completed for '{Name}'. Created:{C} Updated:{U} Locked:{L}",
+                l.Name, applyResult.Created, applyResult.Updated, applyResult.Locked);
 
             return Results.Ok(new
             {
-                success = result.Success,
+                success = applyResult.Success,
                 data = new
                 {
-                    message = result.Message,
-                    usersFound = result.UsersFound,
-                    groupsFound = result.GroupsFound,
-                    lastSync = l.LastSyncAtUtc,
-                    users = result.Users.Take(100),
-                    groups = result.Groups.Take(100)
+                    applyResult.Message,
+                    applyResult.Created,
+                    applyResult.Updated,
+                    applyResult.Locked,
+                    lastSync = l.LastSyncAtUtc
                 }
             });
         });

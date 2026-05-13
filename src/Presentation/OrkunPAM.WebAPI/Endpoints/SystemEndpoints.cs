@@ -96,7 +96,7 @@ public static class SystemEndpoints
                     a.ActorUserId, a.ActorUsername, a.ActorIpAddress,
                     a.TargetType, a.TargetId, a.Details,
                     Outcome = a.Outcome.ToString(),
-                    a.TraceId
+                    a.TraceId, a.IsTampered
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = logs, meta = new { page, pageSize, totalCount = total } });
@@ -104,11 +104,11 @@ public static class SystemEndpoints
 
         audit.MapGet("/verify", async (OrkunPamDbContext db) =>
         {
-            var logs = await db.AuditLogs.OrderBy(a => a.Id).Take(1000).ToListAsync();
+            var logs = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
 
-            var valid = true;
             byte[]? previousHash = null;
-            var checkedCount = 0;
+            int checkedCount = 0, tamperedCount = 0;
+            long? firstTamperedId = null;
 
             foreach (var log in logs)
             {
@@ -116,22 +116,37 @@ public static class SystemEndpoints
                 {
                     if (!previousHash.SequenceEqual(log.PreviousHash))
                     {
-                        valid = false;
-                        break;
+                        if (!log.IsTampered)
+                        {
+                            log.IsTampered = true;
+                            tamperedCount++;
+                            firstTamperedId ??= log.Id;
+                        }
+                    }
+                    else if (log.IsTampered)
+                    {
+                        log.IsTampered = false;
                     }
                 }
                 previousHash = log.EntryHash;
                 checkedCount++;
             }
 
+            if (tamperedCount > 0)
+                await db.SaveChangesAsync();
+
             return Results.Ok(new
             {
                 success = true,
                 data = new
                 {
-                    integrityValid = valid,
+                    integrityValid = tamperedCount == 0,
                     entriesChecked = checkedCount,
-                    message = valid ? "Audit log integrity verified" : "TAMPERING DETECTED - hash chain broken"
+                    tamperedCount,
+                    firstTamperedId,
+                    message = tamperedCount == 0
+                        ? "Audit log integrity verified"
+                        : $"TAMPERING DETECTED — {tamperedCount} record(s) marked as tampered"
                 }
             });
         });
