@@ -99,6 +99,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<BreakGlassEvent> BreakGlassEvents => Set<BreakGlassEvent>();
     public DbSet<JitAccessRequest> JitAccessRequests => Set<JitAccessRequest>();
 
+    // SIEM (#63)
+    public DbSet<SiemTarget> SiemTargets => Set<SiemTarget>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

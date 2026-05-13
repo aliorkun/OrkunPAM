@@ -8,8 +8,10 @@
 </div>
 
 <div style="display:flex;gap:4px;margin-bottom:16px">
-    <button class="pam-btn @(_tab == "ldap" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("ldap"))">🔗 LDAP / AD</button>
+    <button class="pam-btn @(_tab == \"ldap\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+            @onclick="@(() => SetTab(\"ldap\"))">🔗 LDAP / AD</button>
+    <button class="pam-btn @(_tab == \"siem\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+            @onclick="@(() => SetTab(\"siem\"))">📡 SIEM / Syslog</button>
 </div>
 
 @if (_tab == "ldap")
@@ -71,13 +73,105 @@
                                 <td style="font-size:0.8em;max-width:200px;overflow:hidden;text-overflow:ellipsis">@c.BaseDn</td>
                                 <td>@c.SyncIntervalMinutes min</td>
                                 <td>@(c.LastSyncAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
-                                <td><span class="pam-status @(c.IsEnabled ? "pam-status-active" : "pam-status-error")">@(c.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td><span class="pam-status @(c.IsEnabled ? \"pam-status-active\" : \"pam-status-error\")">@(c.IsEnabled ? "Enabled" : "Disabled")</span></td>
                                 <td>
                                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
                                             @onclick="@(() => SyncNowAsync(c.Id))"
                                             disabled="@(_syncing == c.Id)">
                                         @(_syncing == c.Id ? "Syncing…" : "Sync Now")
                                     </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "siem")
+{
+    @if (_siemError != null) { <div class="pam-alert pam-alert-danger">@_siemError</div> }
+    @if (_siemMsg != null) { <div class="pam-alert pam-alert-info">@_siemMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <strong>Add SIEM Target</strong>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+                <input class="pam-input" placeholder="Name (e.g. Splunk)" @bind="_siemName" />
+                <input class="pam-input" placeholder="Host / IP" @bind="_siemHost" />
+                <input class="pam-input" placeholder="Port" type="number" @bind="_siemPort" />
+                <select class="pam-input" @bind="_siemProtocol">
+                    <option value="UDP">UDP</option>
+                    <option value="TCP">TCP</option>
+                    <option value="TLS">TLS</option>
+                </select>
+                <select class="pam-input" @bind="_siemFormat">
+                    <option value="CEF">CEF (ArcSight)</option>
+                    <option value="Syslog-KV">Syslog Key-Value (Splunk / QRadar)</option>
+                </select>
+                <input class="pam-input" placeholder="Facility (0-23, default 16=local0)" type="number" @bind="_siemFacility" />
+            </div>
+            <div style="margin-top:8px">
+                <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="AddSiemTargetAsync"
+                        disabled="@_siemSaving">Add Target</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_siemLoading)
+            {
+                <div class="pam-loading-text p-4">Loading SIEM targets…</div>
+            }
+            else if (_siemTargets == null || _siemTargets.Count == 0)
+            {
+                <div class="pam-empty p-4">No SIEM targets configured. Add a target above to start forwarding PAM events to your SIEM (Splunk, IBM QRadar, Microsoft Sentinel, etc.).</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Host:Port</th>
+                            <th>Protocol</th>
+                            <th>Format</th>
+                            <th>Status</th>
+                            <th>Last Sent</th>
+                            <th>Events Sent</th>
+                            <th>Last Error</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _siemTargets)
+                        {
+                            <tr>
+                                <td>@t.Name</td>
+                                <td>@t.Host:@t.Port</td>
+                                <td>@t.Protocol</td>
+                                <td>@t.Format</td>
+                                <td><span class="pam-status @(t.IsEnabled ? \"pam-status-active\" : \"pam-status-warning\")">@(t.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td>@(t.LastSentAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
+                                <td>@t.TotalEventsSent</td>
+                                <td style="font-size:0.75em;max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--pam-danger)">@(t.LastError ?? "")</td>
+                                <td style="white-space:nowrap">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => ToggleSiemAsync(t.Id))"
+                                            style="margin-right:4px">
+                                        @(t.IsEnabled ? "Disable" : "Enable")
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => TestSiemAsync(t.Id))"
+                                            style="margin-right:4px"
+                                            disabled="@(_siemTesting == t.Id)">
+                                        @(_siemTesting == t.Id ? "Testing…" : "Test")
+                                    </button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => DeleteSiemAsync(t.Id))">Delete</button>
                                 </td>
                             </tr>
                         }
@@ -97,7 +191,6 @@
     private string? _syncing;
     private List<LdapConfigDto>? _configs;
 
-    // New config form fields
     private string _newName = "";
     private string _newHost = "";
     private int _newPort = 389;
@@ -106,19 +199,45 @@
     private int _newInterval = 60;
     private bool _newUseSsl = true;
 
+    private bool _siemLoading;
+    private bool _siemSaving;
+    private string? _siemError;
+    private string? _siemMsg;
+    private string? _siemTesting;
+    private List<SiemTargetDto>? _siemTargets;
+
+    private string _siemName = "";
+    private string _siemHost = "";
+    private int _siemPort = 514;
+    private string _siemProtocol = "UDP";
+    private string _siemFormat = "CEF";
+    private int _siemFacility = 16;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         await LoadAsync();
     }
 
-    private void SetTab(string tab) { _tab = tab; }
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "siem" && _siemTargets == null)
+            await LoadSiemAsync();
+    }
 
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
         _configs = await Api.GetLdapConfigsAsync();
         _loading = false; StateHasChanged();
+    }
+
+    private async Task LoadSiemAsync()
+    {
+        _siemLoading = true; _siemError = null; StateHasChanged();
+        _siemTargets = await Api.GetSiemTargetsAsync();
+        _siemLoading = false; StateHasChanged();
     }
 
     private async Task AddConfigAsync()
@@ -143,7 +262,49 @@
         var result = await Api.SyncLdapNowAsync(configId);
         _syncing = null;
         if (result == null) { _error = "Sync request failed."; }
-        else { _syncMsg = $"Sync complete — Created: {result.Created}, Updated: {result.Updated}, Locked: {result.Locked}"; await LoadAsync(); }
+        else { _syncMsg = $"Sync complete — Created: {result.UsersAdded}, Updated: {result.UsersUpdated}, Locked: {result.UsersDisabled}"; await LoadAsync(); }
         StateHasChanged();
+    }
+
+    private async Task AddSiemTargetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_siemName) || string.IsNullOrWhiteSpace(_siemHost))
+        {
+            _siemError = "Name and Host are required.";
+            StateHasChanged();
+            return;
+        }
+        _siemSaving = true; _siemError = null; StateHasChanged();
+        var ok = await Api.CreateSiemTargetAsync(_siemName, _siemHost, _siemPort,
+            _siemProtocol, _siemFormat, _siemFacility);
+        _siemSaving = false;
+        if (ok) { _siemName = _siemHost = ""; _siemPort = 514; await LoadSiemAsync(); }
+        else { _siemError = "Failed to add SIEM target."; StateHasChanged(); }
+    }
+
+    private async Task ToggleSiemAsync(string id)
+    {
+        _siemMsg = null; _siemError = null;
+        var ok = await Api.ToggleSiemTargetAsync(id);
+        if (ok) await LoadSiemAsync();
+        else { _siemError = "Failed to toggle SIEM target."; StateHasChanged(); }
+    }
+
+    private async Task TestSiemAsync(string id)
+    {
+        _siemTesting = id; _siemMsg = null; _siemError = null; StateHasChanged();
+        var (success, error, ms) = await Api.TestSiemTargetAsync(id);
+        _siemTesting = null;
+        if (success) _siemMsg = "Test message sent successfully (" + ms + " ms)";
+        else _siemError = "Test failed: " + (error ?? "unknown error");
+        StateHasChanged();
+    }
+
+    private async Task DeleteSiemAsync(string id)
+    {
+        _siemMsg = null; _siemError = null;
+        var ok = await Api.DeleteSiemTargetAsync(id);
+        if (ok) await LoadSiemAsync();
+        else { _siemError = "Failed to delete SIEM target."; StateHasChanged(); }
     }
 }
