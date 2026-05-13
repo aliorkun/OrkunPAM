@@ -117,7 +117,7 @@ public static class UserEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             user.Status = UserStatus.Locked;
-            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100);
+            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
             await db.SaveChangesAsync();
 
             await audit.LogAsync("User", "User.Locked", ParseActorId(context),
@@ -267,6 +267,116 @@ public static class UserEndpoints
 
             return Results.Ok(new { success = true, message = "Role removed" });
         });
+
+        // -----------------------------------------------------------------------
+        // Bulk User Import (CSV)
+        // -----------------------------------------------------------------------
+
+        group.MapGet("/import/template", () =>
+        {
+            const string csv = "username,displayName,email,department,role,groupName\n" +
+                               "jdoe,Jane Doe,jdoe@example.com,IT,Operator,Linux-Admins\n" +
+                               "asmith,Alan Smith,asmith@example.com,Finance,,\n";
+            return Results.File(System.Text.Encoding.UTF8.GetBytes(csv),
+                "text/csv", "users-import-template.csv");
+        });
+
+        group.MapPost("/import", async (HttpRequest req, OrkunPamDbContext db,
+            IAuthenticationService auth, IAuditService audit, HttpContext context) =>
+        {
+            if (!req.HasFormContentType || !req.Form.Files.Any())
+                return Results.BadRequest(new { success = false, errors = new[] { "No file uploaded" } });
+
+            var file = req.Form.Files[0];
+            if (file.Length > 5 * 1024 * 1024)
+                return Results.BadRequest(new { success = false, errors = new[] { "File too large (max 5 MB)" } });
+
+            using var reader = new System.IO.StreamReader(file.OpenReadStream());
+            var lines = new List<string>();
+            while (!reader.EndOfStream)
+            {
+                var line = await reader.ReadLineAsync();
+                if (line != null) lines.Add(line);
+            }
+
+            if (lines.Count < 2)
+                return Results.BadRequest(new { success = false, errors = new[] { "CSV must have a header row and at least one data row" } });
+
+            // Pre-fetch roles and groups once to avoid N+1 queries
+            var allRoles  = await db.Roles.ToListAsync();
+            var allGroups = await db.Groups.ToListAsync();
+
+            int successCount = 0;
+            var errors = new List<object>();
+
+            for (int i = 1; i < lines.Count; i++)
+            {
+                var line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                var cols = line.Split(',');
+                if (cols.Length < 2)
+                {
+                    errors.Add(new { row = i + 1, username = "", reason = "Too few columns" });
+                    continue;
+                }
+
+                var username    = cols[0].Trim();
+                var displayName = cols.Length > 1 ? cols[1].Trim() : null;
+                var email       = cols.Length > 2 && !string.IsNullOrEmpty(cols[2].Trim()) ? cols[2].Trim() : null;
+                var roleName    = cols.Length > 4 && !string.IsNullOrEmpty(cols[4].Trim()) ? cols[4].Trim() : null;
+                var groupName   = cols.Length > 5 && !string.IsNullOrEmpty(cols[5].Trim()) ? cols[5].Trim() : null;
+
+                if (string.IsNullOrEmpty(username))
+                {
+                    errors.Add(new { row = i + 1, username = "", reason = "Username is required" });
+                    continue;
+                }
+
+                // Generate a temporary random password — user must change on first login
+                var tempPassword = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
+
+                var result = await auth.CreateLocalUserAsync(username, tempPassword, displayName, email);
+                if (result.IsFailure)
+                {
+                    errors.Add(new { row = i + 1, username, reason = result.Error.Message });
+                    continue;
+                }
+
+                var user = result.Value;
+                user.MustChangePassword = true;
+
+                // Assign role if specified
+                if (roleName != null)
+                {
+                    var role = allRoles.FirstOrDefault(r => r.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+                    if (role != null && !await db.UserRoles.AnyAsync(ur => ur.UserId == user.Id && ur.RoleId == role.Id))
+                        db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
+                }
+
+                // Assign group if specified
+                if (groupName != null)
+                {
+                    var group = allGroups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+                    if (group != null && !await db.UserGroups.AnyAsync(ug => ug.UserId == user.Id && ug.GroupId == group.Id))
+                        db.UserGroups.Add(new UserGroup { UserId = user.Id, GroupId = group.Id });
+                }
+
+                await db.SaveChangesAsync();
+                successCount++;
+            }
+
+            var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("User", "BULK_IMPORT", ParseActorId(context),
+                context.User.FindFirstValue("username"), ip,
+                "User", "bulk", new { successCount, failedCount = errors.Count, totalRows = lines.Count - 1 });
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new { imported = successCount, failed = errors.Count, errors }
+            });
+        }).DisableAntiforgery();
     }
 
     private static Guid? ParseActorId(HttpContext context)
