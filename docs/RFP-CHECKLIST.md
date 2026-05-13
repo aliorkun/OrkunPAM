@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-12
+> Last updated: 2026-05-13
 
 ## Platform (44 items)
 
@@ -186,7 +186,7 @@
 | 18 | Solution shall support secondary password management as a configurative an optional |  |  |
 | 19 | Admin user shall have the right to reset the other users' passwords. When the password is reset, an e-mail shall be sent |  |  |
 | 20 | Solution shall have configurable password strength settings | PC | UserEndpoints.cs — password strength settings per policy |
-| 21 | Solution shall support enriched approval request information, including detailed start and expiration times for enhanced |  |  |
+| 21 | Solution shall support enriched approval request information, including detailed start and expiration times for enhanced | PC | Approvals.razor — expiry countdown with red warning, start/end times, multi-level step indicator (#79) |
 | 22 | Solution shall support detailed logs about device group modifications for improved tracking and reporting of system chan |  |  |
 | 23 | Solution shall provide audit logs that include granular details on policy actions and system configuration changes for c |  |  |
 |  |  |  |  |
@@ -223,7 +223,7 @@
 | 4 | Solution shall have a dashboard to monitor blocked command per user and device daily bases. |  |  |
 | 5 | Solution shall have a dashboard to monitor policy realms |  |  |
 | 6 | Solution shall have a dashboard to monitor the activities taken on Solution itself. (User creation,deletion, policy chan | PC | Dashboard.razor — admin action log widget |
-| 7 | Solution shall have a dashboard to displays information on which passwords are  rotated and by who. Also, dashboard shal |  |  |
+| 7 | Solution shall have a dashboard to displays information on which passwords are  rotated and by who. Also, dashboard shal | PC | VaultEndpoints.cs — PasswordHistory created on each rotation; Vault.razor ↻ Rotate button with connector/host form (#32) |
 | 8 | Solution shall have view, filter and export functionality for each type of session, activity log and user dashboards.  | PC | Reports.razor + AuditLog.razor — session/auth report views and audit log filtering (#27); CSV/PDF export pending |
 | 9 | Solution shall have flexibility of exporting reports to CSV and PDF format.  |  |  |
 | 11 | The solution shall provide a comprehensive audit-trail and reporting for the privileged access. It shall also provide an | PC | AuditLog.razor + AuditService.cs — privileged access audit trail with time/user/action filtering (#27) |
@@ -282,7 +282,7 @@
 | 12 | General | Solution shall support to open SSH/RDP/HTTP sessions via desktop application on user workstation (without logging into P |  |
 | 13 | General | Solution shall support to log users' client IP addresses even if users access the Web GUI through the loadbalancer. |  |
 | 14 | General | Solution shall support to use its own secure tunnel (connector) to connect to target devices located in remote data cent |  |
-| 15 | General | Solution shall support users to create a connection reservation request for a future date and get administrator approval |  |
+| 15 | General | Solution shall support users to create a connection reservation request for a future date and get administrator approval | PC | Approvals.razor — approval workflow, expiry countdown, multi-step approval (#79) |
 | 16 | General | Solution shall support expiration of connection reservation requests that are not approved/devied for a certain period o |  |
 | 17 | General | Solution shall support administrators to change the selected date/time during connection request approval. |  |
 | 18 | General | Solution shall allow connections to target Linux/Unix and Windows systems by entering IP addresses, restricted on a subn |  |
@@ -435,7 +435,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | General | Solution shall support password management of Linux/Unix, Windows OS, databases, network elements, LDAP, Active Director |  |
+| 1 | General | Solution shall support password management of Linux/Unix, Windows OS, databases, network elements, LDAP, Active Director | PC | VaultEndpoints.cs — POST /credentials/{id}/rotate: SSH, WinRM, LDAP/AD, SQL Server, MySQL, PostgreSQL (#32) |
 | 2 | General | Solution shall support to manage Windows Local accounts using Active Directory domain admin accounts. |  |
 | 3 | General | Solution shall support password management of users accounts on NMS/EMS (Nokia 5620 SAM, Huawei U2000, Juniper Managemen |  |
 | 4 | General | Solution shall support password management of Web applications' password |  |
@@ -480,7 +480,7 @@
 | 43 | General | Solution shall support application triggers to sequentially restart Windows services to ensure system stability during p |  |
 | 44 | General | Solution shall enable masking of passwords during bulk imports to enhance security and prevent sensitive data exposure. |  |
 | 45 | One Time Password | Solution shall support one-time password (changing password after every checkout or changing password before checkout) | PC | Vault.razor + VaultEndpoints.cs — checkout/checkin workflow |
-| 46 | One Time Password | Solution shall support periodic password change interval, even if nobody use/change password. |  |
+| 46 | One Time Password | Solution shall support periodic password change interval, even if nobody use/change password. | PC | VaultEndpoints.cs — POST /credentials/{id}/rotate; SSH/WinRM/LDAP/AD/SQL/MySQL/PostgreSQL connectors (#32) |
 | 47 | One Time Password | Password change duration shall be configurable per privileged account. | PC | Vault.razor — maxCheckoutMinutes per credential |
 | 48 | One Time Password | Solution shall have an upper limit for password change duration. |  |
 | 49 | One Time Password | Users can get password for a specific time duration. During this period, other users/applications cannot get the passwor | PC | VaultEndpoints.cs — time-limited checkout with duration |
@@ -488,8 +488,8 @@
 | 51 | Password Request | Solution shall support password reservation for future date with or without managerial approval. | PC | VaultEndpoints.cs — password reservation with approval |
 | 52 | Password Request | Solution shall support split password feature for password requests. |  |
 | 53 | Password Request | Solution shall support password request via mobile application. |  |
-| 54 | Password Request | Solution shall support managerial approval for password requests via email | PC | Vault.razor — requiresApproval flag + WorkflowEngine |
-| 55 | Password Request | Solution shall support multi-level of managerial approval for password requests |  |
+| 54 | Password Request | Solution shall support managerial approval for password requests via email | PC | Approvals.razor — approve/deny modal (deny requires comment), pending/history tabs, NavMenu badge (#79) |
+| 55 | Password Request | Solution shall support multi-level of managerial approval for password requests | PC | Approvals.razor — multi-level step indicator (Step N/M), multi-step approval flow (#79) |
 | 56 | Password Request | Solution shall  support administrators to approve or deny password access requests via mobile application and email. |  |
 | 57 | Logging | Paltform shall support logging password related actions (retrieval, release, reset, comments, ownership modification) | PC | VaultEndpoints.cs — audit log for all vault actions |
 | 58 | Logging | Solution shall log the events for a specific account. (Add/delete to/from a user group) |  |
