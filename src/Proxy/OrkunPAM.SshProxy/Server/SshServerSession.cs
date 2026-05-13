@@ -58,14 +58,15 @@ internal sealed class SshServerSession
 
             var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(_ct);
 
-            var (targetIp, targetPort, targetUser, targetPassword) =
+            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
-            _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}'",
-                targetUser, targetIp, targetPort, pamUser);
+            _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth})",
+                targetUser, targetIp, targetPort, pamUser,
+                targetPrivateKey != null ? "publickey" : "password");
 
             using var target = new SshTargetClient(
-                targetIp, targetPort, targetUser, targetPassword, _log);
+                targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log);
             await target.ConnectAsync(_ct);
 
             await RelayAsync(target, idleTimeoutMinutes);

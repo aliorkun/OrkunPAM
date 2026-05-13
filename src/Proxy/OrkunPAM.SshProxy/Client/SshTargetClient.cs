@@ -23,6 +23,7 @@ internal sealed class SshTargetClient : IDisposable
     private readonly int _port;
     private readonly string _username;
     private byte[] _password;
+    private readonly string? _privateKeyPem;
     private readonly ILogger _log;
     private readonly string? _expectedFingerprint;
 
@@ -33,14 +34,16 @@ internal sealed class SshTargetClient : IDisposable
     private uint _serverChanId;
     private readonly uint _clientChanId = 1;
     private string _targetSshVersion = "SSH-2.0-Unknown";
+    private byte[]? _sessionId;
 
-    internal SshTargetClient(string host, int port, string username, byte[] password, ILogger log,
-        string? expectedFingerprint = null)
+    internal SshTargetClient(string host, int port, string username, byte[]? password, string? privateKeyPem,
+        ILogger log, string? expectedFingerprint = null)
     {
         _host                = host;
         _port                = port;
         _username            = username;
-        _password            = password;
+        _password            = password ?? [];
+        _privateKeyPem       = privateKeyPem;
         _log                 = log;
         _expectedFingerprint = expectedFingerprint;
     }
@@ -119,6 +122,7 @@ internal sealed class SshTargetClient : IDisposable
             dh.PublicKey, f, K);
 
         VerifyHostKeySignature(hostKeyBlob, sigBlob, H);
+        _sessionId ??= H;
 
         var fingerprint = ComputeHostKeyFingerprint(hostKeyBlob);
         if (_expectedFingerprint != null && _expectedFingerprint != fingerprint)
@@ -237,6 +241,14 @@ internal sealed class SshTargetClient : IDisposable
         if (resp[0] != Msg.ServiceAccept)
             throw new SshException("Service ssh-userauth not accepted by target");
 
+        if (_privateKeyPem != null)
+            await DoPublicKeyAuthAsync(ct);
+        else
+            await DoPasswordAuthAsync(ct);
+    }
+
+    private async Task DoPasswordAuthAsync(CancellationToken ct)
+    {
         using var authMs = new MemoryStream();
         SshEncoding.WriteByte(authMs, Msg.UserauthRequest);
         SshEncoding.WriteString(authMs, _username);
@@ -244,7 +256,7 @@ internal sealed class SshTargetClient : IDisposable
         SshEncoding.WriteString(authMs, "password");
         SshEncoding.WriteBool(authMs, false);
         SshEncoding.WriteByteString(authMs, _password);
-        await _conn.SendAsync(authMs, ct);
+        await _conn!.SendAsync(authMs, ct);
 
         for (int i = 0; i < 5; i++)
         {
@@ -252,9 +264,65 @@ internal sealed class SshTargetClient : IDisposable
             if (authResp[0] == Msg.UserauthSuccess) return;
             if (authResp[0] == Msg.UserauthBanner)  continue;
             if (authResp[0] == Msg.UserauthFailure)
-                throw new SshException($"Target rejected auth for '{_username}'");
+                throw new SshException($"Target rejected password auth for '{_username}'");
         }
-        throw new SshException("Target auth failed after retries");
+        throw new SshException("Target auth (password) failed after retries");
+    }
+
+    private async Task DoPublicKeyAuthAsync(CancellationToken ct)
+    {
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(_privateKeyPem);
+
+        var pubKeyBlob = BuildRsaPublicKeyBlob(rsa);
+
+        // Build sign data per RFC 4252 §7
+        using var toSign = new MemoryStream();
+        SshEncoding.WriteByteString(toSign, _sessionId!);
+        SshEncoding.WriteByte(toSign, Msg.UserauthRequest);
+        SshEncoding.WriteString(toSign, _username);
+        SshEncoding.WriteString(toSign, "ssh-connection");
+        SshEncoding.WriteString(toSign, "publickey");
+        SshEncoding.WriteBool(toSign, true);
+        SshEncoding.WriteString(toSign, "rsa-sha2-256");
+        SshEncoding.WriteByteString(toSign, pubKeyBlob);
+
+        var sig = rsa.SignData(toSign.ToArray(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        using var sigBlobMs = new MemoryStream();
+        SshEncoding.WriteString(sigBlobMs, "rsa-sha2-256");
+        SshEncoding.WriteByteString(sigBlobMs, sig);
+
+        using var authMs = new MemoryStream();
+        SshEncoding.WriteByte(authMs, Msg.UserauthRequest);
+        SshEncoding.WriteString(authMs, _username);
+        SshEncoding.WriteString(authMs, "ssh-connection");
+        SshEncoding.WriteString(authMs, "publickey");
+        SshEncoding.WriteBool(authMs, true);
+        SshEncoding.WriteString(authMs, "rsa-sha2-256");
+        SshEncoding.WriteByteString(authMs, pubKeyBlob);
+        SshEncoding.WriteByteString(authMs, sigBlobMs.ToArray());
+        await _conn!.SendAsync(authMs, ct);
+
+        for (int i = 0; i < 5; i++)
+        {
+            var authResp = await _conn.ReadPacketAsync(ct);
+            if (authResp[0] == Msg.UserauthSuccess) return;
+            if (authResp[0] == Msg.UserauthBanner)  continue;
+            if (authResp[0] == Msg.UserauthFailure)
+                throw new SshException($"Target rejected public key auth for '{_username}'");
+        }
+        throw new SshException("Target auth (publickey) failed after retries");
+    }
+
+    private static byte[] BuildRsaPublicKeyBlob(RSA rsa)
+    {
+        var p = rsa.ExportParameters(false);
+        using var ms = new MemoryStream();
+        SshEncoding.WriteString(ms, "ssh-rsa");
+        SshEncoding.WriteMpInt(ms, new BigInteger(p.Exponent!, isUnsigned: true, isBigEndian: true));
+        SshEncoding.WriteMpInt(ms, new BigInteger(p.Modulus!,   isUnsigned: true, isBigEndian: true));
+        return ms.ToArray();
     }
 
     // -------------------------------------------------------------------------
