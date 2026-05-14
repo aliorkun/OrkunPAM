@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-14 (PM run #2)
+> Last updated: 2026-05-14 (PM run #3)
 
 ## Platform (44 items)
 
@@ -533,7 +533,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | Solution shall support radius server with access challange functionality. |  |  |
+| 1 | Solution shall support radius server with access challange functionality. | PC | RadiusProxyService.cs — native UDP RADIUS (RFC 2865); Access-Request/Accept/Reject; TOTP-based challenge via TacacsSession MFA flow; CVE-2024-3596 Message-Authenticator (#111, #119) |
 | 2 | Solution shall support MFA (Multi Factor Authentication) online token generation for MFA. | PC | AuthEndpoints.cs — TOTP online token generation |
 | 3 | Solution shall support MFA (Multi Factor Authentication) offline token generation for MFA. | PC | AuthEndpoints.cs — MFA recovery codes: 10 one-time backup codes, SHA-256 hashed, one-time use; offline fallback without authenticator app |
 | 4 | Solution shall send QR codes to new onboarded users on PAM | PC | MfaSetup.razor — QR code generation and display on enrollment page, email delivery (#83) |
@@ -638,7 +638,7 @@
 | 19 | General | The solution shall support generating vulnerability reports for target database servers. |  |
 | 20 | General | Solution shall support reporting open CVEs for target databases. |  |
 | 21 | General | Solution shall support connection approval features to provide enhanced control for database access. |  |
-| 22 | General | Solution shall support query approval features to provide enhanced control over database access activities. |  |
+| 22 | General | Solution shall support query approv al features to provide enhanced control over database access activities. |  |
 | 23 | General | Solution shall support enhanced database discovery processes to improve efficiency in identifying and managing new datab |  |
 | 24 | General | Solution shall provide enriched audit logs for database access activities, including detailed command and session inform |  |
 | 25 | General | Solution shall provide analysis of local database users and generate report for audit purposes |  |
@@ -700,10 +700,10 @@
 | 3 | Solution shall support multi-domain active directory (LDAP) for authentication | PC | LdapService.cs — multi-domain LDAP bind + group sync |
 | 4 | Solution shall support MFA integration with TACACS+/RADIUS for enhanced security | PC | TacacsSession.cs — TOTP second factor in ASCII auth flow; TACACS+ asks OTP after password when EnableMfaTotp=true (#111) |
 | 5 | Solution shall support Authentication, Authorization and Accounting (AAA) | PC | OrkunPAM.TacacsProxy — AAA: Auth (ASCII/PAP), Authz (command AV-pair), Accounting (START/STOP/WATCHDOG → PAM audit log) (#111) |
-| 6 | Solution shall support Cisco device authentication |  |  |
-| 7 | Solution shall support Juniper device authentication |  |  |
-| 8 | Solution shall support command logging at network element level |  |  |
-| 9 | Solution shall support command authorization at network element level |  |  |
+| 6 | Solution shall support Cisco device authentication | PC | OrkunPAM.TacacsProxy — Cisco IOS  compatible TACACS+ ASCII/PAP authentication via TCP :49; per-device shared secret (#111) |
+| 7 | Solution shall support Juniper device authentication | PC | OrkunPAM.TacacsProxy — Juniper JunOS TACACS+ AAA via RFC 1492; ASCII multi-step + PAP auth; per-device shared secret config (#111) |
+| 8 | Solution shall support command logging at network element level | PC | TacacsSession.cs — all TACACS+ commands logged via Accounting START/STOP/WATCHDOG → PAM AuditService → SIEM CEF/Syslog (#111) |
+| 9 | Solution shall support command authorization at network element level | PC | TacacsSession.cs — TACACS+ AV-pair command authorization; PermitAll/DenyAll/Policy modes; per-device rules; deny feedback to user (#111) |
 | 10 | Solution shall support automatic rotation of network element passwords |  |  |
 |  |  |  |  |
 |  |  |  |  |
