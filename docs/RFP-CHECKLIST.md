@@ -8,7 +8,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 — Windows Server single-package deployment (#36) |
+| 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 + OrkunPAM.Installer CLI — component selection, DB init, cert gen, service registration; single-package Windows Server deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
 | 3 | Solution shall be deployable On‐Premise and provided as a cloud  offering. |  |  |
 | 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se |  |  |
@@ -244,7 +244,7 @@
 | 26 | Solution shall support listing and reporting security advices for AWS , Azure and GCP IAM accounts, virtual machines and |  |  |
 | 27 | Solution shall support enriched reporting dashboards that are dynamically filtered based on user authorization levels. | PC | Reports.razor — reporting dashboards filtered by user authorization level (#27) |
 | 28 | Solution shall support customizable dashboards to monitor user session data, including session start and end times, appr | PC | Reports.razor + Sessions.razor — session monitoring with start/end times and status (#27) |
-| 29 | Solution shall support session replay activity reports, providing visibility into sessions that were accessed or reviewe |  |  |
+| 29 | Solution shall support session replay activity reports, providing visibility into sessions that were accessed or reviewe | PC | Sessions.razor + SessionPlayback.razor — replay activity visible in session list; playback history via SessionEndpoints search API (#34) |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -328,9 +328,9 @@
 | 58 | Logging | Session and command logs shall include the name of the device, IP address, the command that is run, date/time. | PC | SessionRecordingService.cs — logs device, IP, cmd, timestamp |
 | 59 | Logging | The text-based session log files can be downloaded in text .csv and .xls formats. |  |
 | 60 | Logging | Solution shall support logging the access times and durations to the web GUI. | PC | AuditLog.razor — web GUI session access times and durations logged (#27) |
-| 61 | Logging | Solution shall support video-like replay of text-based commands of the CLI session logs. These video logs shall contain  | PC | SessionRecordingService.cs — timed command replay |
+| 61 | Logging | Solution shall support video-like replay of text-based commands of the CLI session logs. These video logs shall contain  | PC | SessionPlayback.razor + RecordingPlaybackService.cs — asciinema-format timed replay, play/pause/seek, speed control, terminal emülatör in Blazor (#34) |
 | 62 | Logging | Solution shall support the logs inspection and classification functionality. |  |
-| 63 | Logging | Solution shall support command and session based search functionality of session logs. |  |
+| 63 | Logging | Solution shall support command and session based search functionality of session logs. | PC | RecordingPlaybackService.cs — full-text search across session recordings; SessionEndpoints.cs search API (#34) |
 | 64 | Logging | Solution shall support periodic archiving of the log files by the system administrator. |  |
 | 65 | Logging | Solution shall support manual and automatic archiving. |  |
 | 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add | FC | RecordingRetentionService — 183-day auto-purge; AuditLogHashChainService — SHA-256 hash-chain integrity (#23, #91) |
@@ -420,7 +420,7 @@
 | 150 | Remote Access | Solution shall provide just-in-time access capabilities for minimizing attack surfaces during remote access. | PC | JitEndpoints.cs + JIT.razor — JIT privileged access with time-limited grant/revoke (#38) |
 | 151 | Remote Access | Solution shall support users to log in with MFA along with username and password for remote access. |  |
 | 152 | Remote Access | Solution shall support the installation of the remote access portal on a public or private cloud. |  |
-| 153 | Remote Access | Solution shall provide session recording and playback for all remote access sessions. |  |
+| 153 | Remote Access | Solution shall provide session recording and playback for all remote access sessions. | PC | SessionRecordingService.cs — SSH/CLI recording; SessionPlayback.razor — asciinema replay + search; RDP/VNC binary stream recording (#34) |
 | 154 | Remote Access | Solution shall provide detailed audit trails of commands and actions executed during remote sessions. |  |
 | 155 | Remote Access | Solution shall support session shadowing for real-time supervision and intervention for remote access sessions |  |
 | 156 | Remote Access | Solution shall support session termination and the ability to send messages to active remote sessions |  |
