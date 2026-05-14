@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="OrkunPAM.E2ETests" />
+    <InternalsVisibleTo Include="OrkunPAM.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

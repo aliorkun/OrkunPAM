@@ -10,7 +10,9 @@ using OrkunPAM.SharedKernel;
 using OrkunPAM.WebAPI.Endpoints;
 using OrkunPAM.WebAPI.Middleware;
 using OrkunPAM.WebAPI.Validation;
+using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.AspNetCore.RateLimiting;
+using OrkunPAM.Grpc.Services;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -84,6 +86,9 @@ try
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IBackupService, OrkunPAM.Persistence.Services.BackupService>();
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BackupSchedulerService>();
 
+    // === Session Recording Playback ===
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
+
     // === Event Bus (shared singleton for pub/sub) ===
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.InProcessEventBus>();
     builder.Services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.InProcessEventBus>());
@@ -98,6 +103,56 @@ try
 
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
+
+    // === gRPC Services (proxy↔core internal communication) ===
+    builder.Services.AddGrpc(options =>
+    {
+        options.MaxReceiveMessageSize = 4 * 1024 * 1024; // 4 MB
+        options.MaxSendMessageSize = 4 * 1024 * 1024;
+        options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    });
+
+    // === Certificate Authentication for mTLS (gRPC proxy clients) ===
+    builder.Services.AddAuthentication()
+        .AddCertificate("MutualTls", options =>
+        {
+            options.AllowedCertificateTypes = CertificateTypes.All;
+            options.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck;
+            options.ValidateValidityPeriod = true;
+            options.Events = new CertificateAuthenticationEvents
+            {
+                OnCertificateValidated = ctx =>
+                {
+                    // Accept certificates with CN matching configured proxy service names
+                    var cn = ctx.ClientCertificate.GetNameInfo(
+                        System.Security.Cryptography.X509Certificates.X509NameType.SimpleName, false);
+                    var allowedCns = ctx.HttpContext.RequestServices
+                        .GetRequiredService<IConfiguration>()
+                        .GetSection("Grpc:AllowedClientCNs").Get<string[]>()
+                        ?? ["OrkunPAM-SshProxy", "OrkunPAM-RdpProxy", "OrkunPAM-VncProxy",
+                            "OrkunPAM-HttpProxy", "OrkunPAM-SqlProxy"];
+
+                    if (cn != null && allowedCns.Contains(cn, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var claims = new[] { new System.Security.Claims.Claim("proxy-cn", cn) };
+                        ctx.Principal = new System.Security.Claims.ClaimsPrincipal(
+                            new System.Security.Claims.ClaimsIdentity(claims, "Certificate"));
+                        ctx.Success();
+                    }
+                    else
+                    {
+                        ctx.Fail($"Client certificate CN '{cn}' is not in the allowed list");
+                    }
+
+                    return Task.CompletedTask;
+                },
+                OnAuthenticationFailed = ctx =>
+                {
+                    Log.Warning("mTLS authentication failed: {Error}", ctx.Exception?.Message);
+                    return Task.CompletedTask;
+                }
+            };
+        });
 
     // === JSON: serialize enums as strings globally ===
     builder.Services.ConfigureHttpJsonOptions(opts =>
@@ -210,7 +265,10 @@ try
         .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build())
-        .AddPolicy("AdminPolicy", p => p.RequireRole("Admin", "SecurityAdmin"));
+        .AddPolicy("AdminPolicy", p => p.RequireRole("Admin", "SecurityAdmin"))
+        .AddPolicy("GrpcProxy", p => p
+            .AddAuthenticationSchemes("MutualTls")
+            .RequireAuthenticatedUser());
 
     var app = builder.Build();
 
@@ -322,6 +380,12 @@ try
     api.MapEncryptionEndpoints();
     api.MapBackupEndpoints();
     api.MapSystemEndpoints();
+
+    // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
+    app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
+    app.MapGrpcService<VaultGrpcService>().RequireAuthorization("GrpcProxy");
+    app.MapGrpcService<AuditGrpcService>().RequireAuthorization("GrpcProxy");
+    Log.Information("gRPC services mapped (Session, Vault, Audit) — mTLS required for proxy clients");
 
     Log.Information("Orkun PAM started on {Urls}", string.Join(", ", app.Urls));
     app.Run();

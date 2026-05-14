@@ -1,0 +1,660 @@
+@page "/session-playback"
+@page "/session-playback/{SessionId}"
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Session Playback — OrkunPAM</PageTitle>
+
+<div class="pam-page-header" style="display:flex;align-items:center;justify-content:space-between;">
+    <h2 class="pam-page-title">Session Playback</h2>
+    @if (!string.IsNullOrEmpty(SessionId))
+    {
+        <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="BackToList">Back to Sessions</button>
+    }
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+@if (string.IsNullOrEmpty(SessionId))
+{
+    <!-- Session list with recording indicator -->
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <h3>Sessions with Recordings</h3>
+        </div>
+        <div class="pam-card-body p-0">
+            @if (_loadingSessions)
+            {
+                <div class="pam-loading-text p-4">Loading sessions...</div>
+            }
+            else if (_sessions == null || _sessions.Count == 0)
+            {
+                <div class="pam-empty p-4">No completed sessions found.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Target</th>
+                            <th>Port</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _sessions)
+                        {
+                            <tr>
+                                <td><span class="pam-badge">@s.SessionType</span></td>
+                                <td>@(s.TargetIpAddress ?? "-")</td>
+                                <td>@(s.TargetPort?.ToString() ?? "-")</td>
+                                <td><span class="pam-status @StatusClass(s.Status)">@s.Status</span></td>
+                                <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td>@Duration(s)</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                            @onclick="() => OpenPlayback(s.Id)">
+                                        Play
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                @if (_sessionMeta != null && _sessionMeta.TotalCount > _pageSize)
+                {
+                    <div class="pam-pagination">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page == 1)" @onclick="PrevPage">Prev</button>
+                        <span class="pam-page-info">Page @_page of @TotalPages</span>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page >= TotalPages)" @onclick="NextPage">Next</button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+else
+{
+    <!-- Playback view for a specific session -->
+    @if (_loadingPlayback)
+    {
+        <div class="pam-loading-text p-4">Loading recording...</div>
+    }
+    else
+    {
+        <!-- Recording metadata card -->
+        @if (_metadata != null)
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>Recording Info</h3>
+                    <div>
+                        <span class="pam-badge" style="margin-right:0.5rem;">@_metadata.Format</span>
+                        @if (_metadata.IntegrityValid)
+                        {
+                            <span class="pam-status pam-status-active">Integrity OK</span>
+                        }
+                        else
+                        {
+                            <span class="pam-status pam-status-error">Integrity Failed</span>
+                        }
+                    </div>
+                </div>
+                <div class="pam-card-body">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;">
+                        <div>
+                            <strong>Duration:</strong> @FormatDuration(_metadata.DurationSeconds)
+                        </div>
+                        <div>
+                            <strong>Size:</strong> @FormatSize(_metadata.FileSizeBytes)
+                        </div>
+                        @if (_metadata.TerminalWidth.HasValue)
+                        {
+                            <div>
+                                <strong>Terminal:</strong> @(_metadata.TerminalWidth)x@(_metadata.TerminalHeight)
+                            </div>
+                        }
+                        <div>
+                            <strong>Recorded:</strong> @_metadata.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                        </div>
+                    </div>
+                    @if (_metadata.FileHash != null)
+                    {
+                        <div style="margin-top:0.5rem;font-family:monospace;font-size:0.75rem;color:#888;">
+                            SHA-256: @_metadata.FileHash
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Search bar for SSH sessions -->
+        @if (_detectedFormat == "asciinema_v2")
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <div class="pam-card-body">
+                    <div style="display:flex;gap:0.5rem;">
+                        <input class="pam-input" placeholder="Search commands/output..."
+                               @bind="_searchQuery" @bind:event="oninput"
+                               @onkeyup="HandleSearchKeyUp" style="flex:1;" />
+                        <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="SearchAsync">Search</button>
+                    </div>
+                    @if (_searchResults != null && _searchResults.Count > 0)
+                    {
+                        <div style="margin-top:0.75rem;max-height:200px;overflow-y:auto;">
+                            <table class="pam-table" style="font-size:0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:100px;">Time</th>
+                                        <th>Match</th>
+                                        <th style="width:80px;">Jump</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var hit in _searchResults)
+                                    {
+                                        <tr>
+                                            <td>@FormatDuration(hit.TimestampSeconds)</td>
+                                            <td style="font-family:monospace;font-size:0.8rem;white-space:pre-wrap;max-width:500px;overflow:hidden;text-overflow:ellipsis;">@hit.MatchedText</td>
+                                            <td>
+                                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                        @onclick="() => JumpToEvent(hit.EventIndex)">Go</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (_searchResults != null)
+                    {
+                        <div style="margin-top:0.5rem;color:#888;">No matches found.</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Timeline scrubber -->
+        @if (_metadata != null && _metadata.DurationSeconds > 0)
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <div class="pam-card-body" style="display:flex;align-items:center;gap:1rem;">
+                    <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="TogglePlayback"
+                            style="min-width:60px;">
+                        @(_isPlaying ? "Pause" : "Play")
+                    </button>
+                    <span style="font-family:monospace;min-width:80px;">@FormatDuration(_currentTime)</span>
+                    <input type="range" min="0" max="@((int)(_metadata.DurationSeconds * 100))"
+                           @bind="_scrubberValue" @bind:event="oninput" @bind:after="OnScrubberChanged"
+                           style="flex:1;" />
+                    <span style="font-family:monospace;min-width:80px;">@FormatDuration(_metadata.DurationSeconds)</span>
+                    <select class="pam-input pam-select" @bind="_playbackSpeed" style="width:80px;">
+                        <option value="0.5">0.5x</option>
+                        <option value="1">1x</option>
+                        <option value="2">2x</option>
+                        <option value="4">4x</option>
+                        <option value="8">8x</option>
+                    </select>
+                </div>
+            </div>
+        }
+
+        <!-- SSH terminal replay -->
+        @if (_detectedFormat == "asciinema_v2" && _sshEvents != null)
+        {
+            <div class="pam-card">
+                <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>Terminal Replay</h3>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="DownloadRecordingAsync">Download</button>
+                </div>
+                <div class="pam-card-body" style="padding:0;">
+                    <pre style="background:#1e1e2e;color:#cdd6f4;padding:1rem;margin:0;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:0.85rem;line-height:1.4;overflow:auto;max-height:600px;min-height:300px;white-space:pre-wrap;word-wrap:break-word;border-radius:0 0 8px 8px;"><code>@_terminalOutput</code></pre>
+                </div>
+            </div>
+        }
+
+        <!-- HTTP session log -->
+        @if (_detectedFormat == "http_jsonl" && _httpEntries != null)
+        {
+            <div class="pam-card">
+                <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>HTTP Request/Response Log</h3>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="DownloadRecordingAsync">Download</button>
+                </div>
+                <div class="pam-card-body p-0">
+                    <table class="pam-table pam-table-hover" style="font-size:0.85rem;">
+                        <thead>
+                            <tr>
+                                <th style="width:80px;">Time</th>
+                                <th style="width:70px;">Method</th>
+                                <th>URL</th>
+                                <th style="width:70px;">Status</th>
+                                <th style="width:80px;">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var e in _httpEntries)
+                            {
+                                <tr @onclick="() => ToggleHttpDetail(e)" style="cursor:pointer;">
+                                    <td>@FormatDuration(e.T)</td>
+                                    <td><span class="pam-badge">@e.Method</span></td>
+                                    <td style="font-family:monospace;font-size:0.8rem;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@e.Url</td>
+                                    <td>
+                                        <span class="pam-status @HttpStatusClass(e.StatusCode)">@e.StatusCode</span>
+                                    </td>
+                                    <td>@(e.DurationMs.ToString("F1"))ms</td>
+                                </tr>
+                                @if (_expandedHttpEntry == e)
+                                {
+                                    <tr>
+                                        <td colspan="5" style="background:#f8f9fa;padding:1rem;">
+                                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                                                <div>
+                                                    <strong>Request</strong>
+                                                    @if (e.RequestHeaders != null)
+                                                    {
+                                                        <pre style="font-size:0.75rem;max-height:200px;overflow:auto;">@string.Join("\n", e.RequestHeaders.Select(h => $"{h.Key}: {h.Value}"))</pre>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(e.RequestBody))
+                                                    {
+                                                        <pre style="font-size:0.75rem;max-height:200px;overflow:auto;">@e.RequestBody</pre>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <strong>Response</strong>
+                                                    @if (e.ResponseHeaders != null)
+                                                    {
+                                                        <pre style="font-size:0.75rem;max-height:200px;overflow:auto;">@string.Join("\n", e.ResponseHeaders.Select(h => $"{h.Key}: {h.Value}"))</pre>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(e.ResponseBody))
+                                                    {
+                                                        <pre style="font-size:0.75rem;max-height:200px;overflow:auto;">@e.ResponseBody</pre>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- RDP session — metadata only -->
+        @if (_detectedFormat is "rdp_binary" or "vnc_binary" or "sql_binary")
+        {
+            <div class="pam-card">
+                <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3>@(_detectedFormat.StartsWith("rdp") ? "RDP" : _detectedFormat.StartsWith("vnc") ? "VNC" : "SQL") Recording</h3>
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="DownloadRecordingAsync">Download</button>
+                </div>
+                <div class="pam-card-body">
+                    <p>Binary recording playback is not yet available in the web interface.</p>
+                    <p>Download the recording file to view it with a compatible player.</p>
+                </div>
+            </div>
+        }
+
+        <!-- No recording available -->
+        @if (_detectedFormat == null && !_loadingPlayback && _metadata == null)
+        {
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <div class="pam-empty p-4">No recording available for this session.</div>
+                </div>
+            </div>
+        }
+
+        <!-- Commands tab -->
+        <div class="pam-card" style="margin-top:1rem;">
+            <div class="pam-card-header">
+                <h3>Command Log</h3>
+            </div>
+            <div class="pam-card-body p-0">
+                @if (_commands == null || _commands.Count == 0)
+                {
+                    <div class="pam-empty p-4">No commands logged for this session.</div>
+                }
+                else
+                {
+                    <table class="pam-table" style="font-size:0.85rem;">
+                        <thead>
+                            <tr>
+                                <th style="width:140px;">Timestamp</th>
+                                <th>Command</th>
+                                <th style="width:80px;">Risk</th>
+                                <th style="width:80px;">Blocked</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cmd in _commands)
+                            {
+                                <tr class="@(cmd.WasBlocked ? "pam-row-danger" : "")">
+                                    <td>@cmd.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</td>
+                                    <td style="font-family:monospace;">@cmd.Command</td>
+                                    <td>
+                                        @if (cmd.RiskScore > 0.7m)
+                                        {
+                                            <span class="pam-status pam-status-error">@cmd.RiskScore.ToString("F2")</span>
+                                        }
+                                        else if (cmd.RiskScore > 0.3m)
+                                        {
+                                            <span class="pam-status" style="color:orange;">@cmd.RiskScore.ToString("F2")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@cmd.RiskScore.ToString("F2")</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (cmd.WasBlocked)
+                                        {
+                                            <span class="pam-status pam-status-error" title="@cmd.BlockReason">Blocked</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string? SessionId { get; set; }
+
+    // Session list state
+    private List<SessionDto>? _sessions;
+    private PageMeta? _sessionMeta;
+    private bool _loadingSessions = true;
+    private int _page = 1;
+    private const int _pageSize = 20;
+    private int TotalPages => _sessionMeta == null ? 1 : (int)Math.Ceiling(_sessionMeta.TotalCount / (double)_pageSize);
+
+    // Playback state
+    private bool _loadingPlayback = true;
+    private string? _error;
+    private RecordingMetadataDto? _metadata;
+    private string? _detectedFormat;
+    private List<RecordingEventDto>? _sshEvents;
+    private List<HttpEntryDto>? _httpEntries;
+    private List<CommandLogDto>? _commands;
+    private string _terminalOutput = "";
+    private int _currentEventIndex;
+
+    // Search state
+    private string _searchQuery = "";
+    private List<RecordingSearchHitDto>? _searchResults;
+
+    // Playback controls
+    private bool _isPlaying;
+    private double _currentTime;
+    private int _scrubberValue;
+    private double _playbackSpeed = 1.0;
+    private System.Threading.Timer? _playbackTimer;
+
+    // HTTP detail expand
+    private HttpEntryDto? _expandedHttpEntry;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (string.IsNullOrEmpty(SessionId))
+        {
+            await LoadSessionListAsync();
+        }
+        else
+        {
+            await LoadPlaybackAsync();
+        }
+    }
+
+    private async Task LoadSessionListAsync()
+    {
+        _loadingSessions = true; StateHasChanged();
+        var result = await Api.GetSessionsAsync("Completed", _page, _pageSize);
+        if (result != null)
+        {
+            _sessions = result.Data;
+            _sessionMeta = result.Meta;
+        }
+        else
+        {
+            _error = "Failed to load sessions.";
+        }
+        _loadingSessions = false; StateHasChanged();
+    }
+
+    private async Task LoadPlaybackAsync()
+    {
+        _loadingPlayback = true; _error = null; StateHasChanged();
+
+        // Load metadata
+        _metadata = await Api.GetRecordingMetadataAsync(SessionId!);
+
+        // Load stream content
+        var stream = await Api.GetRecordingStreamAsync(SessionId!);
+        if (stream != null)
+        {
+            _detectedFormat = stream.Format;
+
+            if (stream.Format == "asciinema_v2" && stream.Events != null)
+            {
+                _sshEvents = stream.Events;
+                // Build initial terminal output up to current time
+                RenderTerminalAtTime(0);
+            }
+            else if (stream.Format == "http_jsonl" && stream.Entries != null)
+            {
+                _httpEntries = stream.Entries;
+            }
+            else if (stream.Format != null && stream.Format.EndsWith("_binary"))
+            {
+                _detectedFormat = stream.Format;
+            }
+        }
+        else if (_metadata == null)
+        {
+            // No recording at all — that's ok, just show commands
+        }
+
+        // Load commands
+        var cmdResult = await Api.GetSessionCommandsAsync(SessionId!);
+        if (cmdResult?.Data != null)
+        {
+            _commands = cmdResult.Data;
+        }
+
+        _loadingPlayback = false; StateHasChanged();
+    }
+
+    private void OpenPlayback(string sessionId)
+    {
+        Nav.NavigateTo($"/session-playback/{sessionId}");
+    }
+
+    private void BackToList()
+    {
+        _playbackTimer?.Dispose();
+        _isPlaying = false;
+        Nav.NavigateTo("/session-playback");
+    }
+
+    // ── Playback controls ────────────────────────────────────────────
+
+    private void TogglePlayback()
+    {
+        if (_sshEvents == null || _sshEvents.Count == 0) return;
+
+        _isPlaying = !_isPlaying;
+
+        if (_isPlaying)
+        {
+            _playbackTimer = new System.Threading.Timer(
+                PlaybackTick, null, 0, 50); // Tick every 50ms
+        }
+        else
+        {
+            _playbackTimer?.Dispose();
+            _playbackTimer = null;
+        }
+    }
+
+    private void PlaybackTick(object? state)
+    {
+        if (!_isPlaying || _sshEvents == null) return;
+
+        _currentTime += 0.05 * _playbackSpeed;
+
+        if (_metadata != null && _currentTime >= _metadata.DurationSeconds)
+        {
+            _currentTime = _metadata.DurationSeconds;
+            _isPlaying = false;
+            _playbackTimer?.Dispose();
+            _playbackTimer = null;
+        }
+
+        _scrubberValue = (int)(_currentTime * 100);
+        RenderTerminalAtTime(_currentTime);
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnScrubberChanged()
+    {
+        _currentTime = _scrubberValue / 100.0;
+        RenderTerminalAtTime(_currentTime);
+    }
+
+    private void RenderTerminalAtTime(double timeSeconds)
+    {
+        if (_sshEvents == null) return;
+
+        var sb = new System.Text.StringBuilder();
+        _currentEventIndex = 0;
+
+        foreach (var evt in _sshEvents)
+        {
+            if (evt.T > timeSeconds) break;
+            if (evt.Type == "o") // output event
+            {
+                sb.Append(StripAnsiEscapes(evt.Data));
+            }
+            _currentEventIndex++;
+        }
+
+        _terminalOutput = sb.ToString();
+    }
+
+    private void JumpToEvent(int eventIndex)
+    {
+        if (_sshEvents == null || eventIndex >= _sshEvents.Count) return;
+
+        var targetTime = _sshEvents[eventIndex].T;
+        _currentTime = targetTime;
+        _scrubberValue = (int)(targetTime * 100);
+        RenderTerminalAtTime(targetTime);
+    }
+
+    // ── Search ───────────────────────────────────────────────────────
+
+    private async Task HandleSearchKeyUp(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery) || string.IsNullOrEmpty(SessionId)) return;
+
+        var result = await Api.SearchRecordingAsync(SessionId, _searchQuery);
+        _searchResults = result?.Data;
+        StateHasChanged();
+    }
+
+    // ── Download ─────────────────────────────────────────────────────
+
+    private async Task DownloadRecordingAsync()
+    {
+        _error = "Download initiated. Check browser downloads.";
+        StateHasChanged();
+        // In a real implementation this would trigger a JS interop file download.
+        // For now, the API endpoint can be called directly via the browser.
+        await Task.CompletedTask;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────
+
+    private static string StatusClass(string s) => s switch
+    {
+        "Active"    => "pam-status-active",
+        "Completed" => "pam-status-done",
+        _           => "pam-status-error"
+    };
+
+    private static string HttpStatusClass(int code) => code switch
+    {
+        >= 200 and < 300 => "pam-status-active",
+        >= 300 and < 400 => "pam-status-done",
+        >= 400 and < 500 => "pam-status-error",
+        _ => "pam-status-error"
+    };
+
+    private static string Duration(SessionDto s)
+    {
+        var end = s.EndedAtUtc ?? DateTime.UtcNow;
+        var dur = end - s.StartedAtUtc;
+        return dur.TotalHours >= 1
+            ? $"{(int)dur.TotalHours}h {dur.Minutes}m"
+            : $"{dur.Minutes}m {dur.Seconds}s";
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
+            : $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private static string StripAnsiEscapes(string text)
+    {
+        // Strip ANSI escape sequences for clean terminal output display
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\x1B\[[0-9;]*[a-zA-Z]", "");
+    }
+
+    private void ToggleHttpDetail(HttpEntryDto entry)
+    {
+        _expandedHttpEntry = _expandedHttpEntry == entry ? null : entry;
+    }
+
+    private async Task PrevPage() { _page--; await LoadSessionListAsync(); }
+    private async Task NextPage() { _page++; await LoadSessionListAsync(); }
+
+    public void Dispose()
+    {
+        _playbackTimer?.Dispose();
+    }
+}

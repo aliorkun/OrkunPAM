@@ -5,10 +5,13 @@
     <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Persistence\OrkunPAM.Persistence.csproj" />
     <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Cryptography\OrkunPAM.Cryptography.csproj" />
     <ProjectReference Include="..\..\Infrastructure\OrkunPAM.Identity\OrkunPAM.Identity.csproj" />
+    <ProjectReference Include="..\OrkunPAM.Grpc\OrkunPAM.Grpc.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="11.12.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.*" />
     <PackageReference Include="Microsoft.OpenApi" Version="3.5.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />

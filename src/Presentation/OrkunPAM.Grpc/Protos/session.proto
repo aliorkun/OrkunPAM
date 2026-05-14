@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option csharp_namespace = "OrkunPAM.Grpc.Session";
+
+package orkunpam.session;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service SessionService {
+  // Validate a proxy session token and return session details + target credentials.
+  rpc ValidateSessionToken (TokenRequest) returns (SessionInfo);
+
+  // Report that a proxy session has ended (normal close, timeout, error).
+  rpc ReportSessionEnd (SessionEndRequest) returns (google.protobuf.Empty);
+
+  // Report real-time session activity (keystrokes, commands, screen events).
+  rpc ReportSessionActivity (ActivityRequest) returns (google.protobuf.Empty);
+}
+
+message TokenRequest {
+  string session_token = 1;
+  string proxy_type = 2;  // "SSH", "RDP", "VNC", "HTTP", "SQL"
+}
+
+message SessionInfo {
+  string session_id = 1;
+  string target_ip = 2;
+  int32 target_port = 3;
+  string target_username = 4;
+  bytes target_password = 5;    // Raw password bytes; caller must zero after use
+  string target_domain = 6;     // For RDP/Windows targets
+  string private_key = 7;       // PEM-encoded SSH private key (if applicable)
+  int32 idle_timeout_minutes = 8;
+  bool recording_enabled = 9;
+}
+
+message SessionEndRequest {
+  string session_id = 1;
+  string reason = 2;            // "user_disconnect", "idle_timeout", "admin_terminate", "error"
+  google.protobuf.Timestamp ended_at = 3;
+  int64 bytes_transferred = 4;
+  int32 commands_executed = 5;
+}
+
+message ActivityRequest {
+  string session_id = 1;
+  string activity_type = 2;     // "command", "keystroke", "file_transfer", "clipboard"
+  string data = 3;              // Command text, file path, etc.
+  google.protobuf.Timestamp timestamp = 4;
+  string source_ip = 5;
+}

@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option csharp_namespace = "OrkunPAM.Grpc.Audit";
+
+package orkunpam.audit;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service AuditService {
+  // Log a general audit event (login, policy change, credential access, etc.).
+  rpc LogEvent (AuditEventRequest) returns (google.protobuf.Empty);
+
+  // Log a session command (SSH command, SQL query, etc.) for session recording.
+  rpc LogCommand (CommandLogRequest) returns (google.protobuf.Empty);
+}
+
+message AuditEventRequest {
+  string category = 1;          // "Authentication", "Session", "Vault", "Policy"
+  string event_type = 2;        // "Login", "CredentialAccess", "SessionStart", etc.
+  string actor_user_id = 3;
+  string actor_username = 4;
+  string actor_ip = 5;
+  string target_type = 6;       // "Device", "Credential", "User", "Session"
+  string target_id = 7;
+  string details_json = 8;      // JSON-serialized detail object
+  string outcome = 9;           // "Success", "Failure", "Denied"
+  google.protobuf.Timestamp timestamp = 10;
+}
+
+message CommandLogRequest {
+  string session_id = 1;
+  string command = 2;
+  string output = 3;            // Truncated output (max 4KB)
+  google.protobuf.Timestamp timestamp = 4;
+  bool is_dangerous = 5;        // Flagged by command filter (rm -rf, DROP TABLE, etc.)
+  string risk_level = 6;        // "low", "medium", "high", "critical"
+}

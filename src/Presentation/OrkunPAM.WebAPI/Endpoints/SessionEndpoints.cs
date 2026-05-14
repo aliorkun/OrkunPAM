@@ -8,6 +8,7 @@ using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -206,6 +207,166 @@ public static class SessionEndpoints
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
+        });
+
+        // ── Recording Playback endpoints ────────────────────────────────────
+        sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
+            IRecordingPlaybackService playback, HttpContext context) =>
+        {
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+            if (!isPrivileged) return Results.Forbid();
+
+            var ps = await db.ProxySessions.FindAsync(id);
+            if (ps == null) return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
+
+            if (string.IsNullOrEmpty(ps.RecordingPath))
+                return Results.NotFound(new { success = false, errors = new[] { "No recording available for this session" } });
+
+            var metadata = await playback.GetMetadataAsync(ps.RecordingPath, ps.SessionType.ToString());
+            if (metadata == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Recording file not found or unreadable" } });
+
+            var integrity = await playback.VerifyIntegrityAsync(ps.RecordingPath);
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    sessionId = id,
+                    format = metadata.Format.ToString(),
+                    fileSizeBytes = metadata.FileSizeBytes,
+                    durationSeconds = metadata.DurationSeconds,
+                    terminalWidth = metadata.TerminalWidth,
+                    terminalHeight = metadata.TerminalHeight,
+                    createdAtUtc = metadata.CreatedAtUtc,
+                    integrityValid = integrity.IsValid,
+                    integrityMessage = integrity.Message,
+                    fileHash = integrity.FileHash
+                }
+            });
+        });
+
+        sessions.MapGet("/{id:guid}/recording/stream", async (Guid id, OrkunPamDbContext db,
+            IRecordingPlaybackService playback, HttpContext context) =>
+        {
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+            if (!isPrivileged) return Results.Forbid();
+
+            var ps = await db.ProxySessions.FindAsync(id);
+            if (ps == null) return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
+
+            if (string.IsNullOrEmpty(ps.RecordingPath))
+                return Results.NotFound(new { success = false, errors = new[] { "No recording available" } });
+
+            // Return parsed content based on session type
+            if (ps.SessionType == SessionType.Ssh)
+            {
+                var recording = await playback.ParseSshRecordingAsync(ps.RecordingPath);
+                if (recording == null)
+                    return Results.Problem("Failed to decrypt or parse SSH recording.");
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        format = "asciinema_v2",
+                        header = new
+                        {
+                            recording.Header.Version,
+                            recording.Header.Width,
+                            recording.Header.Height,
+                            recording.Header.Duration,
+                            recording.Header.Title,
+                            recording.Header.Command
+                        },
+                        events = recording.Events.Select(e => new
+                        {
+                            t = e.TimestampSeconds,
+                            type = e.EventType,
+                            data = e.Data
+                        })
+                    }
+                });
+            }
+
+            if (ps.SessionType == SessionType.Http)
+            {
+                var entries = await playback.ParseHttpRecordingAsync(ps.RecordingPath);
+                if (entries == null)
+                    return Results.Problem("Failed to decrypt or parse HTTP recording.");
+
+                return Results.Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        format = "http_jsonl",
+                        entries = entries.Select(e => new
+                        {
+                            t = e.TimestampSeconds,
+                            method = e.Method,
+                            url = e.Url,
+                            statusCode = e.StatusCode,
+                            requestHeaders = e.RequestHeaders,
+                            requestBody = e.RequestBody,
+                            responseHeaders = e.ResponseHeaders,
+                            responseBody = e.ResponseBody,
+                            durationMs = e.DurationMs
+                        })
+                    }
+                });
+            }
+
+            // RDP / VNC / SQL — return raw decrypted bytes for download
+            var content = await playback.GetDecryptedContentAsync(ps.RecordingPath);
+            if (content == null)
+                return Results.Problem("Failed to decrypt recording.");
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    format = ps.SessionType.ToString().ToLowerInvariant() + "_binary",
+                    contentBase64 = Convert.ToBase64String(content),
+                    sizeBytes = content.Length
+                }
+            });
+        });
+
+        sessions.MapGet("/{id:guid}/recording/search", async (Guid id, string? q,
+            OrkunPamDbContext db, IRecordingPlaybackService playback, HttpContext context) =>
+        {
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+            if (!isPrivileged) return Results.Forbid();
+
+            if (string.IsNullOrEmpty(q))
+                return Results.BadRequest(new { success = false, errors = new[] { "Query parameter 'q' is required" } });
+
+            var ps = await db.ProxySessions.FindAsync(id);
+            if (ps == null) return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
+
+            if (string.IsNullOrEmpty(ps.RecordingPath))
+                return Results.NotFound(new { success = false, errors = new[] { "No recording available" } });
+
+            if (ps.SessionType != SessionType.Ssh)
+                return Results.BadRequest(new { success = false, errors = new[] { "Search is only supported for SSH recordings" } });
+
+            var results = await playback.SearchSshRecordingAsync(ps.RecordingPath, q);
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = results.Select(r => new
+                {
+                    timestampSeconds = r.TimestampSeconds,
+                    matchedText = r.MatchedText,
+                    eventIndex = r.EventIndex
+                }),
+                meta = new { query = q, matchCount = results.Count }
+            });
         });
 
         var policies = app.MapGroup("/api/v1/session-policies").WithTags("Sessions");

@@ -951,6 +951,46 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // ── Session Recording Playback ─────────────────────────────────────────
+    public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
+    {
+        var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
+            $"/api/v1/sessions/{sessionId}/recording");
+        return result?.Data;
+    }
+
+    public async Task<RecordingStreamDto?> GetRecordingStreamAsync(string sessionId)
+    {
+        var result = await GetAsync<SingleResult<RecordingStreamDto>>(
+            $"/api/v1/sessions/{sessionId}/recording/stream");
+        return result?.Data;
+    }
+
+    public async Task<RecordingSearchResultsDto?> SearchRecordingAsync(string sessionId, string query)
+    {
+        var url = $"/api/v1/sessions/{sessionId}/recording/search?q={Uri.EscapeDataString(query)}";
+        return await GetAsync<RecordingSearchResultsDto>(url);
+    }
+
+    public async Task<PagedResult<CommandLogDto>?> GetSessionCommandsAsync(
+        string sessionId, int page = 1, int pageSize = 100)
+    {
+        return await GetAsync<PagedResult<CommandLogDto>>(
+            $"/api/v1/sessions/{sessionId}/commands?page={page}&pageSize={pageSize}");
+    }
+
+    public async Task<byte[]?> DownloadRecordingAsync(string sessionId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.GetAsync($"/api/v1/sessions/{sessionId}/recording/stream");
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsByteArrayAsync();
+        }
+        catch { return null; }
+    }
+
     // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
@@ -1214,6 +1254,43 @@ public record BackupRecordDto(
     DateTime? CompletedAtUtc, DateTime CreatedAtUtc, string InitiatedBy);
 public record BackupScheduleDto(bool Enabled, int HourUtc, string Scope);
 public record BackupRestoreResultDto(int RestoredCount, string Message);
+
+// Session Recording Playback DTOs
+public record RecordingMetadataDto(
+    string SessionId, string Format, long FileSizeBytes, double DurationSeconds,
+    int? TerminalWidth, int? TerminalHeight, DateTime CreatedAtUtc,
+    bool IntegrityValid, string? IntegrityMessage, string? FileHash);
+
+public class RecordingStreamDto
+{
+    public string Format { get; set; } = "";
+    public RecordingHeaderDto? Header { get; set; }
+    public List<RecordingEventDto>? Events { get; set; }
+    public List<HttpEntryDto>? Entries { get; set; }
+    public string? ContentBase64 { get; set; }
+    public int? SizeBytes { get; set; }
+}
+
+public record RecordingHeaderDto(int Version, int Width, int Height, double Duration, string? Title, string? Command);
+
+public record RecordingEventDto(double T, string Type, string Data);
+
+public record HttpEntryDto(
+    double T, string Method, string Url, int StatusCode,
+    Dictionary<string, string>? RequestHeaders, string? RequestBody,
+    Dictionary<string, string>? ResponseHeaders, string? ResponseBody,
+    double DurationMs);
+
+public record RecordingSearchResultsDto(
+    bool Success,
+    List<RecordingSearchHitDto>? Data,
+    RecordingSearchMeta? Meta);
+
+public record RecordingSearchHitDto(double TimestampSeconds, string MatchedText, int EventIndex);
+public record RecordingSearchMeta(string Query, int MatchCount);
+
+public record CommandLogDto(
+    long Id, DateTime Timestamp, string? Command, decimal RiskScore, bool WasBlocked, string? BlockReason);
 
 // TACACS+ (deferred — v2+, stub DTO for compilation)
 public record TacacsCommandPolicyDto(

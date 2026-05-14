@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+option csharp_namespace = "OrkunPAM.Grpc.Vault";
+
+package orkunpam.vault;
+
+import "google/protobuf/empty.proto";
+
+service VaultService {
+  // Decrypt a stored credential blob. Returns plaintext password/key.
+  rpc DecryptCredential (CredentialRequest) returns (CredentialResponse);
+
+  // Check out a credential for exclusive use by a proxy session.
+  rpc CheckOutCredential (CheckOutRequest) returns (CheckOutResponse);
+
+  // Check in (release) a previously checked-out credential.
+  rpc CheckInCredential (CheckInRequest) returns (google.protobuf.Empty);
+}
+
+message CredentialRequest {
+  string credential_id = 1;
+  string purpose = 2;           // "SshProxy", "RdpProxy", "VncProxy", etc.
+  string requester_session_id = 3;
+}
+
+message CredentialResponse {
+  string username = 1;
+  bytes password = 2;           // Raw password bytes; caller must zero after use
+  string private_key = 3;       // PEM-encoded key (if applicable)
+  string domain = 4;            // Windows domain (if applicable)
+}
+
+message CheckOutRequest {
+  string credential_id = 1;
+  string session_id = 2;
+  string proxy_type = 3;
+  int32 ttl_minutes = 4;        // Max checkout duration
+}
+
+message CheckOutResponse {
+  string checkout_id = 1;
+  string username = 2;
+  bytes password = 3;
+  string private_key = 4;
+  string domain = 5;
+}
+
+message CheckInRequest {
+  string checkout_id = 1;
+  string session_id = 2;
+}
