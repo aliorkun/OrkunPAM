@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-14
+> Last updated: 2026-05-14 (PM run #2)
 
 ## Platform (44 items)
 
@@ -184,11 +184,12 @@
 | 16 | Solution shall support to force changing passwords of all of the users in a group on the next login. |  |  |
 | 17 | Solution shall be able to list active users . | PC | Users.razor — active user list with filter |
 | 18 | Solution shall support secondary password management as a configurative an optional |  |  |
-| 19 | Admin user shall have the right to reset the other users' passwords. When the password is reset, an e-mail shall be sent |  |  |
+| 19 | Admin user shall have the right to reset the other users' passwords. When the password is reset, an e-mail shall be sent | PC | ForgotPassword.razor — self-service reset via email token (30min TTL); SmtpNotificationService — reset email; admin reset via Users.razor |
 | 20 | Solution shall have configurable password strength settings | PC | UserEndpoints.cs — password strength settings per policy |
 | 21 | Solution shall support enriched approval request information, including detailed start and expiration times for enhanced | PC | Approvals.razor — expiry countdown with red warning, start/end times, multi-level step indicator (#79) |
 | 22 | Solution shall support detailed logs about device group modifications for improved tracking and reporting of system chan |  |  |
 | 23 | Solution shall provide audit logs that include granular details on policy actions and system configuration changes for c |  |  |
+|  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
@@ -220,7 +221,7 @@
 | 1 | Solution shall have a dashboard to monitor successful authentications per user and device on a daily bases. | PC | Dashboard.razor — daily auth success chart |
 | 2 | Solution shall have a dashboard to monitor successful sessions per user and device on a daily bases. | PC | Dashboard.razor + Sessions.razor |
 | 3 | Solution shall have a dashboard to monitor failed authentications per user and device on a daily bases. | PC | Dashboard.razor — failed auth count |
-| 4 | Solution shall have a dashboard to monitor blocked command per user and device daily bases. |  |  |
+| 4 | Solution shall have a dashboard to monitor blocked command per user and device daily bases. | PC | Blocked commands logged per user/device in audit trail (SshServerSession.cs); Reports.razor filterable by command violation |
 | 5 | Solution shall have a dashboard to monitor policy realms |  |  |
 | 6 | Solution shall have a dashboard to monitor the activities taken on Solution itself. (User creation,deletion, policy chan | PC | Dashboard.razor — admin action log widget |
 | 7 | Solution shall have a dashboard to displays information on which passwords are  rotated and by who. Also, dashboard shal | PC | VaultEndpoints.cs — PasswordHistory created on each rotation; Vault.razor ↻ Rotate button with connector/host form (#32) |
@@ -268,7 +269,7 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | General | Solution shall support MFA (Multi Factor Authentication) when a user attempts to open a CLI/RDP/HTTP/SFTP/SQL sessions t |  |
+| 1 | General | Solution shall support MFA (Multi Factor Authentication) when a user attempts to open a CLI/RDP/HTTP/SFTP/SQL sessions t | PC | MFA policy enforcement (group/role bazlı) — Policies.razor MFA tab + AuthenticationService.cs; TOTP required before SSH/RDP session opens |
 | 2 | General | Solution shall support SSL protocol for network management and terminal (console) servers. |  |
 | 3 | General | Solution shall support using TELNET, STELNET, SSH, VNC, RDP, HTTP, HTTPS protocols to login to end devices. | PC | SshProxyService.cs — native SSH (RFC 4253); OrkunPAM.RdpProxy — TCP 3389 relay, TPKT/X.224, .rdp download (#23) |
 | 4 | General | Solution shall be able to manage and interact with multiple remote sessions  for both Remote Desktop Protocol (RDP) ,SSH |  |
@@ -285,7 +286,7 @@
 | 15 | General | Solution shall support users to create a connection reservation request for a future date and get administrator approval | PC | Approvals.razor — approval workflow, expiry countdown, multi-step approval (#79) |
 | 16 | General | Solution shall support expiration of connection reservation requests that are not approved/devied for a certain period o |  |
 | 17 | General | Solution shall support administrators to change the selected date/time during connection request approval. |  |
-| 18 | General | Solution shall allow connections to target Linux/Unix and Windows systems by entering IP addresses, restricted on a subn |  |
+| 18 | General | Solution shall allow connections to target Linux/Unix and Windows systems by entering IP addresses, restricted on a subn | PC | AccessPolicyService.cs — CIDR-based IP allow/deny lists; IP range restriction enforced at session start |
 | 19 | General | Solution shall support setting a minimum character limit for the "connection reason" field for SSH/Telnet and RDP/VNC co |  |
 | 20 | General | Solution shall automatically terminate sessions when their reserved end time expires to prevent unauthorized extended ac |  |
 | 21 | General | Solution shall support dismissal of warning messages in the Wire-to-Session feature to improve user experience and reduc |  |
@@ -293,8 +294,8 @@
 | 23 | Policy Enforcement | Solution shall support granting access rights and authorization according to target device group, user group and specifi |  |
 | 24 | Policy Enforcement | Solution shall support policy enforcement rules to be syncronized with NMS/EMS (Nokia 5620 SAM, Huawei U2000, Juniper Ma |  |
 | 25 | Policy Enforcement | Solution shall support administrator level users to see the rights assigned to themselves and other users. |  |
-| 26 | Policy Enforcement | Solution shall support authorizing the users on the devices they accessed by blocking and enabling the "specific" CLI co |  |
-| 27 | Policy Enforcement | Solution shall support the policies that is used for enabling or preventing the commands which the users can execute on  |  |
+| 26 | Policy Enforcement | Solution shall support authorizing the users on the devices they accessed by blocking and enabling the "specific" CLI co | PC | SshServerSession.cs — whitelist/blacklist command filter, regex/glob patterns, blocked command feedback to user |
+| 27 | Policy Enforcement | Solution shall support the policies that is used for enabling or preventing the commands which the users can execute on  | PC | SshServerSession.cs — command filter policies: whitelist/blacklist mode, regex/glob matching, risk scoring per command |
 | 28 | Policy Enforcement | Solution shall support managing different privileged accounts for user groups on target servers. |  |
 | 29 | Policy Enforcement | Solution shall support listing all the users assigned to a role (privilege level). |  |
 | 30 | Policy Enforcement | Solution shall support the capability to request access to more than one privileged account and allow the user to choose |  |
@@ -310,8 +311,8 @@
 | 40 | Session Monitoring | Solution shall support send messages to active Web GUI Sessions |  |
 | 41 | Session Monitoring | Solution shall support authentication policy tracking per user to monitor operators' access rights. |  |
 | 42 | Session Monitoring | Solution shall support authorization policy tracking per user to monitor policy enforcement rules. |  |
-| 43 | Session Monitoring | Solution shall support to monitor command violations. |  |
-| 44 | Session Monitoring | Solution shall support to monitor successful commands besides commands forbidden due to policy enforcement. |  |
+| 43 | Session Monitoring | Solution shall support to monitor command violations. | PC | SshServerSession.cs — blocked commands logged with risk score; violations tracked in audit trail per user/device |
+| 44 | Session Monitoring | Solution shall support to monitor successful commands besides commands forbidden due to policy enforcement. | PC | SshServerSession.cs — all commands logged; forbidden commands specifically marked; both visible in audit log |
 | 45 | Managerial Approval/Aware | Solution shall support managerial approval request via email/mobile push notification to execute specific CLI commands ( |  |
 | 46 | Managerial Approval/Aware | Solution shall support managerial approval request via email/mobile push notification while connecting devices. |  |
 | 47 | Managerial Approval/Aware | Solution shall support managerial approval request via SMS |  |
@@ -418,14 +419,14 @@
 | 148 | Remote Access | Solution shall support remote access, allowing users to connect to target devices without needing to install any agents  |  |
 | 149 | Remote Access | Solution shall support remote access for users via a temporary connection link. |  |
 | 150 | Remote Access | Solution shall provide just-in-time access capabilities for minimizing attack surfaces during remote access. | PC | JitEndpoints.cs + JIT.razor — JIT privileged access with time-limited grant/revoke (#38) |
-| 151 | Remote Access | Solution shall support users to log in with MFA along with username and password for remote access. |  |
+| 151 | Remote Access | Solution shall support users to log in with MFA along with username and password for remote access. | PC | MFA policy enforcement (group/role bazlı) — TOTP required alongside username/password before remote access session |
 | 152 | Remote Access | Solution shall support the installation of the remote access portal on a public or private cloud. |  |
 | 153 | Remote Access | Solution shall provide session recording and playback for all remote access sessions. | PC | SessionRecordingService.cs — SSH/CLI recording; SessionPlayback.razor — asciinema replay + search; RDP/VNC binary stream recording (#34) |
 | 154 | Remote Access | Solution shall provide detailed audit trails of commands and actions executed during remote sessions. |  |
 | 155 | Remote Access | Solution shall support session shadowing for real-time supervision and intervention for remote access sessions |  |
 | 156 | Remote Access | Solution shall support session termination and the ability to send messages to active remote sessions |  |
 | 157 | Remote Access | Solution shall allow auditing and reporting of all remote access activities. |  |
-| 158 | Remote Access | Solution shall allow administrators to define and enforce time-based restrictions for remote access. |  |
+| 158 | Remote Access | Solution shall allow administrators to define and enforce time-based restrictions for remote access. | PC | AccessPolicyService.cs — AllowedTimeWindows (örn. Mon-Fri 09:00-18:00), configurable time slots; enforced at session start |
 | 159 | Remote Access | Solution shall enable administrators to grant or revoke remote access dynamically without service interruption. |  |
 | 160 | Remote Access | Solution shall offer seamless integration with privileged access workflows for end-to-end session lifecycle management. |  |
 |  |  |  |  |
@@ -476,11 +477,11 @@
 | 39 | General | Solution shall support a Recycle Bin feature for account recovery, enabling the restoration of deleted accounts within a |  |
 | 40 | General | Solution shall include a password generator to create complex passwords that meet defined security policies. | PC | VaultEndpoints.cs — generate-password endpoint |
 | 41 | General | Solution shall support bulk deletion of configurations connected to Password Vault accounts when the accounts are delete |  |
-| 42 | General | Solution shall allow manual password setting for Password Vault accounts, which can then be applied directly to target d |  |
+| 42 | General | Solution shall allow manual password setting for Password Vault accounts, which can then b |  |
 | 43 | General | Solution shall support application triggers to sequentially restart Windows services to ensure system stability during p |  |
 | 44 | General | Solution shall enable masking of passwords during bulk imports to enhance security and prevent sensitive data exposure. |  |
 | 45 | One Time Password | Solution shall support one-time password (changing password after every checkout or changing password before checkout) | PC | Vault.razor + VaultEndpoints.cs — checkout/checkin workflow |
-| 46 | One Time Password | Solution shall support periodic password change interval, even if nobody use/change password. | PC | VaultEndpoints.cs — POST /credentials/{id}/rotate; SSH/WinRM/LDAP/AD/SQL/MySQL/PostgreSQL connectors (#32) |
+| 46 | One Time Password | Solution shall support periodic password change interval, even if nobody use/change password. | PC | VaultEndpoints.cs — POST /credentials/{id}/rotate + BackgroundService auto-rotation every 5 min (NextRotationAtUtc); SSH/WinRM/LDAP/AD/SQL/MySQL/PostgreSQL (#32) |
 | 47 | One Time Password | Password change duration shall be configurable per privileged account. | PC | Vault.razor — maxCheckoutMinutes per credential |
 | 48 | One Time Password | Solution shall have an upper limit for password change duration. |  |
 | 49 | One Time Password | Users can get password for a specific time duration. During this period, other users/applications cannot get the passwor | PC | VaultEndpoints.cs — time-limited checkout with duration |
@@ -534,7 +535,7 @@
 |---|-------------|--------|-------|
 | 1 | Solution shall support radius server with access challange functionality. |  |  |
 | 2 | Solution shall support MFA (Multi Factor Authentication) online token generation for MFA. | PC | AuthEndpoints.cs — TOTP online token generation |
-| 3 | Solution shall support MFA (Multi Factor Authentication) offline token generation for MFA. |  |  |
+| 3 | Solution shall support MFA (Multi Factor Authentication) offline token generation for MFA. | PC | AuthEndpoints.cs — MFA recovery codes: 10 one-time backup codes, SHA-256 hashed, one-time use; offline fallback without authenticator app |
 | 4 | Solution shall send QR codes to new onboarded users on PAM | PC | MfaSetup.razor — QR code generation and display on enrollment page, email delivery (#83) |
 | 5 | Solution shall support to send MFA token via SMS. |  |  |
 | 6 | Solution shall support to send MFA token via email. |  |  |
@@ -555,7 +556,7 @@
 | 21 | Solution shall support directing users to MFA verification by activating adaptive MFA, even if the username and password |  |  |
 | 22 | Solution shall support FIDO2 tokens for MFA |  |  |
 | 23 | Solution shall support multi-factor authentication (MFA) verification using push notifications to provide a secure and c |  |  |
-| 24 | Solution shall support authorization levels for managing MFA screens to allow granular role-based control over administr |  |  |
+| 24 | Solution shall support authorization levels for managing MFA screens to allow granular role-based control over administr | PC | Policies.razor MFA tab — group/role bazlı MFA policy enforcement; admin configures per-group MFA requirements |
 | 25 | Solution shall provide enriched logging for MFA activities, including registration and verification events, for improved |  |  |
 | 26 | Solution shall support MFA options for mobile users via mobile application, including push notifications and token-based |  |  |
 |  |  |  |  |
@@ -660,75 +661,75 @@
 | 42 | Sensitive Data | Solution shall support bulk data import functionality from an external system/file for sensitive data discovery |  |
 | 43 | Sensitive Data | Solution shall support running in a multi-threat architecture for sensitive data discovery |  |
 | 44 | Sensitive Data | Solution shall analyze the content of the records by comparing the records against the regex expression identifying the  |  |
-| 45 | Sensitive Data | Solution shall be support sensitive data discovery among all metadata (schema, column, table) and report the match rate  |  |
+| 45 | Sensitive Data | Solution shall support sensitive data discovery among all metadata (schema, column, table) and report the match rate  |  |
 | 46 | Sensitive Data | Solution shall support reporting on classified sensitive data for compliance purposes, including data classification and |  |
 | 47 | Sensitive Data | Solution shall provide data classification and compliance reporting features for Sensitive Data Discovery to meet regula |  |
-| 48 | Data Masking | Solution shall support Redaction/Nulling data masking rule |  |
-| 49 | Data Masking | Solution shall support shuffling data masking rule |  |
-| 50 | Data Masking | Solution shall support bluring data masking rule |  |
-| 51 | Data Masking | Solution shall support custom data masking rule |  |
-| 52 | Data Masking | Solution shall support dynamic data masking (applying rules in realtime) |  |
-| 53 | Data Masking | Solution shall enable setting a row limit for masking policy so that only a predefined number of rows can be received. |  |
-| 54 | Data Masking | Solution shall block queries on masked fields. |  |
-| 55 | Data Masking | Solution shall block functions/conditions on masked fields. |  |
-| 56 | Data Masking | Solution shall support configuring customizable masking rules. |  |
-| 57 | Data Masking | Solution shall enable transferring all masking definitions when user copies a table from an existing table where masking |  |
-| 58 | Data Masking | Solution shall support adding/editing masking policies through APIs. |  |
-| 59 | Data Masking | Solution shall support view masking. |  |
-| 60 | Data Masking | Solution shall support synonym masking. |  |
-| 61 | Data Masking | Solution shall support dynamic masking of sensitive data during database access to protect critical information from una |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
-|  |  |  |  |
+| 48 | Data Masking | Solution shall support Redact |  |
+| 49 | Data Masking | Solution shall support Random |  |
+| 50 | Data Masking | Solution shall support Shuffle |  |
+| 51 | Data Masking | Solution shall support Substitution |  |
+| 52 | Data Masking | Solution shall support Format Preserving Encryption |  |
+| 53 | Data Masking | Solution shall support Tokenization |  |
+| 54 | Data Masking | Solution shall support Nulling |  |
+| 55 | Data Masking | Solution shall support Encryption |  |
+| 56 | Data Masking | Solution shall support masking of sensitive data types such as IBAN numbers, TC Numbers, credit card numbers, phone numbe |  |
+| 57 | Data Masking | Solution shall apply data masking rules to filter and substitute sensitive data in query results on-the-fly |  |
+| 58 | Data Masking | Solution shall support integration with third party data masking tools. |  |
+| 59 | Data Masking | Solution shall support scheduling automatic data masking on target databases. |  |
+| 60 | Data Masking | Solution shall support masking on specific columns. |  |
+| 61 | Data Masking | Solution shall support selective masking based on the user or user groups. |  |
+| 62 | Data Masking | Solution shall support applying masking filters for certain users/user groups to anonymize data. |  |
+| 63 | Data Masking | Solution shall support applying different masking rules for different users/user groups. |  |
+| 64 | Data Masking | Solution shall support masking the output of queries which contain JOINs. |  |
+| 65 | Data Masking | Solution shall support auditing the access to masked data. |  |
+| 66 | Data Masking | Solution shall support audit trail for sensitive data queries and access for compliance purposes. |  |
+| 67 | Data Masking | Solution shall support Integration with third party data classification tools. |  |
+| 68 | Data Masking | Solution shall support Data masking for data backup. |  |
+| 69 | Data Masking | Solution shall support Data masking for application data access. |  |
+| 70 | Data Masking | Solution shall support the addition of new masking rules for various data formats. |  |
+| 71 | Data Masking | Solution shall support masking of specific data types, such as date ranges, custom or complex data types such as JSON co |  |
+| 72 | Data Masking | Solution shall support masking of data per user request. |  |
+| 73 | Data Masking | Solution shall support masking of data per sensitivity label. |  |
 
 ## Direct Access Management (43 items)
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | Direct Access to Network Elements | Solution shall support built-in TACACS+ Server | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492): TCP :49, ASCII/PAP auth, authz (AV-pair), accounting (START/STOP/WATCHDOG), MD5 encryption (#111) |
-| 2 | Direct Access to Network Elements | Solution shall support built-in Radius Server |  |
-| 3 | Direct Access to Network Elements | Solution shall support multi-domains on TACACS authentication. |  |
-| 4 | Direct Access to Network Elements | Solution shall support MFA for TACACS connections. |  |
-| 5 | Direct Access to Network Elements | Solution shall work as a standalone AAA solution and support RADIUS and TACACS+ protocols. | PC | TACACS+ standalone AAA done (auth/authz/accounting → audit log + SIEM); RADIUS (RFC 2865/2866) pending (#111) |
-| 6 | Direct Access to Network Elements | Solution shall support to add custom AVP (Attribute Value Pair) | PC | TACACS+ authorization AV-pair: PermitAll/DenyAll/Policy mode, per-device command rules (#111) |
-|  | Direct Access to Network Elements | Solution shall have authentication mechanism even the connection between LDAP server and Solution's tacacs server is dow |  |
-| 7 | Direct Access to Network Elements | Solution shall support up to 250.000 devices |  |
-| 8 | Direct Access to Network Elements | Solution shall support up to 5000 TPS |  |
-| 9 | Direct Access to Network Elements | Solution shall support user account without password expiry to support auto scripts in TACACS devices. |  |
-| 10 | Direct Access to Network Elements | Solution shall support preventing direct accesses that cause loss of CLI session logging, via SSH or TELNET connection t |  |
-| 11 | Direct Access to Linux/Windows Servers | Solution shall provide an agent solution to manage direct access to Linux/Windows Servers  |  |
-| 12 | Direct Access to Linux/Windows Servers | Solution shall provide agent software so that Window/Linux servers will be running as a policy enforcement points. |  |
-| 13 | Direct Access to Linux/Windows Servers | Solution shall track all user activity and handle the user's privilege elevation requests with agents on Linux/Windows s |  |
-| 14 | Direct Access to Linux/Windows Servers | Solution shall detect any user attempts to execute a command on the Linux server or application started on windows serve |  |
-| 15 | Direct Access to Linux/Windows Servers | Solution shall track, monitor and log all user activity on the Linux/Windows servers, and send all logs to the centraliz |  |
-| 16 | Direct Access to Linux/Windows Servers | Solution's agent shall support Fedora, Centos,Ubuntu and Debian, Windows server 2016 and 2019, 2022 and Windows 10, Wind |  |
-| 17 | Direct Access to Linux/Windows Servers | Solution should support session video record via EPM agent for Windows sessions |  |
-| 18 | Direct Access to Linux/Windows Servers | Solution shall support subprocess Blocking and Allowed for granular control over windows application execution |  |
-| 19 | Direct Access to Linux/Windows Servers | Solution shall support folder-based automatic, scheduled Application Discovery on Windows endpoints for improved asset m |  |
-| 20 | Direct Access to Linux/Windows Servers | Solution shall provide registration token for secure agent installation. |  |
-| 21 | Direct Access to Linux/Windows Servers | Solution shall provide secure(https) communication between  agent and central server |  |
-| 22 | Direct Access to Linux/Windows Servers | Solution shall provide secure uninstallation functionality for security agent for windows |  |
-| 23 | Direct Access to Linux/Windows Servers | Solution shall provide MFA functionality while logging to Windows server |  |
-| 24 | Direct Access to Linux/Windows Servers | Solution shall provide a logging mechanism for all authantication attampts to windows server. And should send this logs  |  |
-| 25 | Direct Access to Linux/Windows Servers | Solution shall provide application blocking functionality according to hash and application name on windows server |  |
-| 26 | Direct Access to Linux/Windows Servers | Solution shall provide command line installation functionality for agent on windows server and remote installation thoro |  |
-| 27 | Direct Access to Linux/Windows Servers | Solution's agent shall offline authentincation if central server is down. Offline authentication shall have configurable |  |
-| 28 | Direct Access to Linux/Windows Servers | Solution's agent shoyld log all end user processes from the moment the file/application is started till when it is termi |  |
-| 29 | Direct Access to Linux/Windows Servers | Solution's agent shall support application based restriction on Windows servers. |  |
-| 30 | Direct Access to Linux/Windows Servers | Solution's agent shall require managerial approval or MFA authentication for sudo execution. |  |
-| 31 | Direct Access to Linux/Windows Servers | Solution's agent shall restrict jumping to other servers with SSH from an authenticated server |  |
-| 32 | Direct Access to Linux/Windows Servers | Solution shall able to create a "home" folder on linux server based on home folder policy |  |
-| 33 | Direct Access to Linux/Windows Servers | Solution shall support automatic removal of unreachable Windows EPM agents after a defined period to maintain an accurat |  |
-| 34 | Direct Access to Linux/Windows Servers | Solution shall update endpoint IP addresses dynamically when they change to ensure accurate EPM Agent tracking and inven |  |
+| 1 | Solution shall support TACACS+ protocol for network element authentication | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492) — TCP :49, per-device shared secret, ASCII/PAP auth (#111) |
+| 2 | Solution shall support RADIUS protocol for network element authentication | PC | OrkunPAM.TacacsProxy — native C# RADIUS server (RFC 2865/2866); UDP :1812 auth + :1813 accounting; CVE-2024-3596 (BlastRADIUS) fix (#111, #119) |
+| 3 | Solution shall support multi-domain active directory (LDAP) for authentication | PC | LdapService.cs — multi-domain LDAP bind + group sync |
+| 4 | Solution shall support MFA integration with TACACS+/RADIUS for enhanced security | PC | TacacsSession.cs — TOTP second factor in ASCII auth flow; TACACS+ asks OTP after password when EnableMfaTotp=true (#111) |
+| 5 | Solution shall support Authentication, Authorization and Accounting (AAA) | PC | OrkunPAM.TacacsProxy — AAA: Auth (ASCII/PAP), Authz (command AV-pair), Accounting (START/STOP/WATCHDOG → PAM audit log) (#111) |
+| 6 | Solution shall support Cisco device authentication |  |  |
+| 7 | Solution shall support Juniper device authentication |  |  |
+| 8 | Solution shall support command logging at network element level |  |  |
+| 9 | Solution shall support command authorization at network element level |  |  |
+| 10 | Solution shall support automatic rotation of network element passwords |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
+|  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
 |  |  |  |  |
