@@ -83,6 +83,9 @@ try
     // === Audit Integrity Daily Job (#91) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AuditIntegrityJob>();
 
+    // === Account Lifecycle Policy (#135 #137) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AccountLifecycleJob>();
+
     // === Backup / DR (#55) ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IBackupService, OrkunPAM.Persistence.Services.BackupService>();
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BackupSchedulerService>();

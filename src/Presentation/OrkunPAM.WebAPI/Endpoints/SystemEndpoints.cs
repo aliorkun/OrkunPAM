@@ -231,6 +231,50 @@ public static class SystemEndpoints
                 message = ok ? "Test email sent successfully" : "Failed — check SMTP configuration and logs"
             });
         });
+
+        // === Account Lifecycle Policy ===
+        var accountGroup = app.MapGroup("/api/v1/system/account-policy").WithTags("System");
+
+        accountGroup.MapGet("/", async (OrkunPamDbContext db) =>
+        {
+            var configs = await db.SystemConfigs
+                .Where(c => c.Category == "account")
+                .ToDictionaryAsync(c => c.Key, c => c.Value ?? string.Empty);
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    maxPasswordAgeDays = int.TryParse(configs.GetValueOrDefault("account.maxPasswordAgeDays"), out var pa) ? pa : 0,
+                    maxInactivityDays  = int.TryParse(configs.GetValueOrDefault("account.maxInactivityDays"),  out var ia) ? ia : 0,
+                    warnDaysBefore     = int.TryParse(configs.GetValueOrDefault("account.warnDaysBefore"),     out var wb) ? wb : 7
+                }
+            });
+        });
+
+        accountGroup.MapPut("/", async (AccountPolicyRequest req, OrkunPamDbContext db) =>
+        {
+            var entries = new[]
+            {
+                ("account.maxPasswordAgeDays", req.MaxPasswordAgeDays.ToString()),
+                ("account.maxInactivityDays",  req.MaxInactivityDays.ToString()),
+                ("account.warnDaysBefore",     req.WarnDaysBefore.ToString())
+            };
+
+            foreach (var (key, value) in entries)
+            {
+                var cfg = await db.SystemConfigs.FindAsync(key);
+                if (cfg == null)
+                    db.SystemConfigs.Add(new OrkunPAM.Domain.Entities.System.SystemConfig
+                        { Key = key, Value = value, Category = "account" });
+                else
+                { cfg.Value = value; cfg.UpdatedAtUtc = DateTime.UtcNow; }
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, message = "Account policy saved" });
+        });
     }
 }
 
@@ -238,3 +282,4 @@ public record UpdateConfigRequest(string Value, string? Category, string? Descri
 public record SmtpConfigRequest(string? Host, int? Port, string? From, string? FromName,
     string? Username, string? Password, bool UseTls = true);
 public record TestEmailRequest(string To);
+public record AccountPolicyRequest(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore = 7);
