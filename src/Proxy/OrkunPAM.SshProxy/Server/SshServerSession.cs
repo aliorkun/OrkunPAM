@@ -61,16 +61,22 @@ internal sealed class SshServerSession
             // Fetch session policy for command filtering
             var sessionPolicy = await _api.GetFullSessionPolicyAsync(_ct);
 
-            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey) =
+            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
-            _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth})",
+            _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth}, tofu: {Tofu})",
                 targetUser, targetIp, targetPort, pamUser,
-                targetPrivateKey != null ? "publickey" : "password");
+                targetPrivateKey != null ? "publickey" : "password",
+                expectedFingerprint == null ? "first-use" : "verified");
 
             using var target = new SshTargetClient(
-                targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log);
+                targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log,
+                expectedFingerprint: expectedFingerprint);
             await target.ConnectAsync(_ct);
+
+            // TOFU: if no fingerprint was stored yet, persist the observed one now
+            if (expectedFingerprint == null && target.ObservedFingerprint != null)
+                await _api.StoreSshFingerprintAsync(deviceId, target.ObservedFingerprint, _ct);
 
             await RelayAsync(target, idleTimeoutMinutes, sessionPolicy);
         }

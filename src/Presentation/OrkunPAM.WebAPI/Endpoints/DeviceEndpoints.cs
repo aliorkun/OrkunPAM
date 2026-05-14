@@ -34,6 +34,7 @@ public static class DeviceEndpoints
                     Status = d.Status.ToString(),
                     d.IsReachable, d.LastReachableCheck,
                     d.Tags, d.IsManaged,
+                    d.SshHostKeyFingerprint,
                     CredentialCount = d.DeviceCredentials.Count
                 }).ToListAsync();
 
@@ -139,6 +140,24 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true });
         });
 
+        // Proxy-only endpoint: store SSH host key fingerprint (TOFU) — requires X-Proxy-Secret
+        devices.MapPost("/{id:guid}/ssh-fingerprint", async (Guid id, SshFingerprintRequest req,
+            OrkunPamDbContext db, IConfiguration config, HttpContext context) =>
+        {
+            var expectedSecret = config["ProxyService:Secret"];
+            var providedSecret = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault();
+            if (string.IsNullOrEmpty(expectedSecret) || providedSecret != expectedSecret)
+                return Results.Forbid();
+
+            var d = await db.Devices.FindAsync(id);
+            if (d == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
+
+            d.SshHostKeyFingerprint = req.Fingerprint;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        }).AllowAnonymous(); // auth replaced by X-Proxy-Secret header check above
+
         var groups = app.MapGroup("/api/v1/device-groups").WithTags("Devices");
 
         groups.MapGet("/", async (OrkunPamDbContext db) =>
@@ -222,3 +241,4 @@ public record LinkCredentialRequest(Guid CredentialId, CredentialPurpose Purpose
 public record CreateDeviceGroupRequest(string Name, DeviceGroupType GroupType, int? VlanId, string? SubnetCidr, Guid? ParentGroupId);
 public record AddDeviceGroupMembersRequest(Guid[] DeviceIds);
 public record CreatePlatformRequest(string Name, ConnectionProtocol Protocol, int Port, string? RotationConnector, string? ConnectionTemplate);
+public record SshFingerprintRequest(string Fingerprint);

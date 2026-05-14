@@ -34,7 +34,7 @@ public static class PolicyEndpoints
 
     public static void MapPolicyEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/v1/policies").WithTags("Policies");
+        var group = app.MapGroup("/api/v1/policies").WithTags("Policies").RequireAuthorization("AdminPolicy");
 
         group.MapGet("/", async (OrkunPamDbContext db, string? type) =>
         {
@@ -138,7 +138,7 @@ public static class PolicyEndpoints
         // Dedicated password policy endpoints (RFP Security #2-6, #10, #11)
         // -----------------------------------------------------------------------
 
-        var pwdGroup = app.MapGroup("/api/v1/policy").WithTags("Policy Settings");
+        var pwdGroup = app.MapGroup("/api/v1/policy").WithTags("Policy Settings").RequireAuthorization("AdminPolicy");
 
         pwdGroup.MapGet("/password", async (OrkunPamDbContext db) =>
         {

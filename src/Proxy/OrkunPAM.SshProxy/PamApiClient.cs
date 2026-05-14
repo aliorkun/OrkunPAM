@@ -53,9 +53,10 @@ internal sealed class PamApiClient
 
     /// <summary>
     /// Look up a device by hostname/IP and return the SSH credential for it.
+    /// Also returns the stored SSH host key fingerprint (null = first connection, TOFU applies) and deviceId.
     /// Throws InvalidOperationException on any failure — caller must close session (fail-closed).
     /// </summary>
-    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey)>
+    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
     {
         try
@@ -138,7 +139,9 @@ internal sealed class PamApiClient
                 device.ConnectionPort ?? 22,
                 cred.Username ?? throw new InvalidOperationException("Credential has no username"),
                 passwordBytes,
-                string.IsNullOrEmpty(privateKey) ? null : privateKey);
+                string.IsNullOrEmpty(privateKey) ? null : privateKey,
+                device.SshHostKeyFingerprint,
+                device.Id);
         }
         catch (InvalidOperationException)
         {
@@ -205,11 +208,38 @@ internal sealed class PamApiClient
         return null;
     }
 
+    /// <summary>
+    /// Store SSH host key fingerprint for a device (TOFU: first successful connection).
+    /// Best-effort — never throws, logs on failure.
+    /// </summary>
+    internal async Task StoreSshFingerprintAsync(string deviceId, string fingerprint, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post,
+                $"/api/v1/devices/{deviceId}/ssh-fingerprint");
+            req.Content = JsonContent.Create(new { fingerprint });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+                _log.LogWarning("StoreSshFingerprint: failed for device {DeviceId} (HTTP {Status})",
+                    deviceId, (int)resp.StatusCode);
+            else
+                _log.LogInformation("TOFU: SSH host key fingerprint stored for device {DeviceId}: {Fp}",
+                    deviceId, fingerprint);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "StoreSshFingerprint: unexpected error for device {DeviceId}", deviceId);
+        }
+    }
+
     // Response DTOs
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);
     private record DeviceListResponse(IEnumerable<DeviceDto>? Data);
-    private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort);
+    private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort, string? SshHostKeyFingerprint);
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
