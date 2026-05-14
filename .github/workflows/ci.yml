@@ -1,0 +1,63 @@
+name: OrkunPAM CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore OrkunPAM.sln
+
+    - name: Build
+      run: dotnet build OrkunPAM.sln --configuration Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test tests/OrkunPAM.UnitTests/OrkunPAM.UnitTests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: tests/**/TestResults/*.trx
+
+    - name: Publish WebAPI
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: dotnet publish src/Presentation/OrkunPAM.WebAPI/OrkunPAM.WebAPI.csproj -c Release -o publish/WebAPI --self-contained false
+
+    - name: Publish Blazor Web
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: dotnet publish src/Presentation/OrkunPAM.Web/OrkunPAM.Web.csproj -c Release -o publish/Web --self-contained false
+
+    - name: Publish SSH Proxy
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: dotnet publish src/Proxy/OrkunPAM.SshProxy/OrkunPAM.SshProxy.csproj -c Release -o publish/SshProxy --self-contained false
+
+    - name: Publish RDP Proxy
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: dotnet publish src/Proxy/OrkunPAM.RdpProxy/OrkunPAM.RdpProxy.csproj -c Release -o publish/RdpProxy --self-contained false
+
+    - name: Publish HTTP Proxy
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: dotnet publish src/Proxy/OrkunPAM.HttpProxy/OrkunPAM.HttpProxy.csproj -c Release -o publish/HttpProxy --self-contained false
+
+    - name: Upload build artifacts
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: orkunpam-release
+        path: publish/
+        retention-days: 30
