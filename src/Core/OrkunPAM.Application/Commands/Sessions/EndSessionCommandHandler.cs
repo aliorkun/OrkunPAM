@@ -30,6 +30,10 @@ public sealed class EndSessionCommandHandler : IRequestHandler<EndSessionCommand
 
     public async Task<Result> Handle(EndSessionCommand request, CancellationToken cancellationToken)
     {
+        var userId = _currentUser.UserId;
+        if (userId is null)
+            return Result.Failure(Error.Unauthorized("Authenticated user context is required."));
+
         var session = await _sessions.GetByIdAsync(request.SessionId, cancellationToken);
         if (session is null)
             return Result.Failure(Error.NotFound("Session", request.SessionId));
@@ -37,7 +41,11 @@ public sealed class EndSessionCommandHandler : IRequestHandler<EndSessionCommand
         if (session.Status != SessionStatus.Active)
             return Result.Failure(Error.Conflict($"Session is already {session.Status}."));
 
-        var adminUserId = _currentUser.UserId ?? Guid.Empty;
+        var isAdmin = _currentUser.Roles.Contains("GlobalAdmin") || _currentUser.Roles.Contains("SessionAdmin");
+        if (session.UserId != userId.Value && !isAdmin)
+            return Result.Failure(Error.Forbidden("Cannot terminate another user's session."));
+
+        var adminUserId = userId.Value;
 
         // If termination reason is provided, it's an admin-initiated termination
         if (!string.IsNullOrEmpty(request.TerminationReason))
@@ -49,7 +57,7 @@ public sealed class EndSessionCommandHandler : IRequestHandler<EndSessionCommand
         await _uow.SaveChangesAsync(cancellationToken);
 
         var eventType = string.IsNullOrEmpty(request.TerminationReason) ? "SessionEnded" : "SessionTerminated";
-        await _audit.LogAsync("Session", eventType, _currentUser.UserId, _currentUser.Username,
+        await _audit.LogAsync("Session", eventType, userId.Value, _currentUser.Username,
             _currentUser.IpAddress, "Session", session.Id.ToString(),
             new { session.DurationSeconds, request.TerminationReason },
             AuditOutcome.Success, cancellationToken);

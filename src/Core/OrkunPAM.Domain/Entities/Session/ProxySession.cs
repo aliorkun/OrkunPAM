@@ -27,6 +27,7 @@ public class ProxySession : Entity
     public bool HasOcrData { get; set; }
     public decimal RiskScore { get; set; }
     public string? Tags { get; set; }
+    public string? SessionTokenHash { get; set; }
 
     public void End()
     {
