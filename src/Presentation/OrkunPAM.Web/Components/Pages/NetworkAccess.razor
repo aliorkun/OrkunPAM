@@ -1,0 +1,419 @@
+@page "/network-access"
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Network Access — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Network Device Access</h2>
+    <div style="display:flex;gap:8px;align-items:center">
+        <span class="pam-badge pam-badge-success">TACACS+ TCP:49</span>
+        <span class="pam-badge pam-badge-success">RADIUS UDP:1812/1813</span>
+    </div>
+</div>
+
+<!-- Status overview -->
+<div class="pam-stats-row" style="margin-bottom:24px">
+    <div class="pam-stat-card">
+        <div class="pam-stat-title">TACACS+ Server</div>
+        <div class="pam-stat-value" style="color:var(--pam-success,#22c55e)">TCP :49</div>
+        <div class="pam-stat-sub">RFC 1492 — Auth/Authz/Acct</div>
+    </div>
+    <div class="pam-stat-card">
+        <div class="pam-stat-title">RADIUS Auth</div>
+        <div class="pam-stat-value" style="color:var(--pam-success,#22c55e)">UDP :1812</div>
+        <div class="pam-stat-sub">RFC 2865 — VPN/Wi-Fi/NAC</div>
+    </div>
+    <div class="pam-stat-card">
+        <div class="pam-stat-title">RADIUS Accounting</div>
+        <div class="pam-stat-value" style="color:var(--pam-success,#22c55e)">UDP :1813</div>
+        <div class="pam-stat-sub">RFC 2866 — Session Tracking</div>
+    </div>
+    <div class="pam-stat-card">
+        <div class="pam-stat-title">Network Devices</div>
+        <div class="pam-stat-value">@_deviceCount</div>
+        <div class="pam-stat-sub">Managed</div>
+    </div>
+</div>
+
+<!-- Tab navigation -->
+<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid #e2e8f0">
+    <button class="pam-btn @(_tab == "devices" ? "pam-btn-primary" : "pam-btn-secondary")"
+            style="border-radius:6px 6px 0 0;border-bottom:none"
+            @onclick="@(() => SetTab("devices"))">Network Devices</button>
+    <button class="pam-btn @(_tab == "policies" ? "pam-btn-primary" : "pam-btn-secondary")"
+            style="border-radius:6px 6px 0 0;border-bottom:none"
+            @onclick="@(() => SetTab("policies"))">Command Policies</button>
+    <button class="pam-btn @(_tab == "info" ? "pam-btn-primary" : "pam-btn-secondary")"
+            style="border-radius:6px 6px 0 0;border-bottom:none"
+            @onclick="@(() => SetTab("info"))">Protocol Info</button>
+</div>
+
+@if (_tab == "devices")
+{
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loadingDevices)
+            {
+                <div class="pam-loading-text p-4">Loading network devices&#8230;</div>
+            }
+            else if (_devices == null || _devices.Count == 0)
+            {
+                <div class="pam-empty p-4">
+                    No network devices configured. Go to <a href="/devices">Devices</a> and add devices
+                    with type &#34;Network Device&#34; to manage TACACS+/RADIUS access.
+                </div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Hostname</th>
+                            <th>IP Address</th>
+                            <th>Protocol</th>
+                            <th>OS</th>
+                            <th>Credentials</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _devices)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@d.Hostname</strong>
+                                    @if (!string.IsNullOrEmpty(d.Fqdn) && d.Fqdn != d.Hostname)
+                                    {
+                                        <div class="pam-sub-text">@d.Fqdn</div>
+                                    }
+                                </td>
+                                <td>@(d.IpAddress ?? "&#8212;")</td>
+                                <td>
+                                    <span class="pam-badge">@d.Protocol</span>
+                                    @if (d.IpAddress != null)
+                                    {
+                                        <span class="pam-badge pam-badge-info" style="margin-left:4px">TACACS+</span>
+                                    }
+                                </td>
+                                <td>@(d.OperatingSystem ?? "&#8212;")</td>
+                                <td>
+                                    <span class="pam-badge @(d.CredentialCount > 0 ? "pam-badge-success" : "pam-badge-secondary")">
+                                        @d.CredentialCount
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="pam-status @(d.Status == "Active" ? "pam-status-active" : "pam-status-done")">
+                                        @d.Status
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="pam-btn-icon pam-btn-connect" title="SSH to device"
+                                            @onclick="@(() => Nav.NavigateTo("/connect?deviceId=" + d.Id))">&#9000;</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+else if (_tab == "policies")
+{
+    <div class="pam-page-header" style="margin-bottom:12px">
+        <span></span>
+        <button class="pam-btn pam-btn-primary" @onclick="OpenPolicyModal">+ Add Policy</button>
+    </div>
+
+    @if (_policyError != null)
+    {
+        <div class="pam-alert pam-alert-danger">@_policyError</div>
+    }
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loadingPolicies)
+            {
+                <div class="pam-loading-text p-4">Loading command policies&#8230;</div>
+            }
+            else if (_policies == null || _policies.Count == 0)
+            {
+                <div class="pam-empty p-4">
+                    No command policies defined. TACACS+ uses PermitAll by default.
+                    Add policies to restrict which commands users can run on specific devices.
+                </div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Device Pattern</th>
+                            <th>Mode</th>
+                            <th>Commands</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _policies)
+                        {
+                            <tr>
+                                <td><strong>@p.Username</strong></td>
+                                <td><code>@p.DevicePattern</code></td>
+                                <td>
+                                    <span class="pam-badge @(p.Mode == "DenyAll" ? "pam-badge-danger" : p.Mode == "PermitAll" ? "pam-badge-success" : "pam-badge-info")">
+                                        @p.Mode
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(p.Commands))
+                                    {
+                                        <code style="font-size:12px">@p.Commands</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="pam-sub-text">&#8212;</span>
+                                    }
+                                </td>
+                                <td class="pam-sub-text">@p.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                                <td>
+                                    <button class="pam-btn-icon pam-btn-danger" title="Delete policy"
+                                            @onclick="@(() => DeletePolicyAsync(p.Id))">&#128465;</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="pam-card">
+            <div class="pam-card-body">
+                <h4 style="margin-bottom:12px">TACACS+ (RFC 1492)</h4>
+                <table class="pam-table" style="font-size:13px">
+                    <tbody>
+                        <tr><td style="color:#64748b">Transport</td><td>TCP Port 49</td></tr>
+                        <tr><td style="color:#64748b">Encryption</td><td>MD5 pseudo-pad (body)</td></tr>
+                        <tr><td style="color:#64748b">Auth Methods</td><td>ASCII (multi-step) + PAP</td></tr>
+                        <tr><td style="color:#64748b">MFA TOTP</td><td>Configurable second factor</td></tr>
+                        <tr><td style="color:#64748b">Authorization</td><td>Command-level (AV-pairs)</td></tr>
+                        <tr><td style="color:#64748b">Accounting</td><td>START/STOP/WATCHDOG &#8594; Audit + SIEM</td></tr>
+                        <tr><td style="color:#64748b">Devices</td><td>Cisco IOS, Juniper JUNOS, Aruba</td></tr>
+                        <tr><td style="color:#64748b">Secret Matching</td><td>Exact IP + CIDR prefix</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-body">
+                <h4 style="margin-bottom:12px">RADIUS (RFC 2865/2866)</h4>
+                <table class="pam-table" style="font-size:13px">
+                    <tbody>
+                        <tr><td style="color:#64748b">Transport</td><td>UDP :1812 (auth) / :1813 (acct)</td></tr>
+                        <tr><td style="color:#64748b">Encryption</td><td>MD5 User-Password (per RFC 2865 &#167;5.2)</td></tr>
+                        <tr><td style="color:#64748b">Auth Method</td><td>PAP over encrypted attribute</td></tr>
+                        <tr><td style="color:#64748b">Use Cases</td><td>WPA2-Enterprise Wi-Fi, VPN, NAC</td></tr>
+                        <tr><td style="color:#64748b">Accounting</td><td>Delegated to PAM audit log</td></tr>
+                        <tr><td style="color:#64748b">Secret Matching</td><td>Exact IP + CIDR prefix</td></tr>
+                        <tr><td style="color:#64748b">Devices</td><td>Cisco ASA, Juniper SRX, Aruba, FortiGate</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="pam-card" style="margin-top:16px">
+        <div class="pam-card-body">
+            <h4 style="margin-bottom:12px">NAS Device Configuration</h4>
+            <p style="color:#64748b;font-size:13px;margin-bottom:12px">
+                Configure your network devices to use OrkunPAM as their AAA server:
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div>
+                    <strong style="font-size:13px">Cisco IOS &#8212; TACACS+</strong>
+                    <pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:6px;font-size:12px;margin-top:8px;overflow:auto">aaa new-model
+tacacs server ORKUNPAM
+ address ipv4 &lt;PAM-SERVER-IP&gt;
+ key &lt;SHARED-SECRET&gt;
+aaa authentication login default group tacacs+ local
+aaa authorization exec default group tacacs+
+aaa accounting exec default start-stop group tacacs+</pre>
+                </div>
+                <div>
+                    <strong style="font-size:13px">Cisco ASA &#8212; RADIUS</strong>
+                    <pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:6px;font-size:12px;margin-top:8px;overflow:auto">aaa-server ORKUNPAM protocol radius
+aaa-server ORKUNPAM (inside) host &lt;PAM-SERVER-IP&gt;
+ key &lt;SHARED-SECRET&gt;
+ authentication-port 1812
+ accounting-port 1813
+aaa authentication ssh console ORKUNPAM LOCAL</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Add Command Policy Modal -->
+@if (_showPolicyModal)
+{
+    <div class="pam-modal-overlay" @onclick="ClosePolicyModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Add Command Policy</h3>
+                <button class="pam-close-btn" @onclick="ClosePolicyModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Username *</label>
+                    <input class="pam-input w-100-input" @bind="_fUsername"
+                           placeholder="e.g. admin (use * for any user)" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Device Pattern *</label>
+                    <input class="pam-input w-100-input" @bind="_fDevicePattern"
+                           placeholder="e.g. 192.168.1.0/24 or 10.0.0.1" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Authorization Mode *</label>
+                    <select class="pam-input" style="width:100%" @bind="_fMode">
+                        <option value="PermitAll">PermitAll &#8212; allow all commands</option>
+                        <option value="DenyAll">DenyAll &#8212; deny all commands</option>
+                        <option value="Policy">Policy &#8212; use Commands list below</option>
+                    </select>
+                </div>
+                @if (_fMode == "Policy")
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Permitted Commands</label>
+                        <textarea class="pam-input w-100-input" rows="4" @bind="_fCommands"
+                                  placeholder="One command per line, e.g. show / ping / traceroute"></textarea>
+                        <div class="pam-sub-text" style="margin-top:4px">
+                            Commands not listed here will be denied.
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="ClosePolicyModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SavePolicyAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    Add Policy
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "devices";
+
+    // Device tab
+    private List<DeviceDto>? _devices;
+    private int              _deviceCount;
+    private bool             _loadingDevices = true;
+
+    // Policy tab
+    private List<TacacsCommandPolicyDto>? _policies;
+    private bool                          _loadingPolicies;
+    private string?                       _policyError;
+
+    // Policy modal
+    private bool    _showPolicyModal;
+    private string? _formError;
+    private bool    _formSaving;
+    private string  _fUsername      = "";
+    private string  _fDevicePattern = "";
+    private string  _fMode          = "PermitAll";
+    private string  _fCommands      = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadDevicesAsync();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "policies" && _policies == null)
+            await LoadPoliciesAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadDevicesAsync()
+    {
+        _loadingDevices = true;
+        StateHasChanged();
+        var result = await Api.GetDevicesAsync(type: "NetworkDevice", pageSize: 100);
+        _devices        = result?.Data ?? [];
+        _deviceCount    = result?.Meta?.TotalCount ?? 0;
+        _loadingDevices = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadPoliciesAsync()
+    {
+        _loadingPolicies = true;
+        _policyError     = null;
+        StateHasChanged();
+        _policies        = await Api.GetTacacsCommandPoliciesAsync();
+        _loadingPolicies = false;
+        StateHasChanged();
+    }
+
+    private void OpenPolicyModal()
+    {
+        _fUsername = _fDevicePattern = _fCommands = "";
+        _fMode     = "PermitAll";
+        _formError = null;
+        _showPolicyModal = true;
+    }
+
+    private void ClosePolicyModal() { _showPolicyModal = false; _formError = null; }
+
+    private async Task SavePolicyAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fUsername))      { _formError = "Username is required."; return; }
+        if (string.IsNullOrWhiteSpace(_fDevicePattern)) { _formError = "Device pattern is required."; return; }
+
+        _formSaving = true;
+        StateHasChanged();
+
+        var ok = await Api.SaveTacacsCommandPolicyAsync(
+            _fUsername.Trim(), _fDevicePattern.Trim(), _fMode,
+            _fMode == "Policy" && !string.IsNullOrWhiteSpace(_fCommands) ? _fCommands.Trim() : null);
+
+        _formSaving = false;
+
+        if (!ok)
+        {
+            _formError = "Failed to save policy &#8212; check API connection.";
+            StateHasChanged();
+            return;
+        }
+
+        ClosePolicyModal();
+        await LoadPoliciesAsync();
+    }
+
+    private async Task DeletePolicyAsync(string id)
+    {
+        _policyError = null;
+        var ok = await Api.DeleteTacacsCommandPolicyAsync(id);
+        if (!ok) _policyError = "Failed to delete policy.";
+        else await LoadPoliciesAsync();
+    }
+}

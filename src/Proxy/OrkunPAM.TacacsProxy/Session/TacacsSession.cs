@@ -148,6 +148,29 @@ internal sealed class TacacsSession
             var authenticated = await _api.ValidateCredentialAsync(username, password, _deviceIp, _ct);
             password = string.Empty;
 
+            // Optional MFA TOTP second factor
+            if (authenticated && _opts.EnableMfaTotp)
+            {
+                var otpPrompt = new AuthenReplyPacket
+                {
+                    Status    = AuthenStatus.Getdata,
+                    ServerMsg = "OTP Code: "
+                };
+                await SendRawReplyAsync(stream, passHeader, otpPrompt.Serialize());
+
+                var otpHeader = await ReadHeaderAsync(stream);
+                if (otpHeader is null) return;
+                var otpBody = await ReadBodyAsync(stream, otpHeader.Length);
+                if (otpHeader.IsEncrypted && !string.IsNullOrEmpty(_sharedSecret))
+                    otpBody = TacacsCrypto.Crypt(otpBody, otpHeader.SessionId, _sharedSecret, otpHeader.Version, otpHeader.SeqNo);
+
+                var otpCont = AuthenContinuePacket.Parse(otpBody);
+                if (otpCont.IsAbort) return;
+
+                authenticated = await _api.VerifyTotpAsync(username, otpCont.UserMsg, _ct);
+                passHeader    = otpHeader;
+            }
+
             await SendAuthReplyAsync(stream, passHeader,
                 authenticated ? AuthenStatus.Pass : AuthenStatus.Fail,
                 authenticated ? "Authentication successful" : "Authentication failed");
@@ -267,9 +290,5 @@ internal sealed class TacacsSession
     }
 
     private string ResolveSecret(string deviceIp)
-    {
-        if (_opts.SharedSecrets.TryGetValue(deviceIp, out var secret))
-            return secret;
-        return _opts.DefaultSharedSecret;
-    }
+        => CidrMatcher.Resolve(deviceIp, _opts.SharedSecrets) ?? _opts.DefaultSharedSecret;
 }

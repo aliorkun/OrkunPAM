@@ -22,4 +22,12 @@ internal sealed class TacacsProxyOptions
 
     /// <summary>Command authorization mode: None, PermitAll, DenyAll, Policy.</summary>
     public string CommandAuthorizationMode { get; set; } = "PermitAll";
+
+    // RADIUS server (RFC 2865/2866)
+    public bool RadiusEnabled  { get; set; } = true;
+    public int  RadiusAuthPort { get; set; } = 1812;
+    public int  RadiusAcctPort { get; set; } = 1813;
+
+    /// <summary>When true, ASCII auth prompts for TOTP code after password.</summary>
+    public bool EnableMfaTotp { get; set; } = false;
 }

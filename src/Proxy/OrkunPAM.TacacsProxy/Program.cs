@@ -31,6 +31,7 @@ try
 
     builder.Services.AddSingleton<PamApiClient>();
     builder.Services.AddHostedService<TacacsProxyService>();
+    builder.Services.AddHostedService<RadiusProxyService>();
 
     await builder.Build().RunAsync();
 }

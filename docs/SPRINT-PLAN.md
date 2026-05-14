@@ -112,11 +112,11 @@
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #111 | TACACS+/RADIUS Built-in Server | v2-PROXY | 🔄 In Progress |
+| #111 | TACACS+/RADIUS Built-in Server | v2-PROXY | 🔄 In Progress (%95) |
 | #110 | RDP Full Integration (RDS Gateway) | v2-PROXY | 🔲 Bekliyor |
 | #112 | Multi-Tenancy (MSP) | v2-ARCH | 🔲 Bekliyor |
 
-**#111 TACACS+ İlerleme:**
+**#111 TACACS+/RADIUS İlerleme:**
 - [x] Native C# TACACS+ server (RFC 1492) — `OrkunPAM.TacacsProxy` projesi
 - [x] TCP :49 listener, per-IP rate limiting
 - [x] Authentication: ASCII multi-step (GETUSER/GETPASS) + PAP
@@ -125,13 +125,13 @@
 - [x] Body encryption: MD5 pseudo-pad (RFC 1492 §5.2)
 - [x] Per-device shared secret + fallback default
 - [x] PAM API integration: `/api/v1/tacacs/authenticate|authorize|accounting`
-- [ ] RADIUS server (RFC 2865/2866) — UDP :1812/:1813
-- [ ] Cisco IOS test / Juniper JUNOS validation
-- [ ] CIDR prefix matching for shared secrets
-- [ ] MFA TOTP integration in TACACS+ auth flow
-- [ ] Blazor UI: device management + command policies
+- [x] RADIUS server (RFC 2865/2866) — UDP :1812/:1813 (`RadiusProxyService`)
+- [x] CIDR prefix matching for shared secrets (`CidrMatcher.cs`)
+- [x] MFA TOTP integration in TACACS+ ASCII auth flow
+- [x] Blazor UI: Network Access page — device list + command policies + protocol info
+- [ ] Cisco IOS test / Juniper JUNOS validation (manual)
 
-**İlerleme:** 1/3 issue (TACACS+ core %75)
+**İlerleme:** 1/3 issue (TACACS+/RADIUS core %95 — Cisco/Juniper validation kaldı)
 
 ---
 
@@ -162,6 +162,7 @@
 - **VNC Proxy:** Native C# RFB protokol (RFC 6143) — açık kaynak yok
 - **HTTP/HTTPS Proxy:** Native C# reverse proxy + CONNECT tunnel — açık kaynak yok
 - **TACACS+ Proxy:** Native C# (RFC 1492) — ağ cihazı AAA, Cisco/Juniper/Aruba
+- **RADIUS Proxy:** Native C# (RFC 2865/2866) — VPN/Wi-Fi/NAC, UDP :1812/:1813
 - **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
 - **AAPM + Threat Analytics:** v2.0.0'a ertelendi
 

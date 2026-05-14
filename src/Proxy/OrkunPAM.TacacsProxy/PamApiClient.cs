@@ -57,6 +57,25 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>Verifies a TOTP code for the given username.</summary>
+    public async Task<bool> VerifyTotpAsync(string username, string code, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var payload = new { Username = username, Code = code };
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/verify-totp", payload, ct);
+            if (!resp.IsSuccessStatusCode) return false;
+            var json = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+            return json.TryGetProperty("success", out var s) && s.GetBoolean();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "PAM API call failed during TACACS+ TOTP verification");
+            return false;
+        }
+    }
+
     /// <summary>Posts an accounting event to the PAM audit log.</summary>
     public async Task SendAccountingAsync(
         string username, string deviceIp, string command,
