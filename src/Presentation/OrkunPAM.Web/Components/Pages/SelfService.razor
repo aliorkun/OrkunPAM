@@ -26,6 +26,10 @@
         My Requests
         @if (_activeJit > 0) { <span class="pam-badge-count" style="background:#c00">@_activeJit</span> }
     </button>
+    <button class="pam-tab @(_tab == "sessions" ? "active" : "")" @onclick="@(() => SetTab("sessions"))">
+        My Sessions
+        @if (_mySessions != null) { <span class="pam-badge-count">@_mySessions.Count</span> }
+    </button>
     <button class="pam-tab @(_tab == "jit" ? "active" : "")" @onclick="@(() => SetTab("jit"))">+ Request Access</button>
 </div>
 
@@ -210,6 +214,57 @@
     </div>
 }
 
+@* ===== MY SESSIONS ===== *@
+@if (_tab == "sessions")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>My Active Sessions</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loading) { <div class="pam-loading-text">Loading sessions...</div> }
+            else if (_mySessions == null || _mySessions.Count == 0) { <div class="pam-empty">No sessions found.</div> }
+            else
+            {
+                <table class="pam-table">
+                    <thead><tr><th>Target</th><th>Protocol</th><th>Started</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _mySessions)
+                        {
+                            <tr>
+                                <td><code>@(s.TargetIpAddress ?? "---")@(s.TargetPort.HasValue ? ":" + s.TargetPort : "")</code></td>
+                                <td><span class="pam-badge pam-badge-blue">@s.Type</span></td>
+                                <td>@s.StartedAtUtc.ToString("MM/dd HH:mm")</td>
+                                <td>@s.DurationMinutes min</td>
+                                <td>
+                                    @if (s.Status == "Active")
+                                    { <span class="pam-badge pam-badge-green">Active</span> }
+                                    else if (s.Status == "Completed")
+                                    { <span class="pam-badge pam-badge-gray">Completed</span> }
+                                    else if (s.Status == "Terminated")
+                                    { <span class="pam-badge pam-badge-red">Terminated</span> }
+                                    else
+                                    { <span class="pam-badge">@s.Status</span> }
+                                </td>
+                                <td>
+                                    @if (s.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                                @onclick="@(() => EndMySessionAsync(s.Id))"
+                                                disabled="@_submitting">
+                                            End Session
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
 @* ===== MY REQUESTS ===== *@
 @if (_tab == "requests")
 {
@@ -318,6 +373,8 @@
     private List<JitRequestDto>? _myRequests;
     private int _activeJit;
 
+    private List<MySessionDto>? _mySessions;
+
     private string _jitResourceType = "Device";
     private string? _jitResourceName;
     private int _jitDuration = 60;
@@ -337,6 +394,7 @@
         _tab = tab; _error = null; _success = null;
         if (tab == "devices") await LoadDevicesAsync();
         else if (tab == "vault") await LoadCredentialsAsync();
+        else if (tab == "sessions") await LoadMySessionsAsync();
         else if (tab == "requests") await LoadMyRequestsAsync();
     }
 
@@ -444,6 +502,22 @@
             _tab = "requests"; await LoadMyRequestsAsync();
         }
         else _error = "Failed to submit request.";
+    }
+
+    private async Task LoadMySessionsAsync()
+    {
+        _loading = true;
+        _mySessions = await Api.GetMySessionsAsync();
+        _loading = false;
+    }
+
+    private async Task EndMySessionAsync(string sessionId)
+    {
+        _error = null; _success = null; _submitting = true;
+        var ok = await Api.EndMySessionAsync(sessionId);
+        _submitting = false;
+        if (ok) { _success = "Session ended."; await LoadMySessionsAsync(); }
+        else _error = "Failed to end session.";
     }
 
     private static string JitStatusClass(string status) => status switch

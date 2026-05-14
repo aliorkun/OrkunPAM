@@ -200,6 +200,30 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true, data = settings });
         });
 
+        // -----------------------------------------------------------------------
+        // MFA policy endpoints
+        // -----------------------------------------------------------------------
+        pwdGroup.MapGet("/mfa", async (OrkunPamDbContext db) =>
+        {
+            var p = await db.Policies.FirstOrDefaultAsync(
+                x => x.PolicyType == "MFA" && x.Scope == PolicyScope.Global);
+            var settings = ReadPolicy<MfaPolicySettings>(p?.PolicyJson ?? "{}");
+            return Results.Ok(new { success = true, data = settings });
+        });
+
+        pwdGroup.MapPost("/mfa", async (
+            MfaPolicySettings req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            await UpsertGlobalPolicyAsync(db, "MFA", "Global MFA Policy", req);
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Policy", "MFA_POLICY_UPDATED", null, null, ip,
+                "Policy", "MFA", new { settings = req });
+
+            return Results.Ok(new { success = true });
+        });
+
         pwdGroup.MapPost("/session", async (
             SessionPolicySettings req, OrkunPamDbContext db,
             IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
@@ -248,4 +272,9 @@ public record SessionPolicySettings
 {
     public int IdleTimeoutMinutes    { get; init; } = 30;
     public int MaxConcurrentSessions { get; init; } = 3;
+}
+
+public record MfaPolicySettings
+{
+    public bool MfaRequired { get; init; }
 }

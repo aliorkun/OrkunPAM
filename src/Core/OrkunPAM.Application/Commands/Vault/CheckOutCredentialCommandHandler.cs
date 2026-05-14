@@ -14,6 +14,7 @@ public sealed class CheckOutCredentialCommandHandler : IRequestHandler<CheckOutC
     private readonly IAuditService _audit;
     private readonly ICurrentUserService _currentUser;
     private readonly IPamAuthorizationService _authz;
+    private readonly IAccessPolicyEngine? _accessPolicy;
     private readonly ILogger<CheckOutCredentialCommandHandler> _logger;
 
     public CheckOutCredentialCommandHandler(
@@ -22,13 +23,15 @@ public sealed class CheckOutCredentialCommandHandler : IRequestHandler<CheckOutC
         IAuditService audit,
         ICurrentUserService currentUser,
         IPamAuthorizationService authz,
-        ILogger<CheckOutCredentialCommandHandler> logger)
+        ILogger<CheckOutCredentialCommandHandler> logger,
+        IAccessPolicyEngine? accessPolicy = null)
     {
         _credentials = credentials;
         _uow = uow;
         _audit = audit;
         _currentUser = currentUser;
         _authz = authz;
+        _accessPolicy = accessPolicy;
         _logger = logger;
     }
 
@@ -46,11 +49,33 @@ public sealed class CheckOutCredentialCommandHandler : IRequestHandler<CheckOutC
         if (credential is null)
             return Result<CheckOutResult>.Failure(Error.NotFound("Credential", request.CredentialId));
 
+        // Access policy check (time windows + IP restrictions)
+        if (_accessPolicy != null)
+        {
+            var clientIp = _currentUser.IpAddress ?? "0.0.0.0";
+            var decision = await _accessPolicy.EvaluateAsync(
+                userId, request.CredentialId, clientIp, DateTime.UtcNow, cancellationToken);
+
+            if (decision.Verdict == AccessVerdict.Deny)
+            {
+                await _audit.LogAsync("Vault", "CredentialCheckoutDenied", _currentUser.UserId, _currentUser.Username,
+                    _currentUser.IpAddress, "Credential", credential.Id.ToString(),
+                    new { credential.Name, decision.Reason, decision.PolicyName },
+                    AuditOutcome.Denied, cancellationToken);
+
+                _logger.LogWarning("Credential checkout denied for '{Name}' by access policy: {Reason}",
+                    credential.Name, decision.Reason);
+
+                return Result<CheckOutResult>.Failure(Error.Forbidden($"Access denied: {decision.Reason}"));
+            }
+        }
+
         if (credential.RequiresApproval)
         {
             // TODO: integrate with ApprovalWorkflow - for now, block
             return Result<CheckOutResult>.Failure(Error.Forbidden("This credential requires approval before checkout."));
         }
+
         var maxMinutes = request.MaxMinutes ?? credential.MaxCheckoutMinutes;
 
         var checkoutResult = credential.CheckOut(userId.Value, maxMinutes);

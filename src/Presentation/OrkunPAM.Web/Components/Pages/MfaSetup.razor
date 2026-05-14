@@ -20,11 +20,38 @@
 
         @if (_done)
         {
-            <div style="background:#1a3d1a;border:1px solid #3fb950;border-radius:6px;padding:1.5rem;text-align:center;color:#3fb950">
-                <div style="font-size:2rem;margin-bottom:.5rem">✅</div>
-                <strong>MFA enrollment complete!</strong>
-                <p style="margin:.5rem 0 0;font-size:.9rem;color:#8b949e">Your authenticator app is now linked. Redirecting to login…</p>
-            </div>
+            @if (_recoveryCodes != null && _recoveryCodes.Length > 0)
+            {
+                <div style="background:#1a3d1a;border:1px solid #3fb950;border-radius:6px;padding:1.5rem;color:#3fb950;margin-bottom:1rem">
+                    <strong>MFA enrollment complete!</strong>
+                    <p style="margin:.5rem 0 0;font-size:.9rem;color:#8b949e">Your authenticator app is now linked.</p>
+                </div>
+                <div style="background:#0d1117;border:1px solid #f0883e;border-radius:8px;padding:1rem;margin-bottom:1rem">
+                    <p style="color:#f0883e;font-weight:600;margin:0 0 .5rem">Recovery Codes — Save These Now!</p>
+                    <p style="color:#8b949e;font-size:.8rem;margin:0 0 .75rem">
+                        These one-time codes can be used if you lose access to your authenticator app.
+                        Each code can only be used once. Store them in a safe place.
+                    </p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.75rem">
+                        @foreach (var rc in _recoveryCodes)
+                        {
+                            <span style="background:#161b22;border:1px solid #30363d;border-radius:4px;padding:.35rem .5rem;font-size:.95rem;color:#79c0ff;text-align:center;letter-spacing:.15rem;font-family:monospace">@rc</span>
+                        }
+                    </div>
+                    <p style="color:#f85149;font-size:.75rem;margin:0">These codes will NOT be shown again.</p>
+                </div>
+                <button style="width:100%;background:#238636;border:1px solid #2ea043;border-radius:6px;padding:.65rem;color:#fff;font-size:.95rem;cursor:pointer;font-weight:600"
+                        @onclick="GoToLogin">
+                    I've Saved My Codes — Go to Login
+                </button>
+            }
+            else
+            {
+                <div style="background:#1a3d1a;border:1px solid #3fb950;border-radius:6px;padding:1.5rem;text-align:center;color:#3fb950">
+                    <strong>MFA enrollment complete!</strong>
+                    <p style="margin:.5rem 0 0;font-size:.9rem;color:#8b949e">Your authenticator app is now linked. Redirecting to login...</p>
+                </div>
+            }
         }
         else if (_step == "loading")
         {
@@ -80,6 +107,7 @@
     private string? _secret;
     private string? _qrUri;
     private string _code = string.Empty;
+    private string[]? _recoveryCodes;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -102,18 +130,28 @@
         if (string.IsNullOrWhiteSpace(_code) || _code.Length != 6)
         { _error = "Enter the 6-digit code from your authenticator app."; return; }
         _confirming = true; StateHasChanged();
-        var ok = await Api.ConfirmMfaEnrollmentAsync(_token!, _code.Trim());
+        var result = await Api.ConfirmMfaEnrollmentAsync(_token!, _code.Trim());
         _confirming = false;
-        if (ok)
+        if (result?.Success == true)
         {
+            _recoveryCodes = result.Data?.RecoveryCodes;
             _done = true; StateHasChanged();
-            await Task.Delay(2500);
-            Nav.NavigateTo("/login");
+            // If no recovery codes returned, redirect after delay
+            if (_recoveryCodes == null || _recoveryCodes.Length == 0)
+            {
+                await Task.Delay(2500);
+                Nav.NavigateTo("/login");
+            }
         }
         else
         {
             _error = "Invalid code or the link has expired. Try scanning the QR code again or contact your admin.";
             StateHasChanged();
         }
+    }
+
+    private void GoToLogin()
+    {
+        Nav.NavigateTo("/login");
     }
 }

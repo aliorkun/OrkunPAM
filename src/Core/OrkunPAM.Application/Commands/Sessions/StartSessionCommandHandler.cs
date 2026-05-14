@@ -15,6 +15,7 @@ public sealed class StartSessionCommandHandler : IRequestHandler<StartSessionCom
     private readonly IAuditService _audit;
     private readonly ICurrentUserService _currentUser;
     private readonly IPamAuthorizationService _authz;
+    private readonly IAccessPolicyEngine? _accessPolicy;
     private readonly ILogger<StartSessionCommandHandler> _logger;
 
     public StartSessionCommandHandler(
@@ -23,13 +24,15 @@ public sealed class StartSessionCommandHandler : IRequestHandler<StartSessionCom
         IAuditService audit,
         ICurrentUserService currentUser,
         IPamAuthorizationService authz,
-        ILogger<StartSessionCommandHandler> logger)
+        ILogger<StartSessionCommandHandler> logger,
+        IAccessPolicyEngine? accessPolicy = null)
     {
         _sessions = sessions;
         _uow = uow;
         _audit = audit;
         _currentUser = currentUser;
         _authz = authz;
+        _accessPolicy = accessPolicy;
         _logger = logger;
     }
 
@@ -47,6 +50,26 @@ public sealed class StartSessionCommandHandler : IRequestHandler<StartSessionCom
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
         var sessionToken = Convert.ToBase64String(tokenBytes);
         var tokenHash = Convert.ToHexString(SHA256.HashData(tokenBytes));
+
+        // Access policy check (time windows + IP restrictions)
+        if (_accessPolicy != null)
+        {
+            var clientIp = request.ClientIpAddress ?? _currentUser.IpAddress ?? "0.0.0.0";
+            var decision = await _accessPolicy.EvaluateAsync(
+                userId, request.CredentialId, clientIp, DateTime.UtcNow, cancellationToken);
+
+            if (decision.Verdict == AccessVerdict.Deny)
+            {
+                await _audit.LogAsync("Session", "SessionStartDenied", userId, _currentUser.Username,
+                    _currentUser.IpAddress, "Session", null,
+                    new { request.DeviceId, request.CredentialId, decision.Reason, decision.PolicyName },
+                    AuditOutcome.Denied, cancellationToken);
+
+                _logger.LogWarning("Session start denied by access policy: {Reason}", decision.Reason);
+
+                return Result<StartSessionResult>.Failure(Error.Forbidden($"Access denied: {decision.Reason}"));
+            }
+        }
 
         var session = new ProxySession
         {

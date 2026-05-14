@@ -403,10 +403,13 @@ internal sealed class SshTargetClient : IDisposable
 
     internal async Task RelayToClientAsync(
         SshConnection clientConn, uint clientSideChanId,
-        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks = null)
+        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks = null,
+        CommandFilter? commandFilter = null, CommandFilterModeProxy filterMode = CommandFilterModeProxy.None,
+        string? commandFilterRulesJson = null)
     {
         var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct, lastActivityTicks), ct);
-        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct, lastActivityTicks), ct);
+        var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct, lastActivityTicks,
+            commandFilter, filterMode, commandFilterRulesJson), ct);
         await Task.WhenAny(t2c, c2t);
     }
 
@@ -521,8 +524,12 @@ internal sealed class SshTargetClient : IDisposable
 
     // Receives data from client connection → forwards to target
     private async Task ClientToTargetLoopAsync(
-        SshConnection clientConn, uint clientSideChanId, CancellationToken ct, long[]? lastActivityTicks)
+        SshConnection clientConn, uint clientSideChanId, CancellationToken ct, long[]? lastActivityTicks,
+        CommandFilter? commandFilter = null, CommandFilterModeProxy filterMode = CommandFilterModeProxy.None,
+        string? commandFilterRulesJson = null)
     {
+        var commandDetector = commandFilter != null ? new CommandDetector() : null;
+
         while (!ct.IsCancellationRequested)
         {
             var pkt = await clientConn.ReadPacketAsync(ct);
@@ -534,11 +541,62 @@ internal sealed class SshTargetClient : IDisposable
                     var _ch  = SshEncoding.ReadUInt32(pkt, ref pos);
                     var data = SshEncoding.ReadByteString(pkt, ref pos);
 
-                    using var fwd = new MemoryStream();
-                    SshEncoding.WriteByte(fwd, Msg.ChannelData);
-                    SshEncoding.WriteUInt32(fwd, _serverChanId);
-                    SshEncoding.WriteByteString(fwd, data);
-                    await _conn!.SendAsync(fwd, ct);
+                    // Command filtering: detect commands in the data stream
+                    bool blocked = false;
+                    if (commandFilter != null && commandDetector != null)
+                    {
+                        foreach (var command in commandDetector.Feed(data))
+                        {
+                            var result = commandFilter.Evaluate(command, filterMode, commandFilterRulesJson);
+
+                            if (result.Action == FilterAction.Block)
+                            {
+                                _log.LogWarning(
+                                    "SSH command BLOCKED: '{Command}' — reason: {Reason}, risk={Risk}",
+                                    command.Length > 200 ? command[..200] + "..." : command,
+                                    result.Reason, result.RiskScore);
+
+                                // Send warning message back to client via stderr (extended data type 1)
+                                var warningMsg = $"\r\n[OrkunPAM] Command blocked: {result.Reason}\r\n";
+                                var warningBytes = System.Text.Encoding.UTF8.GetBytes(warningMsg);
+                                using var warnMs = new MemoryStream();
+                                SshEncoding.WriteByte(warnMs, Msg.ChannelExtData);
+                                SshEncoding.WriteUInt32(warnMs, clientSideChanId);
+                                SshEncoding.WriteUInt32(warnMs, 1); // SSH_EXTENDED_DATA_STDERR
+                                SshEncoding.WriteByteString(warnMs, warningBytes);
+                                await clientConn.SendAsync(warnMs, ct);
+
+                                blocked = true;
+                                // Don't forward the newline that triggered this command
+                                // but do replenish the window
+                                break;
+                            }
+                            else if (result.Action == FilterAction.Warn)
+                            {
+                                _log.LogWarning(
+                                    "SSH command WARNING: '{Command}' — risk={Risk}",
+                                    command.Length > 200 ? command[..200] + "..." : command,
+                                    result.RiskScore);
+                                // Allow through but log it
+                            }
+
+                            if (result.RiskScore > 0)
+                            {
+                                _log.LogInformation("SSH command risk score: {Risk} for '{Command}'",
+                                    result.RiskScore,
+                                    command.Length > 100 ? command[..100] + "..." : command);
+                            }
+                        }
+                    }
+
+                    if (!blocked)
+                    {
+                        using var fwd = new MemoryStream();
+                        SshEncoding.WriteByte(fwd, Msg.ChannelData);
+                        SshEncoding.WriteUInt32(fwd, _serverChanId);
+                        SshEncoding.WriteByteString(fwd, data);
+                        await _conn!.SendAsync(fwd, ct);
+                    }
 
                     // Replenish client's view of our receive window
                     using var adj = new MemoryStream();

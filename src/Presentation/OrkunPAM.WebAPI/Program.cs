@@ -89,6 +89,13 @@ try
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
+    // === Auto-Rotation Background Service ===
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.PasswordRotationOrchestrator>();
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AutoRotationService>();
+
+    // === Access Policy Engine (time/IP restrictions) ===
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IAccessPolicyEngine, OrkunPAM.Persistence.Services.AccessPolicyEngine>();
+
     // === Event Bus (shared singleton for pub/sub) ===
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.InProcessEventBus>();
     builder.Services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.InProcessEventBus>());

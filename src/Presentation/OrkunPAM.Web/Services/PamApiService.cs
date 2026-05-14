@@ -733,16 +733,17 @@ public sealed class PamApiService
         return result?.Data;
     }
 
-    public async Task<bool> ConfirmMfaEnrollmentAsync(string token, string code)
+    public async Task<MfaConfirmResult?> ConfirmMfaEnrollmentAsync(string token, string code)
     {
         var client = _factory.CreateClient("PamApi");
         try
         {
             var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/enrollment/confirm",
                 new { token, code });
-            return resp.IsSuccessStatusCode;
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<MfaConfirmResult>(JsonOpts);
         }
-        catch { return false; }
+        catch { return null; }
     }
 
     public async Task<bool> ResetUserMfaAsync(string userId)
@@ -991,6 +992,64 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // MFA Policy
+    public async Task<MfaPolicySettingsDto?> GetMfaPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<MfaPolicySettingsDto>>("/api/v1/policy/mfa");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveMfaPolicyAsync(MfaPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/policy/mfa", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // Self-Service Password Reset
+    public async Task<bool> ForgotPasswordAsync(string username, string email)
+    {
+        var client = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/forgot-password",
+                new { username, email });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<(bool Success, string? Message)> ResetPasswordAsync(string token, string newPassword)
+    {
+        var client = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/reset-password",
+                new { token, newPassword });
+            var result = await resp.Content.ReadFromJsonAsync<SimpleMessageResult>(JsonOpts);
+            return (result?.Success ?? false, result?.Message);
+        }
+        catch (Exception ex) { return (false, ex.Message); }
+    }
+
+    // My Active Sessions
+    public async Task<List<MySessionDto>?> GetMySessionsAsync()
+    {
+        var result = await GetAsync<ListResult<MySessionDto>>("/api/v1/auth/my-sessions");
+        return result?.Data;
+    }
+
+    public async Task<bool> EndMySessionAsync(string sessionId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/auth/my-sessions/{sessionId}/end", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
@@ -1011,6 +1070,7 @@ public record LoginData(
     string   Username,
     string   DisplayName,
     bool     MfaRequired,
+    bool     MfaEnrollmentRequired,
     bool     MustChangePassword,
     bool     PasswordExpired);
 
@@ -1223,6 +1283,8 @@ public record JitListResult(bool Success, List<JitRequestDto>? Data);
 
 public record MfaEnrollmentDto(string Username, string Secret, string QrUri);
 public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
+public record MfaConfirmResult(bool Success, string? Message, MfaConfirmData? Data);
+public record MfaConfirmData(string[]? RecoveryCodes);
 
 public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
 public record ImportRowError(int Row, string Username, string Reason);
@@ -1292,6 +1354,19 @@ public record RecordingSearchMeta(string Query, int MatchCount);
 public record CommandLogDto(
     long Id, DateTime Timestamp, string? Command, decimal RiskScore, bool WasBlocked, string? BlockReason);
 
-// TACACS+ (deferred — v2+, stub DTO for compilation)
+// TACACS+ (deferred -- v2+, stub DTO for compilation)
 public record TacacsCommandPolicyDto(
     string Id, string Username, string DevicePattern, string Mode, string? Commands, bool IsEnabled, DateTime CreatedAtUtc);
+
+// MFA Policy DTO
+public record MfaPolicySettingsDto(bool MfaRequired);
+
+// My Sessions DTO
+public record MySessionDto(
+    string    Id,
+    string    Type,
+    string?   TargetIpAddress,
+    int?      TargetPort,
+    DateTime  StartedAtUtc,
+    int       DurationMinutes,
+    string    Status);

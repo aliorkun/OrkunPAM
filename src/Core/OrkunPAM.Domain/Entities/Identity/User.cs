@@ -33,6 +33,13 @@ public class User : SoftDeletableEntity
     public Guid? MfaEnrollmentToken { get; set; }
     public DateTime? MfaEnrollmentTokenExpiry { get; set; }
 
+    // MFA Recovery Codes (JSON array of SHA256-hashed one-time codes)
+    public string? RecoveryCodesHash { get; set; }
+
+    // Self-Service Password Reset
+    public string? PasswordResetToken { get; set; }
+    public DateTime? PasswordResetExpiry { get; set; }
+
     // Navigation
     public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();

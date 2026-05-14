@@ -62,8 +62,12 @@
             </div>
         }
 
+        <div style="text-align:center;margin-top:.75rem">
+            <a href="/forgot-password" style="color:#58a6ff;font-size:.85rem;text-decoration:none">Forgot password?</a>
+        </div>
+
         <p class="pam-login-footer">
-            © @DateTime.Now.Year OrkunPAM — Enterprise PAM
+            &copy; @DateTime.Now.Year OrkunPAM — Enterprise PAM
         </p>
     </div>
 </div>
@@ -93,6 +97,13 @@
         if (result?.Success == true && result.Data != null)
         {
             var d = result.Data;
+            if (d.MfaEnrollmentRequired)
+            {
+                _error = "MFA enrollment is required by your organization's policy. Contact your administrator for an MFA setup link.";
+                _loading = false;
+                StateHasChanged();
+                return;
+            }
             if (d.MfaRequired)
             {
                 _mfaStep = true;

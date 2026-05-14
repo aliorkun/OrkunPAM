@@ -13,7 +13,7 @@ public interface IAuthenticationService
     Task<Result<User>> CreateLocalUserAsync(string username, string password, string? displayName, string? email, CancellationToken ct = default);
 }
 
-public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, bool MustChangePassword, bool PasswordExpired);
+public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, bool MfaEnrollmentRequired, bool MustChangePassword, bool PasswordExpired);
 
 public sealed class AuthenticationService : IAuthenticationService
 {
@@ -26,6 +26,9 @@ public sealed class AuthenticationService : IAuthenticationService
     // Configurable lockout settings
     private const int MaxFailedAttempts = 5;
     private const int LockoutMinutes = 30;
+
+    private static readonly System.Text.Json.JsonSerializerOptions PolicyJsonOpts =
+        new() { PropertyNameCaseInsensitive = true };
 
     public AuthenticationService(OrkunPamDbContext db, IPasswordHasher hasher,
         IJwtTokenService jwt, IPasswordPolicyService policy, ILogger<AuthenticationService> logger)
@@ -119,8 +122,40 @@ public sealed class AuthenticationService : IAuthenticationService
             }
         }
 
-        // Check if MFA required
+        // Check if MFA required — user-level or policy-level
         bool mfaRequired = user.MfaEnabled;
+        bool mfaEnrollmentRequired = false;
+
+        if (!mfaRequired)
+        {
+            // Check effective MFA policy for this user's groups
+            var userGroupIds = user.UserGroups.Select(ug => ug.GroupId).ToList();
+            var mfaPolicies = await _db.Policies
+                .Where(p => p.PolicyType == "MFA" && p.IsEnabled &&
+                    (p.Scope == PolicyScope.Global ||
+                     (p.Scope == PolicyScope.User && p.ScopeId == user.Id) ||
+                     (p.Scope == PolicyScope.Group && userGroupIds.Contains(p.ScopeId!.Value))))
+                .OrderByDescending(p => p.Scope)
+                .ThenByDescending(p => p.Priority)
+                .FirstOrDefaultAsync(ct);
+
+            if (mfaPolicies != null)
+            {
+                try
+                {
+                    var mfaSettings = System.Text.Json.JsonSerializer.Deserialize<MfaPolicySettings>(
+                        mfaPolicies.PolicyJson, PolicyJsonOpts);
+                    if (mfaSettings?.MfaRequired == true)
+                    {
+                        if (user.MfaEnabled)
+                            mfaRequired = true;
+                        else
+                            mfaEnrollmentRequired = true;
+                    }
+                }
+                catch { /* invalid JSON — ignore */ }
+            }
+        }
 
         // Generate tokens (if MFA required, token will have mfa_verified=false)
         var tokenResult = _jwt.GenerateTokens(
@@ -138,7 +173,7 @@ public sealed class AuthenticationService : IAuthenticationService
             username, ipAddress, string.Join(",", roles));
 
         return Result<AuthResult>.Success(new AuthResult(
-            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mustChangePassword, passwordExpired));
+            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mfaEnrollmentRequired, mustChangePassword, passwordExpired));
     }
 
     public async Task<Result<User>> CreateLocalUserAsync(string username, string password,
@@ -175,4 +210,9 @@ public sealed class AuthenticationService : IAuthenticationService
         _logger.LogInformation("Local user '{Username}' created (Id: {Id})", username, user.Id);
         return Result<User>.Success(user);
     }
+}
+
+public record MfaPolicySettings
+{
+    public bool MfaRequired { get; init; }
 }

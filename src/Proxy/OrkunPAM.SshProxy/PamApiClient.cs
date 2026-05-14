@@ -174,6 +174,35 @@ internal sealed class PamApiClient
         return (30, 3);
     }
 
+    /// <summary>
+    /// Returns the full session policy including command filter settings.
+    /// Falls back to null (no filtering) on error.
+    /// </summary>
+    internal async Task<SessionPolicyInfo?> GetFullSessionPolicyAsync(CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var resp = await client.GetAsync("/api/v1/policy/session", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var data = await resp.Content.ReadFromJsonAsync<FullSessionPolicyResponse>(ct);
+                var p = data?.Data;
+                if (p != null)
+                    return new SessionPolicyInfo(
+                        p.IdleTimeoutMinutes,
+                        p.MaxConcurrentSessions,
+                        p.CommandFilterMode,
+                        p.CommandFilterRulesJson);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to fetch full session policy — command filtering disabled");
+        }
+        return null;
+    }
+
     // Response DTOs
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);
@@ -185,4 +214,17 @@ internal sealed class PamApiClient
     private record DecryptData(string? Password, string? PrivateKey);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
     private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
+    private record FullSessionPolicyResponse(bool Success, FullSessionPolicyData? Data);
+    private record FullSessionPolicyData(
+        int IdleTimeoutMinutes, int MaxConcurrentSessions,
+        byte CommandFilterMode, string? CommandFilterRulesJson);
 }
+
+/// <summary>
+/// Session policy info including command filter configuration.
+/// </summary>
+internal sealed record SessionPolicyInfo(
+    int IdleTimeoutMinutes,
+    int MaxConcurrentSessions,
+    byte CommandFilterMode,
+    string? CommandFilterRulesJson);

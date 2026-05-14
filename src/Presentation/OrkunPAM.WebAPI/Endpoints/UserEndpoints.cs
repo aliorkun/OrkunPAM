@@ -147,7 +147,7 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, message = $"User '{user.Username}' unlocked" });
         });
 
-        group.MapPost("/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest req,
+        group.MapPost("/{id:guid}/reset-password", async (Guid id, AdminResetPasswordRequest req,
             OrkunPamDbContext db, IPasswordHasher hasher, IPasswordPolicyService policy,
             IAuditService audit, HttpContext context) =>
         {
@@ -391,4 +391,4 @@ public static class UserEndpoints
 }
 
 public record UpdateUserRequest(string? DisplayName, string? Email, string? Language, string? Timezone, UserStatus? Status);
-public record ResetPasswordRequest(string NewPassword);
+public record AdminResetPasswordRequest(string NewPassword);

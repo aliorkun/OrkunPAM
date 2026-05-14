@@ -58,6 +58,9 @@ internal sealed class SshServerSession
 
             var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(_ct);
 
+            // Fetch session policy for command filtering
+            var sessionPolicy = await _api.GetFullSessionPolicyAsync(_ct);
+
             var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
@@ -69,7 +72,7 @@ internal sealed class SshServerSession
                 targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log);
             await target.ConnectAsync(_ct);
 
-            await RelayAsync(target, idleTimeoutMinutes);
+            await RelayAsync(target, idleTimeoutMinutes, sessionPolicy);
         }
         catch (OperationCanceledException) { }
         catch (SshException ex) { _log.LogWarning("SSH protocol error: {Msg}", ex.Message); }
@@ -260,7 +263,7 @@ internal sealed class SshServerSession
     // Channel handling: capture client requests, then relay
     // -------------------------------------------------------------------------
 
-    private async Task RelayAsync(SshTargetClient target, int idleTimeoutMinutes)
+    private async Task RelayAsync(SshTargetClient target, int idleTimeoutMinutes, SessionPolicyInfo? sessionPolicy = null)
     {
         // Step 1: receive CHANNEL_OPEN from client
         var pkt = await _conn.ReadPacketAsync(_ct);
@@ -378,16 +381,29 @@ internal sealed class SshServerSession
         _log.LogInformation("Relay started for channel {ChanId} (pty={HasPty}, exec={IsExec}, idleTimeout={Idle}min)",
             clientChanId, pty != null, isExec, idleTimeoutMinutes);
 
-        // Step 4: record + relay with idle timeout enforcement
+        // Step 4: record + relay with idle timeout enforcement and command filtering
         var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty, _hashChain);
         recorder.Start(_sessionId);
+
+        // Set up command filter if policy defines one
+        CommandFilter? commandFilter = null;
+        CommandFilterModeProxy filterMode = CommandFilterModeProxy.None;
+        if (sessionPolicy != null && sessionPolicy.CommandFilterMode != 0)
+        {
+            commandFilter = new CommandFilter(_log);
+            filterMode = (CommandFilterModeProxy)sessionPolicy.CommandFilterMode;
+            _log.LogInformation("Command filtering enabled: mode={Mode}, rules configured",
+                filterMode);
+        }
 
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
         long[] lastActivity = [DateTime.UtcNow.Ticks];
 
         try
         {
-            var relayTask = target.RelayToClientAsync(_conn, clientChanId, recorder, idleCts.Token, lastActivity);
+            var relayTask = target.RelayToClientAsync(
+                _conn, clientChanId, recorder, idleCts.Token, lastActivity,
+                commandFilter, filterMode, sessionPolicy?.CommandFilterRulesJson);
             var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
 
             await Task.WhenAny(relayTask, idleTask);

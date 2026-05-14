@@ -17,6 +17,7 @@
     <button class="pam-tab @(_tab=="password"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("password"))">Password Policy</button>
     <button class="pam-tab @(_tab=="lockout"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("lockout"))">Account Lockout</button>
     <button class="pam-tab @(_tab=="session"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("session"))">Session Policy</button>
+    <button class="pam-tab @(_tab=="mfa"?"pam-tab-active":"")"     @onclick="@(() => SwitchTab("mfa"))">MFA Policy</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -207,6 +208,34 @@
     </div>
 }
 
+@if (_tab == "mfa")
+{
+    <div class="pam-card" style="max-width:480px">
+        <div class="pam-card-header"><strong>MFA Enforcement Policy</strong></div>
+        <div class="pam-card-body">
+            @if (_mfaLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_mfaRequired" />
+                        <strong>Require MFA for all users</strong>
+                    </label>
+                    <span class="pam-hint">When enabled, users who have not enrolled in MFA will be prompted to set up their authenticator at next login.</span>
+                </div>
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveMfaPolicyAsync" disabled="@_mfaSaving">
+                        @if (_mfaSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -331,6 +360,11 @@
     private int  _sessIdleMin       = 30;
     private int  _sessMaxConcurrent = 3;
 
+    // MFA policy
+    private bool _mfaLoading  = false;
+    private bool _mfaSaving   = false;
+    private bool _mfaRequired = false;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -346,6 +380,7 @@
             case "password": await LoadPasswordPolicyAsync();  break;
             case "lockout":  await LoadLockoutPolicyAsync();   break;
             case "session":  await LoadSessionPolicyAsync();   break;
+            case "mfa":      await LoadMfaPolicyAsync();       break;
         }
     }
 
@@ -469,6 +504,25 @@
         _sessSaving = false;
         _successMsg = ok ? "Session policy saved." : null;
         if (!ok) _error = "Failed to save session policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadMfaPolicyAsync()
+    {
+        _mfaLoading = true; StateHasChanged();
+        var s = await Api.GetMfaPolicyAsync();
+        if (s != null) { _mfaRequired = s.MfaRequired; }
+        _mfaLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveMfaPolicyAsync()
+    {
+        _mfaSaving = true; StateHasChanged();
+        var ok = await Api.SaveMfaPolicyAsync(new MfaPolicySettingsDto(_mfaRequired));
+        _mfaSaving = false;
+        _successMsg = ok ? "MFA policy saved." : null;
+        if (!ok) _error = "Failed to save MFA policy.";
         StateHasChanged();
         if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }
