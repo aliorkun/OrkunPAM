@@ -227,6 +227,8 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasIndex(s => new { s.UserId, s.StartedAtUtc });
             e.HasIndex(s => s.Status);
+            e.Property(s => s.SessionTokenHash).HasMaxLength(64);
+            e.HasIndex(s => s.SessionTokenHash).IsUnique().HasFilter("[SessionTokenHash] IS NOT NULL");
         });
 
         modelBuilder.Entity<CommandLog>(e =>
