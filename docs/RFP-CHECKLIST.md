@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-13
+> Last updated: 2026-05-14
 
 ## Platform (44 items)
 
@@ -336,7 +336,7 @@
 | 66 | Logging | All session logs shall be stored for at least 6 months and shall include session identifier, session time, client IP add | FC | RecordingRetentionService — 183-day auto-purge; AuditLogHashChainService — SHA-256 hash-chain integrity (#23, #91) |
 | 67 | Logging | Users who wire into sessions shall also be logged in session logs |  |
 | 68 | Logging | Solution shall have tamper proof logging capability to prevent and capture any modification or deletion of a log record  | PC | AuditLogHashChainService.cs — SHA-256 hash chain, tamper detection on audit log read (#91) |
-| 69 | Logging | Solution shall tag any modified log record as "Tampered"  |  |
+| 69 | Logging | Solution shall tag any modified log record as "Tampered"  | PC | AuditLogHashChainService.cs — IsTampered flag persisted on tampered entries; Reports.razor shows ⚠ TAMPERED badge (#91) |
 | 70 | Logging | Solution shall support sending notification to administrators when a recorded session replayed |  |
 | 71 | User Behavior Analytics | Solution shall provide a comprehensive threat intelligence module to identify potential insider threats. |  |
 | 72 | User Behavior Analytics | Solution shall support real-time monitoring and analysis of privileged user behavior to detect anomalies. |  |
@@ -384,9 +384,9 @@
 | 114 | RDP | Solution shall support configuration of OCR sensitivity |  |
 | 115 | RDP | Solution shall support displaying a Watermark containing user information on RDP connections to target systems. |  |
 | 116 | RDP | Solution shall support masking of text transferred via the clipboard to prevent data leakage |  |
-| 117 | VNC | Solution shall support VNC (Virtual Network Computing - GUI) connections |  |
+| 117 | VNC | Solution shall support VNC (Virtual Network Computing - GUI) connections | PC | OrkunPAM.VncProxy — native C# RFB (RFC 6143), PAM session token auth, vault credential injection, audit log (#101) |
 | 118 | VNC | Solution shall support to open an VNC session directly from user's desktop (without logging into Web GUI) |  |
-| 119 | VNC | Solution shall support video recording of VNC sessions |  |
+| 119 | VNC | Solution shall support video recording of VNC sessions | PC | OrkunPAM.VncProxy — binary RFB stream recording with SHA-256 hash-chain integrity (#101) |
 | 120 | VNC | Solution shall support re-playing of recorded VNC sessions |  |
 | 121 | VNC | Solution shall support key logging in VNC sessions |  |
 | 122 | VNC | Solution shall support OCR (Optical Character Recognition) in VNC sessions |  |
@@ -397,21 +397,21 @@
 | 127 | SFTP | Solution shall support managerial approval for SFTP proxy connections. |  |
 | 128 |  | Solution shall support MFA functionality for SFTP proxy connections. |  |
 | 129 | SFTP | Solution shall support time limitation for sending managerial approval emails for SFTP proxy connections. |  |
-| 130 | HTTP/HTTPS | Solution shall support HTTP/HTTPS connections |  |
+| 130 | HTTP/HTTPS | Solution shall support HTTP/HTTPS connections | PC | OrkunPAM.HttpProxy — native C# HTTP/HTTPS proxy; CONNECT tunnel + HTTP forward, port 8080, PAM auth, rate limiting (#102) |
 | 131 | HTTP/HTTPS | Platfrom shall support digest authentication for HTTP/HTTPS connections. |  |
-| 132 | HTTP/HTTPS | Solution shall support auto login to HTTP/HTTPS web applications |  |
-| 133 | HTTP/HTTPS | Solution shall support logging of HTTP/HTTPS messages |  |
-| 134 | HTTP/HTTPS | Solution shall support policy enforcement on HTTP/HTTPS sessions (blocking URLs for specific user groups etc.) |  |
+| 132 | HTTP/HTTPS | Solution shall support auto login to HTTP/HTTPS web applications | PC | HttpSession.cs — vault web credential injection, Authorization: Basic auto-inject from vault on each request (#102) |
+| 133 | HTTP/HTTPS | Solution shall support logging of HTTP/HTTPS messages | PC | HttpSessionLogger.cs — tab-delimited audit log: sessionId, user, clientIp, method, URL, status, duration, vaultInjected (#102) |
+| 134 | HTTP/HTTPS | Solution shall support policy enforcement on HTTP/HTTPS sessions (blocking URLs for specific user groups etc.) | PC | HttpProxyService.cs — URL whitelist (priority) + blacklist (glob: *, ?) policy enforcement per session (#102) |
 | 135 | HTTP/HTTPS | Solution shall support managerial approval for HTTP/HTTPS proxy connections. |  |
 | 136 | HTTP/HTTPS | Solution shall support MFA (2 Factor authentication) for HTTP/HTTPS proxy connections. |  |
-| 137 | HTTP/HTTPS | Solution shall support to log user's client IP addresses even if users access target web application through HTTPS Proxy |  |
+| 137 | HTTP/HTTPS | Solution shall support to log user's client IP addresses even if users access target web application through HTTPS Proxy | PC | HttpSessionLogger.cs — clientIp captured and logged in all session records, present even through reverse proxy (#102) |
 | 138 | HTTP/HTTPS | Solution shall support to record all HTTPS activities in pass-through mode without applying the policy. |  |
 | 139 | HTTP/HTTPS | Solution shall support auto-login to target web applications that use XHR requests. |  |
-| 140 | HTTP/HTTPS | Solution shall support connecting to target web applications that support TLS v1.3 via HTTPS Proxy. |  |
+| 140 | HTTP/HTTPS | Solution shall support connecting to target web applications that support TLS v1.3 via HTTPS Proxy. | PC | HttpSession.cs CONNECT tunnel — raw TCP relay, TLS negotiated end-to-end between client and target server (#102) |
 | 141 | HTTP/HTTPS | Solution shall support video recording of HTTPS Proxy sessions to web applications without the need for any jump server. |  |
 | 142 | HTTP/HTTPS | Solution shall support listing the web applications that users have permission to access on the HTTP Proxy login page, s |  |
 | 143 | Auto Login | Solution shall support multi-user option for remote applications auto-login. |  |
-| 144 | SSH Keys | Solution shall support SSH-Keys while login to devices. |  |
+| 144 | SSH Keys | Solution shall support SSH-Keys while login to devices. | PC | SshServerSession.cs + SshKeyEndpoints.cs — vault-stored RSA/OpenSSH key authentication to target devices (#80) |
 | 145 | SSH Keys | Solution shall support forcing users to use SSH keys and password authentication at the same time. |  |
 | 146 | Remote Access | Solution shall support secure remote access using encrypted SSL/TLS protocols. |  |
 | 147 | Remote Access | Solution shall support remote access for a user only to authorized devices and only during permitted time periods. |  |
