@@ -1,4 +1,5 @@
 using OrkunPAM.Domain.Enums;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Domain.Entities.Security;
 

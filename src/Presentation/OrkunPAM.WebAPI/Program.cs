@@ -62,7 +62,7 @@ try
     builder.Services.AddValidatorsFromAssemblyContaining<Program>(ServiceLifetime.Singleton);
 
     // === Integration Services ===
-    builder.Services.AddSingleton<OrkunPAM.Identity.Services.ILdapService, OrkunPAM.Identity.Services.LdapService>();
+    builder.Services.AddSingleton<OrkunPAM.Application.Contracts.ILdapService, OrkunPAM.Identity.Services.LdapService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IWebhookDeliveryService, OrkunPAM.Persistence.Services.WebhookDeliveryService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IItsmService, OrkunPAM.Persistence.Services.ItsmService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
@@ -84,12 +84,17 @@ try
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IBackupService, OrkunPAM.Persistence.Services.BackupService>();
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BackupSchedulerService>();
 
+    // === Event Bus (shared singleton for pub/sub) ===
+    builder.Services.AddSingleton<OrkunPAM.Persistence.Services.InProcessEventBus>();
+    builder.Services.AddSingleton<IEventBus>(sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.InProcessEventBus>());
+
     // === SIEM Syslog/CEF Forwarder (#63) ===
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.SiemForwarderService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.ISiemForwarderService>(
         sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.SiemForwarderService>());
     builder.Services.AddHostedService(
         sp => sp.GetRequiredService<OrkunPAM.Persistence.Services.SiemForwarderService>());
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.SyslogForwarderService>();
 
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();

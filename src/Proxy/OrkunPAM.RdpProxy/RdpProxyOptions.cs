@@ -34,4 +34,13 @@ public sealed class RdpProxyOptions
     /// If not set, recordings are frame-encrypted but the content key is stored unprotected in the file header.
     /// </summary>
     public string? RecordingEncryptionKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Path to the PFX/PKCS#12 certificate file used for TLS termination on the client side.
+    /// If not set, a self-signed certificate is generated at startup.
+    /// </summary>
+    public string? TlsCertificatePath { get; set; }
+
+    /// <summary>Password for the TLS certificate PFX file. Null if no password.</summary>
+    public string? TlsCertificatePassword { get; set; }
 }

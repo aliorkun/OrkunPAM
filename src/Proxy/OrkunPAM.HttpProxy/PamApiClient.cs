@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 namespace OrkunPAM.HttpProxy;
 
 /// <summary>
-/// Calls the OrkunPAM WebAPI to authenticate PAM users and retrieve vault web credentials.
+/// Calls the OrkunPAM WebAPI to validate session tokens and retrieve target credentials.
+/// Used by the HTTP proxy to authenticate browser sessions and perform credential injection.
 /// </summary>
 internal sealed class PamApiClient
 {
@@ -11,7 +12,8 @@ internal sealed class PamApiClient
     private readonly ILogger<PamApiClient> _log;
     private readonly string _proxySecret;
 
-    public PamApiClient(IHttpClientFactory factory, ILogger<PamApiClient> log, IConfiguration config)
+    public PamApiClient(IHttpClientFactory factory, ILogger<PamApiClient> log,
+        IConfiguration config)
     {
         _factory = factory;
         _log = log;
@@ -30,155 +32,176 @@ internal sealed class PamApiClient
                 "PamApi:ProxySecret must be at least 32 characters. Generate with: openssl rand -base64 32");
     }
 
-    internal async Task<bool> ValidateUserAsync(string username, string password, CancellationToken ct)
+    /// <summary>
+    /// Validates a session token issued by the PAM WebAPI when a user clicks "Connect".
+    /// Returns session details on success, null on failure (fail-closed).
+    /// </summary>
+    internal async Task<HttpSessionInfo?> ValidateSessionTokenAsync(string sessionToken, CancellationToken ct)
     {
         try
         {
-            var client = _factory.CreateClient("PamApi");
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username, password, mfaCode = (string?)null }, ct);
-            return resp.IsSuccessStatusCode;
+            var client = CreateAuthenticatedClient();
+
+            // Get JWT for the proxy service account
+            var jwt = await GetProxyJwtAsync(client, ct);
+            if (jwt == null)
+            {
+                _log.LogError("Proxy service account login failed — cannot validate session token");
+                return null;
+            }
+
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+
+            // Validate session token via dedicated proxy endpoint
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                "/api/v1/sessions/http/validate");
+            request.Content = JsonContent.Create(new { sessionToken });
+            request.Headers.Add("X-Proxy-Secret", _proxySecret);
+
+            var resp = await client.SendAsync(request, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _log.LogWarning("Session token validation failed (HTTP {Status})", (int)resp.StatusCode);
+                return null;
+            }
+
+            var data = await resp.Content.ReadFromJsonAsync<ValidateSessionResponse>(ct);
+            if (data?.Data == null)
+            {
+                _log.LogWarning("Session token validation returned empty data");
+                return null;
+            }
+
+            var s = data.Data;
+            return new HttpSessionInfo
+            {
+                SessionId = s.SessionId,
+                TargetUrl = s.TargetUrl,
+                Username = s.Username,
+                CredentialId = s.CredentialId,
+                AuthStrategy = Enum.TryParse<AuthStrategy>(s.AuthStrategy, true, out var strategy)
+                    ? strategy : AuthStrategy.BasicAuth,
+                CustomHeaders = s.CustomHeaders,
+                FormLoginUrl = s.FormLoginUrl,
+                FormUsernameField = s.FormUsernameField,
+                FormPasswordField = s.FormPasswordField,
+            };
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Failed to validate user '{User}' against PAM API", username);
-            return false;
+            _log.LogError(ex, "Unexpected error validating session token");
+            return null;
         }
     }
 
     /// <summary>
-    /// Retrieves the web (HTTP Basic Auth) vault credential for the given device hostname.
-    /// Returns (null, null) if no credential is found — callers treat this as optional.
+    /// Decrypts credential from vault for the given credential ID.
+    /// Returns password bytes (caller must zero after use). Throws on failure (fail-closed).
     /// </summary>
-    internal async Task<(string? Username, string? Password)> GetWebCredentialAsync(
-        string pamUser, string targetHost, CancellationToken ct)
+    internal async Task<(string username, byte[] password)> GetCredentialAsync(
+        string credentialId, CancellationToken ct)
     {
-        try
-        {
-            var client = _factory.CreateClient("PamApi");
+        var client = CreateAuthenticatedClient();
+        var jwt = await GetProxyJwtAsync(client, ct)
+            ?? throw new InvalidOperationException("Proxy service account authentication failed");
 
-            var loginResp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username = "proxy-service", password = _proxySecret, mfaCode = (string?)null }, ct);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
 
-            string? jwt = null;
-            if (loginResp.IsSuccessStatusCode)
-            {
-                var loginData = await loginResp.Content.ReadFromJsonAsync<LoginResponse>(ct);
-                jwt = loginData?.Data?.Token;
-            }
+        using var decryptReq = new HttpRequestMessage(HttpMethod.Post,
+            "/api/v1/vault/credentials/proxy-decrypt");
+        decryptReq.Content = JsonContent.Create(new { credentialId, purpose = "HttpProxy" });
+        decryptReq.Headers.Add("X-Proxy-Secret", _proxySecret);
 
-            if (jwt == null)
-            {
-                _log.LogError("Proxy service account login failed — aborting web credential lookup for {Host}", targetHost);
-                return (null, null);
-            }
+        var resp = await client.SendAsync(decryptReq, ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Credential decryption failed for '{credentialId}' (HTTP {(int)resp.StatusCode})");
 
-            client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
+        var data = await resp.Content.ReadFromJsonAsync<DecryptResponse>(ct);
+        var password = data?.Data?.Password;
+        var username = data?.Data?.Username;
 
-            var devResp = await client.GetAsync(
-                $"/api/v1/devices?search={Uri.EscapeDataString(targetHost)}&pageSize=1", ct);
+        if (string.IsNullOrEmpty(password))
+            throw new InvalidOperationException($"Decrypted credential has no password for '{credentialId}'");
 
-            if (!devResp.IsSuccessStatusCode) return (null, null);
+        var passwordBytes = System.Text.Encoding.UTF8.GetBytes(password);
 
-            var devData = await devResp.Content.ReadFromJsonAsync<DeviceListResponse>(ct);
-            var device  = devData?.Data?.FirstOrDefault();
-            if (device == null) return (null, null);
-
-            var credResp = await client.GetAsync(
-                $"/api/v1/vault/credentials?deviceId={device.Id}&credentialType=Web&pageSize=1", ct);
-
-            if (!credResp.IsSuccessStatusCode) return (null, null);
-
-            var credData = await credResp.Content.ReadFromJsonAsync<CredentialListResponse>(ct);
-            var cred     = credData?.Data?.FirstOrDefault();
-            if (cred == null) return (null, null);
-
-            using var decryptReq = new HttpRequestMessage(HttpMethod.Post,
-                "/api/v1/vault/credentials/proxy-decrypt");
-            decryptReq.Content = JsonContent.Create(new { credentialId = cred.Id, purpose = "HttpProxy" });
-            decryptReq.Headers.Add("X-Proxy-Secret", _proxySecret);
-            var decryptResp = await client.SendAsync(decryptReq, ct);
-
-            if (!decryptResp.IsSuccessStatusCode) return (null, null);
-
-            var decryptData = await decryptResp.Content.ReadFromJsonAsync<DecryptResponse>(ct);
-            var password    = decryptData?.Data?.Password;
-
-            if (password == null) return (null, null);
-
-            return (cred.Username, password);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Could not retrieve web credential for '{Host}' — proceeding without injection", targetHost);
-            return (null, null);
-        }
+        return (
+            username ?? throw new InvalidOperationException("Credential has no username"),
+            passwordBytes);
     }
 
-    internal async Task ReportSessionEndedAsync(
-        string sessionId, int durationSeconds, string recordingPath, CancellationToken ct)
+    /// <summary>Returns (IdleTimeoutMinutes, MaxConcurrentSessions) from the global session policy.</summary>
+    internal async Task<(int IdleTimeoutMinutes, int MaxConcurrentSessions)> GetSessionPolicyAsync(CancellationToken ct)
     {
         try
         {
-            var client = _factory.CreateClient("PamApi");
-            var loginResp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username = "proxy-service", password = _proxySecret, mfaCode = (string?)null }, ct);
-
-            string? jwt = null;
-            if (loginResp.IsSuccessStatusCode)
-            {
-                var loginData = await loginResp.Content.ReadFromJsonAsync<LoginResponse>(ct);
-                jwt = loginData?.Data?.Token;
-            }
-
-            if (jwt == null) return;
-
-            client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwt);
-
-            using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/sessions/{sessionId}/end");
-            req.Content = JsonContent.Create(new { durationSeconds, recordingPath });
-            req.Headers.Add("X-Proxy-Secret", _proxySecret);
-            await client.SendAsync(req, ct);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Failed to report HTTP session end for {SessionId}", sessionId);
-        }
-    }
-
-    internal async Task<(int IdleTimeoutMinutes, int MaxConcurrentSessions)> GetSessionPolicyAsync(
-        CancellationToken ct)
-    {
-        try
-        {
-            var client = _factory.CreateClient("PamApi");
-            var resp   = await client.GetAsync("/api/v1/policy/session", ct);
+            var client = CreateAuthenticatedClient();
+            var resp = await client.GetAsync("/api/v1/policy/session", ct);
             if (resp.IsSuccessStatusCode)
             {
                 var data = await resp.Content.ReadFromJsonAsync<SessionPolicyResponse>(ct);
-                var p    = data?.Data;
+                var p = data?.Data;
                 if (p != null)
-                    return (p.IdleTimeoutMinutes > 0 ? p.IdleTimeoutMinutes : 60,
-                            p.MaxConcurrentSessions > 0 ? p.MaxConcurrentSessions : 50);
+                    return (p.IdleTimeoutMinutes > 0 ? p.IdleTimeoutMinutes : 30,
+                            p.MaxConcurrentSessions > 0 ? p.MaxConcurrentSessions : 3);
             }
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Failed to fetch session policy — using defaults");
+            _log.LogWarning(ex, "Failed to fetch session policy — using defaults (30 min idle)");
         }
-        return (60, 50);
+        return (30, 3);
     }
 
+    private HttpClient CreateAuthenticatedClient() => _factory.CreateClient("PamApi");
+
+    private async Task<string?> GetProxyJwtAsync(HttpClient client, CancellationToken ct)
+    {
+        var loginResp = await client.PostAsJsonAsync("/api/v1/auth/login",
+            new { username = "proxy-service", password = _proxySecret, mfaCode = (string?)null }, ct);
+
+        if (!loginResp.IsSuccessStatusCode) return null;
+
+        var loginData = await loginResp.Content.ReadFromJsonAsync<LoginResponse>(ct);
+        return loginData?.Data?.Token;
+    }
+
+    // Response DTOs
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);
-    private record DeviceListResponse(IEnumerable<DeviceDto>? Data);
-    private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort);
-    private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
-    private record CredentialDto(string Id, string? Username);
+    private record ValidateSessionResponse(bool Success, HttpSessionData? Data);
+    private record HttpSessionData(
+        string SessionId, string TargetUrl, string Username, string CredentialId,
+        string AuthStrategy, Dictionary<string, string>? CustomHeaders,
+        string? FormLoginUrl, string? FormUsernameField, string? FormPasswordField);
     private record DecryptResponse(DecryptData? Data);
-    private record DecryptData(string? Password);
+    private record DecryptData(string? Username, string? Password);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
     private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
+}
+
+/// <summary>Validated session information returned by the PAM API.</summary>
+internal sealed class HttpSessionInfo
+{
+    public required string SessionId { get; init; }
+    public required string TargetUrl { get; init; }
+    public required string Username { get; init; }
+    public required string CredentialId { get; init; }
+    public AuthStrategy AuthStrategy { get; init; }
+    public Dictionary<string, string>? CustomHeaders { get; init; }
+    public string? FormLoginUrl { get; init; }
+    public string? FormUsernameField { get; init; }
+    public string? FormPasswordField { get; init; }
+}
+
+/// <summary>Authentication strategy for injecting credentials into proxied HTTP requests.</summary>
+internal enum AuthStrategy
+{
+    BasicAuth,
+    FormLogin,
+    HeaderInjection,
+    CookieReplay
 }

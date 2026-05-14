@@ -262,7 +262,7 @@
         var result = await Api.SyncLdapNowAsync(configId);
         _syncing = null;
         if (result == null) { _error = "Sync request failed."; }
-        else { _syncMsg = $"Sync complete — Created: {result.UsersAdded}, Updated: {result.UsersUpdated}, Locked: {result.UsersDisabled}"; await LoadAsync(); }
+        else { _syncMsg = $"Sync complete — Created: {result.UsersAdded}, Updated: {result.UsersUpdated}, Disabled: {result.UsersDisabled}"; await LoadAsync(); }
         StateHasChanged();
     }
 

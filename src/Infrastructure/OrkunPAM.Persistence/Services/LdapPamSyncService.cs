@@ -4,7 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Enums;
-using OrkunPAM.Identity.Services;
+using OrkunPAM.Application.Contracts;
 
 namespace OrkunPAM.Persistence.Services;
 

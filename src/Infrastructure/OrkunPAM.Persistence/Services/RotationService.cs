@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Enums;
 
 namespace OrkunPAM.Persistence.Services;
@@ -12,11 +13,6 @@ public interface IRotationService
     Task<RotationResult> RotatePasswordAsync(RotationConnector connector, RotationTarget target, CancellationToken ct = default);
     string GeneratePassword(int length = 24, bool upper = true, bool lower = true, bool digits = true, bool special = true);
 }
-
-public record RotationTarget(string Host, int Port, string Username, string? CurrentPassword, string NewPassword,
-    string? Domain = null, string? DatabaseName = null);
-
-public record RotationResult(bool Success, string Message, string Connector, int? ResponseTimeMs = null);
 
 public sealed class RotationService : IRotationService
 {
@@ -42,6 +38,7 @@ public sealed class RotationService : IRotationService
             RotationConnector.PostgreSql => await RotateViaPostgreSqlAsync(target, ct),
             RotationConnector.WinRm => await RotateViaWinRmAsync(target, ct),
             RotationConnector.Ssh => await RotateViaSshAsync(target, ct),
+            RotationConnector.Wmi => await RotateViaWmiAsync(target, ct),
             _ => new RotationResult(false, $"Connector '{connector}' not yet implemented", connector.ToString())
         };
 
@@ -249,6 +246,16 @@ public sealed class RotationService : IRotationService
             "SSH rotation pending native proxy implementation. Host reachable: " +
             IsPortOpen(target.Host, target.Port > 0 ? target.Port : 22),
             "SSH"));
+    }
+
+    private Task<RotationResult> RotateViaWmiAsync(RotationTarget target, CancellationToken ct)
+    {
+        // WMI rotation is handled by the dedicated WmiPasswordRotator via PasswordRotationOrchestrator.
+        // This stub exists for backward compatibility with direct IRotationService callers.
+        return Task.FromResult(new RotationResult(false,
+            "WMI rotation should be invoked via PasswordRotationOrchestrator with a dedicated WmiPasswordRotator. " +
+            "Host reachable: " + IsPortOpen(target.Host, target.Port > 0 ? target.Port : 135),
+            "WMI"));
     }
 
     private static string EscapeLdapFilterValue(string input) =>

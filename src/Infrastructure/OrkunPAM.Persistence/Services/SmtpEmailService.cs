@@ -32,14 +32,16 @@ public sealed class SmtpEmailService : IEmailService
             }
 
             using (client)
-            using var msg = new MailMessage();
-            msg.From = new MailAddress(from, fromName ?? "OrkunPAM");
-            msg.To.Add(to);
-            msg.Subject = subject;
-            msg.Body = htmlBody;
-            msg.IsBodyHtml = true;
+            {
+                using var msg = new MailMessage();
+                msg.From = new MailAddress(from, fromName ?? "OrkunPAM");
+                msg.To.Add(to);
+                msg.Subject = subject;
+                msg.Body = htmlBody;
+                msg.IsBodyHtml = true;
 
-            await client.SendMailAsync(msg, ct);
+                await client.SendMailAsync(msg, ct);
+            }
             _logger.LogInformation("Email sent to {To}: {Subject}", to, subject);
             return true;
         }
@@ -86,7 +88,7 @@ public sealed class SmtpEmailService : IEmailService
             {
                 if (passCfg.IsEncrypted)
                 {
-                    var dec = _vault.DecryptString(Convert.FromBase64String(passCfg.Value), "SystemConfig");
+                    var dec = _vault.DecryptString(Convert.FromBase64String(passCfg.Value));
                     password = dec.IsSuccess ? dec.Value : string.Empty;
                 }
                 else

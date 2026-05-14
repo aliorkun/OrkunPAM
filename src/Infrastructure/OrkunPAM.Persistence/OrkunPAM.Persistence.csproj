@@ -2,9 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\OrkunPAM.Application\OrkunPAM.Application.csproj" />
+    <ProjectReference Include="..\OrkunPAM.Cryptography\OrkunPAM.Cryptography.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.*">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -14,6 +16,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.*" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.*" />
     <PackageReference Include="System.DirectoryServices.Protocols" Version="8.0.*" />
+    <PackageReference Include="System.Management" Version="8.0.*" />
   </ItemGroup>
 
   <PropertyGroup>

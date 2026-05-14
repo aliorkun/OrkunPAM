@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using OrkunPAM.HttpProxy;
 using OrkunPAM.HttpProxy.Session;
 using Serilog;
@@ -24,6 +25,19 @@ try
     .ConfigurePrimaryHttpMessageHandler(() =>
     {
         var handler = new HttpClientHandler();
+        // In development, accept self-signed Core API certificates.
+        // In production, use a trusted CA or pin the Core API certificate fingerprint.
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
+            handler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        return handler;
+    });
+
+    // Register an additional named HttpClient for upstream (target) connections used by FormLoginInjector
+    builder.Services.AddHttpClient("UpstreamTarget")
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        var handler = new HttpClientHandler();
         if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
             handler.ServerCertificateCustomValidationCallback =
                 HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
@@ -31,7 +45,13 @@ try
     });
 
     builder.Services.AddSingleton<PamApiClient>();
-    builder.Services.AddHostedService<LogRetentionService>();
+    builder.Services.AddSingleton(sp =>
+    {
+        var opts = sp.GetRequiredService<IOptions<HttpProxyOptions>>().Value;
+        var log  = sp.GetRequiredService<ILogger<HashChainStore>>();
+        return new HashChainStore(opts.RecordingDirectory, log);
+    });
+    builder.Services.AddHostedService<RecordingRetentionService>();
     builder.Services.AddHostedService<HttpProxyService>();
 
     await builder.Build().RunAsync();

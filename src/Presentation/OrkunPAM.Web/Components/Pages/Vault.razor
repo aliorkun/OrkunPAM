@@ -128,7 +128,7 @@
                                         @if (!isCheckedOut)
                                         {
                                             <button class="pam-btn-icon" title="Checkout credential"
-                                                    @onclick="@(() => OpenCheckout(c.Id, c.Name)">↗</button>
+                                                    @onclick="@(() => OpenCheckout(c.Id, c.Name))">↗</button>
                                         }
                                         @if (isMyCheckout)
                                         {
@@ -143,7 +143,7 @@
                                         @if (!string.IsNullOrEmpty(c.DeviceId))
                                         {
                                             <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
-                                                    @onclick="@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))">⌨</button>
+                                                    @onclick='@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))'>⌨</button>
                                         }
                                     </div>
                                 </td>
@@ -235,7 +235,7 @@
                     <div class="pam-form-group">
                         <label class="pam-label">Private Key (PEM)</label>
                         <textarea class="pam-input w-100-input" rows="8" readonly
-                                  style="font-size:0.75em;font-family:monospace">@new string(_revealPrivKey)</textarea>
+                                  style="font-size:0.75em;font-family:monospace">@(new string(_revealPrivKey))</textarea>
                     </div>
                 }
                 else

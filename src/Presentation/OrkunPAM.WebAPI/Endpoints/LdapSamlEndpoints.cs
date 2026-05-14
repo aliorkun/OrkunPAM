@@ -122,7 +122,7 @@ public static class LdapSamlEndpoints
         });
 
         ldap.MapPost("/{id:guid}/test", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Identity.Services.ILdapService ldapService, ILogger<Program> logger) =>
+            OrkunPAM.Application.Contracts.ILdapService ldapService, ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
@@ -150,7 +150,7 @@ public static class LdapSamlEndpoints
         });
 
         ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Identity.Services.ILdapService ldapService,
+            OrkunPAM.Application.Contracts.ILdapService ldapService,
             OrkunPAM.Persistence.Services.IAuditService audit,
             ILogger<Program> logger) =>
         {

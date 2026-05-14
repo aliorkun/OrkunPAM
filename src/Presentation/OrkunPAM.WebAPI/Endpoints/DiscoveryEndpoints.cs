@@ -217,7 +217,7 @@ public static class DiscoveryEndpoints
                 _ => 0
             };
 
-            var target = new OrkunPAM.Persistence.Services.RotationTarget(
+            var target = new OrkunPAM.Application.Contracts.RotationTarget(
                 host, port, cred.Username ?? "", currentPassword, newPassword);
 
             var result = await rotationService.RotatePasswordAsync(connector, target);

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using OrkunPAM.Cryptography;
 
@@ -8,9 +9,14 @@ public class CryptographyTests
     private readonly InMemoryKeyStore _keyStore;
     private readonly AesGcmEncryptionService _encService;
 
+    private static IConfiguration BuildTestConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:KeyDirectory"] = Path.Combine(Path.GetTempPath(), "orkunpam-test-keys") })
+            .Build();
+
     public CryptographyTests()
     {
-        _keyStore = new InMemoryKeyStore(NullLogger<InMemoryKeyStore>.Instance);
+        _keyStore = new InMemoryKeyStore(NullLogger<InMemoryKeyStore>.Instance, BuildTestConfig());
         _keyStore.Initialize("TestPassphrase-2026!");
         _encService = new AesGcmEncryptionService(_keyStore, NullLogger<AesGcmEncryptionService>.Instance);
     }
@@ -68,7 +74,7 @@ public class CryptographyTests
     [Fact]
     public void KeyStore_NotInitialized_FailsGracefully()
     {
-        var uninitStore = new InMemoryKeyStore(NullLogger<InMemoryKeyStore>.Instance);
+        var uninitStore = new InMemoryKeyStore(NullLogger<InMemoryKeyStore>.Instance, BuildTestConfig());
         var enc = new AesGcmEncryptionService(uninitStore, NullLogger<AesGcmEncryptionService>.Instance);
 
         var result = enc.EncryptString("test");
@@ -96,7 +102,7 @@ public class CryptographyTests
         Assert.True(encResult.IsSuccess);
 
         // Rotate master key
-        var rotateResult = _keyStore.RotateMasterKey();
+        var rotateResult = _keyStore.RotateMasterKey("NewTestPassphrase-2026!");
         Assert.True(rotateResult.IsSuccess);
 
         // Old data should still decrypt

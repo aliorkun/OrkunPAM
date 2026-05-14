@@ -43,7 +43,7 @@ public enum PolicyScope : byte { Global = 0, Group = 1, User = 2 }
 
 public enum DiscoveryType : byte { ActiveDirectory = 0, WindowsLocal = 1, Linux = 2, Database = 3, Cloud = 4 }
 public enum TakeoverStatus : byte { Pending = 0, TakenOver = 1, Ignored = 2 }
-public enum RotationConnector { WinRm, Ssh, Ldap, Snmp, SqlServer, Oracle, MySql, PostgreSql }
+public enum RotationConnector { WinRm, Ssh, Ldap, Snmp, SqlServer, Oracle, MySql, PostgreSql, Wmi }
 
 public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
 
