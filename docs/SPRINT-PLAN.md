@@ -83,25 +83,32 @@
 
 ---
 
-## Aktif Sprint: Sprint 6 - Polish + Proxy Completion + GA
-**Tarih:** 13 Mayıs 2026 (erken başlandı)
-**Hedef:** SQL Proxy ✅, VNC Proxy ✅, HTTP Proxy, E2E testler, performans, dokümantasyon
+## ~~Sprint 6 - Polish + Proxy Completion + GA~~ ✅ TAMAMLANDI
+**Tarih:** 13-14 Mayıs 2026
+**Durum:** Tamamlandı — Tüm proxy'ler ✅ + E2E test suite ✅ + perf-baseline.md ✅
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #64 | SQL Database Proxy | MVP-SESSION | ✅ Tamamlandı |
 | #101 | VNC Proxy — Native C# RFC 6143 | MVP-PROXY | ✅ Tamamlandı |
-| #102 | HTTP/HTTPS Reverse Proxy — Native C# | MVP-PROXY | 🔲 Bekliyor |
-| #100 | E2E Test Suite + Performance Benchmark | MVP-TEST | 🔲 Bekliyor |
-| - | Dokümantasyon | Docs | 🔲 Bekliyor |
+| #102 | HTTP/HTTPS Reverse Proxy — Native C# | MVP-PROXY | ✅ Tamamlandı |
+| #100 | E2E Test Suite + Performance Benchmark | MVP-TEST | ✅ Tamamlandı |
+| - | Dokümantasyon (docs/perf-baseline.md) | Docs | ✅ Tamamlandı |
 
-**Çıkış kriteri:** Tüm proxy'ler çalışıyor + E2E yeşil + müşteri demo hazır → v1.0.0 GA tag
+**İlerleme:** 5/5 tamamlandı (%100) ✅
+**Tag:** `v1.0.0` (atılacak)
 
-**Öncelik sırası:**
-1. ~~#101 VNC Proxy~~ ✅
-2. #102 HTTP Proxy (proxy tamamlama — RFP gap)
-3. #100 E2E Tests (GA exit criteria)
-4. Dokümantasyon (GA exit criteria)
+**E2E Test Detayları:**
+- `OrkunPAM.E2ETests` projesi oluşturuldu (tests/ altında)
+- 30+ test, `[Trait("Category","E2E")]` ile filtrelenebilir
+- Kapsam: HttpRequestParser (11), TdsPacket (8), SshEncoding (11), CryptoPerformance (6), HttpProxyE2E (4)
+- `docs/perf-baseline.md` commit'lendi — AES-256-GCM < 0.1 ms/op (hedef < 5 ms) ✅
+
+---
+
+## Sonraki Adım: v1.0.0 GA Tag
+**Kriter:** Sprint 6 tamamlandı → CI yeşil → `v1.0.0` tag atılacak
+**v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ---
 
@@ -116,7 +123,7 @@
 - **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Tamamlandı
 - **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ← Tamamlandı
 - **v1.0.0-rc2:** Sprint 5 çıkışı (13 Mayıs 2026) ← Tamamlandı
-- **v1.0.0:** Sprint 6 çıkışı (14 Haziran 2026 hedef)
+- **v1.0.0:** Sprint 6 çıkışı (14 Mayıs 2026) ← Tamamlandı
 - **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ## Mimari Kararlar
