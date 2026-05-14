@@ -385,15 +385,18 @@ internal sealed class SshServerSession
         var recorder = new SessionRecorder(_opts.RecordingDirectory, _log, pty, _hashChain);
         recorder.Start(_sessionId);
 
-        // Set up command filter if policy defines one
+        // Set up command filter if policy defines one (also needed for double-confirm risk scoring)
         CommandFilter? commandFilter = null;
         CommandFilterModeProxy filterMode = CommandFilterModeProxy.None;
-        if (sessionPolicy != null && sessionPolicy.CommandFilterMode != 0)
+        if (sessionPolicy != null &&
+            (sessionPolicy.CommandFilterMode != 0 || sessionPolicy.DoubleConfirmRiskThreshold > 0))
         {
             commandFilter = new CommandFilter(_log);
             filterMode = (CommandFilterModeProxy)sessionPolicy.CommandFilterMode;
-            _log.LogInformation("Command filtering enabled: mode={Mode}, rules configured",
-                filterMode);
+            if (sessionPolicy.CommandFilterMode != 0)
+                _log.LogInformation("Command filtering enabled: mode={Mode}", filterMode);
+            if (sessionPolicy.DoubleConfirmRiskThreshold > 0)
+                _log.LogInformation("Double-confirm enabled: threshold={Threshold}", sessionPolicy.DoubleConfirmRiskThreshold);
         }
 
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
@@ -403,7 +406,9 @@ internal sealed class SshServerSession
         {
             var relayTask = target.RelayToClientAsync(
                 _conn, clientChanId, recorder, idleCts.Token, lastActivity,
-                commandFilter, filterMode, sessionPolicy?.CommandFilterRulesJson);
+                commandFilter, filterMode, sessionPolicy?.CommandFilterRulesJson,
+                sessionPolicy?.DoubleConfirmRiskThreshold ?? 0,
+                sessionPolicy?.DoubleConfirmCommandsJson);
             var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
 
             await Task.WhenAny(relayTask, idleTask);

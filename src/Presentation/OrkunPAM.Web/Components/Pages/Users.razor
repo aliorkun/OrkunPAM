@@ -58,7 +58,17 @@
                     @foreach (var u in _users)
                     {
                         <tr>
-                            <td><strong>@u.Username</strong></td>
+                            <td>
+                                <strong>@u.Username</strong>
+                                @if (u.IsTemporary && u.TemporaryExpiresUtc.HasValue)
+                                {
+                                    var daysLeft = (int)(u.TemporaryExpiresUtc.Value - DateTime.UtcNow).TotalDays;
+                                    var badgeClass = daysLeft <= 0 ? "pam-badge pam-badge-danger" :
+                                                     daysLeft <= 7 ? "pam-badge pam-badge-warning" : "pam-badge pam-badge-secondary";
+                                    var label = daysLeft <= 0 ? "Expired" : $"Exp: {daysLeft}d";
+                                    <span class="@badgeClass" style="margin-left:.4rem;font-size:.7rem" title="@u.TemporaryExpiresUtc.Value.ToString("yyyy-MM-dd")">@label</span>
+                                }
+                            </td>
                             <td>@(u.DisplayName ?? "—")</td>
                             <td>@(u.Email ?? "—")</td>
                             <td><span class="pam-badge pam-badge-secondary">@u.AuthSource</span></td>
@@ -70,15 +80,15 @@
                             <td>
                                 @if (u.MfaEnabled)
                                 {
-                                    <span class="pam-status pam-status-active">✅ On</span>
+                                    <span class="pam-status pam-status-active">&#x2705; On</span>
                                     <button class="pam-btn-icon" title="Reset MFA"
-                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">🔄</button>
+                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">&#x1F504;</button>
                                 }
                                 else
                                 {
                                     <span class="pam-status pam-status-done">Off</span>
                                     <button class="pam-btn-icon" title="Send MFA Setup Link"
-                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">🔑</button>
+                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">&#x1F511;</button>
                                 }
                             </td>
                             <td>@(u.LastLoginAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>
@@ -149,6 +159,10 @@
                     <label class="pam-label">Confirm Password *</label>
                     <input class="pam-input w-100-input" type="password" @bind="_fPasswordConfirm" />
                 </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Account Expiry Date <span class="pam-text-muted">(optional — temporary user)</span></label>
+                    <input class="pam-input w-100-input" type="date" @bind="_fExpiresAt" />
+                </div>
             </div>
             <div class="pam-modal-footer">
                 <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
@@ -179,6 +193,15 @@
                 <div class="pam-form-group">
                     <label class="pam-label">Email</label>
                     <input class="pam-input w-100-input" type="email" @bind="_eEmail" placeholder="user@company.com" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Account Expiry Date <span class="pam-text-muted">(optional — leave blank to clear)</span></label>
+                    <input class="pam-input w-100-input" type="date" @bind="_eExpiresAt" />
+                    @if (_eExpiresAt.HasValue)
+                    {
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm" style="margin-top:.25rem"
+                                @onclick="@(() => { _eExpiresAt = null; _eClearExpiry = true; })">Clear Expiry</button>
+                    }
                 </div>
             </div>
             <div class="pam-modal-footer">
@@ -261,14 +284,15 @@
     private int            _page         = 1;
     private const int      _pageSize     = 20;
 
-    private bool    _showAdd;
-    private string? _formError;
-    private bool    _formSaving;
-    private string  _fUsername        = "";
-    private string  _fDisplayName     = "";
-    private string  _fEmail           = "";
-    private string  _fPassword        = "";
-    private string  _fPasswordConfirm = "";
+    private bool       _showAdd;
+    private string?    _formError;
+    private bool       _formSaving;
+    private string     _fUsername        = "";
+    private string     _fDisplayName     = "";
+    private string     _fEmail           = "";
+    private string     _fPassword        = "";
+    private string     _fPasswordConfirm = "";
+    private DateTime?  _fExpiresAt;
 
     private string?   _mfaSetupToken;
     private DateTime? _mfaSetupExpiry;
@@ -279,13 +303,15 @@
     private string?                 _importError;
     private ImportResultDto?        _importResult;
 
-    private bool    _showEdit;
-    private string  _eUserId      = "";
-    private string  _eUsername    = "";
-    private string  _eDisplayName = "";
-    private string  _eEmail       = "";
-    private string? _editError;
-    private bool    _editSaving;
+    private bool       _showEdit;
+    private string     _eUserId      = "";
+    private string     _eUsername    = "";
+    private string     _eDisplayName = "";
+    private string     _eEmail       = "";
+    private DateTime?  _eExpiresAt;
+    private bool       _eClearExpiry;
+    private string?    _editError;
+    private bool       _editSaving;
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -315,7 +341,7 @@
         await LoadAsync();
     }
 
-    private void OpenAddModal() { _fUsername = _fDisplayName = _fEmail = _fPassword = _fPasswordConfirm = ""; _formError = null; _showAdd = true; }
+    private void OpenAddModal() { _fUsername = _fDisplayName = _fEmail = _fPassword = _fPasswordConfirm = ""; _fExpiresAt = null; _formError = null; _showAdd = true; }
     private void CloseModal() { _showAdd = false; _formError = null; }
 
     private async Task SubmitAddUserAsync()
@@ -327,13 +353,21 @@
         _formSaving = true; StateHasChanged();
         var ok = await Api.CreateUserAsync(_fUsername.Trim(),
             string.IsNullOrWhiteSpace(_fDisplayName) ? null : _fDisplayName.Trim(),
-            string.IsNullOrWhiteSpace(_fEmail)       ? null : _fEmail.Trim(), _fPassword);
+            string.IsNullOrWhiteSpace(_fEmail)       ? null : _fEmail.Trim(),
+            _fPassword, expiresAt: _fExpiresAt);
         _formSaving = false;
         if (!ok) { _formError = "Failed to create user — check username uniqueness and password policy."; StateHasChanged(); return; }
         CloseModal(); _page = 1; await LoadAsync();
     }
 
-    private void OpenEditModal(UserDto u) { _eUserId = u.Id; _eUsername = u.Username; _eDisplayName = u.DisplayName ?? ""; _eEmail = u.Email ?? ""; _editError = null; _showEdit = true; }
+    private void OpenEditModal(UserDto u)
+    {
+        _eUserId = u.Id; _eUsername = u.Username;
+        _eDisplayName = u.DisplayName ?? ""; _eEmail = u.Email ?? "";
+        _eExpiresAt = u.TemporaryExpiresUtc?.ToLocalTime();
+        _eClearExpiry = false;
+        _editError = null; _showEdit = true;
+    }
     private void CloseEditModal() { _showEdit = false; _editError = null; }
 
     private async Task SubmitEditUserAsync()
@@ -341,7 +375,9 @@
         _editError = null; _editSaving = true; StateHasChanged();
         var ok = await Api.UpdateUserAsync(_eUserId,
             string.IsNullOrWhiteSpace(_eDisplayName) ? null : _eDisplayName.Trim(),
-            string.IsNullOrWhiteSpace(_eEmail)        ? null : _eEmail.Trim());
+            string.IsNullOrWhiteSpace(_eEmail)        ? null : _eEmail.Trim(),
+            expiresAt: _eExpiresAt,
+            clearExpiry: _eClearExpiry);
         _editSaving = false;
         if (!ok) { _editError = "Failed to save changes — please try again."; StateHasChanged(); return; }
         CloseEditModal(); await LoadAsync();

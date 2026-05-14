@@ -270,8 +270,12 @@ public record LockoutPolicySettings
 
 public record SessionPolicySettings
 {
-    public int IdleTimeoutMinutes    { get; init; } = 30;
-    public int MaxConcurrentSessions { get; init; } = 3;
+    public int     IdleTimeoutMinutes         { get; init; } = 30;
+    public int     MaxConcurrentSessions      { get; init; } = 3;
+    public byte    CommandFilterMode          { get; init; } = 0;
+    public string? CommandFilterRulesJson     { get; init; }
+    public decimal DoubleConfirmRiskThreshold { get; init; } = 0;
+    public string? DoubleConfirmCommandsJson  { get; init; }
 }
 
 public record MfaPolicySettings

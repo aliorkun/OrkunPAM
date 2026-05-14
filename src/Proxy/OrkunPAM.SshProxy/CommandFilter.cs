@@ -10,7 +10,8 @@ internal enum FilterAction : byte
 {
     Allow = 0,
     Block = 1,
-    Warn = 2
+    Warn = 2,
+    DoubleConfirm = 3
 }
 
 /// <summary>
@@ -227,7 +228,7 @@ internal sealed class CommandFilter : ICommandFilter
         }
     }
 
-    private static decimal CalculateRiskScore(string command)
+    internal static decimal CalculateRiskScore(string command)
     {
         decimal score = 0m;
         var trimmed = command.Trim();
@@ -258,6 +259,15 @@ internal sealed class CommandFilter : ICommandFilter
             score = Math.Max(score, 2.0m);
 
         return Math.Min(score, 10.0m);
+    }
+
+    internal bool IsInDoubleConfirmList(string command, string? patternsJson)
+    {
+        if (string.IsNullOrWhiteSpace(patternsJson)) return false;
+        var rules = ParseRules(patternsJson);
+        if (rules.Length == 0) return false;
+        var (matched, _) = MatchesAnyRule(command, rules);
+        return matched;
     }
 
     private static string TruncateCommand(string command, int maxLen = 100)

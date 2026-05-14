@@ -59,25 +59,45 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    public async Task<bool> CreateUserAsync(string username, string? displayName, string? email, string password)
+    public async Task<bool> CreateUserAsync(string username, string? displayName, string? email,
+        string password, DateTime? expiresAt = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
             var resp = await client.PostAsJsonAsync("/api/v1/users",
-                new { username, displayName, email, password, authSource = "Local" });
+                new { username, displayName, email, password, authSource = "Local", expiresAt });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> UpdateUserAsync(string id, string? displayName, string? email)
+    public async Task<bool> UpdateUserAsync(string id, string? displayName, string? email,
+        DateTime? expiresAt = null, bool clearExpiry = false)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PatchAsJsonAsync($"/api/v1/users/{id}",
-                new { displayName, email });
+            var resp = await client.PutAsJsonAsync($"/api/v1/users/{id}",
+                new { displayName, email, expiresAt, clearExpiry = clearExpiry ? (bool?)true : null });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<AccountPolicyDto?> GetAccountPolicyAsync()
+    {
+        var result = await GetAsync<SingleResult<AccountPolicyDto>>("/api/v1/system/account-policy");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveAccountPolicyAsync(int maxPasswordAgeDays, int maxInactivityDays, int warnDaysBefore)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/account-policy",
+                new { maxPasswordAgeDays, maxInactivityDays, warnDaysBefore });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -1090,6 +1110,7 @@ public record UserDto(
     string    Status,
     bool      MfaEnabled,
     bool      IsTemporary,
+    DateTime? TemporaryExpiresUtc,
     DateTime? LastLoginAtUtc,
     DateTime  CreatedAtUtc);
 
@@ -1177,7 +1198,11 @@ public record LockoutPolicySettingsDto(
 
 public record SessionPolicySettingsDto(
     int IdleTimeoutMinutes,
-    int MaxConcurrentSessions);
+    int MaxConcurrentSessions,
+    byte CommandFilterMode = 0,
+    string? CommandFilterRulesJson = null,
+    decimal DoubleConfirmRiskThreshold = 0,
+    string? DoubleConfirmCommandsJson = null);
 
 public record RdpLaunchResult(
     string       SessionId,
@@ -1360,6 +1385,8 @@ public record TacacsCommandPolicyDto(
 
 // MFA Policy DTO
 public record MfaPolicySettingsDto(bool MfaRequired);
+
+public record AccountPolicyDto(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore);
 
 // My Sessions DTO
 public record MySessionDto(

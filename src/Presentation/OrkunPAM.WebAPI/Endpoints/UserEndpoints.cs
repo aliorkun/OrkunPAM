@@ -33,12 +33,40 @@ public static class UserEndpoints
                     u.Id, u.Username, u.DisplayName, u.Email,
                     AuthSource = u.AuthSource.ToString(),
                     Status = u.Status.ToString(),
-                    u.MfaEnabled, u.IsTemporary,
+                    u.MfaEnabled, u.IsTemporary, u.TemporaryExpiresUtc,
                     u.LastLoginAtUtc, u.CreatedAtUtc
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = users, meta = new { page, pageSize, totalCount = total } });
         });
+
+        group.MapPost("", async (CreateUserRequest req, IAuthenticationService auth,
+            OrkunPamDbContext db, IAuditService audit, HttpContext context) =>
+        {
+            var result = await auth.CreateLocalUserAsync(req.Username, req.Password, req.DisplayName, req.Email);
+            if (result.IsFailure)
+                return Results.Conflict(new { success = false, errors = new[] { result.Error.Message } });
+
+            var user = result.Value;
+
+            if (req.ExpiresAt.HasValue)
+            {
+                user.TemporaryExpiresUtc = req.ExpiresAt.Value.ToUniversalTime();
+                user.IsTemporary = true;
+                await db.SaveChangesAsync();
+            }
+
+            await audit.LogAsync("User", "User.Created", ParseActorId(context),
+                context.User.FindFirstValue("username"),
+                context.Connection.RemoteIpAddress?.ToString(),
+                "User", user.Id.ToString(), new { targetUsername = user.Username, hasExpiry = req.ExpiresAt.HasValue });
+
+            return Results.Created($"/api/v1/users/{user.Id}", new
+            {
+                success = true,
+                data = new { user.Id, user.Username, user.DisplayName }
+            });
+        }).RequireAuthorization("AdminOnly");
 
         group.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
         {
@@ -80,6 +108,16 @@ public static class UserEndpoints
             if (req.Language != null) user.Language = req.Language;
             if (req.Timezone != null) user.Timezone = req.Timezone;
             if (req.Status.HasValue) user.Status = req.Status.Value;
+            if (req.ExpiresAt.HasValue)
+            {
+                user.TemporaryExpiresUtc = req.ExpiresAt.Value.ToUniversalTime();
+                user.IsTemporary = true;
+            }
+            else if (req.ClearExpiry == true)
+            {
+                user.TemporaryExpiresUtc = null;
+                user.IsTemporary = false;
+            }
 
             await db.SaveChangesAsync();
 
@@ -390,5 +428,8 @@ public static class UserEndpoints
     }
 }
 
-public record UpdateUserRequest(string? DisplayName, string? Email, string? Language, string? Timezone, UserStatus? Status);
+public record CreateUserRequest(string Username, string Password, string? DisplayName, string? Email,
+    string? AuthSource = null, DateTime? ExpiresAt = null);
+public record UpdateUserRequest(string? DisplayName, string? Email, string? Language, string? Timezone,
+    UserStatus? Status, DateTime? ExpiresAt = null, bool? ClearExpiry = null);
 public record AdminResetPasswordRequest(string NewPassword);

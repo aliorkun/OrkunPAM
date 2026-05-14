@@ -181,12 +181,12 @@
 
 @if (_tab == "session")
 {
-    <div class="pam-card" style="max-width:480px">
+    <div class="pam-card" style="max-width:600px">
         <div class="pam-card-header"><strong>Session Policy</strong></div>
         <div class="pam-card-body">
             @if (_sessLoading)
             {
-                <div class="pam-loading-text">Loading…</div>
+                <div class="pam-loading-text">Loading...</div>
             }
             else
             {
@@ -198,9 +198,57 @@
                     <label class="pam-label">Max concurrent sessions per user</label>
                     <input type="number" class="pam-input" style="width:180px" min="1" @bind="_sessMaxConcurrent" />
                 </div>
+
+                <hr style="margin:1.5rem 0" />
+                <div style="font-weight:600;margin-bottom:1rem">SSH Command Filter</div>
+
+                <div class="pam-form-group">
+                    <label class="pam-label">Command filter mode</label>
+                    <select class="pam-input" style="width:220px" @bind="_sessCommandFilterMode">
+                        <option value="0">None (disabled)</option>
+                        <option value="1">Whitelist (allow listed commands only)</option>
+                        <option value="2">Blacklist (block listed commands)</option>
+                    </select>
+                </div>
+                @if (_sessCommandFilterMode != 0)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Filter rules (JSON array of patterns)</label>
+                        <textarea class="pam-input" rows="4" style="font-family:monospace;font-size:0.85rem"
+                            @bind="_sessCommandFilterRules"
+                            placeholder='["reload","write erase","rm -rf *"]'></textarea>
+                        <div style="font-size:0.78rem;color:#888;margin-top:4px">Glob (*) or regex patterns. Use isRegex:true for regex objects.</div>
+                    </div>
+                }
+
+                <hr style="margin:1.5rem 0" />
+                <div style="font-weight:600;margin-bottom:1rem">SSH Double Confirmation</div>
+                <div style="font-size:0.85rem;color:#888;margin-bottom:1rem">
+                    When enabled, high-risk SSH commands require the user to type YES before execution.
+                    The command is cancelled after 30 seconds with no response.
+                </div>
+
+                <div class="pam-form-group">
+                    <label class="pam-label">Risk score threshold (0 = disabled, 1-10)</label>
+                    <input type="number" class="pam-input" style="width:180px" min="0" max="10" step="0.5"
+                        @bind="_sessDoubleConfirmThreshold" />
+                    <div style="font-size:0.78rem;color:#888;margin-top:4px">
+                        Commands scoring at or above this threshold require confirmation. Recommended: 7.
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Explicit command patterns (JSON array, optional)</label>
+                    <textarea class="pam-input" rows="3" style="font-family:monospace;font-size:0.85rem"
+                        @bind="_sessDoubleConfirmCommands"
+                        placeholder='["reload","write erase","format *","shutdown"]'></textarea>
+                    <div style="font-size:0.78rem;color:#888;margin-top:4px">
+                        These commands always require confirmation regardless of risk score.
+                    </div>
+                </div>
+
                 <div style="margin-top:1rem">
-                    <button class="pam-btn pam-btn-primary" @onclick="SaveSessionPolicyAsync" disabled="@_sessSaving">
-                        @if (_sessSaving) { <span class="pam-spinner-sm"></span> } Save
+                    <button class="pam-btn pam-btn-primary" @onclick="@(() => SaveSessionPolicyAsync())" disabled="@_sessSaving">
+                        @if (_sessSaving) { <span class="pam-spinner-sm"></span> } Save Session Policy
                     </button>
                 </div>
             }
@@ -355,10 +403,14 @@
     private int  _lockWindowMin   = 15;
 
     // Session policy
-    private bool _sessLoading       = false;
-    private bool _sessSaving        = false;
-    private int  _sessIdleMin       = 30;
-    private int  _sessMaxConcurrent = 3;
+    private bool    _sessLoading                = false;
+    private bool    _sessSaving                 = false;
+    private int     _sessIdleMin                = 30;
+    private int     _sessMaxConcurrent          = 3;
+    private byte    _sessCommandFilterMode      = 0;
+    private string  _sessCommandFilterRules     = "";
+    private decimal _sessDoubleConfirmThreshold = 0;
+    private string  _sessDoubleConfirmCommands  = "";
 
     // MFA policy
     private bool _mfaLoading  = false;
@@ -492,15 +544,27 @@
     {
         _sessLoading = true; StateHasChanged();
         var s = await Api.GetSessionPolicyAsync();
-        if (s != null) { _sessIdleMin = s.IdleTimeoutMinutes; _sessMaxConcurrent = s.MaxConcurrentSessions; }
+        if (s != null)
+        {
+            _sessIdleMin                = s.IdleTimeoutMinutes;
+            _sessMaxConcurrent          = s.MaxConcurrentSessions;
+            _sessCommandFilterMode      = s.CommandFilterMode;
+            _sessCommandFilterRules     = s.CommandFilterRulesJson ?? "";
+            _sessDoubleConfirmThreshold = s.DoubleConfirmRiskThreshold;
+            _sessDoubleConfirmCommands  = s.DoubleConfirmCommandsJson ?? "";
+        }
         _sessLoading = false; StateHasChanged();
     }
 
     private async Task SaveSessionPolicyAsync()
     {
         _sessSaving = true; StateHasChanged();
-        var ok = await Api.SaveSessionPolicyAsync(
-            new SessionPolicySettingsDto(_sessIdleMin, _sessMaxConcurrent));
+        var ok = await Api.SaveSessionPolicyAsync(new SessionPolicySettingsDto(
+            _sessIdleMin, _sessMaxConcurrent,
+            _sessCommandFilterMode,
+            string.IsNullOrWhiteSpace(_sessCommandFilterRules) ? null : _sessCommandFilterRules,
+            _sessDoubleConfirmThreshold,
+            string.IsNullOrWhiteSpace(_sessDoubleConfirmCommands) ? null : _sessDoubleConfirmCommands));
         _sessSaving = false;
         _successMsg = ok ? "Session policy saved." : null;
         if (!ok) _error = "Failed to save session policy.";
