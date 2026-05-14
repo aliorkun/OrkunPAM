@@ -19,7 +19,7 @@
 | 9 | Solution shall support SAML provider configuration on a per-tenant basis, allowing separate identity provider settings f |  |  |
 | 10 | Solution shall support Public Key Infrastructure (PKI) Authentication for secure portal access using digital certificate |  |  |
 | 11 | Solution shall support Windows Authentication fo |  |  |
-| 12 | Solution shall have out of the box management capability for network devices and systems (Juniper, Cisco IOS, Cisco IOS- |  |  |
+| 12 | Solution shall have out of the box management capability for network devices and systems (Juniper, Cisco IOS, Cisco IOS- | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492) built-in server; Cisco/Juniper/Aruba CLI AAA via TCP :49 (#111) |
 | 13 | Solution shall support adapting to different brand/model devices and systems, which will be used in the future. |  |  |
 | 14 | Solution shall have out of the box support for script usage on NAS devices. |  |  |
 | 15 | Solution shall support users to change their passwords and force to create the passwords in a complex way as well as cha |  |  |
@@ -694,12 +694,12 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| 1 | Direct Access to Network Elements | Solution shall support built-in TACACS+ Server |  |
+| 1 | Direct Access to Network Elements | Solution shall support built-in TACACS+ Server | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492): TCP :49, ASCII/PAP auth, authz (AV-pair), accounting (START/STOP/WATCHDOG), MD5 encryption (#111) |
 | 2 | Direct Access to Network Elements | Solution shall support built-in Radius Server |  |
 | 3 | Direct Access to Network Elements | Solution shall support multi-domains on TACACS authentication. |  |
 | 4 | Direct Access to Network Elements | Solution shall support MFA for TACACS connections. |  |
-| 5 | Direct Access to Network Elements | Solution shall work as a standalone AAA solution and support RADIUS and TACACS+ protocols. |  |
-| 6 | Direct Access to Network Elements | Solution shall support to add custom AVP (Attribute Value Pair) |  |
+| 5 | Direct Access to Network Elements | Solution shall work as a standalone AAA solution and support RADIUS and TACACS+ protocols. | PC | TACACS+ standalone AAA done (auth/authz/accounting → audit log + SIEM); RADIUS (RFC 2865/2866) pending (#111) |
+| 6 | Direct Access to Network Elements | Solution shall support to add custom AVP (Attribute Value Pair) | PC | TACACS+ authorization AV-pair: PermitAll/DenyAll/Policy mode, per-device command rules (#111) |
 |  | Direct Access to Network Elements | Solution shall have authentication mechanism even the connection between LDAP server and Solution's tacacs server is dow |  |
 | 7 | Direct Access to Network Elements | Solution shall support up to 250.000 devices |  |
 | 8 | Direct Access to Network Elements | Solution shall support up to 5000 TPS |  |
