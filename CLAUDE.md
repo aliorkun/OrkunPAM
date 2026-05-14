@@ -90,11 +90,18 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 
 **Döngü sürekli tekrar eder. Her agent GitHub'ı tek kaynak olarak kullanır.**
 
+### Mevcut Durum (2026-05-14)
+- **v1.0.0-rc1 TAG ATILDI** — MVP tamamlandı
+- MVP milestone'ları (v0.2.0, v0.3.0, v1.0.0-rc1) hepsi kapalı
+- Artık **v2.0.0 feature'ları** aktif geliştirme hedefi
+- Security fix'ler hâlâ en yüksek öncelik
+
 ### Developer Kuralları
 - `gh issue list --label security` → Security agent bulgularını takip et
 - `gh issue list --label product` → PM taleplerini takip et
 - `severity:critical` ve `severity:high` issue'lar her şeyden önce fix'lenir
-- `priority:mvp` issue'lar `priority:v2`'den önce gelir
+- **MVP TAMAMLANDI** — `priority:v2` issue'lara geçildi
+- v2 öncelik sırası: #125 Session Monitoring → #126 Windows/Kerberos Auth → #127 Vendor Access → #110 RDP Full → #116 HTML5 RDP
 - Her fix commit'inde ilgili issue numarasını referansla
 - Proxy katmanında açık kaynak kütüphane KULLANMA - native C# implementasyon
 - Security agent'ın açtığı ticket'larda belirtilen dosya:satır bilgisini dikkate al
@@ -116,17 +123,24 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 - **Çakışma önleme:** Agent'lar farklı saatlerde çalışır, üst üste binmez
 - **Duplicate:** Tüm agent'lar önce mevcut issue'ları kontrol eder
 
-### Ertelenen Alanlar (v2+ — ŞU AN DOKUNMA)
-Aşağıdaki RFP bölümleri bilinçli olarak ertelendi. Bu alanlarda:
-- PM yeni issue **AÇMAZ**
-- Developer kod **YAZMAZ**
-- Security bu alanları **DENETLEMeZ**
+### v2 Aktif Geliştirme Öncelikleri
+Aşağıdaki issue'lar sırayla implement edilecek:
+
+| # | Issue | Açıklama |
+|---|-------|----------|
+| #125 | Session Live Monitoring | Canlı oturum izleme, admin müdahale |
+| #126 | Windows/Kerberos Auth | NTLM/Kerberos portal girişi |
+| #127 | Vendor Access Management | Tedarikçi/geçici erişim yönetimi |
+| #110 | RDP Full Integration | RDS Gateway (RemoteApp, Shadowing, HA) |
+| #116 | HTML5 RDP Terminal | Tarayıcıdan native client olmadan RDP |
+
+### Ertelenen Alanlar (v3+ — ŞU AN DOKUNMA)
+Bu alanlarda PM issue **AÇMAZ**, Developer kod **YAZMAZ**:
 
 | Alan | RFP Bölümü | Neden Ertelendi |
 |------|-----------|-----------------|
-| Multitenancy | Bölüm 9 | MVP'de tek tenant yeterli |
+| Multitenancy | Bölüm 9 | Tek tenant yeterli şimdilik |
 | Data Access Manager (DB Proxy) | Bölüm 10 | SQL proxy sonra |
-| Direct Access (TACACS+/RADIUS) | Bölüm 11 | Network cihaz yönetimi sonra |
 | Privileged Task Automation | Bölüm 12 | Otomasyon sonra |
 
 ### Backlog Sağlık Kuralları
