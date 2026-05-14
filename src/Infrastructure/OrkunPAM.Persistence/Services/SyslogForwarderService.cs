@@ -21,7 +21,7 @@ public sealed class SyslogForwarderService : BackgroundService
 {
     private readonly InProcessEventBus _eventBus;
     private readonly ILogger<SyslogForwarderService> _logger;
-    private readonly List<SiemTarget> _targets;
+    private readonly List<SyslogTarget> _targets;
     private readonly Channel<IDomainEvent> _buffer;
     private readonly bool _useCef;
 
@@ -39,7 +39,7 @@ public sealed class SyslogForwarderService : BackgroundService
         _useCef = string.IsNullOrEmpty(useCefStr) || !bool.TryParse(useCefStr, out var parsed) || parsed;
 
         _targets = section.GetSection("Targets").GetChildren()
-            .Select(t => new SiemTarget
+            .Select(t => new SyslogTarget
             {
                 Host = t["Host"] ?? "127.0.0.1",
                 Port = int.TryParse(t["Port"], out var p) ? p : 514,
@@ -145,7 +145,7 @@ public enum SyslogProtocol
 /// <summary>
 /// Configuration for a single SIEM target.
 /// </summary>
-public sealed class SiemTarget
+public sealed class SyslogTarget
 {
     public string Host { get; init; } = "127.0.0.1";
     public int Port { get; init; } = 514;
@@ -162,7 +162,7 @@ public sealed class SiemTarget
 /// </summary>
 internal sealed class SiemTransport : IDisposable
 {
-    public SiemTarget Target { get; }
+    public SyslogTarget Target { get; }
     private readonly ILogger _logger;
 
     // UDP
@@ -178,7 +178,7 @@ internal sealed class SiemTransport : IDisposable
     private const int MaxReconnectAttempts = 3;
     private static readonly byte[] OctetFramingNewline = "\n"u8.ToArray();
 
-    public SiemTransport(SiemTarget target, ILogger logger)
+    public SiemTransport(SyslogTarget target, ILogger logger)
     {
         Target = target;
         _logger = logger;

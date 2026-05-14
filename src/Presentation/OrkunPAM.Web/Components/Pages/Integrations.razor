@@ -8,10 +8,10 @@
 </div>
 
 <div style="display:flex;gap:4px;margin-bottom:16px">
-    <button class="pam-btn @(_tab == \"ldap\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-            @onclick="@(() => SetTab(\"ldap\"))">🔗 LDAP / AD</button>
-    <button class="pam-btn @(_tab == \"siem\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-            @onclick="@(() => SetTab(\"siem\"))">📡 SIEM / Syslog</button>
+    <button class="pam-btn @(_tab == "ldap" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("ldap"))">🔗 LDAP / AD</button>
+    <button class="pam-btn @(_tab == "siem" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("siem"))">📡 SIEM / Syslog</button>
 </div>
 
 @if (_tab == "ldap")
@@ -73,7 +73,7 @@
                                 <td style="font-size:0.8em;max-width:200px;overflow:hidden;text-overflow:ellipsis">@c.BaseDn</td>
                                 <td>@c.SyncIntervalMinutes min</td>
                                 <td>@(c.LastSyncAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
-                                <td><span class="pam-status @(c.IsEnabled ? \"pam-status-active\" : \"pam-status-error\")">@(c.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td><span class="pam-status @(c.IsEnabled ? "pam-status-active" : "pam-status-error")">@(c.IsEnabled ? "Enabled" : "Disabled")</span></td>
                                 <td>
                                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
                                             @onclick="@(() => SyncNowAsync(c.Id))"
@@ -154,7 +154,7 @@
                                 <td>@t.Host:@t.Port</td>
                                 <td>@t.Protocol</td>
                                 <td>@t.Format</td>
-                                <td><span class="pam-status @(t.IsEnabled ? \"pam-status-active\" : \"pam-status-warning\")">@(t.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td><span class="pam-status @(t.IsEnabled ? "pam-status-active" : "pam-status-warning")">@(t.IsEnabled ? "Enabled" : "Disabled")</span></td>
                                 <td>@(t.LastSentAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
                                 <td>@t.TotalEventsSent</td>
                                 <td style="font-size:0.75em;max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--pam-danger)">@(t.LastError ?? "")</td>

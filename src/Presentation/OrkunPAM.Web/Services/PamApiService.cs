@@ -950,6 +950,16 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
+
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────
+    public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
+        => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
+
+    public Task<bool> SaveTacacsCommandPolicyAsync(string username, string devicePattern, string mode, string? commands)
+        => Task.FromResult(false);
+
+    public Task<bool> DeleteTacacsCommandPolicyAsync(string id)
+        => Task.FromResult(false);
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -1204,3 +1214,7 @@ public record BackupRecordDto(
     DateTime? CompletedAtUtc, DateTime CreatedAtUtc, string InitiatedBy);
 public record BackupScheduleDto(bool Enabled, int HourUtc, string Scope);
 public record BackupRestoreResultDto(int RestoredCount, string Message);
+
+// TACACS+ (deferred — v2+, stub DTO for compilation)
+public record TacacsCommandPolicyDto(
+    string Id, string Username, string DevicePattern, string Mode, string? Commands, bool IsEnabled, DateTime CreatedAtUtc);

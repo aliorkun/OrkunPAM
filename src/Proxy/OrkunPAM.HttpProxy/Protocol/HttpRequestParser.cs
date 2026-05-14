@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Text;
 
 namespace OrkunPAM.HttpProxy.Protocol;

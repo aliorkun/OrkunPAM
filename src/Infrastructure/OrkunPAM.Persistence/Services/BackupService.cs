@@ -121,7 +121,7 @@ public sealed class BackupService : IBackupService
                     {
                         Id = dto.Id, Name = dto.Name, Username = dto.Username,
                         PasswordEnc = dto.PasswordEnc, PrivateKeyEnc = dto.PrivateKeyEnc,
-                        CredentialType = Enum.TryParse<CredentialType>(dto.CredentialType, out var ct2) ? ct2 : CredentialType.Password,
+                        CredentialType = Enum.TryParse<CredentialType>(dto.CredentialType, out var ct2) ? ct2 : CredentialType.UserPassword,
                         FolderId = dto.FolderId, KeyVersion = dto.KeyVersion, Tags = dto.Tags
                     });
                     restoredCount++;

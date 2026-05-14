@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Enums;
+using SiemTarget = OrkunPAM.Domain.Entities.Integration.SiemTarget;
 
 namespace OrkunPAM.Persistence.Services;
 
