@@ -42,6 +42,22 @@ internal sealed class HttpProxyService : BackgroundService
 
         using var semaphore = new SemaphoreSlim(_opts.MaxConcurrentSessions);
 
+        // Periodically evict expired rate-limit entries to prevent unbounded growth (#109)
+        _ = Task.Run(async () =>
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try { await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken); }
+                catch (OperationCanceledException) { return; }
+                var cutoff = DateTimeOffset.UtcNow - RateLimitWindow;
+                foreach (var key in _connTracker.Keys)
+                {
+                    if (_connTracker.TryGetValue(key, out var e) && e.windowStart < cutoff)
+                        _connTracker.TryRemove(key, out _);
+                }
+            }
+        }, stoppingToken);
+
         try
         {
             while (!stoppingToken.IsCancellationRequested)

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using OrkunPAM.HttpProxy.Protocol;
@@ -111,12 +112,22 @@ internal sealed class HttpSession
             await HandleHttpAsync(clientStream, request, pamUser, pamPass, sessionId, logger, ct);
     }
 
-    // ── CONNECT tunnel (HTTPS passthrough) ────────────────────────────────────────────
+    // ── CONNECT tunnel (HTTPS passthrough) ───────────────────────────────────────────────
 
     private async Task HandleConnectAsync(
         NetworkStream clientStream, ParsedRequest req,
         string pamUser, string sessionId, HttpSessionLogger logger, CancellationToken ct)
     {
+        // SSRF guard: block private/loopback/link-local targets (#107)
+        if (!await IsConnectTargetSafeAsync(req.TargetHost, req.TargetPort, ct))
+        {
+            _log.LogWarning("HTTP CONNECT {User}: SSRF blocked — {Host}:{Port}", pamUser, req.TargetHost, req.TargetPort);
+            await WriteStatusAsync(clientStream, 403, "Forbidden", [], "SSRF: target address not permitted.", ct);
+            logger.Write(sessionId, pamUser, _clientIp, "CONNECT",
+                $"https://{req.TargetHost}:{req.TargetPort}", 403, 0, false);
+            return;
+        }
+
         using var target = new TcpClient { NoDelay = true };
 
         try
@@ -167,7 +178,7 @@ internal sealed class HttpSession
         _ = _api.ReportSessionEndedAsync(sessionId, duration, "", CancellationToken.None);
     }
 
-    // ── Plain HTTP forward ─────────────────────────────────────────────────────
+    // ── Plain HTTP forward ─────────────────────────────────────────────
 
     private async Task HandleHttpAsync(
         NetworkStream clientStream, ParsedRequest req,
@@ -210,7 +221,7 @@ internal sealed class HttpSession
         foreach (var (name, value) in req.Headers)
         {
             if (!HopByHop.Contains(name))
-                fwdSb.Append(name).Append(": ").Append(value).Append("\r\n");
+                fwdSb.Append(SanitizeHeader(name)).Append(": ").Append(SanitizeHeader(value)).Append("\r\n");
         }
 
         // Inject vault credential (replaces any existing Authorization header)
@@ -257,7 +268,7 @@ internal sealed class HttpSession
         _ = _api.ReportSessionEndedAsync(sessionId, (int)(duration / 1000), "", CancellationToken.None);
     }
 
-    // ── Relay helpers ──────────────────────────────────────────────────────
+    // ── Relay helpers ──────────────────────────────────────────────────
 
     private static async Task PumpAsync(
         Stream src, Stream dst, CancellationToken ct, long[]? lastActivityTicks)
@@ -342,7 +353,7 @@ internal sealed class HttpSession
         catch (OperationCanceledException) { }
     }
 
-    // ── HTTP response writer ─────────────────────────────────────────────────────
+    // ── HTTP response writer ────────────────────────────────────────────────────
 
     private static async Task WriteStatusAsync(
         NetworkStream stream, int statusCode, string statusText,
@@ -373,7 +384,44 @@ internal sealed class HttpSession
         catch { /* best-effort — client may have disconnected */ }
     }
 
-    // ── URL policy ──────────────────────────────────────────────────────────────────
+    // ── Security helpers ──────────────────────────────────────────────────────
+
+    // Strips CR, LF, and NUL to prevent CRLF injection in forwarded headers (#108)
+    private static string SanitizeHeader(string s) =>
+        s.Replace("\r", "").Replace("\n", "").Replace("\0", "");
+
+    // Resolves DNS and rejects private/loopback/link-local addresses to prevent SSRF (#107)
+    private static async Task<bool> IsConnectTargetSafeAsync(string host, int port, CancellationToken ct)
+    {
+        if (port < 1 || port > 65535) return false;
+
+        IPAddress[] addresses;
+        try { addresses = await Dns.GetHostAddressesAsync(host, ct); }
+        catch { return false; }
+
+        foreach (var addr in addresses)
+        {
+            if (IsPrivateOrLinkLocal(addr)) return false;
+        }
+        return addresses.Length > 0;
+    }
+
+    private static bool IsPrivateOrLinkLocal(IPAddress addr)
+    {
+        if (IPAddress.IsLoopback(addr)) return true;
+        if (addr.AddressFamily == AddressFamily.InterNetworkV6 && addr.IsIPv6LinkLocal) return true;
+        if (addr.AddressFamily == AddressFamily.InterNetworkV6 && addr.IsIPv6UniqueLocal) return true;
+
+        var b = addr.GetAddressBytes();
+        if (b.Length != 4) return false;
+
+        return b[0] == 10 ||
+               (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+               (b[0] == 192 && b[1] == 168) ||
+               (b[0] == 169 && b[1] == 254);
+    }
+
+    // ── URL policy ───────────────────────────────────────────────────────────────────────────
 
     private bool IsUrlAllowed(string url)
     {
