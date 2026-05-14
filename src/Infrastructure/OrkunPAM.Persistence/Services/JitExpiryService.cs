@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Enums;
 
 namespace OrkunPAM.Persistence.Services;

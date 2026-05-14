@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence.Services;
+using IAuditService = OrkunPAM.Application.Contracts.IAuditService;
 
 namespace OrkunPAM.UnitTests;
 

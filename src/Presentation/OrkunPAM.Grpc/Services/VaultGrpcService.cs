@@ -17,13 +17,13 @@ public sealed class VaultGrpcService : VaultService.VaultServiceBase
 {
     private readonly OrkunPamDbContext _db;
     private readonly IVaultEncryptionService _vault;
-    private readonly Persistence.Services.IAuditService _audit;
+    private readonly Application.Contracts.IAuditService _audit;
     private readonly ILogger<VaultGrpcService> _logger;
 
     public VaultGrpcService(
         OrkunPamDbContext db,
         IVaultEncryptionService vault,
-        Persistence.Services.IAuditService audit,
+        Application.Contracts.IAuditService audit,
         ILogger<VaultGrpcService> logger)
     {
         _db = db;

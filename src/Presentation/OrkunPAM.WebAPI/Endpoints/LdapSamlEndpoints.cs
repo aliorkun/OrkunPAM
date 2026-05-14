@@ -151,7 +151,7 @@ public static class LdapSamlEndpoints
 
         ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db,
             OrkunPAM.Application.Contracts.ILdapService ldapService,
-            OrkunPAM.Persistence.Services.IAuditService audit,
+            OrkunPAM.Application.Contracts.IAuditService audit,
             ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);

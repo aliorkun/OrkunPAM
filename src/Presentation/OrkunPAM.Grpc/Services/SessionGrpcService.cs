@@ -17,13 +17,13 @@ public sealed class SessionGrpcService : SessionService.SessionServiceBase
 {
     private readonly OrkunPamDbContext _db;
     private readonly IMemoryCache _cache;
-    private readonly Persistence.Services.IAuditService _audit;
+    private readonly Application.Contracts.IAuditService _audit;
     private readonly ILogger<SessionGrpcService> _logger;
 
     public SessionGrpcService(
         OrkunPamDbContext db,
         IMemoryCache cache,
-        Persistence.Services.IAuditService audit,
+        Application.Contracts.IAuditService audit,
         ILogger<SessionGrpcService> logger)
     {
         _db = db;

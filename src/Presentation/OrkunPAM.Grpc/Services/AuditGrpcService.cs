@@ -12,11 +12,11 @@ namespace OrkunPAM.Grpc.Services;
 /// </summary>
 public sealed class AuditGrpcService : OrkunPAM.Grpc.Audit.AuditService.AuditServiceBase
 {
-    private readonly Persistence.Services.IAuditService _audit;
+    private readonly Application.Contracts.IAuditService _audit;
     private readonly ILogger<AuditGrpcService> _logger;
 
     public AuditGrpcService(
-        Persistence.Services.IAuditService audit,
+        Application.Contracts.IAuditService audit,
         ILogger<AuditGrpcService> logger)
     {
         _audit = audit;

@@ -2,7 +2,6 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.Vault;

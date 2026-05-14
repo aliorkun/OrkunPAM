@@ -3,17 +3,11 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Enums;
 
 namespace OrkunPAM.Persistence.Services;
-
-public interface IAuditService
-{
-    Task LogAsync(string category, string eventType, Guid? actorUserId, string? actorUsername,
-        string? actorIp, string? targetType, string? targetId, object? details,
-        AuditOutcome outcome = AuditOutcome.Success, CancellationToken ct = default);
-}
 
 /// <summary>
 /// Tamper-proof audit logging with hash chain.

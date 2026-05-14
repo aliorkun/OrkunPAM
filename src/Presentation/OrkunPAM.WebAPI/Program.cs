@@ -58,7 +58,7 @@ try
     builder.Services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
     builder.Services.AddSingleton<ITotpService, TotpService>();
-    builder.Services.AddScoped<OrkunPAM.Persistence.Services.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IAuditService, OrkunPAM.Persistence.Services.AuditService>();
 
     // === Input Validation (fixes #19) ===
     builder.Services.AddValidatorsFromAssemblyContaining<Program>(ServiceLifetime.Singleton);
@@ -400,3 +400,6 @@ finally
 }
 
 // Request records moved to Endpoints/ files
+
+// Make Program accessible for integration tests (WebApplicationFactory<Program>)
+public partial class Program { }
