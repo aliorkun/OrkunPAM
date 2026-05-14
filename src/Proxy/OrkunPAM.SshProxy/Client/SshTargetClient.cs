@@ -405,11 +405,13 @@ internal sealed class SshTargetClient : IDisposable
         SshConnection clientConn, uint clientSideChanId,
         SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks = null,
         CommandFilter? commandFilter = null, CommandFilterModeProxy filterMode = CommandFilterModeProxy.None,
-        string? commandFilterRulesJson = null)
+        string? commandFilterRulesJson = null,
+        decimal doubleConfirmThreshold = 0, string? doubleConfirmCommandsJson = null)
     {
         var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct, lastActivityTicks), ct);
         var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct, lastActivityTicks,
-            commandFilter, filterMode, commandFilterRulesJson), ct);
+            commandFilter, filterMode, commandFilterRulesJson,
+            doubleConfirmThreshold, doubleConfirmCommandsJson), ct);
         await Task.WhenAny(t2c, c2t);
     }
 
@@ -526,9 +528,10 @@ internal sealed class SshTargetClient : IDisposable
     private async Task ClientToTargetLoopAsync(
         SshConnection clientConn, uint clientSideChanId, CancellationToken ct, long[]? lastActivityTicks,
         CommandFilter? commandFilter = null, CommandFilterModeProxy filterMode = CommandFilterModeProxy.None,
-        string? commandFilterRulesJson = null)
+        string? commandFilterRulesJson = null,
+        decimal doubleConfirmThreshold = 0, string? doubleConfirmCommandsJson = null)
     {
-        var commandDetector = commandFilter != null ? new CommandDetector() : null;
+        var commandDetector = (commandFilter != null || doubleConfirmThreshold > 0) ? new CommandDetector() : null;
 
         while (!ct.IsCancellationRequested)
         {
@@ -541,13 +544,16 @@ internal sealed class SshTargetClient : IDisposable
                     var _ch  = SshEncoding.ReadUInt32(pkt, ref pos);
                     var data = SshEncoding.ReadByteString(pkt, ref pos);
 
-                    // Command filtering: detect commands in the data stream
+                    // Command filtering + double-confirmation
                     bool blocked = false;
-                    if (commandFilter != null && commandDetector != null)
+                    if (commandDetector != null)
                     {
                         foreach (var command in commandDetector.Feed(data))
                         {
-                            var result = commandFilter.Evaluate(command, filterMode, commandFilterRulesJson);
+                            var result = commandFilter != null
+                                ? commandFilter.Evaluate(command, filterMode, commandFilterRulesJson)
+                                : new FilterResult(FilterAction.Allow,
+                                    RiskScore: CommandFilter.CalculateRiskScore(command));
 
                             if (result.Action == FilterAction.Block)
                             {
@@ -556,9 +562,8 @@ internal sealed class SshTargetClient : IDisposable
                                     command.Length > 200 ? command[..200] + "..." : command,
                                     result.Reason, result.RiskScore);
 
-                                // Send warning message back to client via stderr (extended data type 1)
-                                var warningMsg = $"\r\n[OrkunPAM] Command blocked: {result.Reason}\r\n";
-                                var warningBytes = System.Text.Encoding.UTF8.GetBytes(warningMsg);
+                                var warningBytes = System.Text.Encoding.UTF8.GetBytes(
+                                    $"\r\n[OrkunPAM] Command blocked: {result.Reason}\r\n");
                                 using var warnMs = new MemoryStream();
                                 SshEncoding.WriteByte(warnMs, Msg.ChannelExtData);
                                 SshEncoding.WriteUInt32(warnMs, clientSideChanId);
@@ -567,25 +572,58 @@ internal sealed class SshTargetClient : IDisposable
                                 await clientConn.SendAsync(warnMs, ct);
 
                                 blocked = true;
-                                // Don't forward the newline that triggered this command
-                                // but do replenish the window
                                 break;
                             }
                             else if (result.Action == FilterAction.Warn)
                             {
-                                _log.LogWarning(
-                                    "SSH command WARNING: '{Command}' — risk={Risk}",
+                                _log.LogWarning("SSH command WARNING: '{Command}' — risk={Risk}",
                                     command.Length > 200 ? command[..200] + "..." : command,
                                     result.RiskScore);
-                                // Allow through but log it
+                            }
+
+                            // Double-confirmation check (risk threshold OR explicit pattern list)
+                            if (!blocked && doubleConfirmThreshold > 0)
+                            {
+                                bool needsConfirm = result.RiskScore >= doubleConfirmThreshold
+                                    || (commandFilter != null
+                                        && commandFilter.IsInDoubleConfirmList(command, doubleConfirmCommandsJson));
+
+                                if (needsConfirm)
+                                {
+                                    bool confirmed = await ConfirmCommandAsync(
+                                        clientConn, clientSideChanId, command, ct);
+
+                                    if (confirmed)
+                                    {
+                                        _log.LogInformation(
+                                            "SSH double-confirm CONFIRMED: '{Command}' risk={Risk}",
+                                            command.Length > 200 ? command[..200] + "..." : command,
+                                            result.RiskScore);
+                                        // Forward the triggering data (newline) to target so shell executes
+                                        using var fwdConfirm = new MemoryStream();
+                                        SshEncoding.WriteByte(fwdConfirm, Msg.ChannelData);
+                                        SshEncoding.WriteUInt32(fwdConfirm, _serverChanId);
+                                        SshEncoding.WriteByteString(fwdConfirm, data);
+                                        await _conn!.SendAsync(fwdConfirm, ct);
+                                    }
+                                    else
+                                    {
+                                        _log.LogWarning(
+                                            "SSH double-confirm CANCELLED: '{Command}' risk={Risk}",
+                                            command.Length > 200 ? command[..200] + "..." : command,
+                                            result.RiskScore);
+                                        // Send Ctrl-U to clear the partially-typed command at target
+                                        await ClearTargetLineAsync(ct);
+                                    }
+                                    blocked = true; // prevent normal forward below
+                                    break;
+                                }
                             }
 
                             if (result.RiskScore > 0)
-                            {
                                 _log.LogInformation("SSH command risk score: {Risk} for '{Command}'",
                                     result.RiskScore,
                                     command.Length > 100 ? command[..100] + "..." : command);
-                            }
                         }
                     }
 
@@ -667,6 +705,92 @@ internal sealed class SshTargetClient : IDisposable
                     break;
             }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Double-confirmation helpers
+    // -------------------------------------------------------------------------
+
+    private async Task<bool> ConfirmCommandAsync(
+        SshConnection clientConn, uint clientSideChanId, string command, CancellationToken ct)
+    {
+        var displayCmd = command.Length > 100 ? command[..100] + "..." : command;
+        var prompt = System.Text.Encoding.UTF8.GetBytes(
+            $"\r\n[OrkunPAM] *** HIGH RISK COMMAND DETECTED ***\r\n" +
+            $"[OrkunPAM] Command: {displayCmd}\r\n" +
+            $"[OrkunPAM] This command may cause service interruption.\r\n" +
+            $"[OrkunPAM] Type YES and press Enter to confirm, or press Enter to cancel (30s timeout): ");
+        await SendDataToClientAsync(clientConn, clientSideChanId, prompt, ct);
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+        var response = new System.Text.StringBuilder();
+        try
+        {
+            while (!timeoutCts.Token.IsCancellationRequested)
+            {
+                var pkt = await clientConn.ReadPacketAsync(timeoutCts.Token);
+                if (pkt[0] == Msg.ChannelData)
+                {
+                    int pos  = 1;
+                    SshEncoding.ReadUInt32(pkt, ref pos);
+                    var data = SshEncoding.ReadByteString(pkt, ref pos);
+
+                    // Echo characters back so user sees what they type
+                    await SendDataToClientAsync(clientConn, clientSideChanId, data, ct);
+
+                    using var adj = new MemoryStream();
+                    SshEncoding.WriteByte(adj, Msg.ChannelWinAdj);
+                    SshEncoding.WriteUInt32(adj, clientSideChanId);
+                    SshEncoding.WriteUInt32(adj, (uint)data.Length);
+                    await clientConn.SendAsync(adj, ct);
+
+                    foreach (var b in data)
+                    {
+                        if (b == '\r' || b == '\n')
+                            return response.ToString().Trim().Equals("YES", StringComparison.OrdinalIgnoreCase);
+                        else if (b == 0x7f || b == 0x08) // backspace/DEL
+                        { if (response.Length > 0) response.Length--; }
+                        else if (b >= 0x20)
+                            response.Append((char)b);
+                    }
+                }
+                else if (pkt[0] == Msg.ChannelEof || pkt[0] == Msg.ChannelClose)
+                {
+                    return false;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+
+        // Timeout
+        if (!ct.IsCancellationRequested)
+        {
+            await SendDataToClientAsync(clientConn, clientSideChanId,
+                System.Text.Encoding.UTF8.GetBytes("\r\n[OrkunPAM] Timeout — command cancelled.\r\n"), ct);
+        }
+        return false;
+    }
+
+    private async Task SendDataToClientAsync(SshConnection clientConn, uint clientSideChanId, byte[] data, CancellationToken ct)
+    {
+        using var ms = new MemoryStream();
+        SshEncoding.WriteByte(ms, Msg.ChannelData);
+        SshEncoding.WriteUInt32(ms, clientSideChanId);
+        SshEncoding.WriteByteString(ms, data);
+        await clientConn.SendAsync(ms, ct);
+    }
+
+    private async Task ClearTargetLineAsync(CancellationToken ct)
+    {
+        // Ctrl-U (0x15) clears the current line in most shells — prevents the
+        // partially-typed command (minus its newline) from executing
+        using var ms = new MemoryStream();
+        SshEncoding.WriteByte(ms, Msg.ChannelData);
+        SshEncoding.WriteUInt32(ms, _serverChanId);
+        SshEncoding.WriteByteString(ms, [0x15]); // Ctrl-U
+        await _conn!.SendAsync(ms, ct);
     }
 
     public void Dispose()
