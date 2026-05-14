@@ -20,8 +20,8 @@ internal sealed class TacacsProxyOptions
     /// <summary>Privilege levels (0-15) allowed for enable/exec authorization.</summary>
     public int DefaultPrivilegeLevel { get; set; } = 1;
 
-    /// <summary>Command authorization mode: None, PermitAll, DenyAll, Policy.</summary>
-    public string CommandAuthorizationMode { get; set; } = "PermitAll";
+    /// <summary>Command authorization mode: PermitAll, DenyAll, Policy. Defaults to DenyAll (secure by default).</summary>
+    public string CommandAuthorizationMode { get; set; } = "DenyAll";
 
     // RADIUS server (RFC 2865/2866)
     public bool RadiusEnabled  { get; set; } = true;

@@ -14,17 +14,18 @@ internal static class RadiusCode
     public const byte AccountingResponse = 5;
 }
 
-/// <summary>RADIUS attribute types (RFC 2865).</summary>
+/// <summary>RADIUS attribute types (RFC 2865 / RFC 3579).</summary>
 internal static class RadiusAttr
 {
-    public const byte UserName       = 1;
-    public const byte UserPassword   = 2;
-    public const byte NasIpAddress   = 4;
-    public const byte NasPort        = 5;
-    public const byte ReplyMessage   = 18;
-    public const byte NasIdentifier  = 32;
-    public const byte AcctStatusType = 40;
-    public const byte AcctSessionId  = 44;
+    public const byte UserName            = 1;
+    public const byte UserPassword        = 2;
+    public const byte NasIpAddress        = 4;
+    public const byte NasPort             = 5;
+    public const byte ReplyMessage        = 18;
+    public const byte NasIdentifier       = 32;
+    public const byte AcctStatusType      = 40;
+    public const byte AcctSessionId       = 44;
+    public const byte MessageAuthenticator = 80; // RFC 3579 §3.2 — BlastRADIUS protection
 }
 
 /// <summary>
@@ -38,6 +39,7 @@ internal sealed class RadiusPacket
     public byte[] Authenticator { get; set; } = new byte[16];
 
     private readonly List<(byte Type, byte[] Value)> _attrs = [];
+    private byte[] _rawBytes = Array.Empty<byte>(); // kept for Message-Authenticator HMAC validation
 
     /// <summary>Parses a RADIUS packet from raw UDP payload. Returns null on malformed input.</summary>
     public static RadiusPacket? TryParse(ReadOnlySpan<byte> data)
@@ -48,6 +50,7 @@ internal sealed class RadiusPacket
 
         var pkt = new RadiusPacket { Code = data[0], Id = data[1] };
         data[4..20].CopyTo(pkt.Authenticator);
+        pkt._rawBytes = data[..length].ToArray(); // preserve for Message-Authenticator HMAC validation
 
         int pos = 20;
         while (pos + 2 <= length)
@@ -100,29 +103,71 @@ internal sealed class RadiusPacket
         return Encoding.UTF8.GetString(plain, 0, realLen);
     }
 
-    /// <summary>Builds Access-Accept or Access-Reject with correct ResponseAuth.</summary>
+    /// <summary>
+    /// Validates Message-Authenticator (RFC 3579 §3.2 / BlastRADIUS mitigation).
+    /// Returns false when attribute is absent or HMAC-MD5 does not match.
+    /// </summary>
+    public bool ValidateMessageAuthenticator(string sharedSecret)
+    {
+        if (_rawBytes.Length < 20) return false;
+
+        int length = BinaryPrimitives.ReadUInt16BigEndian(_rawBytes.AsSpan(2));
+        int msgAuthValueOffset = -1;
+        int pos = 20;
+        while (pos + 2 <= length)
+        {
+            byte type = _rawBytes[pos];
+            byte len  = _rawBytes[pos + 1];
+            if (len < 2 || pos + len > length) break;
+            if (type == RadiusAttr.MessageAuthenticator) { msgAuthValueOffset = pos + 2; break; }
+            pos += len;
+        }
+
+        if (msgAuthValueOffset < 0 || msgAuthValueOffset + 16 > length) return false;
+
+        var received = _rawBytes.AsSpan(msgAuthValueOffset, 16).ToArray();
+        var workCopy = _rawBytes.AsSpan(0, length).ToArray();
+        Array.Clear(workCopy, msgAuthValueOffset, 16); // zero out HMAC for re-computation
+
+        var expected = HMACMD5.HashData(Encoding.ASCII.GetBytes(sharedSecret), workCopy);
+        return CryptographicOperations.FixedTimeEquals(received, expected);
+    }
+
+    /// <summary>
+    /// Builds Access-Accept or Access-Reject with correct ResponseAuth and
+    /// Message-Authenticator (RFC 3579 §3.2) to guard against BlastRADIUS.
+    /// </summary>
     public byte[] BuildResponse(byte code, string sharedSecret, string? replyMessage = null)
     {
-        var attrBytes = EncodeReplyAttr(replyMessage);
-        int total     = 20 + attrBytes.Length;
-        var secret    = Encoding.ASCII.GetBytes(sharedSecret);
+        var replyAttr   = EncodeReplyAttr(replyMessage);
+        const int msgAuthAttrSize = 18; // type(1) + len(1) + hmac16(16)
+        int total       = 20 + replyAttr.Length + msgAuthAttrSize;
+        var secretBytes = Encoding.ASCII.GetBytes(sharedSecret);
 
-        // ResponseAuth = MD5(Code || Id || Length || RequestAuth || Attrs || Secret)
-        var hashIn = new byte[total + secret.Length];
-        hashIn[0] = code;
-        hashIn[1] = Id;
-        BinaryPrimitives.WriteUInt16BigEndian(hashIn.AsSpan(2), (ushort)total);
-        Authenticator.CopyTo(hashIn, 4);
-        attrBytes.CopyTo(hashIn, 20);
-        secret.CopyTo(hashIn, 20 + attrBytes.Length);
-        var responseAuth = MD5.HashData(hashIn);
-
+        // Build packet with zero-filled ResponseAuth and zero Message-Authenticator placeholder
         var pkt = new byte[total];
         pkt[0] = code;
         pkt[1] = Id;
         BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), (ushort)total);
+        // pkt[4..19] = zeros (ResponseAuth placeholder, filled below)
+        replyAttr.CopyTo(pkt, 20);
+        int msgAuthPos      = 20 + replyAttr.Length;
+        pkt[msgAuthPos]     = RadiusAttr.MessageAuthenticator;
+        pkt[msgAuthPos + 1] = 18;
+        // pkt[msgAuthPos+2..+17] = zeros (HMAC placeholder, filled below)
+
+        // 1. ResponseAuth = MD5(Code|Id|Length|RequestAuth|Attrs+ZeroMsgAuth|Secret)
+        var hashIn = new byte[total + secretBytes.Length];
+        Buffer.BlockCopy(pkt, 0, hashIn, 0, total);
+        Authenticator.CopyTo(hashIn, 4); // insert RequestAuth (was zero placeholder)
+        secretBytes.CopyTo(hashIn, total);
+        var responseAuth = MD5.HashData(hashIn.AsSpan(0, total + secretBytes.Length));
         responseAuth.CopyTo(pkt, 4);
-        attrBytes.CopyTo(pkt, 20);
+
+        // 2. HMAC-MD5 over complete packet (ResponseAuth set, Message-Auth still zeros)
+        var msgAuth = HMACMD5.HashData(secretBytes, pkt);
+        msgAuth.CopyTo(pkt, msgAuthPos + 2);
+
         return pkt;
     }
 

@@ -201,7 +201,7 @@ internal sealed class TacacsSession
             "PermitAll" => true,
             "DenyAll"   => false,
             "Policy"    => await _api.AuthorizeCommandAsync(req.User, cmd, _deviceIp, _ct),
-            _           => true
+            _           => LogAndDeny(_opts.CommandAuthorizationMode, req.User, cmd)
         };
 
         var reply = new AuthorResponsePacket
@@ -287,6 +287,13 @@ internal sealed class TacacsSession
 
         await stream.WriteAsync(packet.AsMemory(), _ct);
         await stream.FlushAsync(_ct);
+    }
+
+    private bool LogAndDeny(string mode, string user, string cmd)
+    {
+        _log.LogError("[{DeviceIp}] Unknown CommandAuthorizationMode '{Mode}' — denying cmd={Cmd} user={User}",
+            _deviceIp, mode, cmd, user);
+        return false;
     }
 
     private string ResolveSecret(string deviceIp)

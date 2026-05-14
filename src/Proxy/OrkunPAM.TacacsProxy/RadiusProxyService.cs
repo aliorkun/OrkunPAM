@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,11 @@ internal sealed class RadiusProxyService : BackgroundService
     private readonly ILogger<RadiusProxyService> _log;
     private readonly TacacsProxyOptions          _opts;
     private readonly PamApiClient                _api;
+
+    // Per-IP rate limiter: max 10 auth requests per 60 s (brute-force protection)
+    private readonly ConcurrentDictionary<string, (int Count, long WindowStart)> _rateLimiter = new();
+    private const int MaxRequestsPerWindow = 10;
+    private static readonly long RateLimitWindowTicks = TimeSpan.FromSeconds(60).Ticks;
 
     public RadiusProxyService(
         ILogger<RadiusProxyService> log,
@@ -79,11 +85,31 @@ internal sealed class RadiusProxyService : BackgroundService
         }
     }
 
+    private bool IsRateLimited(string clientIp)
+    {
+        var nowTicks = DateTime.UtcNow.Ticks;
+        var entry = _rateLimiter.AddOrUpdate(
+            clientIp,
+            _ => (1, nowTicks),
+            (_, existing) => nowTicks - existing.WindowStart > RateLimitWindowTicks
+                ? (1, nowTicks)
+                : (existing.Count + 1, existing.WindowStart));
+
+        if (entry.Count > MaxRequestsPerWindow)
+        {
+            _log.LogWarning("[RADIUS] Rate limit exceeded for {Ip} — dropping packet", clientIp);
+            return true;
+        }
+        return false;
+    }
+
     private async Task HandlePacketAsync(
         UdpClient socket, UdpReceiveResult result, bool isAccounting, CancellationToken ct)
     {
         var remote   = result.RemoteEndPoint;
         var clientIp = remote.Address.ToString();
+
+        if (IsRateLimited(clientIp)) return;
 
         var pkt = RadiusPacket.TryParse(result.Buffer);
         if (pkt == null)
@@ -110,6 +136,13 @@ internal sealed class RadiusProxyService : BackgroundService
         if (pkt.Code != RadiusCode.AccessRequest)
         {
             _log.LogWarning("[RADIUS] Unexpected code {Code} from {Ip}", pkt.Code, clientIp);
+            return;
+        }
+
+        // RFC 3579 §3.2 / BlastRADIUS (CVE-2024-3596): require valid Message-Authenticator
+        if (!pkt.ValidateMessageAuthenticator(secret))
+        {
+            _log.LogWarning("[RADIUS] Missing/invalid Message-Authenticator from {Ip} — dropping", clientIp);
             return;
         }
 
