@@ -106,6 +106,35 @@
 
 ---
 
+## Sprint 7 - v2.0.0 Network Device Access (TACACS+/RADIUS)
+**Tarih:** 14 Mayıs 2026 - ...
+**Durum:** Aktif 🔄
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #111 | TACACS+/RADIUS Built-in Server | v2-PROXY | 🔄 In Progress |
+| #110 | RDP Full Integration (RDS Gateway) | v2-PROXY | 🔲 Bekliyor |
+| #112 | Multi-Tenancy (MSP) | v2-ARCH | 🔲 Bekliyor |
+
+**#111 TACACS+ İlerleme:**
+- [x] Native C# TACACS+ server (RFC 1492) — `OrkunPAM.TacacsProxy` projesi
+- [x] TCP :49 listener, per-IP rate limiting
+- [x] Authentication: ASCII multi-step (GETUSER/GETPASS) + PAP
+- [x] Authorization: command-level (AV-pair), PermitAll/DenyAll/Policy mode
+- [x] Accounting: START/STOP/WATCHDOG → PAM audit log + SIEM
+- [x] Body encryption: MD5 pseudo-pad (RFC 1492 §5.2)
+- [x] Per-device shared secret + fallback default
+- [x] PAM API integration: `/api/v1/tacacs/authenticate|authorize|accounting`
+- [ ] RADIUS server (RFC 2865/2866) — UDP :1812/:1813
+- [ ] Cisco IOS test / Juniper JUNOS validation
+- [ ] CIDR prefix matching for shared secrets
+- [ ] MFA TOTP integration in TACACS+ auth flow
+- [ ] Blazor UI: device management + command policies
+
+**İlerleme:** 1/3 issue (TACACS+ core %75)
+
+---
+
 ## Sonraki Adım: v1.0.0 GA Tag
 **Kriter:** Sprint 6 tamamlandı → CI yeşil → `v1.0.0` tag atılacak
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
@@ -132,6 +161,7 @@
 - **SQL Proxy:** Native C# TDS protokol implementasyonu — açık kaynak yok
 - **VNC Proxy:** Native C# RFB protokol (RFC 6143) — açık kaynak yok
 - **HTTP/HTTPS Proxy:** Native C# reverse proxy + CONNECT tunnel — açık kaynak yok
+- **TACACS+ Proxy:** Native C# (RFC 1492) — ağ cihazı AAA, Cisco/Juniper/Aruba
 - **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
 - **AAPM + Threat Analytics:** v2.0.0'a ertelendi
 
