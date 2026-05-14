@@ -193,7 +193,9 @@ internal sealed class PamApiClient
                         p.IdleTimeoutMinutes,
                         p.MaxConcurrentSessions,
                         p.CommandFilterMode,
-                        p.CommandFilterRulesJson);
+                        p.CommandFilterRulesJson,
+                        p.DoubleConfirmRiskThreshold,
+                        p.DoubleConfirmCommandsJson);
             }
         }
         catch (Exception ex)
@@ -217,14 +219,17 @@ internal sealed class PamApiClient
     private record FullSessionPolicyResponse(bool Success, FullSessionPolicyData? Data);
     private record FullSessionPolicyData(
         int IdleTimeoutMinutes, int MaxConcurrentSessions,
-        byte CommandFilterMode, string? CommandFilterRulesJson);
+        byte CommandFilterMode, string? CommandFilterRulesJson,
+        decimal DoubleConfirmRiskThreshold, string? DoubleConfirmCommandsJson);
 }
 
 /// <summary>
-/// Session policy info including command filter configuration.
+/// Session policy info including command filter and double-confirmation configuration.
 /// </summary>
 internal sealed record SessionPolicyInfo(
     int IdleTimeoutMinutes,
     int MaxConcurrentSessions,
     byte CommandFilterMode,
-    string? CommandFilterRulesJson);
+    string? CommandFilterRulesJson,
+    decimal DoubleConfirmRiskThreshold = 0,
+    string? DoubleConfirmCommandsJson = null);
