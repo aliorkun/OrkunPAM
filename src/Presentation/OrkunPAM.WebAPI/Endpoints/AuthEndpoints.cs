@@ -57,7 +57,7 @@ public static class AuthEndpoints
                 success = true,
                 data = new { result.Value.Id, result.Value.Username, result.Value.DisplayName }
             });
-        });
+        }).RequireAuthorization("AdminOnly").RequireRateLimiting("auth");
 
         // Change password — requires authentication; enforces policy + history
         app.MapPost("/api/v1/auth/change-password", async (ChangePasswordRequest req, OrkunPamDbContext db,

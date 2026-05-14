@@ -57,8 +57,8 @@ public sealed class AuthenticationService : IAuthenticationService
 
         if (user.AuthSource != AuthSource.Local)
         {
-            _logger.LogWarning("Login failed: user '{Username}' is not a local user (source: {Source})", username, user.AuthSource);
-            return Result<AuthResult>.Failure(Error.Unauthorized($"User '{username}' must authenticate via {user.AuthSource}"));
+            _logger.LogWarning("Login failed: user '{Username}' non-local auth attempted (source: {Source})", username, user.AuthSource);
+            return Result<AuthResult>.Failure(Error.Unauthorized("Invalid username or password"));
         }
 
         if (user.IsLocked)
@@ -153,7 +153,12 @@ public sealed class AuthenticationService : IAuthenticationService
                             mfaEnrollmentRequired = true;
                     }
                 }
-                catch { /* invalid JSON — ignore */ }
+                catch (System.Text.Json.JsonException ex)
+                {
+                    _logger.LogError(ex, "MFA policy JSON parse failed for policy {PolicyId} — treating as MFA required for safety", mfaPolicies.Id);
+                    mfaRequired = user.MfaEnabled;
+                    mfaEnrollmentRequired = !user.MfaEnabled;
+                }
             }
         }
 

@@ -56,7 +56,7 @@ public sealed class StartSessionCommandHandler : IRequestHandler<StartSessionCom
         {
             var clientIp = request.ClientIpAddress ?? _currentUser.IpAddress ?? "0.0.0.0";
             var decision = await _accessPolicy.EvaluateAsync(
-                userId, request.CredentialId, clientIp, DateTime.UtcNow, cancellationToken);
+                userId.Value, request.CredentialId, clientIp, DateTime.UtcNow, cancellationToken);
 
             if (decision.Verdict == AccessVerdict.Deny)
             {
