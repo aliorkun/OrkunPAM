@@ -66,4 +66,21 @@ public sealed class RdpProxyOptions
 
     /// <summary>RDS RemoteApp collection name on the RDSH server.</summary>
     public string RemoteAppCollection { get; set; } = "PAM-RemoteApps";
+
+    // ── Proxy-to-Target TLS Validation ────────────────────────────────────────
+
+    /// <summary>
+    /// When false (default), the proxy validates the target server's TLS certificate against the
+    /// system CA store. Set to true only in dev/lab environments where targets use self-signed
+    /// certificates that cannot be added to AllowedTargetThumbprints.
+    /// Never set to true in production.
+    /// </summary>
+    public bool SkipTargetCertValidation { get; set; } = false;
+
+    /// <summary>
+    /// Explicit SHA-1 thumbprints (hex, case-insensitive) of target server certificates to accept
+    /// even when they fail normal chain validation (e.g. internal self-signed certs).
+    /// Example: ["A1B2C3D4E5F6...", "..."]
+    /// </summary>
+    public string[] AllowedTargetThumbprints { get; set; } = [];
 }

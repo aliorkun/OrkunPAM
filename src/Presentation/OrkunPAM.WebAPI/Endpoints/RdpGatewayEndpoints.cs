@@ -2,7 +2,9 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
+using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 
@@ -75,6 +77,10 @@ public static class RdpGatewayEndpoints
             var cred = await db.Credentials.FindAsync(req.CredentialId);
             if (cred?.PasswordEnc == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found or has no password" } });
+
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin");
+            if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
+                return Results.Forbid();
 
             var decResult = vault.DecryptString(cred.PasswordEnc);
             if (decResult.IsFailure)
@@ -234,6 +240,30 @@ public static class RdpGatewayEndpoints
         sb.AppendLine("compression:i:1");
         sb.AppendLine("description:s:PAM RemoteApp - " + appName);
         return sb.ToString();
+    }
+
+    private static async Task<bool> HasCredentialAccessAsync(
+        OrkunPamDbContext db, Guid userId, bool isAdmin, Credential cred)
+    {
+        if (isAdmin) return true;
+
+        var userGroupIds = await db.UserGroups
+            .Where(ug => ug.UserId == userId)
+            .Select(ug => ug.GroupId)
+            .ToListAsync();
+
+        var hasAccess = await db.CredentialPermissions.AnyAsync(p =>
+            (p.CredentialId == cred.Id || p.FolderId == cred.FolderId)
+            && ((p.PrincipalType == PrincipalType.User && p.PrincipalId == userId)
+                || (p.PrincipalType == PrincipalType.Group && userGroupIds.Contains(p.PrincipalId))));
+
+        if (!hasAccess) return false;
+
+        if (cred.RequiresApproval &&
+            !(cred.CheckedOutByUserId == userId && cred.Status == CredentialStatus.CheckedOut))
+            return false;
+
+        return true;
     }
 }
 

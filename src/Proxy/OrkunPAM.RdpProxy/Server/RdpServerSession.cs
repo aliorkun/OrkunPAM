@@ -183,15 +183,13 @@ internal sealed class RdpServerSession
                         sessionInfo.SessionId, clientSsl.SslProtocol);
 
                     // TLS to target (proxy acts as client)
-                    targetSsl = new SslStream(targetStream, leaveInnerStreamOpen: true,
-                        // Accept self-signed certs from target servers
-                        (_, _, _, _) => true);
+                    targetSsl = new SslStream(targetStream, leaveInnerStreamOpen: true);
                     await targetSsl.AuthenticateAsClientAsync(
                         new SslClientAuthenticationOptions
                         {
                             TargetHost = sessionInfo.TargetIp,
                             EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                            RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                            RemoteCertificateValidationCallback = ValidateTargetCertificate,
                         }, ct);
 
                     _log.LogInformation("RDP session {SessionId}: TLS established to target ({Protocol})",
@@ -595,4 +593,15 @@ internal sealed class RdpServerSession
 
     private static bool IsExpectedDisconnect(Exception ex) =>
         ex is IOException or SocketException;
+
+    private bool ValidateTargetCertificate(
+        object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
+    {
+        if (errors == SslPolicyErrors.None) return true;
+        if (_opts.SkipTargetCertValidation) return true;
+        if (cert != null && _opts.AllowedTargetThumbprints.Length > 0)
+            return _opts.AllowedTargetThumbprints.Contains(
+                cert.GetCertHashString(), StringComparer.OrdinalIgnoreCase);
+        return false;
+    }
 }
