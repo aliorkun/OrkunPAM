@@ -77,13 +77,18 @@ app.Map("/ws/ssh", async (HttpContext context) =>
         var sessionReq = new { deviceId, credentialId, sessionType = 0, reason = "Web SSH Terminal" };
         var sessionResp = await httpClient.PostAsJsonAsync("/api/v1/sessions/ssh/connect", sessionReq);
 
-        if (!sessionResp.IsSuccessStatusCode)
+        string? sessionId = null;
+        if (sessionResp.IsSuccessStatusCode)
+        {
+            var sessJson = await sessionResp.Content.ReadFromJsonAsync<JsonElement>();
+            if (sessJson.TryGetProperty("data", out var sd) && sd.TryGetProperty("sessionId", out var si))
+                sessionId = si.GetString();
+        }
+        else
         {
             var err = await sessionResp.Content.ReadAsStringAsync();
             logger.LogWarning("SSH session creation failed: {Status} {Error}", sessionResp.StatusCode, err);
-            await SendJsonAsync(browserWs, new { t = "error", msg = $"Session creation failed: {sessionResp.StatusCode}" });
-            await browserWs.CloseAsync(WebSocketCloseStatus.InternalServerError, "Session failed", CancellationToken.None);
-            return;
+            // Continue anyway — session tracking optional for terminal
         }
 
         // 2. Get device info + credential from API
@@ -261,6 +266,29 @@ app.Map("/ws/ssh", async (HttpContext context) =>
         {
             try { proc.Kill(); } catch { }
         }
+
+        // End session in API
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            try
+            {
+                var proxySecret = builder.Configuration["PamApi:ProxySecret"]
+                    ?? builder.Configuration["ProxyService:Secret"] ?? "";
+                using var endClient = new HttpClient { BaseAddress = new Uri(pamApiBase) };
+                endClient.DefaultRequestHeaders.Add("X-Proxy-Secret", proxySecret);
+                await endClient.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/end",
+                    new { durationSeconds = 0, recordingPath = (string?)null });
+                logger.LogInformation("Session {SessionId} marked as completed", sessionId);
+            }
+            catch (Exception ex2) { logger.LogWarning("Failed to end session: {Msg}", ex2.Message); }
+        }
+
+        // Check in credential
+        try
+        {
+            await httpClient.PostAsync($"/api/v1/vault/credentials/{credentialId}/checkin", null);
+        }
+        catch { }
 
         logger.LogInformation("SSH bridge closed for device {DeviceId}", deviceId);
     }
