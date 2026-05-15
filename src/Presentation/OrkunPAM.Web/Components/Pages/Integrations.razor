@@ -9,9 +9,11 @@
 
 <div style="display:flex;gap:4px;margin-bottom:16px">
     <button class="pam-btn @(_tab == "ldap" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("ldap"))">🔗 LDAP / AD</button>
+            @onclick="@(() => SetTab("ldap"))">&#x1F517; LDAP / AD</button>
     <button class="pam-btn @(_tab == "siem" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("siem"))">📡 SIEM / Syslog</button>
+            @onclick="@(() => SetTab("siem"))">&#x1F4E1; SIEM / Syslog</button>
+    <button class="pam-btn @(_tab == "winauth" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("winauth"))">&#x1FA9F; Windows Auth</button>
 </div>
 
 @if (_tab == "ldap")
@@ -182,6 +184,60 @@
     </div>
 }
 
+@if (_tab == "winauth")
+{
+    @if (_winAuthMsg != null) { <div class="pam-alert pam-alert-info">@_winAuthMsg</div> }
+    @if (_winAuthError != null) { <div class="pam-alert pam-alert-danger">@_winAuthError</div> }
+
+    <div class="pam-card">
+        <div class="pam-card-body">
+            <strong>Windows / Kerberos Authentication</strong>
+            <p style="color:var(--pam-muted);font-size:0.85em;margin:4px 0 12px">
+                Allow domain-joined browsers to log in via Kerberos SSO or NTLM — no password prompt.
+                Requires the PAM server to run on Windows (or Linux with GSSAPI/Kerberos configured).
+                Login URL: <code>/api/v1/auth/windows</code>
+            </p>
+
+            @if (_winAuthLoading)
+            {
+                <div class="pam-loading-text">Loading…</div>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:12px;max-width:500px">
+                    <label style="display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" @bind="_winEnabled" />
+                        <span>Enable Windows / Kerberos Authentication</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" @bind="_winAutoProvision" />
+                        <span>Auto-provision users on first login (creates PAM account from Windows identity)</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" @bind="_winMfaBypass" />
+                        <span>Bypass MFA for Kerberos-authenticated users (Kerberos = strong auth)</span>
+                    </label>
+                    <div>
+                        <label style="display:block;margin-bottom:4px;font-size:0.85em">
+                            Trusted Domains (comma-separated, leave blank to allow all):
+                        </label>
+                        <input class="pam-input" placeholder="CORP,SUBSIDIARY" @bind="_winTrustedDomains" />
+                        <div style="font-size:0.75em;color:var(--pam-muted);margin-top:2px">
+                            Example: CORP,SUBSIDIARY — only users from these NETBIOS domains can log in.
+                        </div>
+                    </div>
+                    <div>
+                        <button class="pam-btn pam-btn-primary" @onclick="SaveWinAuthAsync"
+                                disabled="@_winSaving">
+                            @(_winSaving ? "Saving…" : "Save")
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
@@ -206,6 +262,16 @@
     private string? _siemTesting;
     private List<SiemTargetDto>? _siemTargets;
 
+    // Windows Auth state
+    private bool _winAuthLoading;
+    private bool _winSaving;
+    private string? _winAuthError;
+    private string? _winAuthMsg;
+    private bool _winEnabled;
+    private bool _winAutoProvision;
+    private bool _winMfaBypass;
+    private string _winTrustedDomains = "";
+
     private string _siemName = "";
     private string _siemHost = "";
     private int _siemPort = 514;
@@ -224,6 +290,32 @@
         _tab = tab;
         if (tab == "siem" && _siemTargets == null)
             await LoadSiemAsync();
+        if (tab == "winauth")
+            await LoadWinAuthAsync();
+    }
+
+    private async Task LoadWinAuthAsync()
+    {
+        _winAuthLoading = true; _winAuthError = null; StateHasChanged();
+        var s = await Api.GetWindowsAuthSettingsAsync();
+        if (s != null)
+        {
+            _winEnabled = s.Enabled;
+            _winAutoProvision = s.AutoProvision;
+            _winMfaBypass = s.MfaBypass;
+            _winTrustedDomains = s.TrustedDomains;
+        }
+        _winAuthLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveWinAuthAsync()
+    {
+        _winSaving = true; _winAuthMsg = null; _winAuthError = null; StateHasChanged();
+        var ok = await Api.SaveWindowsAuthSettingsAsync(_winEnabled, _winAutoProvision, _winMfaBypass, _winTrustedDomains);
+        _winSaving = false;
+        if (ok) _winAuthMsg = "Windows Auth settings saved.";
+        else _winAuthError = "Failed to save settings.";
+        StateHasChanged();
     }
 
     private async Task LoadAsync()

@@ -263,7 +263,8 @@ try
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromSeconds(30)
             };
-        });
+        })
+        .AddNegotiate(); // Windows/Kerberos/NTLM SSO (#126)
 
     builder.Services.AddAuthorizationBuilder()
         .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
@@ -272,6 +273,9 @@ try
         .AddPolicy("AdminPolicy", p => p.RequireRole("Admin", "SecurityAdmin"))
         .AddPolicy("GrpcProxy", p => p
             .AddAuthenticationSchemes("MutualTls")
+            .RequireAuthenticatedUser())
+        .AddPolicy("WindowsAuth", p => p
+            .AddAuthenticationSchemes("Negotiate")
             .RequireAuthenticatedUser());
 
     var app = builder.Build();

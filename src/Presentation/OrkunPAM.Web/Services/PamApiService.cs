@@ -509,6 +509,25 @@ public sealed class PamApiService
         catch (Exception ex) { return (false, ex.Message, 0); }
     }
 
+    // === Windows Auth Settings (#126) ===
+    public async Task<WindowsAuthSettingsDto?> GetWindowsAuthSettingsAsync()
+    {
+        var result = await GetAsync<SingleResult<WindowsAuthSettingsDto>>("/api/v1/system/windows-auth");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveWindowsAuthSettingsAsync(bool enabled, bool autoProvision, bool mfaBypass, string trustedDomains)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/windows-auth",
+                new { enabled, autoProvision, mfaBypass, trustedDomains });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // === Backup (#55) ===
     public async Task<List<BackupRecordDto>?> GetBackupsAsync()
     {
@@ -972,7 +991,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ────────────────────────────────────────────────────
+    // ── Session Recording Playback ────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1070,7 +1089,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1397,3 +1416,6 @@ public record MySessionDto(
     DateTime  StartedAtUtc,
     int       DurationMinutes,
     string    Status);
+
+// Windows Auth DTOs (#126)
+public record WindowsAuthSettingsDto(bool Enabled, bool AutoProvision, bool MfaBypass, string TrustedDomains);
