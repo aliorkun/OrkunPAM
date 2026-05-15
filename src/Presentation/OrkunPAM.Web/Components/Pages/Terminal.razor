@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IConfiguration Config
 
 <PageTitle>SSH Terminal - OrkunPAM</PageTitle>
 
@@ -33,17 +34,8 @@
     private IJSObjectReference? _module;
     private bool _initialized;
 
-    // API base URL - in production, read from configuration.
-    // The terminal page is served by the Blazor app; the WebAPI is on a different port.
-    private string ApiBase
-    {
-        get
-        {
-            var uri = new Uri(Nav.BaseUri);
-            var apiPort = uri.Port == 5000 ? 5001 : uri.Port;
-            return $"{uri.Scheme}://{uri.Host}:{apiPort}";
-        }
-    }
+    private string ApiBase =>
+        Config["PamApi:BaseUrl"]?.TrimEnd('/') ?? Nav.BaseUri.TrimEnd('/');
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -223,13 +224,11 @@ public static class VendorAccessEndpoints
             if (vendor.SingleUseInvite && vendor.InviteUsedAtUtc.HasValue)
                 return Results.Forbid();
 
-            // Optional IP check
+            // Optional IP check — exact IP or CIDR notation (e.g. "10.0.0.0/24")
             if (!string.IsNullOrEmpty(vendor.IpWhitelist))
             {
                 var clientIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "";
-                var allowed = vendor.IpWhitelist.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => s.Trim());
-                if (!allowed.Any(a => clientIp.StartsWith(a, StringComparison.OrdinalIgnoreCase)))
+                if (!IsIpAllowed(clientIp, vendor.IpWhitelist))
                     return Results.Forbid();
             }
 
@@ -263,6 +262,45 @@ public static class VendorAccessEndpoints
                 }
             });
         }).WithTags("VendorAccess").AllowAnonymous();
+    }
+
+    private static bool IsIpAllowed(string clientIp, string whitelist)
+    {
+        if (!IPAddress.TryParse(clientIp, out var clientAddr)) return false;
+
+        foreach (var entry in whitelist.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(s => s.Trim()))
+        {
+            int slash = entry.IndexOf('/');
+            if (slash >= 0)
+            {
+                if (IPAddress.TryParse(entry[..slash], out var network) &&
+                    int.TryParse(entry[(slash + 1)..], out var prefix) &&
+                    IsInCidr(clientAddr, network, prefix))
+                    return true;
+            }
+            else if (IPAddress.TryParse(entry, out var allowed) && clientAddr.Equals(allowed))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsInCidr(IPAddress addr, IPAddress network, int prefix)
+    {
+        var a = addr.GetAddressBytes();
+        var n = network.GetAddressBytes();
+        if (a.Length != n.Length) return false;
+        int full = prefix / 8, rem = prefix % 8;
+        for (int i = 0; i < full && i < a.Length; i++)
+            if (a[i] != n[i]) return false;
+        if (rem > 0 && full < a.Length)
+        {
+            byte mask = (byte)(0xFF << (8 - rem));
+            if ((a[full] & mask) != (n[full] & mask)) return false;
+        }
+        return true;
     }
 
     private static object MapDto(VendorAccess v) => new
