@@ -377,6 +377,7 @@ try
     api.MapAapmEndpoints();
     api.MapSessionEndpoints();
     api.MapWebSshEndpoints();
+    api.MapWebRdpEndpoints();
     api.MapDiscoveryEndpoints();
     api.MapReportEndpoints();
     api.MapComplianceEndpoints();
