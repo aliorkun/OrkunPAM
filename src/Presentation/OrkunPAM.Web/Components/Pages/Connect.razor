@@ -57,12 +57,19 @@
         @if (IsProtocol("Rdp"))
         {
             <button class="pam-btn pam-btn-primary"
+                    disabled="@(string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_credId))"
+                    @onclick="@(() => LaunchRdpWebTerminal())">
+                &#128444; Open RDP in Browser
+            </button>
+            <button class="pam-btn pam-btn-secondary"
+                    style="margin-top:6px"
                     disabled="@(string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_credId) || _launching)"
                     @onclick="@(() => LaunchRdpSessionAsync())">
-                @(_launching ? "Preparing…" : "&#128187; Launch RDP Session")
+                @(_launching ? "Preparing…" : "&#128187; Download .rdp File")
             </button>
             <p style="margin-top:8px;font-size:0.85em;color:#666;">
-                A <code>.rdp</code> file will download. Open it with Windows Remote Desktop.
+                <strong>Browser RDP</strong> opens a native session in this tab (no client install).<br />
+                <strong>.rdp file</strong> requires Windows Remote Desktop client.
             </p>
         }
 
@@ -127,6 +134,12 @@
     {
         if (!string.IsNullOrEmpty(_deviceId) && !string.IsNullOrEmpty(_credId))
             Nav.NavigateTo("/terminal/" + _deviceId + "/" + _credId);
+    }
+
+    private void LaunchRdpWebTerminal()
+    {
+        if (!string.IsNullOrEmpty(_deviceId) && !string.IsNullOrEmpty(_credId))
+            Nav.NavigateTo("/rdp-terminal/" + _deviceId + "/" + _credId);
     }
 
     private async Task LaunchRdpSessionAsync()
