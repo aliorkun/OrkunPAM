@@ -168,6 +168,57 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    public async Task<List<RdpHaNodeDto>?> GetRdpHaNodesAsync()
+    {
+        var result = await GetAsync<ListResult<RdpHaNodeDto>>("/api/v1/rdp/ha-nodes");
+        return result?.Data;
+    }
+
+    public async Task<List<RemoteAppDto>?> GetRemoteAppsAsync()
+    {
+        var result = await GetAsync<ListResult<RemoteAppDto>>("/api/v1/rdp/remoteapps");
+        return result?.Data;
+    }
+
+    public async Task<RdpLaunchResult?> LaunchRemoteAppAsync(
+        string deviceId, string credentialId, string appName, string? reason = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/rdp/remoteapp/connect", new
+            {
+                deviceId     = Guid.Parse(deviceId),
+                credentialId = Guid.Parse(credentialId),
+                appName,
+                reason
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpLaunchResult>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<RdpShadowResult?> ShadowSessionAsync(string sessionId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/rdp/sessions/" + sessionId + "/shadow", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpShadowResult>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<SessionDto>?> GetActiveSessionsAsync()
+    {
+        var result = await GetAsync<ListResult<SessionDto>>("/api/v1/sessions/active");
+        return result?.Data;
+    }
+
     public async Task<List<FolderDto>?> GetFoldersAsync()
     {
         var result = await GetAsync<ListResult<FolderDto>>("/api/v1/vault/folders");
@@ -1050,7 +1101,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ───────────────────────────────────────────────────
+    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1148,7 +1199,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1505,4 +1556,20 @@ public record VendorAccessDto(
     DateTime? RevokedAtUtc);
 
 public record VendorCreateResult(bool Success, VendorAccessDto? Data, string? PortalUrl);
+
+// RDP Gateway DTOs (#110)
+public record RdpHaNodeDto(string Host, bool Healthy, int LatencyMs, string Error);
+
+public record RemoteAppDto(
+    string Name,
+    string AppPath,
+    string? Description,
+    string? AppArgs,
+    string? Category,
+    string? DefaultDeviceId);
+
+public record RdpShadowResult(
+    string ShadowSessionId,
+    string OriginalSessionId,
+    RdpFileInfo RdpFile);
 public record VendorResendResult(bool Success, string? PortalUrl);
