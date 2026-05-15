@@ -21,17 +21,35 @@ public sealed class AuthStateService
 
     public async Task<string?> GetTokenAsync()
     {
-        _token ??= await _js.InvokeAsync<string?>("localStorage.getItem", TokenKey);
+        if (_token != null) return _token;
+        try
+        {
+            _token = await _js.InvokeAsync<string?>("localStorage.getItem", TokenKey);
+        }
+        catch (InvalidOperationException)
+        {
+            // Prerender — JS not available yet
+        }
         return _token;
     }
 
     public async Task<AuthUser?> GetUserAsync()
     {
         if (_user != null) return _user;
-        var json = await _js.InvokeAsync<string?>("localStorage.getItem", UserKey);
-        if (json == null) return null;
-        try { _user = JsonSerializer.Deserialize<AuthUser>(json, JsonOpts); }
-        catch { /* stale/corrupt data — treat as logged out */ }
+        try
+        {
+            var json = await _js.InvokeAsync<string?>("localStorage.getItem", UserKey);
+            if (json == null) return null;
+            _user = JsonSerializer.Deserialize<AuthUser>(json, JsonOpts);
+        }
+        catch (InvalidOperationException)
+        {
+            // Prerender — JS not available yet
+        }
+        catch
+        {
+            // stale/corrupt data — treat as logged out
+        }
         return _user;
     }
 

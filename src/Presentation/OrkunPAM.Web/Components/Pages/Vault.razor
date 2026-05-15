@@ -56,6 +56,10 @@
                 }
             }
         }
+
+        <div style="padding:8px">
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" style="width:100%" @onclick="OpenFolderModal">+ New Folder</button>
+        </div>
     </aside>
 
     <!-- Credential Table -->
@@ -457,6 +461,40 @@
     </div>
 }
 
+<!-- Create Folder Modal -->
+@if (_showFolderModal)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showFolderModal = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Create Folder</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showFolderModal = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_folderError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_folderError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Folder Name *</label>
+                    <input class="pam-input w-100-input" @bind="_folderName" placeholder="e.g. Production Servers" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_folderDesc" placeholder="Optional" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showFolderModal = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitFolderAsync" disabled="@_folderSaving">
+                    @if (_folderSaving) { <span class="pam-spinner-sm"></span> }
+                    Create Folder
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<CredentialDto>? _creds;
     private List<FolderDto>?     _folders;
@@ -471,6 +509,13 @@
     private const int            _pageSize = 20;
     // SoD (RFP Vault #26): admin without PasswordViewer cannot checkout passwords
     private bool                 _checkoutBlocked;
+
+    // Create Folder modal
+    private bool    _showFolderModal;
+    private string  _folderName  = "";
+    private string  _folderDesc  = "";
+    private bool    _folderSaving;
+    private string? _folderError;
 
     // Checkout modal
     private bool    _showCheckout;
@@ -541,6 +586,34 @@
         if (_folders != null && string.IsNullOrEmpty(_addFolderId))
             _addFolderId = _folders.FirstOrDefault()?.Id ?? "";
         StateHasChanged();
+    }
+
+    private void OpenFolderModal()
+    {
+        _folderName = ""; _folderDesc = "";
+        _folderError = null; _folderSaving = false;
+        _showFolderModal = true;
+    }
+
+    private async Task SubmitFolderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_folderName))
+        {
+            _folderError = "Folder name is required.";
+            return;
+        }
+        _folderSaving = true; _folderError = null; StateHasChanged();
+
+        var ok = await Api.CreateFolderAsync(_folderName.Trim(), _folderDesc.Trim());
+        _folderSaving = false;
+        if (!ok)
+        {
+            _folderError = "Failed to create folder.";
+            StateHasChanged();
+            return;
+        }
+        _showFolderModal = false;
+        await LoadFoldersAsync();
     }
 
     private async Task LoadAsync()

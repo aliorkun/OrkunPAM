@@ -61,7 +61,7 @@
                                 <td><span class="pam-badge pam-badge-blue">@d.Protocol</span></td>
                                 <td>@(d.OperatingSystem ?? "—")</td>
                                 <td>
-                                    @if (d.IsReachable)
+                                    @if (d.IsReachable == true)
                                     { <span class="pam-badge pam-badge-green">Online</span> }
                                     else
                                     { <span class="pam-badge pam-badge-gray">Offline</span> }

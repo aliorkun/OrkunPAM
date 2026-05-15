@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="OrkunPAM.Web.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="@InteractiveServer" />
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
 </head>
 
 <body>
@@ -38,9 +38,20 @@
         <div class="boot-spin"></div>
     </div>
 
-    <Routes @rendermode="@InteractiveServer" />
+    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
 
-    <script src="_framework/blazor.web.js"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        Blazor.start({
+            circuit: {
+                configureSignalR: function (builder) {
+                    builder.withUrl("/_blazor", {
+                        transport: 1 | 2 | 4
+                    });
+                }
+            }
+        });
+    </script>
     <script>
         // Remove splash once Blazor circuit is connected
         document.addEventListener('blazor:connected', function() {

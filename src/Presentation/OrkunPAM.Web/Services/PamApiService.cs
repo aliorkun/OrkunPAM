@@ -1124,7 +1124,7 @@ public record DeviceDto(
     int?    ConnectionPort,
     string? OperatingSystem,
     string  Status,
-    bool    IsReachable,
+    bool?   IsReachable,
     bool    IsManaged,
     int     CredentialCount);
 
