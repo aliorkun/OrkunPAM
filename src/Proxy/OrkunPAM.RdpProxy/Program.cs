@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using OrkunPAM.RdpProxy;
+using OrkunPAM.RdpProxy.Services;
 using OrkunPAM.RdpProxy.Session;
 using Serilog;
 
@@ -32,6 +33,8 @@ try
     });
 
     builder.Services.AddSingleton<PamApiClient>();
+    builder.Services.AddSingleton<RdsLoadBalancer>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<RdsLoadBalancer>());
     builder.Services.AddHostedService<RecordingRetentionService>();
     builder.Services.AddHostedService<RdpProxyService>();
 

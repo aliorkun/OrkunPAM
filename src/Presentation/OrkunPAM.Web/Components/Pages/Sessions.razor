@@ -1,6 +1,7 @@
 @page "/sessions"
 @inject PamApiService Api
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <PageTitle>Sessions — OrkunPAM</PageTitle>
 
@@ -27,7 +28,7 @@
     <div class="pam-card-body p-0">
         @if (_loading)
         {
-            <div class="pam-loading-text p-4">Loading sessions…</div>
+            <div class="pam-loading-text p-4">Loading sessions&#x2026;</div>
         }
         else if (_sessions == null || _sessions.Count == 0)
         {
@@ -45,6 +46,7 @@
                         <th>Status</th>
                         <th>Started</th>
                         <th>Duration</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,14 +54,28 @@
                     {
                         <tr>
                             <td><span class="pam-badge">@s.SessionType</span></td>
-                            <td>@(s.TargetIpAddress ?? "—")</td>
-                            <td>@(s.TargetPort?.ToString() ?? "—")</td>
-                            <td>@(s.ClientIpAddress ?? "—")</td>
+                            <td>@(s.TargetIpAddress ?? "&#x2014;")</td>
+                            <td>@(s.TargetPort?.ToString() ?? "&#x2014;")</td>
+                            <td>@(s.ClientIpAddress ?? "&#x2014;")</td>
                             <td>
                                 <span class="pam-status @StatusClass(s.Status)">@s.Status</span>
                             </td>
                             <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
                             <td>@Duration(s)</td>
+                            <td>
+                                @if (s.Status == "Active")
+                                {
+                                    <button class="pam-btn pam-btn-warning pam-btn-sm"
+                                            disabled="@(_shadowingId == s.Id)"
+                                            @onclick="@(() => ShadowAsync(s.Id))">
+                                        @(_shadowingId == s.Id ? "&#x2026;" : "Shadow")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span style="color:#ccc">&#x2014;</span>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -69,10 +85,10 @@
             {
                 <div class="pam-pagination">
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
-                    <span class="pam-page-info">Page @_page of @TotalPages — @_meta.TotalCount sessions</span>
+                            disabled="@(_page == 1)" @onclick="PrevPage">&#x2190; Prev</button>
+                    <span class="pam-page-info">Page @_page of @TotalPages &#x2014; @_meta.TotalCount sessions</span>
                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next &#x2192;</button>
                 </div>
             }
         }
@@ -87,6 +103,7 @@
     private string            _statusFilter = "";
     private int               _page         = 1;
     private const int         _pageSize     = 20;
+    private string?           _shadowingId;
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -123,6 +140,21 @@
 
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
+
+    private async Task ShadowAsync(string sessionId)
+    {
+        _shadowingId = sessionId;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var result = await Api.ShadowSessionAsync(sessionId);
+            if (result == null) { _error = "Shadow failed. Requires GlobalAdmin or SessionAdmin role."; return; }
+            await JS.InvokeVoidAsync("downloadRdpFile", result.RdpFile.Filename, result.RdpFile.ContentBase64);
+        }
+        catch (Exception ex) { _error = "Error: " + ex.Message; }
+        finally { _shadowingId = null; StateHasChanged(); }
+    }
 
     private async Task ExportCsvAsync()
     {

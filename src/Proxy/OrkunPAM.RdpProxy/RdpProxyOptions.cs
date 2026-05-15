@@ -43,4 +43,27 @@ public sealed class RdpProxyOptions
 
     /// <summary>Password for the TLS certificate PFX file. Null if no password.</summary>
     public string? TlsCertificatePassword { get; set; }
+
+    // ── RDS HA Cluster ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Optional list of RDSH/RDP proxy hostnames for HA load balancing.
+    /// When empty, all connections route to the single proxy node.
+    /// The load balancer health-checks each node every 30 s and uses least-connections routing.
+    /// </summary>
+    public string[] RdsHosts { get; set; } = [];
+
+    /// <summary>Optional RDS Connection Broker hostname for session-aware routing.</summary>
+    public string? ConnectionBroker { get; set; }
+
+    // ── Advanced Features ─────────────────────────────────────────────────────
+
+    /// <summary>Allow admins to create shadow (monitor) sessions on active RDP connections.</summary>
+    public bool EnableSessionShadowing { get; set; } = true;
+
+    /// <summary>Allow launching published RemoteApps via PAM session tokens.</summary>
+    public bool EnableRemoteApp { get; set; } = true;
+
+    /// <summary>RDS RemoteApp collection name on the RDSH server.</summary>
+    public string RemoteAppCollection { get; set; } = "PAM-RemoteApps";
 }

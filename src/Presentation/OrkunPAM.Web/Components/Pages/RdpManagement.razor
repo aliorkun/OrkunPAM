@@ -1,0 +1,245 @@
+@page "/rdp-management"
+@inject PamApiService Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>RDP Management — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">RDP Management</h2>
+    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="@(() => LoadAllAsync())">&#x21BB; Refresh</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+@if (_successMsg != null)
+{
+    <div class="pam-alert pam-alert-success">@_successMsg</div>
+}
+
+<!-- RDS HA Cluster Status -->
+<div class="pam-card" style="margin-bottom:24px">
+    <div class="pam-card-header">
+        <h3 class="pam-card-title">&#x1F5A7; RDS HA Cluster Nodes</h3>
+    </div>
+    <div class="pam-card-body p-0">
+        @if (_haLoading)
+        {
+            <div class="pam-loading-text p-4">Checking node health&#x2026;</div>
+        }
+        else if (_haNodes == null || _haNodes.Count == 0)
+        {
+            <div class="pam-empty p-4">
+                No RDS cluster nodes configured.
+                Add hosts to <code>RdpProxy:RdsHosts</code> in appsettings.json to enable HA.
+            </div>
+        }
+        else
+        {
+            <table class="pam-table">
+                <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>Status</th>
+                        <th>Latency</th>
+                        <th>Last Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var node in _haNodes)
+                    {
+                        <tr>
+                            <td><strong>@node.Host</strong></td>
+                            <td>
+                                @if (node.Healthy)
+                                {
+                                    <span class="pam-status pam-status-active">&#x2705; Healthy</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-status pam-status-error">&#x274C; Unreachable</span>
+                                }
+                            </td>
+                            <td>@(node.Healthy ? node.LatencyMs + " ms" : "&#x2014;")</td>
+                            <td style="color:#999;font-size:0.85em">@(string.IsNullOrEmpty(node.Error) ? "&#x2014;" : node.Error)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- Published RemoteApps -->
+<div class="pam-card" style="margin-bottom:24px">
+    <div class="pam-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <h3 class="pam-card-title">&#x1F4E6; Published RemoteApps</h3>
+        <button class="pam-btn pam-btn-primary pam-btn-sm"
+                @onclick="@(() => Nav.NavigateTo("/connect"))">
+            Launch via Connect Page
+        </button>
+    </div>
+    <div class="pam-card-body p-0">
+        @if (_appsLoading)
+        {
+            <div class="pam-loading-text p-4">Loading&#x2026;</div>
+        }
+        else if (_remoteApps == null || _remoteApps.Count == 0)
+        {
+            <div class="pam-empty p-4">
+                No RemoteApps configured.
+                Add entries to the <code>RemoteApps</code> section in appsettings.json.
+            </div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>App Path</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var app in _remoteApps)
+                    {
+                        <tr>
+                            <td><strong>@app.Name</strong></td>
+                            <td><code>@app.AppPath</code></td>
+                            <td>@(app.Category ?? "&#x2014;")</td>
+                            <td style="color:#666">@(app.Description ?? "&#x2014;")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- Active RDP Sessions with Shadow -->
+<div class="pam-card">
+    <div class="pam-card-header">
+        <h3 class="pam-card-title">&#x1F5A5; Active RDP Sessions</h3>
+    </div>
+    <div class="pam-card-body p-0">
+        @if (_sessionsLoading)
+        {
+            <div class="pam-loading-text p-4">Loading sessions&#x2026;</div>
+        }
+        else if (_activeSessions == null || _activeSessions.Count == 0)
+        {
+            <div class="pam-empty p-4">No active RDP sessions.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Session ID</th>
+                        <th>Target</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _activeSessions)
+                    {
+                        <tr>
+                            <td><code style="font-size:0.8em">@s.Id[..8]&#x2026;</code></td>
+                            <td>@(s.TargetIpAddress ?? "&#x2014;"):@(s.TargetPort?.ToString() ?? "&#x2014;")</td>
+                            <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                            <td>@GetDuration(s)</td>
+                            <td>
+                                <button class="pam-btn pam-btn-warning pam-btn-sm"
+                                        disabled="@(_shadowingId != null)"
+                                        @onclick="@(() => ShadowSessionAsync(s.Id))">
+                                    @(_shadowingId == s.Id ? "Preparing&#x2026;" : "&#x1F441; Shadow")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<RdpHaNodeDto>?  _haNodes;
+    private List<RemoteAppDto>?  _remoteApps;
+    private List<SessionDto>?    _activeSessions;
+    private bool                 _haLoading       = true;
+    private bool                 _appsLoading     = true;
+    private bool                 _sessionsLoading = true;
+    private string?              _error;
+    private string?              _successMsg;
+    private string?              _shadowingId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _haLoading = _appsLoading = _sessionsLoading = true;
+        _error = _successMsg = null;
+        StateHasChanged();
+
+        var t1 = Api.GetRdpHaNodesAsync();
+        var t2 = Api.GetRemoteAppsAsync();
+        var t3 = Api.GetActiveSessionsAsync();
+
+        await Task.WhenAll(t1, t2, t3);
+
+        _haNodes         = await t1;
+        _remoteApps      = await t2;
+        var allActive    = await t3;
+        _activeSessions  = allActive ?? [];
+
+        _haLoading = _appsLoading = _sessionsLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task ShadowSessionAsync(string sessionId)
+    {
+        _shadowingId = sessionId;
+        _error = _successMsg = null;
+        StateHasChanged();
+        try
+        {
+            var result = await Api.ShadowSessionAsync(sessionId);
+            if (result == null)
+            {
+                _error = "Shadow session failed. Check that you have SessionAdmin or GlobalAdmin role.";
+                return;
+            }
+            await JS.InvokeVoidAsync("downloadRdpFile",
+                result.RdpFile.Filename, result.RdpFile.ContentBase64);
+            _successMsg = "Shadow .rdp file downloaded. Open it with Windows Remote Desktop to monitor the session.";
+        }
+        catch (Exception ex)
+        {
+            _error = "Error: " + ex.Message;
+        }
+        finally
+        {
+            _shadowingId = null;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetDuration(SessionDto s)
+    {
+        var dur = DateTime.UtcNow - s.StartedAtUtc;
+        return dur.TotalHours >= 1
+            ? $"{(int)dur.TotalHours}h {dur.Minutes}m"
+            : $"{dur.Minutes}m {dur.Seconds}s";
+    }
+}
