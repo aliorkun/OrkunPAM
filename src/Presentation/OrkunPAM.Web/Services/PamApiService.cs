@@ -509,6 +509,65 @@ public sealed class PamApiService
         catch (Exception ex) { return (false, ex.Message, 0); }
     }
 
+    // === Vendor Access (#127) ===
+    public async Task<List<VendorAccessDto>?> GetVendorAccessListAsync(string? status = null)
+    {
+        var url = "/api/v1/vendor-access";
+        if (!string.IsNullOrEmpty(status)) url += $"?status={status}";
+        var result = await GetAsync<PagedResult<VendorAccessDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<VendorCreateResult?> CreateVendorAccessAsync(
+        string vendorName, string? company, string email, string? phone,
+        DateTime startAtUtc, DateTime endAtUtc,
+        int? allowedHoursStart, int? allowedHoursEnd,
+        int maxSessionMinutesPerDay,
+        List<Guid> authorizedDeviceIds,
+        string? ipWhitelist, bool singleUseInvite = false)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/vendor-access", new
+            {
+                vendorName, company, email, phone,
+                startAtUtc, endAtUtc,
+                allowedHoursStart, allowedHoursEnd,
+                maxSessionMinutesPerDay, authorizedDeviceIds,
+                ipWhitelist, singleUseInvite
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<VendorCreateResult>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RevokeVendorAccessAsync(string id, string? reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/vendor-access/{id}/revoke",
+                new { reason });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<string?> ResendVendorInviteAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync($"/api/v1/vendor-access/{id}/resend", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<VendorResendResult>(JsonOpts);
+            return r?.PortalUrl;
+        }
+        catch { return null; }
+    }
+
     // === Windows Auth Settings (#126) ===
     public async Task<WindowsAuthSettingsDto?> GetWindowsAuthSettingsAsync()
     {
@@ -991,7 +1050,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ────────────────────────────────────────────────
+    // ── Session Recording Playback ───────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1089,7 +1148,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1419,3 +1478,31 @@ public record MySessionDto(
 
 // Windows Auth DTOs (#126)
 public record WindowsAuthSettingsDto(bool Enabled, bool AutoProvision, bool MfaBypass, string TrustedDomains);
+
+// Vendor Access DTOs (#127)
+public record VendorAccessDto(
+    string    Id,
+    string    VendorName,
+    string?   Company,
+    string    Email,
+    string?   Phone,
+    DateTime  StartAtUtc,
+    DateTime  EndAtUtc,
+    int?      AllowedHoursStart,
+    int?      AllowedHoursEnd,
+    int       MaxSessionMinutesPerDay,
+    string    AuthorizedDeviceIdsJson,
+    string?   IpWhitelist,
+    string    InviteToken,
+    DateTime  InviteExpiresAtUtc,
+    DateTime? InviteUsedAtUtc,
+    bool      SingleUseInvite,
+    string    Status,
+    string    CreatedByUsername,
+    DateTime  CreatedAtUtc,
+    string?   RevokeReason,
+    string?   RevokedByUsername,
+    DateTime? RevokedAtUtc);
+
+public record VendorCreateResult(bool Success, VendorAccessDto? Data, string? PortalUrl);
+public record VendorResendResult(bool Success, string? PortalUrl);
