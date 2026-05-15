@@ -11,4 +11,4 @@ public record LdapTestResult(bool Success, string Message, int? ResponseTimeMs =
 
 public record LdapSyncResult(bool Success, string Message, int UsersFound, int GroupsFound, List<LdapSyncedUser> Users, List<LdapSyncedGroup> Groups);
 public record LdapSyncedUser(string SamAccountName, string? DisplayName, string? Email, string? Dn, bool IsEnabled);
-public record LdapSyncedGroup(string Name, string Dn, int MemberCount);
+public record LdapSyncedGroup(string Name, string Dn, int MemberCount, IReadOnlyList<string> MemberDns);

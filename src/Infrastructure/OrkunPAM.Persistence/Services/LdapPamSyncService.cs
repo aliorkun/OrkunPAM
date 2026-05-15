@@ -113,12 +113,79 @@ public sealed class LdapPamSyncService : BackgroundService
             }
         }
 
+        // Group membership sync: create/update PAM groups and sync memberships
+        int groupsCreated = 0, membershipsAdded = 0, membershipsRemoved = 0;
+        if (result.Groups.Count > 0)
+        {
+            // Build DN → NormalizedUsername lookup from synced users
+            var dnToNorm = result.Users
+                .Where(u => u.Dn != null)
+                .ToDictionary(u => u.Dn!, u => u.SamAccountName.ToUpperInvariant(),
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (var adGroup in result.Groups)
+            {
+                var pamGroup = await db.Groups.FirstOrDefaultAsync(
+                    g => g.GroupSource == GroupSource.ActiveDirectory && g.Name == adGroup.Name, ct);
+
+                if (pamGroup == null)
+                {
+                    pamGroup = new Group
+                    {
+                        Name = adGroup.Name,
+                        Description = $"Synced from AD: {adGroup.Dn}",
+                        GroupSource = GroupSource.ActiveDirectory,
+                        ExternalGroupId = adGroup.Dn
+                    };
+                    db.Groups.Add(pamGroup);
+                    await db.SaveChangesAsync(ct);
+                    groupsCreated++;
+                }
+
+                // Resolve expected PAM user IDs from member DNs (single bulk query per group)
+                var memberNorms = adGroup.MemberDns
+                    .Where(dn => dnToNorm.ContainsKey(dn))
+                    .Select(dn => dnToNorm[dn])
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var expectedIds = await db.Users
+                    .Where(u => memberNorms.Contains(u.NormalizedUsername)
+                             && u.AuthSource == AuthSource.ActiveDirectory)
+                    .Select(u => u.Id)
+                    .ToListAsync(ct);
+
+                var existing = await db.UserGroups
+                    .Where(ug => ug.GroupId == pamGroup.Id)
+                    .ToListAsync(ct);
+
+                var existingIds = existing.Select(ug => ug.UserId).ToHashSet();
+                var expectedSet = expectedIds.ToHashSet();
+
+                // Remove stale memberships
+                foreach (var ug in existing.Where(ug => !expectedSet.Contains(ug.UserId)))
+                {
+                    db.UserGroups.Remove(ug);
+                    membershipsRemoved++;
+                }
+
+                // Add new memberships
+                foreach (var uid in expectedSet.Where(id => !existingIds.Contains(id)))
+                {
+                    db.UserGroups.Add(new UserGroup { UserId = uid, GroupId = pamGroup.Id });
+                    membershipsAdded++;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
+
         config.LastSyncAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
         await audit.LogAsync("LDAP", "LDAP_SYNC_COMPLETED", null, "System", null,
             "LdapConfig", config.Id.ToString(),
-            new { config.Name, created, updated, locked, usersFound = result.UsersFound }, ct: ct);
+            new { config.Name, created, updated, locked, usersFound = result.UsersFound,
+                  groupsCreated, membershipsAdded, membershipsRemoved }, ct: ct);
 
         return new LdapSyncApplyResult(true, "Sync completed", created, updated, locked);
     }

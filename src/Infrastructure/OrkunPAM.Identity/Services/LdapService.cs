@@ -148,7 +148,7 @@ public sealed class LdapService : ILdapService
                         isEnabled));
                 }
 
-                // Sync groups
+                // Sync groups with member DNs
                 var groups = new List<LdapSyncedGroup>();
                 var groupRequest = new SearchRequest(baseDn, groupSearchFilter,
                     SearchScope.Subtree, "cn", "distinguishedName", "member");
@@ -160,11 +160,14 @@ public sealed class LdapService : ILdapService
                     var cn = GetAttribute(entry, "cn");
                     if (string.IsNullOrEmpty(cn)) continue;
 
-                    var memberCount = entry.Attributes.Contains("member")
-                        ? entry.Attributes["member"].Count
-                        : 0;
+                    var memberDns = new List<string>();
+                    if (entry.Attributes.Contains("member"))
+                    {
+                        var vals = entry.Attributes["member"].GetValues(typeof(string));
+                        memberDns.AddRange(vals.Cast<string>());
+                    }
 
-                    groups.Add(new LdapSyncedGroup(cn, GetAttribute(entry, "distinguishedName") ?? "", memberCount));
+                    groups.Add(new LdapSyncedGroup(cn, GetAttribute(entry, "distinguishedName") ?? "", memberDns.Count, memberDns));
                 }
 
                 _logger.LogInformation("LDAP sync completed from {Host}. Users: {UserCount}, Groups: {GroupCount}",
