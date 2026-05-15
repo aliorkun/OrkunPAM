@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-15 (PM run #6)
+> Last updated: 2026-05-15 (PM run #7)
 
 ## Platform (44 items)
 
@@ -58,7 +58,7 @@
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | 1 | Solution shall support local user accounts | FC | UserEndpoints.cs — CRUD, PBKDF2-SHA512 hashed passwords, roles |
-| 2 | Solution shall support Active Directory integration | PC | AdSyncService.cs — LDAP bind, user/group import, scheduled sync |
+| 2 | Solution shall support Active Directory integration | PC | LdapPamSyncService.cs — scheduled AD sync + AD group → PAM group membership sync; uSNChanged delta sync; multi-domain Global Catalog (port 3268) support; bulk user/group reconciliation (#141) |
 | 3 | Solution shall support LDAP integration | PC | AdSyncService.cs — LDAP (port 389/636) bind + search |
 | 4 | Solution shall support role-based access control | FC | PamRole enum + RoleEndpoints.cs — 7 roles, endpoint-level enforcement |
 | 5 | Solution shall support group-based access control | PC | GroupEndpoints.cs — group CRUD, group→credential/device binding |
@@ -306,7 +306,7 @@
 | 4 | General | Solution shall be able to manage and interact with multiple remote sessions  for both Remote Desktop Protocol (RDP) ,SSH |  |
 | 5 | General | Solution shall be able to launch and configure sessions across multiple  environments with credentials automatically inj | PC | SshServerSession.cs — vault credential injection to target |
 | 6 | General | Solution shall support native CLI clients like SecureCRT, Putty, MobaXterm etc. |  |
-| 7 | General | Solution shall support SSH and RDP connections to target servers from any device without any native client or agent inst | PC | Connect.razor + SshProxyService.cs — browser-based SSH terminal |
+| 7 | General | Solution shall support SSH and RDP connections to target servers from any device without any native client or agent inst | FC | WebRdpClient.cs (native C# RDP-over-WebSocket) + RdpTerminal.razor — browser RDP without MSTSC; SshProxyService.cs + WebSshClient (plink removed) — browser SSH; both SSH and RDP from any browser, zero native client required (#116, #151) |
 | 8 | General | Solution shall support double confirmation of execution of the command that can cause a service interrupt or any request | PC | DangerousCommandFilter.cs — SSH double-confirmation for destructive commands (rm -rf, shutdown, reboot, DROP, format, mkfs); configurable command list (#136) |
 | 9 | General | Solution shall support geofence validation through mobile application for the command executions. |  |
 | 10 | General | Solution shall support duration based restriction policy for the sessions | PC | SessionPolicyService.cs — session duration/timeout enforcement at runtime (#84) |
