@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Hubs;
 
@@ -14,19 +16,36 @@ namespace OrkunPAM.WebAPI.Hubs;
 [Authorize]
 public sealed class SessionMonitorHub : Hub
 {
+    private const int MaxReasonLength = 500;
+
     private readonly OrkunPamDbContext _db;
     private readonly ILogger<SessionMonitorHub> _log;
+    private readonly IEventBus _eventBus;
 
-    public SessionMonitorHub(OrkunPamDbContext db, ILogger<SessionMonitorHub> log)
+    public SessionMonitorHub(OrkunPamDbContext db, ILogger<SessionMonitorHub> log, IEventBus eventBus)
     {
         _db = db;
         _log = log;
+        _eventBus = eventBus;
     }
 
     public override async Task OnConnectedAsync()
     {
         if (IsMonitor())
+        {
             await Groups.AddToGroupAsync(Context.ConnectionId, "monitor");
+
+            var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var username = Context.User?.FindFirstValue(ClaimTypes.Name);
+
+            // Audit: who connected to the monitor group and when (fixes #148)
+            await _eventBus.PublishAsync(new MonitoringStartedEvent
+            {
+                ActorUserId = Guid.TryParse(userId, out var uid) ? uid : null,
+                ActorUsername = username,
+                ConnectionId = Context.ConnectionId
+            });
+        }
         await base.OnConnectedAsync();
     }
 
@@ -36,9 +55,19 @@ public sealed class SessionMonitorHub : Hub
         if (!IsAdmin()) { await Clients.Caller.SendAsync("Error", "Insufficient permissions"); return; }
         if (!Guid.TryParse(sessionId, out var id)) { await Clients.Caller.SendAsync("Error", "Invalid session ID"); return; }
 
+        // Validate reason length to prevent oversized payloads and DB column overflow (fixes #149)
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > MaxReasonLength)
+        {
+            await Clients.Caller.SendAsync("Error", $"Reason must be 1-{MaxReasonLength} characters");
+            return;
+        }
+        reason = reason.Trim();
+
         var adminIdStr = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
         if (adminIdStr == null || !Guid.TryParse(adminIdStr, out var adminId))
         { await Clients.Caller.SendAsync("Error", "Unauthenticated"); return; }
+
+        var adminUsername = Context.User?.FindFirstValue(ClaimTypes.Name);
 
         var session = await _db.ProxySessions.FindAsync(id);
         if (session == null) { await Clients.Caller.SendAsync("Error", "Session not found"); return; }
@@ -46,7 +75,15 @@ public sealed class SessionMonitorHub : Hub
 
         session.Terminate(adminId, reason);
         await _db.SaveChangesAsync();
-        _log.LogWarning("Session {SessionId} terminated via hub by admin {AdminId}: {Reason}", id, adminId, reason);
+
+        // Publish to event bus → tamper-proof audit chain (fixes #148)
+        await _eventBus.PublishAsync(new SessionTerminatedEvent
+        {
+            SessionId = id,
+            Reason = reason,
+            ActorUserId = adminId,
+            ActorUsername = adminUsername
+        });
 
         await Clients.Group("monitor").SendAsync("SessionUpdate", new
         {

@@ -183,3 +183,9 @@ public record BreakGlassActivatedEvent : PamEvent
     public override string EventType => "Security.BreakGlass.Activated";
     public string Reason { get; init; } = string.Empty;
 }
+
+public record MonitoringStartedEvent : PamEvent
+{
+    public override string EventType => "Session.Monitor.Connected";
+    public string ConnectionId { get; init; } = string.Empty;
+}
