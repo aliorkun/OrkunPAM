@@ -155,8 +155,9 @@ app.Map("/ws/ssh", async (HttpContext context) =>
 
         // 4. Launch plink.exe to connect to target
         var plinkPath = @"C:\OrkunPAM\Tools\plink.exe";
+        // Accept any host key automatically (-hostkey *)
         var psi = new System.Diagnostics.ProcessStartInfo(plinkPath,
-            $"-ssh -P {targetPort} -l {sshUser} -pw {sshPass} {targetHost} -no-antispoof")
+            $"-ssh -P {targetPort} -l {sshUser} -pw {sshPass} -hostkey * {targetHost} -no-antispoof")
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
