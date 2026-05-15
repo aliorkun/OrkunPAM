@@ -275,6 +275,51 @@ public static class SystemEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, message = "Account policy saved" });
         });
+
+        // === Windows / Kerberos Auth Settings (#126) ===
+        var winAuthGroup = app.MapGroup("/api/v1/system/windows-auth").WithTags("System");
+
+        winAuthGroup.MapGet("/", async (OrkunPamDbContext db) =>
+        {
+            var configs = await db.SystemConfigs
+                .Where(c => c.Category == "windows_auth")
+                .ToDictionaryAsync(c => c.Key, c => c.Value ?? string.Empty);
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    enabled = configs.GetValueOrDefault("windows.auth.enabled") == "true",
+                    autoProvision = configs.GetValueOrDefault("windows.auth.auto_provision") == "true",
+                    mfaBypass = configs.GetValueOrDefault("windows.auth.mfa_bypass") == "true",
+                    trustedDomains = configs.GetValueOrDefault("windows.auth.trusted_domains") ?? string.Empty
+                }
+            });
+        });
+
+        winAuthGroup.MapPut("/", async (WindowsAuthSettingsRequest req, OrkunPamDbContext db) =>
+        {
+            var entries = new[]
+            {
+                ("windows.auth.enabled", req.Enabled ? "true" : "false"),
+                ("windows.auth.auto_provision", req.AutoProvision ? "true" : "false"),
+                ("windows.auth.mfa_bypass", req.MfaBypass ? "true" : "false"),
+                ("windows.auth.trusted_domains", req.TrustedDomains ?? string.Empty)
+            };
+
+            foreach (var (key, value) in entries)
+            {
+                var cfg = await db.SystemConfigs.FindAsync(key);
+                if (cfg == null)
+                    db.SystemConfigs.Add(new OrkunPAM.Domain.Entities.System.SystemConfig
+                        { Key = key, Value = value, Category = "windows_auth" });
+                else
+                { cfg.Value = value; cfg.UpdatedAtUtc = DateTime.UtcNow; }
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, message = "Windows Auth settings saved" });
+        });
     }
 }
 
@@ -283,3 +328,4 @@ public record SmtpConfigRequest(string? Host, int? Port, string? From, string? F
     string? Username, string? Password, bool UseTls = true);
 public record TestEmailRequest(string To);
 public record AccountPolicyRequest(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore = 7);
+public record WindowsAuthSettingsRequest(bool Enabled, bool AutoProvision, bool MfaBypass, string? TrustedDomains);
