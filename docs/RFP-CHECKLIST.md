@@ -7,7 +7,7 @@
 ## Platform (44 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 + OrkunPAM.Installer CLI — component selection, DB init, cert gen, service registration; single-package Windows Server deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
 | 3 | Solution shall be deployable On‑Premise and provided as a cloud  offering. |  |  |
@@ -56,7 +56,7 @@
 ## User Management (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support local user accounts | FC | UserEndpoints.cs — CRUD, PBKDF2-SHA512 hashed passwords, roles |
 | 2 | Solution shall support Active Directory integration | PC | LdapPamSyncService.cs — scheduled AD sync + AD group → PAM group membership sync; uSNChanged delta sync; multi-domain Global Catalog (port 3268) support; bulk user/group reconciliation (#141) |
 | 3 | Solution shall support LDAP integration | PC | AdSyncService.cs — LDAP (port 389/636) bind + search |
@@ -109,7 +109,7 @@
 ## Reporting (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall provide pre-built compliance reports | PC | Reports.razor — 9 pre-built reports: credential-expiry, group-membership, policy-compliance, checkout-history, break-glass, jit-access, privileged-inventory, vendor-access, compliance-summary (#120) |
 | 2 | Solution shall support custom report creation |  |  |
 | 3 | Solution shall support scheduled report delivery |  |  |
@@ -162,7 +162,7 @@
 ## MFA Manager (24 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enroll/verify; RFC 6238 compliant |
 | 2 | Solution shall support FIDO2/WebAuthn |  |  |
 | 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
@@ -191,7 +191,7 @@
 ## Remote Access (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support SSH remote access | FC | SshProxyService.cs — native C# SSH (RFC 4253) proxy on port 2222 |
 | 2 | Solution shall support RDP remote access | PC | RdpProxyService.cs — TCP 3389 relay, TPKT/X.224, credential injection |
 | 3 | Solution shall support VNC remote access | PC | VncProxyService.cs — RFB protocol relay (#23) |
@@ -246,7 +246,7 @@
 ## Password Vault (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support credential storage | FC | CredentialEndpoints.cs + VaultEncryptionService.cs — AES-256-GCM encrypted credential store |
 | 2 | Solution shall support credential retrieval | FC | CredentialEndpoints.cs — RBAC-enforced checkout flow |
 | 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job |
@@ -299,7 +299,7 @@
 ## Session Manager (162 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | General | Solution shall support MFA (Multi Factor Authentication) when a user attempts to open a CLI/RDP/HTTP/SFTP/SQL sessions t | PC | MFA policy enforcement (group/role bazlı) — Policies.razor MFA tab + AuthenticationService.cs; TOTP required before SSH/RDP session opens |
 | 2 | General | Solution shall support SSL protocol for network management and terminal (console) servers. |  |
 | 3 | General | Solution shall support using TELNET, STELNET, SSH, VNC, RDP, HTTP, HTTPS protocols to login to end devices. | PC | SshProxyService.cs — native SSH (RFC 4253); OrkunPAM.RdpProxy — TCP 3389 relay, TPKT/X.224, .rdp download (#23) |
@@ -466,7 +466,7 @@
 ## Device Management (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support device discovery | PC | DeviceEndpoints.cs — manual device registration + ICMP reachability check |
 | 2 | Solution shall support device onboarding | PC | Devices.razor — Add Device form with type, OS, credentials, groups |
 | 3 | Solution shall support device categorization | PC | DeviceEndpoints.cs — device type (Server/Network/Database), OS, group |
@@ -519,7 +519,7 @@
 ## Integrations (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|-------|
+|---|-------------|--------|---------|
 | 1 | Solution shall support SIEM integration | PC | SyslogForwarderService.cs — RFC 5424 Syslog + CEF; auto-forward audit events; Integrations.razor config UI |
 | 2 | Solution shall support LDAP/AD integration | PC | AdSyncService.cs — LDAP bind, import users/groups; Integrations.razor AD tab |
 | 3 | Solution shall support SAML integration | PC | SamlAuthEndpoints.cs — SAML 2.0 SP-initiated + ACS; Integrations.razor SAML tab |
