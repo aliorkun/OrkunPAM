@@ -98,6 +98,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Security
     public DbSet<BreakGlassEvent> BreakGlassEvents => Set<BreakGlassEvent>();
     public DbSet<JitAccessRequest> JitAccessRequests => Set<JitAccessRequest>();
+    public DbSet<VendorAccess> VendorAccesses => Set<VendorAccess>();
 
     // SIEM (#63)
     public DbSet<SiemTarget> SiemTargets => Set<SiemTarget>();
@@ -320,6 +321,17 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasKey(s => s.Id);
             e.Property(s => s.Id).ValueGeneratedOnAdd();
             e.HasOne(s => s.Request).WithMany(r => r.Steps).HasForeignKey(s => s.RequestId);
+        });
+
+        // === Vendor Access (#127) ===
+        modelBuilder.Entity<VendorAccess>(e =>
+        {
+            e.HasIndex(v => v.InviteToken).IsUnique();
+            e.HasIndex(v => v.Status);
+            e.Property(v => v.VendorName).HasMaxLength(256);
+            e.Property(v => v.Company).HasMaxLength(256);
+            e.Property(v => v.Email).HasMaxLength(512);
+            e.Property(v => v.InviteToken).HasMaxLength(128);
         });
 
         // Seed built-in data
