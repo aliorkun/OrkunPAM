@@ -1,5 +1,6 @@
 using System.DirectoryServices.Protocols;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Application.Contracts;
@@ -31,7 +32,13 @@ public sealed class LdapService : ILdapService
 
                 if (useSsl)
                 {
-                    connection.SessionOptions.VerifyServerCertificate = (conn, cert) => true; // TODO: configurable cert validation
+                    connection.SessionOptions.VerifyServerCertificate = (conn, serverCert) =>
+                    {
+                        var cert = new X509Certificate2(serverCert);
+                        using var chain = new X509Chain();
+                        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                        return chain.Build(cert);
+                    };
                 }
 
                 if (!string.IsNullOrEmpty(bindDn) && !string.IsNullOrEmpty(bindPassword))
@@ -108,7 +115,15 @@ public sealed class LdapService : ILdapService
                 connection.AuthType = AuthType.Basic;
 
                 if (useSsl)
-                    connection.SessionOptions.VerifyServerCertificate = (conn, cert) => true;
+                {
+                    connection.SessionOptions.VerifyServerCertificate = (conn, serverCert) =>
+                    {
+                        var cert = new X509Certificate2(serverCert);
+                        using var chain = new X509Chain();
+                        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                        return chain.Build(cert);
+                    };
+                }
 
                 if (!string.IsNullOrEmpty(bindDn) && !string.IsNullOrEmpty(bindPassword))
                     connection.Credential = new NetworkCredential(bindDn, bindPassword);

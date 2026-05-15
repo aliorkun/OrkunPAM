@@ -20,6 +20,9 @@ public static class VendorAccessEndpoints
             HttpContext ctx, IAuditService audit, IEmailService? email,
             IConfiguration config) =>
         {
+            var isAdmin = ctx.User.IsInRole("GlobalAdmin") || ctx.User.IsInRole("VendorAdmin");
+            if (!isAdmin) return Results.Forbid();
+
             var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null || !Guid.TryParse(userId, out var adminId))
                 return Results.Unauthorized();
@@ -88,9 +91,12 @@ public static class VendorAccessEndpoints
         });
 
         // GET /api/v1/vendor-access — list all vendor accesses
-        grp.MapGet("/", async (OrkunPamDbContext db, string? status = null,
+        grp.MapGet("/", async (OrkunPamDbContext db, HttpContext ctx, string? status = null,
             int page = 1, int pageSize = 50) =>
         {
+            var isAdmin = ctx.User.IsInRole("GlobalAdmin") || ctx.User.IsInRole("VendorAdmin");
+            if (!isAdmin) return Results.Forbid();
+
             // Auto-expire past-end vendors
             var now = DateTime.UtcNow;
             var expired = await db.VendorAccesses
@@ -119,8 +125,11 @@ public static class VendorAccessEndpoints
         });
 
         // GET /api/v1/vendor-access/{id}
-        grp.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        grp.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db, HttpContext ctx) =>
         {
+            var isAdmin = ctx.User.IsInRole("GlobalAdmin") || ctx.User.IsInRole("VendorAdmin");
+            if (!isAdmin) return Results.Forbid();
+
             var vendor = await db.VendorAccesses.FindAsync(id);
             if (vendor == null) return Results.NotFound(new { success = false });
             return Results.Ok(new { success = true, data = MapDto(vendor) });
@@ -130,6 +139,9 @@ public static class VendorAccessEndpoints
         grp.MapPost("/{id:guid}/revoke", async (Guid id, RevokeVendorRequest req,
             OrkunPamDbContext db, HttpContext ctx, IAuditService audit) =>
         {
+            var isAdmin = ctx.User.IsInRole("GlobalAdmin") || ctx.User.IsInRole("VendorAdmin");
+            if (!isAdmin) return Results.Forbid();
+
             var vendor = await db.VendorAccesses.FindAsync(id);
             if (vendor == null) return Results.NotFound(new { success = false });
             if (vendor.Status == VendorAccessStatus.Revoked)
@@ -159,6 +171,9 @@ public static class VendorAccessEndpoints
         grp.MapPost("/{id:guid}/resend", async (Guid id, OrkunPamDbContext db,
             HttpContext ctx, IEmailService? email, IConfiguration config) =>
         {
+            var isAdmin = ctx.User.IsInRole("GlobalAdmin") || ctx.User.IsInRole("VendorAdmin");
+            if (!isAdmin) return Results.Forbid();
+
             var vendor = await db.VendorAccesses.FindAsync(id);
             if (vendor == null) return Results.NotFound(new { success = false });
             if (vendor.Status == VendorAccessStatus.Revoked)
@@ -317,7 +332,6 @@ public static class VendorAccessEndpoints
         maxSessionMinutesPerDay = v.MaxSessionMinutesPerDay,
         authorizedDeviceIdsJson = v.AuthorizedDeviceIdsJson,
         ipWhitelist = v.IpWhitelist,
-        inviteToken = v.InviteToken,
         inviteExpiresAtUtc = v.InviteExpiresAtUtc,
         inviteUsedAtUtc = v.InviteUsedAtUtc,
         singleUseInvite = v.SingleUseInvite,

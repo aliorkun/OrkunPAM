@@ -152,13 +152,14 @@ public static class LdapSamlEndpoints
         ldap.MapPost("/{id:guid}/sync", async (Guid id, OrkunPamDbContext db,
             OrkunPAM.Application.Contracts.ILdapService ldapService,
             OrkunPAM.Application.Contracts.IAuditService audit,
+            OrkunPAM.Application.Contracts.IVaultEncryptionService vault,
             ILogger<Program> logger) =>
         {
             var l = await db.LdapConfigurations.FindAsync(id);
             if (l == null) return Results.NotFound(new { success = false, errors = new[] { "LDAP config not found" } });
 
             var applyResult = await OrkunPAM.Persistence.Services.LdapPamSyncService.ApplySyncAsync(
-                l, db, ldapService, audit, CancellationToken.None);
+                l, db, ldapService, audit, vault, CancellationToken.None);
 
             logger.LogInformation("LDAP manual sync completed for '{Name}'. Created:{C} Updated:{U} Locked:{L}",
                 l.Name, applyResult.Created, applyResult.Updated, applyResult.Locked);

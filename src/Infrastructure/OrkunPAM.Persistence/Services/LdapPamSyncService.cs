@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Enums;
-using OrkunPAM.Application.Contracts;
 
 namespace OrkunPAM.Persistence.Services;
 
@@ -42,6 +42,7 @@ public sealed class LdapPamSyncService : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<OrkunPamDbContext>();
         var ldap = scope.ServiceProvider.GetRequiredService<ILdapService>();
         var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
+        var vault = scope.ServiceProvider.GetRequiredService<IVaultEncryptionService>();
 
         var configs = await db.LdapConfigurations.Where(c => c.IsEnabled).ToListAsync(ct);
         foreach (var config in configs)
@@ -51,15 +52,21 @@ public sealed class LdapPamSyncService : BackgroundService
                 var next = config.LastSyncAtUtc.Value.AddMinutes(config.SyncIntervalMinutes);
                 if (DateTime.UtcNow < next) continue;
             }
-            await ApplySyncAsync(config, db, ldap, audit, ct);
+            await ApplySyncAsync(config, db, ldap, audit, vault, ct);
         }
     }
 
     public static async Task<LdapSyncApplyResult> ApplySyncAsync(
         LdapConfiguration config, OrkunPamDbContext db,
-        ILdapService ldap, IAuditService audit, CancellationToken ct)
+        ILdapService ldap, IAuditService audit, IVaultEncryptionService vault, CancellationToken ct)
     {
-        string? bindPassword = null; // TODO: decrypt config.BindPasswordEnc via vault when implemented
+        string? bindPassword = null;
+        if (config.BindPasswordEnc != null)
+        {
+            var decrypted = vault.DecryptString(config.BindPasswordEnc);
+            if (decrypted.IsSuccess)
+                bindPassword = decrypted.Value;
+        }
 
         var result = await ldap.SyncUsersAndGroupsAsync(
             config.Host, config.Port, config.UseSsl, config.BindDn, bindPassword,
