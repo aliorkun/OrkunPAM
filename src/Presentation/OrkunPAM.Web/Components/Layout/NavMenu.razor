@@ -4,7 +4,7 @@
 
 <div class="pam-sidebar">
     <div class="pam-brand">
-        <span class="pam-brand-icon">🔐</span>
+        <span class="pam-brand-icon">&#x1F510;</span>
         <span class="pam-brand-text">OrkunPAM</span>
     </div>
 
@@ -22,79 +22,82 @@
     <nav class="pam-nav">
         <div class="pam-nav-section">OVERVIEW</div>
         <NavLink class="pam-nav-link" href="/" Match="NavLinkMatch.All">
-            <span class="pam-nav-icon">⊞</span> Dashboard
+            <span class="pam-nav-icon">&#x229E;</span> Dashboard
         </NavLink>
         <NavLink class="pam-nav-link" href="/portal">
-            <span class="pam-nav-icon">🧑</span> My Portal
+            <span class="pam-nav-icon">&#x1F9D1;</span> My Portal
         </NavLink>
         <NavLink class="pam-nav-link" href="/sessions">
-            <span class="pam-nav-icon">▶</span> Active Sessions
+            <span class="pam-nav-icon">&#x25B6;</span> Active Sessions
         </NavLink>
         <NavLink class="pam-nav-link" href="/session-playback">
-            <span class="pam-nav-icon">⏯</span> Session Playback
+            <span class="pam-nav-icon">&#x23EF;</span> Session Playback
         </NavLink>
 
         <div class="pam-nav-section">ACCESS</div>
         <NavLink class="pam-nav-link" href="/vault">
-            <span class="pam-nav-icon">🔑</span> Vault
+            <span class="pam-nav-icon">&#x1F511;</span> Vault
         </NavLink>
         <NavLink class="pam-nav-link" href="/devices">
-            <span class="pam-nav-icon">🖵</span> Devices
+            <span class="pam-nav-icon">&#x1F5B5;</span> Devices
         </NavLink>
 
         <div class="pam-nav-section">IDENTITY</div>
         <NavLink class="pam-nav-link" href="/users">
-            <span class="pam-nav-icon">👤</span> Users
+            <span class="pam-nav-icon">&#x1F464;</span> Users
         </NavLink>
         <NavLink class="pam-nav-link" href="/policies">
-            <span class="pam-nav-icon">📋</span> Policies
+            <span class="pam-nav-icon">&#x1F4CB;</span> Policies
         </NavLink>
 
         <div class="pam-nav-section">WORKFLOW</div>
         <NavLink class="pam-nav-link" href="/approvals">
-            <span class="pam-nav-icon">✅</span> Approvals
+            <span class="pam-nav-icon">&#x2705;</span> Approvals
             @if (_pendingCount > 0)
             {
                 <span class="pam-nav-badge @(_pendingCount > 0 ? "pam-nav-badge-red" : "")">@_pendingCount</span>
             }
         </NavLink>
         <NavLink class="pam-nav-link" href="/break-glass">
-            <span class="pam-nav-icon">🚨</span> Break-Glass
+            <span class="pam-nav-icon">&#x1F6A8;</span> Break-Glass
         </NavLink>
         <NavLink class="pam-nav-link" href="/jit">
-            <span class="pam-nav-icon">⏱</span> JIT Access
+            <span class="pam-nav-icon">&#x23F1;</span> JIT Access
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/vendors">
+            <span class="pam-nav-icon">&#x1F3ED;</span> Vendor Access
         </NavLink>
 
         <div class="pam-nav-section">REPORTING</div>
         <NavLink class="pam-nav-link" href="/reports">
-            <span class="pam-nav-icon">📊</span> Reports
+            <span class="pam-nav-icon">&#x1F4CA;</span> Reports
         </NavLink>
 
         <div class="pam-nav-section">TERMINAL</div>
         <NavLink class="pam-nav-link" href="/connect">
-            <span class="pam-nav-icon">⌨</span> SSH/RDP Connect
+            <span class="pam-nav-icon">&#x2328;</span> SSH/RDP Connect
         </NavLink>
 
         <div class="pam-nav-section">NETWORK</div>
         <NavLink class="pam-nav-link" href="/network-access">
-            <span class="pam-nav-icon">⬡</span> TACACS+/RADIUS
+            <span class="pam-nav-icon">&#x2B21;</span> TACACS+/RADIUS
         </NavLink>
 
         <div class="pam-nav-section">SYSTEM</div>
         <NavLink class="pam-nav-link" href="/discovery">
-            <span class="pam-nav-icon">🔍</span> Discovery
+            <span class="pam-nav-icon">&#x1F50D;</span> Discovery
         </NavLink>
         <NavLink class="pam-nav-link" href="/integrations">
-            <span class="pam-nav-icon">🔗</span> Integrations
+            <span class="pam-nav-icon">&#x1F517;</span> Integrations
         </NavLink>
         <NavLink class="pam-nav-link" href="/encryption">
-            <span class="pam-nav-icon">🔒</span> Encryption
+            <span class="pam-nav-icon">&#x1F512;</span> Encryption
         </NavLink>
     </nav>
 
     <div class="pam-sidebar-footer">
         <button class="pam-logout-btn" @onclick="LogoutAsync">
-            <span>↩</span> Sign Out
+            <span>&#x21A9;</span> Sign Out
         </button>
     </div>
 </div>

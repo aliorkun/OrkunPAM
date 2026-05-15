@@ -1,0 +1,307 @@
+@page "/vendors"
+@inject PamApiService Api
+
+<PageTitle>Vendor Access &#x2014; OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Vendor Access Management</h2>
+    <p style="color:var(--pam-muted);font-size:0.85em;margin:4px 0 0">
+        Grant time-limited, audited access to third-party vendors without creating permanent PAM accounts.
+    </p>
+</div>
+
+@if (_msg != null) { <div class="pam-alert pam-alert-info">@_msg</div> }
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+
+<div style="display:flex;gap:4px;margin-bottom:16px">
+    <button class="pam-btn @(_tab == "list" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("list"))">Active Vendors</button>
+    <button class="pam-btn @(_tab == "create" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("create"))">+ Create Vendor Access</button>
+</div>
+
+@if (_tab == "create")
+{
+    <div class="pam-card" style="max-width:760px">
+        <div class="pam-card-body">
+            <strong>New Vendor Access Profile</strong>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+                <div>
+                    <label class="pam-label">Vendor Name *</label>
+                    <input class="pam-input" placeholder="e.g. John Smith" @bind="_name" />
+                </div>
+                <div>
+                    <label class="pam-label">Company</label>
+                    <input class="pam-input" placeholder="e.g. Cisco Systems" @bind="_company" />
+                </div>
+                <div>
+                    <label class="pam-label">Email *</label>
+                    <input class="pam-input" type="email" placeholder="vendor@company.com" @bind="_email" />
+                </div>
+                <div>
+                    <label class="pam-label">Phone</label>
+                    <input class="pam-input" placeholder="+1 555 0000" @bind="_phone" />
+                </div>
+                <div>
+                    <label class="pam-label">Access Start (UTC) *</label>
+                    <input class="pam-input" type="datetime-local" @bind="_startAt" />
+                </div>
+                <div>
+                    <label class="pam-label">Access End (UTC) *</label>
+                    <input class="pam-input" type="datetime-local" @bind="_endAt" />
+                </div>
+                <div>
+                    <label class="pam-label">Allowed Hours Start (0-23, blank = any)</label>
+                    <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 9" @bind="_hoursStart" />
+                </div>
+                <div>
+                    <label class="pam-label">Allowed Hours End (0-23, blank = any)</label>
+                    <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 18" @bind="_hoursEnd" />
+                </div>
+                <div>
+                    <label class="pam-label">Max Session (minutes/day)</label>
+                    <input class="pam-input" type="number" min="30" max="1440" @bind="_maxMinutes" />
+                </div>
+                <div>
+                    <label class="pam-label">IP Whitelist (comma-sep, blank = any)</label>
+                    <input class="pam-input" placeholder="203.0.113.0,198.51.100.0" @bind="_ipWhitelist" />
+                </div>
+            </div>
+
+            <div style="margin-top:12px">
+                <label class="pam-label">Authorized Device IDs (one per line)</label>
+                <textarea class="pam-input" rows="4"
+                          placeholder="Paste device UUIDs, one per line"
+                          @bind="_deviceIdsText" style="font-family:monospace;font-size:0.8em"></textarea>
+                <div style="font-size:0.75em;color:var(--pam-muted)">
+                    Find device IDs on the Devices page. The vendor will only see these devices in their portal.
+                </div>
+            </div>
+
+            <div style="margin-top:10px">
+                <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" @bind="_singleUse" />
+                    <span>Single-use invite link (link becomes invalid after first access)</span>
+                </label>
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:8px">
+                <button class="pam-btn pam-btn-primary" @onclick="CreateAsync" disabled="@_saving">
+                    @(_saving ? "Creating..." : "Create & Send Invite")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab("list"))">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_tab == "list")
+{
+    <div class="pam-card">
+        <div class="pam-card-body" style="padding:8px 12px;border-bottom:1px solid var(--pam-border)">
+            <div style="display:flex;gap:8px;align-items:center">
+                <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
+                @foreach (var s in new[] { "All", "Active", "Expired", "Revoked" })
+                {
+                    <button class="pam-btn pam-btn-sm @(_statusFilter == s ? "pam-btn-primary" : "pam-btn-secondary")"
+                            @onclick="@(() => FilterStatus(s))">@s</button>
+                }
+                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadAsync">&#x21BB; Refresh</button>
+            </div>
+        </div>
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_vendors == null || _vendors.Count == 0)
+            {
+                <div class="pam-empty p-4">No vendor access profiles. Create one to grant third-party access.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Vendor</th>
+                            <th>Company</th>
+                            <th>Email</th>
+                            <th>Access Window (UTC)</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in _vendors)
+                        {
+                            <tr>
+                                <td><strong>@v.VendorName</strong></td>
+                                <td>@(v.Company ?? "—")</td>
+                                <td style="font-size:0.85em">@v.Email</td>
+                                <td style="font-size:0.8em;white-space:nowrap">
+                                    @v.StartAtUtc.ToLocalTime().ToString("MM/dd HH:mm") —
+                                    @v.EndAtUtc.ToLocalTime().ToString("MM/dd HH:mm")
+                                    @if (v.AllowedHoursStart.HasValue && v.AllowedHoursEnd.HasValue)
+                                    {
+                                        <span style="color:var(--pam-muted)"> (@v.AllowedHoursStart:00–@v.AllowedHoursEnd:00 UTC)</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="pam-status @StatusClass(v.Status)">@v.Status</span>
+                                </td>
+                                <td style="font-size:0.8em">@v.CreatedByUsername</td>
+                                <td style="white-space:nowrap">
+                                    @if (v.Status != "Revoked")
+                                    {
+                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                style="margin-right:4px"
+                                                @onclick="@(() => ResendAsync(v.Id))"
+                                                disabled="@(_actionId == v.Id)">
+                                            Resend
+                                        </button>
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => RevokeAsync(v.Id))"
+                                                disabled="@(_actionId == v.Id)">
+                                            Revoke
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:0.8em;color:var(--pam-muted)">@(v.RevokeReason ?? "Revoked")</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "list";
+    private bool _loading = true;
+    private bool _saving;
+    private string? _msg;
+    private string? _error;
+    private string? _actionId;
+    private string _statusFilter = "All";
+    private List<VendorAccessDto>? _vendors;
+
+    // Create form fields
+    private string _name = "";
+    private string _company = "";
+    private string _email = "";
+    private string _phone = "";
+    private DateTime _startAt = DateTime.Today;
+    private DateTime _endAt = DateTime.Today.AddDays(7);
+    private int? _hoursStart;
+    private int? _hoursEnd;
+    private int _maxMinutes = 120;
+    private string _ipWhitelist = "";
+    private string _deviceIdsText = "";
+    private bool _singleUse = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        _msg = null; _error = null;
+        if (tab == "list") await LoadAsync();
+    }
+
+    private async Task FilterStatus(string status)
+    {
+        _statusFilter = status;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; StateHasChanged();
+        var filter = _statusFilter == "All" ? null : _statusFilter;
+        _vendors = await Api.GetVendorAccessListAsync(filter);
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task CreateAsync()
+    {
+        _msg = null; _error = null;
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_email))
+        {
+            _error = "Vendor name and email are required.";
+            StateHasChanged();
+            return;
+        }
+        if (_endAt <= _startAt)
+        {
+            _error = "End time must be after start time.";
+            StateHasChanged();
+            return;
+        }
+
+        var deviceIds = _deviceIdsText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => Guid.TryParse(s, out _))
+            .Select(Guid.Parse)
+            .ToList();
+
+        _saving = true; StateHasChanged();
+        var result = await Api.CreateVendorAccessAsync(
+            _name.Trim(), _company.Trim(), _email.Trim(), _phone.Trim(),
+            _startAt.ToUniversalTime(), _endAt.ToUniversalTime(),
+            _hoursStart, _hoursEnd, _maxMinutes,
+            deviceIds, _ipWhitelist.Trim(), _singleUse);
+        _saving = false;
+
+        if (result != null)
+        {
+            _msg = $"Vendor access created. Invite sent to {_email}. Portal URL: {result.PortalUrl}";
+            _name = _company = _email = _phone = _deviceIdsText = _ipWhitelist = "";
+            _startAt = DateTime.Today; _endAt = DateTime.Today.AddDays(7);
+            _hoursStart = null; _hoursEnd = null; _maxMinutes = 120; _singleUse = false;
+            _tab = "list";
+            await LoadAsync();
+        }
+        else
+        {
+            _error = "Failed to create vendor access profile.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task RevokeAsync(string id)
+    {
+        _msg = null; _error = null; _actionId = id; StateHasChanged();
+        var ok = await Api.RevokeVendorAccessAsync(id, "Revoked by admin");
+        _actionId = null;
+        if (ok) { _msg = "Vendor access revoked."; await LoadAsync(); }
+        else { _error = "Failed to revoke vendor access."; StateHasChanged(); }
+    }
+
+    private async Task ResendAsync(string id)
+    {
+        _msg = null; _error = null; _actionId = id; StateHasChanged();
+        var url = await Api.ResendVendorInviteAsync(id);
+        _actionId = null;
+        if (url != null) _msg = $"Invite resent. New portal URL: {url}";
+        else _error = "Failed to resend invite.";
+        StateHasChanged();
+    }
+
+    private static string StatusClass(string status) => status switch
+    {
+        "Active"  => "pam-status-active",
+        "Expired" => "pam-status-warning",
+        "Revoked" => "pam-status-error",
+        _         => "pam-status-pending"
+    };
+}

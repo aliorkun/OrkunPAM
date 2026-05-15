@@ -388,6 +388,7 @@ try
     api.MapEncryptionEndpoints();
     api.MapBackupEndpoints();
     api.MapSystemEndpoints();
+    api.MapVendorAccessEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
