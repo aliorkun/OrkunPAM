@@ -8,6 +8,7 @@ using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 using OrkunPAM.Domain.Enums;
+using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
@@ -442,6 +443,146 @@ public static class AuthEndpoints
 
             return Results.Ok(new { success = true, message = "Session ended" });
         }).RequireAuthorization().WithTags("Auth");
+
+        // === Windows/Kerberos SSO (#126) ===
+        // Browser hits this endpoint; Negotiate middleware challenges, validates Kerberos/NTLM,
+        // then the handler maps the Windows identity to a PAM user and issues a PAM JWT.
+        app.MapGet("/api/v1/auth/windows", async (OrkunPamDbContext db, IJwtTokenService jwt,
+            IEventBus eventBus, HttpContext ctx) =>
+        {
+            // Runtime toggle — Windows Auth must be explicitly enabled by admin
+            var enabledStr = await db.SystemConfigs
+                .Where(c => c.Key == "windows.auth.enabled")
+                .Select(c => c.Value)
+                .FirstOrDefaultAsync();
+            if (enabledStr != "true")
+                return Results.Json(new { success = false, error = "Windows authentication is not enabled" }, statusCode: 403);
+
+            // Windows identity name set by Negotiate middleware
+            var windowsName = ctx.User.Identity?.Name;
+            if (string.IsNullOrEmpty(windowsName))
+                return Results.Unauthorized();
+
+            // Parse sAMAccountName: "DOMAIN\\username" → "username", "user@domain.com" → "user"
+            var samAccountName = windowsName.Contains('\\')
+                ? windowsName.Split('\\')[1].Trim()
+                : windowsName.Split('@')[0].Trim();
+            var normalizedSam = samAccountName.ToUpperInvariant();
+
+            // Trusted domain check
+            if (windowsName.Contains('\\'))
+            {
+                var trustedDomains = await db.SystemConfigs
+                    .Where(c => c.Key == "windows.auth.trusted_domains")
+                    .Select(c => c.Value)
+                    .FirstOrDefaultAsync();
+                if (!string.IsNullOrEmpty(trustedDomains))
+                {
+                    var domain = windowsName.Split('\\')[0].ToUpperInvariant();
+                    var allowed = trustedDomains.Split(',')
+                        .Select(d => d.Trim().ToUpperInvariant())
+                        .Where(d => !string.IsNullOrEmpty(d)).ToList();
+                    if (allowed.Count > 0 && !allowed.Contains(domain))
+                        return Results.Json(new { success = false, error = $"Domain '{domain}' is not trusted" }, statusCode: 401);
+                }
+            }
+
+            // Find PAM user by sAMAccountName (Windows or AD auth source)
+            var user = await db.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role).ThenInclude(r => r.RolePermissions)
+                .Include(u => u.UserGroups).ThenInclude(ug => ug.Group).ThenInclude(g => g.GroupRoles)
+                    .ThenInclude(gr => gr.Role).ThenInclude(r => r.RolePermissions)
+                .FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedSam &&
+                    (u.AuthSource == AuthSource.Windows || u.AuthSource == AuthSource.ActiveDirectory));
+
+            if (user == null)
+            {
+                // Auto-provision if configured
+                var autoProvStr = await db.SystemConfigs
+                    .Where(c => c.Key == "windows.auth.auto_provision")
+                    .Select(c => c.Value)
+                    .FirstOrDefaultAsync();
+                if (autoProvStr != "true")
+                    return Results.Json(new { success = false, error = "User not found; auto-provisioning disabled" }, statusCode: 401);
+
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Username = samAccountName,
+                    NormalizedUsername = normalizedSam,
+                    DisplayName = windowsName,
+                    AuthSource = AuthSource.Windows,
+                    Status = UserStatus.Active
+                };
+                db.Users.Add(newUser);
+                await db.SaveChangesAsync();
+
+                user = await db.Users
+                    .Include(u => u.UserRoles).ThenInclude(ur => ur.Role).ThenInclude(r => r.RolePermissions)
+                    .Include(u => u.UserGroups).ThenInclude(ug => ug.Group).ThenInclude(g => g.GroupRoles)
+                        .ThenInclude(gr => gr.Role).ThenInclude(r => r.RolePermissions)
+                    .FirstAsync(u => u.Id == newUser.Id);
+            }
+
+            if (user.Status != UserStatus.Active || user.IsLocked)
+                return Results.Json(new { success = false, error = "Account is not active" }, statusCode: 401);
+
+            // Collect roles and permissions
+            var roles = new HashSet<string>();
+            var permissions = new HashSet<string>();
+            foreach (var ur in user.UserRoles)
+            {
+                roles.Add(ur.Role.Name);
+                foreach (var rp in ur.Role.RolePermissions) permissions.Add(rp.PermissionCode);
+            }
+            foreach (var ug in user.UserGroups)
+                foreach (var gr in ug.Group.GroupRoles)
+                {
+                    roles.Add(gr.Role.Name);
+                    foreach (var rp in gr.Role.RolePermissions) permissions.Add(rp.PermissionCode);
+                }
+
+            // MFA bypass option for Kerberos-authenticated users (admin-configurable)
+            var mfaBypassStr = await db.SystemConfigs
+                .Where(c => c.Key == "windows.auth.mfa_bypass")
+                .Select(c => c.Value)
+                .FirstOrDefaultAsync();
+            bool mfaVerified = mfaBypassStr == "true";
+
+            var tokenResult = jwt.GenerateTokens(
+                user.Id, user.Username, user.DisplayName ?? user.Username,
+                "Windows", roles, permissions, mfaVerified: mfaVerified);
+            if (tokenResult.IsFailure)
+                return Results.Problem("Failed to generate tokens");
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await eventBus.PublishAsync(new UserLoggedInEvent
+            {
+                ActorUserId = user.Id,
+                ActorUsername = user.Username,
+                ActorIp = ip,
+                AuthSource = "Windows"
+            });
+
+            user.RecordLoginSuccess(ip);
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    accessToken = tokenResult.Value.AccessToken,
+                    refreshToken = tokenResult.Value.RefreshToken,
+                    expiresAt = tokenResult.Value.AccessTokenExpiry,
+                    userId = user.Id,
+                    username = user.Username,
+                    displayName = user.DisplayName,
+                    authMethod = "Windows/Kerberos",
+                    mfaRequired = !mfaVerified && user.MfaEnabled
+                }
+            });
+        }).RequireAuthorization("WindowsAuth").WithTags("Auth");
     }
 }
 
