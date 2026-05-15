@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.SharedKernel;
 
@@ -9,10 +10,11 @@ namespace OrkunPAM.Persistence.Services;
 /// Uses System.Threading.Channels for high-performance async pub/sub.
 /// Consumers: audit logger, SIEM forwarder, webhook delivery, analytics engine.
 /// </summary>
-public sealed class InProcessEventBus : IEventBus, IDisposable
+public sealed class InProcessEventBus : IEventBus, IHostedService, IDisposable
 {
     private readonly Channel<IDomainEvent> _channel;
     private readonly List<Func<IDomainEvent, CancellationToken, Task>> _handlers = new();
+    private readonly object _handlersLock = new();
     private readonly ILogger<InProcessEventBus> _logger;
     private readonly CancellationTokenSource _cts = new();
     private Task? _processingTask;
@@ -30,10 +32,11 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
 
     public void Subscribe(Func<IDomainEvent, CancellationToken, Task> handler)
     {
-        _handlers.Add(handler);
+        lock (_handlersLock) _handlers.Add(handler);
     }
 
-    public void StartProcessing()
+    // IHostedService — starts processing when the app starts (replaces manual StartProcessing call)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         _processingTask = Task.Run(async () =>
         {
@@ -43,19 +46,18 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
                 {
                     await foreach (var evt in _channel.Reader.ReadAllAsync(_cts.Token))
                     {
-                        foreach (var handler in _handlers)
+                        Func<IDomainEvent, CancellationToken, Task>[] snapshot;
+                        lock (_handlersLock) snapshot = [.. _handlers];
+                        foreach (var handler in snapshot)
                         {
-                            try
-                            {
-                                await handler(evt, _cts.Token);
-                            }
+                            try { await handler(evt, _cts.Token); }
                             catch (Exception ex)
                             {
                                 _logger.LogError(ex, "Event handler failed for {EventType}", evt.EventType);
                             }
                         }
                     }
-                    break; // channel writer completed cleanly
+                    break;
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
@@ -66,8 +68,19 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
             }
         }, _cts.Token);
 
-        _logger.LogInformation("Event bus started with {HandlerCount} handlers", _handlers.Count);
+        _logger.LogInformation("Event bus started");
+        return Task.CompletedTask;
     }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _cts.Cancel();
+        _channel.Writer.Complete();
+        return Task.CompletedTask;
+    }
+
+    [Obsolete("Use IHostedService lifecycle — InProcessEventBus now starts automatically.")]
+    public void StartProcessing() => _ = StartAsync(CancellationToken.None);
 
     public async Task PublishAsync<T>(T @event, CancellationToken ct = default) where T : IDomainEvent
     {
@@ -76,8 +89,7 @@ public sealed class InProcessEventBus : IEventBus, IDisposable
 
     public void Dispose()
     {
-        _cts.Cancel();
-        _channel.Writer.Complete();
+        // StopAsync cancels and completes the channel; Dispose cleans up the CTS
         _processingTask?.Wait(TimeSpan.FromSeconds(5));
         _cts.Dispose();
     }
