@@ -114,48 +114,38 @@ app.Map("/ws/ssh", async (HttpContext context) =>
             return;
         }
 
-        // 3. Checkout credential (returns decrypted password)
+        // 3. Decrypt credential via proxy-decrypt endpoint
         string sshUser = "root", sshPass = "";
-        var credResp = await httpClient.PostAsJsonAsync($"/api/v1/vault/credentials/{credentialId}/checkout",
-            new { reason = "Web SSH Terminal", maxMinutes = 60 });
+        var proxySecret = builder.Configuration["PamApi:ProxySecret"]
+            ?? builder.Configuration["ProxyService:Secret"]
+            ?? "OrkunPAM-ProxySecret-2026-VeryLongKey!";
 
-        if (credResp.IsSuccessStatusCode)
+        using var decryptClient = new HttpClient { BaseAddress = new Uri(pamApiBase) };
+        decryptClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        decryptClient.DefaultRequestHeaders.Add("X-Proxy-Secret", proxySecret);
+
+        var decryptResp = await decryptClient.PostAsJsonAsync("/api/v1/vault/credentials/proxy-decrypt",
+            new { credentialId = credentialId });
+
+        if (decryptResp.IsSuccessStatusCode)
         {
-            var credJson = await credResp.Content.ReadFromJsonAsync<JsonElement>();
-            if (credJson.TryGetProperty("data", out var cd))
+            var decJson = await decryptResp.Content.ReadFromJsonAsync<JsonElement>();
+            if (decJson.TryGetProperty("data", out var dd))
             {
-                sshUser = cd.TryGetProperty("username", out var u) ? u.GetString() ?? "root" : "root";
-                sshPass = cd.TryGetProperty("password", out var p) ? p.GetString() ?? "" : "";
+                sshUser = dd.TryGetProperty("username", out var u) ? u.GetString() ?? "root" : "root";
+                sshPass = dd.TryGetProperty("password", out var p) ? p.GetString() ?? "" : "";
             }
         }
         else
         {
-            // Credential might already be checked out or approval required
-            var errBody = await credResp.Content.ReadAsStringAsync();
-            logger.LogWarning("Credential checkout failed: {Status} {Body}", credResp.StatusCode, errBody);
-            // Try to get username from credential info at least
-            var credInfoResp = await httpClient.GetAsync($"/api/v1/vault/credentials?pageSize=50&deviceId={deviceId}");
-            if (credInfoResp.IsSuccessStatusCode)
-            {
-                var infoJson = await credInfoResp.Content.ReadFromJsonAsync<JsonElement>();
-                if (infoJson.TryGetProperty("data", out var arr) && arr.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in arr.EnumerateArray())
-                    {
-                        var itemId = item.TryGetProperty("id", out var iid) ? iid.GetString() : "";
-                        if (itemId == credentialId)
-                        {
-                            sshUser = item.TryGetProperty("username", out var iu) ? iu.GetString() ?? "root" : "root";
-                            break;
-                        }
-                    }
-                }
-            }
+            var errBody = await decryptResp.Content.ReadAsStringAsync();
+            logger.LogWarning("Credential decrypt failed: {Status} {Body}", decryptResp.StatusCode, errBody);
         }
 
         if (string.IsNullOrEmpty(sshPass))
         {
-            await SendJsonAsync(browserWs, new { t = "error", msg = "Could not retrieve credential password. Check vault." });
+            await SendJsonAsync(browserWs, new { t = "error", msg = "Could not decrypt credential. Check vault encryption." });
             await browserWs.CloseAsync(WebSocketCloseStatus.InternalServerError, "No credential", CancellationToken.None);
             return;
         }
@@ -272,8 +262,6 @@ app.Map("/ws/ssh", async (HttpContext context) =>
         {
             try
             {
-                var proxySecret = builder.Configuration["PamApi:ProxySecret"]
-                    ?? builder.Configuration["ProxyService:Secret"] ?? "";
                 using var endClient = new HttpClient { BaseAddress = new Uri(pamApiBase) };
                 endClient.DefaultRequestHeaders.Add("X-Proxy-Secret", proxySecret);
                 await endClient.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/end",

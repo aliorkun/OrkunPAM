@@ -175,7 +175,7 @@ try
     {
         options.AddFixedWindowLimiter("auth", opt =>
         {
-            opt.PermitLimit = 5;
+            opt.PermitLimit = 20;
             opt.Window = TimeSpan.FromMinutes(1);
             opt.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
             opt.QueueLimit = 0;
