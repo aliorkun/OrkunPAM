@@ -191,6 +191,21 @@ public static class VaultEndpoints
             if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
                 return Results.Unauthorized();
 
+            // SoD enforcement (RFP Vault #26): admin roles cannot view passwords directly.
+            // They must delegate checkout rights via the PasswordViewer role (which they
+            // cannot assign to themselves — see UserEndpoints role-assignment guard).
+            var isAdminRole = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin");
+            var hasPasswordViewer = context.User.IsInRole("PasswordViewer");
+            if (isAdminRole && !hasPasswordViewer)
+            {
+                logger.LogWarning("SoD violation attempt: admin user {UserId} tried to checkout credential {CredId} without PasswordViewer role",
+                    userId, id);
+                return Results.Problem(
+                    title: "Access Denied — Separation of Duties",
+                    detail: "Administrators cannot view passwords directly. The 'PasswordViewer' role must be assigned by another admin.",
+                    statusCode: 403);
+            }
+
             var cred = await db.Credentials.FindAsync(id);
             if (cred == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });

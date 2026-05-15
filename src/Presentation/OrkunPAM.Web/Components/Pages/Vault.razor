@@ -14,6 +14,14 @@
     <div class="pam-alert pam-alert-danger">@_error</div>
 }
 
+@if (_checkoutBlocked)
+{
+    <div class="pam-alert" style="background:#fff3cd;border-color:#ffc107;color:#856404;margin-bottom:1rem">
+        <strong>Separation of Duties:</strong> Your administrator role does not allow direct password viewing (RFP Vault §26).
+        To checkout credentials, another admin must assign you the <code>PasswordViewer</code> role.
+    </div>
+}
+
 <div class="pam-card pam-vault-layout">
     <!-- Folder Sidebar -->
     <aside class="pam-vault-sidebar">
@@ -127,8 +135,17 @@
                                     <div class="pam-actions">
                                         @if (!isCheckedOut)
                                         {
-                                            <button class="pam-btn-icon" title="Checkout credential"
-                                                    @onclick="@(() => OpenCheckout(c.Id, c.Name))">↗</button>
+                                            @if (_checkoutBlocked)
+                                            {
+                                                <button class="pam-btn-icon" disabled
+                                                        title="Separation of Duties: Admin role cannot view passwords. Ask another admin to assign the 'PasswordViewer' role to you."
+                                                        style="opacity:0.4;cursor:not-allowed">↗</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="pam-btn-icon" title="Checkout credential"
+                                                        @onclick="@(() => OpenCheckout(c.Id, c.Name))">↗</button>
+                                            }
                                         }
                                         @if (isMyCheckout)
                                         {
@@ -452,6 +469,8 @@
     private int                  _allTotal;
     private int                  _page     = 1;
     private const int            _pageSize = 20;
+    // SoD (RFP Vault #26): admin without PasswordViewer cannot checkout passwords
+    private bool                 _checkoutBlocked;
 
     // Checkout modal
     private bool    _showCheckout;
@@ -507,6 +526,12 @@
         if (!firstRender) return;
         var user = await Api.GetCurrentUserAsync();
         _currentUserId = user?.UserId;
+        if (user != null)
+        {
+            var isAdmin = user.Roles.Contains("GlobalAdmin") || user.Roles.Contains("VaultAdmin");
+            var hasPasswordViewer = user.Roles.Contains("PasswordViewer");
+            _checkoutBlocked = isAdmin && !hasPasswordViewer;
+        }
         await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
     }
 

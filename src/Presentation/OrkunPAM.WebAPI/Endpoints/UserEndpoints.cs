@@ -273,10 +273,22 @@ public static class UserEndpoints
         {
             if (!await db.Users.AnyAsync(u => u.Id == id))
                 return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
-            if (!await db.Roles.AnyAsync(r => r.Id == roleId))
+            var targetRole = await db.Roles.FirstOrDefaultAsync(r => r.Id == roleId);
+            if (targetRole == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Role not found" } });
             if (await db.UserRoles.AnyAsync(ur => ur.UserId == id && ur.RoleId == roleId))
                 return Results.Conflict(new { success = false, errors = new[] { "Role already assigned" } });
+
+            // SoD guard: PasswordViewer cannot be self-assigned (RFP Vault #26)
+            if (targetRole.Name == "PasswordViewer")
+            {
+                var actorIdStr = context.User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+                if (actorIdStr != null && Guid.TryParse(actorIdStr, out var actorId) && actorId == id)
+                    return Results.Problem(
+                        title: "Self-Assignment Denied",
+                        detail: "The 'PasswordViewer' role cannot be self-assigned. Another administrator must grant this role.",
+                        statusCode: 403);
+            }
 
             db.UserRoles.Add(new UserRole { UserId = id, RoleId = roleId });
             await db.SaveChangesAsync();

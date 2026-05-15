@@ -62,9 +62,11 @@ internal sealed class CommandFilter : ICommandFilter
 {
     private readonly ILogger _log;
 
-    // Cache compiled rules per policy JSON to avoid re-parsing
+    // Cache compiled rules per policy JSON to avoid re-parsing — capped at MaxCacheEntries
+    // to prevent OOM in long-running Windows Service (CWE-770)
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CommandFilterRule[]>
         _ruleCache = new();
+    private const int MaxCacheEntries = 50;
 
     // High-risk commands that always get elevated risk score regardless of rules
     private static readonly string[] HighRiskPatterns =
@@ -140,35 +142,49 @@ internal sealed class CommandFilter : ICommandFilter
         if (string.IsNullOrWhiteSpace(json))
             return [];
 
-        return _ruleCache.GetOrAdd(json, static j =>
+        if (_ruleCache.TryGetValue(json, out var cached))
+            return cached;
+
+        var parsed = ParseRulesCore(json);
+
+        // Evict oldest entries if at capacity before inserting
+        while (_ruleCache.Count >= MaxCacheEntries)
+        {
+            var evict = _ruleCache.Keys.FirstOrDefault();
+            if (evict is null) break;
+            _ruleCache.TryRemove(evict, out _);
+        }
+
+        _ruleCache.TryAdd(json, parsed);
+        return parsed;
+    }
+
+    private static CommandFilterRule[] ParseRulesCore(string j)
+    {
+        try
+        {
+            var rules = JsonSerializer.Deserialize<CommandFilterRule[]>(j,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (rules != null)
+                return rules;
+        }
+        catch
         {
             try
             {
-                // Try parsing as array of CommandFilterRule objects
-                var rules = JsonSerializer.Deserialize<CommandFilterRule[]>(j,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (rules != null)
-                    return rules;
+                var patterns = JsonSerializer.Deserialize<string[]>(j);
+                if (patterns != null)
+                    return patterns.Select(p => new CommandFilterRule
+                    {
+                        Pattern = p,
+                        IsRegex = p.Contains('(') || p.Contains('[') || p.Contains('+') || p.Contains('\\'),
+                        RiskScore = 5.0m
+                    }).ToArray();
             }
-            catch
-            {
-                // Try parsing as simple string array (glob patterns)
-                try
-                {
-                    var patterns = JsonSerializer.Deserialize<string[]>(j);
-                    if (patterns != null)
-                        return patterns.Select(p => new CommandFilterRule
-                        {
-                            Pattern = p,
-                            IsRegex = p.Contains('(') || p.Contains('[') || p.Contains('+') || p.Contains('\\'),
-                            RiskScore = 5.0m
-                        }).ToArray();
-                }
-                catch { /* fall through */ }
-            }
+            catch { /* fall through */ }
+        }
 
-            return [];
-        });
+        return [];
     }
 
     private static (bool matched, CommandFilterRule? rule) MatchesAnyRule(string command, CommandFilterRule[] rules)

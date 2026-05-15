@@ -11,6 +11,8 @@ public static class SeedData
     public static readonly Guid ReadOnlyId = Guid.Parse("00000000-0000-0000-0000-000000000005");
     public static readonly Guid HelpDeskId = Guid.Parse("00000000-0000-0000-0000-000000000006");
     public static readonly Guid DeviceAdminId = Guid.Parse("00000000-0000-0000-0000-000000000007");
+    // RFP Vault #26 — Separation of Duties: admin cannot view passwords, only PasswordViewer role can
+    public static readonly Guid PasswordViewerId = Guid.Parse("00000000-0000-0000-0000-000000000008");
 
     public static IEnumerable<Role> GetRoles() =>
     [
@@ -21,6 +23,7 @@ public static class SeedData
         new() { Id = AuditorId, Name = "Auditor", Description = "Read-only audit access", IsSystemRole = true },
         new() { Id = ReadOnlyId, Name = "ReadOnly", Description = "View-only access", IsSystemRole = true },
         new() { Id = HelpDeskId, Name = "HelpDesk", Description = "User support", IsSystemRole = true },
+        new() { Id = PasswordViewerId, Name = "PasswordViewer", Description = "Can checkout/view passwords (SoD — cannot be self-assigned by admins)", IsSystemRole = true },
     ];
 
     public static IEnumerable<Permission> GetPermissions() =>
@@ -133,5 +136,10 @@ public static class SeedData
         var helpDeskPerms = new[] { "user.view", "user.lock", "user.resetpassword", "group.view", "vault.view", "device.view", "session.view" };
         foreach (var code in helpDeskPerms)
             yield return new() { RoleId = HelpDeskId, PermissionCode = code };
+
+        // PasswordViewer — SoD role: checkout/view passwords, no management
+        var passwordViewerPerms = new[] { "vault.view", "vault.credential.checkout", "vault.credential.checkin" };
+        foreach (var code in passwordViewerPerms)
+            yield return new() { RoleId = PasswordViewerId, PermissionCode = code };
     }
 }
