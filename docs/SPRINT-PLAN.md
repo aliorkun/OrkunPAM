@@ -128,7 +128,7 @@
 |-------|--------|-----|-------|
 | #138 | System Health Monitoring & O&M Dashboard | v2-INFRA | ✅ Tamamlandı |
 | #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔄 In Progress |
-| #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | 🔲 Bekliyor |
+| #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | ✅ Tamamlandı |
 | #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | 🔲 Bekliyor |
 | #154 | Access Certification Campaigns | v2-COMPLIANCE | 🔲 Bekliyor |
 
@@ -156,7 +156,14 @@
 - [x] Program.cs `AddHostedService` registration
 - [ ] RFP Session Manager #11, #16, #17 validation
 
-**İlerleme:** 2/5 issue (%40)
+**#153 Orphaned Account Detection — TAMAMLANDI ✅**
+- `IsOrphaned` + `OrphanedDetectedAtUtc` domain properties + EF migration
+- `LdapPamSyncService` orphaned detection after each sync (auto-mark & auto-clear)
+- `GET /api/v1/users/orphaned` API endpoint
+- `GetOrphanedUsersAsync()` in PamApiService + `UserDto` updated
+- Red "Orphaned" badge in Users.razor UI
+
+**İlerleme:** 3/5 issue (%60)
 
 ---
 
