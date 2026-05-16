@@ -1,0 +1,325 @@
+@page "/compliance"
+@inject PamApiService Api
+@inject AuthStateService Auth
+
+<PageTitle>Access Certifications — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Access Certification Campaigns</h2>
+    <span class="pam-page-sub">Periodic privileged access review — SOC 2, ISO 27001, PCI DSS</span>
+    <button class="pam-btn pam-btn-primary" @onclick="@(() => _showCreate = true)">+ New Campaign</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+@if (_success != null)
+{
+    <div class="pam-alert pam-alert-success">@_success</div>
+}
+
+<!-- Tabs -->
+<div class="pam-tabs">
+    <button class="pam-tab @(_tab == "active" ? "active" : "")" @onclick="@(() => SetTab("active"))">Active</button>
+    <button class="pam-tab @(_tab == "history" ? "active" : "")" @onclick="@(() => SetTab("history"))">History</button>
+</div>
+
+@if (_loading)
+{
+    <div class="pam-loading-text">Loading campaigns...</div>
+}
+else
+{
+    var filtered = _tab == "active"
+        ? (_campaigns?.Where(c => c.Status == 0 || c.Status == 1).ToList() ?? new())
+        : (_campaigns?.Where(c => c.Status == 2 || c.Status == 3).ToList() ?? new());
+
+    <div class="pam-card">
+        <div class="pam-card-body">
+            @if (filtered.Count == 0)
+            {
+                <div class="pam-empty">No campaigns found.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Starts</th>
+                            <th>Deadline</th>
+                            <th>Auto-Revoke</th>
+                            <th>Completed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in filtered)
+                        {
+                            <tr>
+                                <td>@c.Name</td>
+                                <td>@((MarkupString)CampaignStatusBadge(c.Status))</td>
+                                <td>@c.StartsAtUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                                <td>@c.DeadlineUtc.ToLocalTime().ToString("MM/dd/yyyy")</td>
+                                <td>@(c.AutoRevokeOnMiss ? "Yes" : "No")</td>
+                                <td>@(c.CompletedAtUtc.HasValue ? c.CompletedAtUtc.Value.ToLocalTime().ToString("MM/dd/yyyy") : "—")</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                            @onclick="@(() => OpenDetail(c.Id))">View</button>
+                                    @if (c.Status == 0)
+                                    {
+                                        <button class="pam-btn pam-btn-sm pam-btn-primary"
+                                                @onclick="@(() => StartCampaign(c.Id))">Start</button>
+                                    }
+                                    @if (c.Status == 1)
+                                    {
+                                        <button class="pam-btn pam-btn-sm pam-btn-danger"
+                                                @onclick="@(() => CompleteCampaign(c.Id))">Complete</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<!-- Create Modal -->
+@if (_showCreate)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showCreate = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>New Certification Campaign</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showCreate = false)">&#x2715;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-form-group">
+                    <label class="pam-label">Campaign Name</label>
+                    <input class="pam-input" @bind="_createName" placeholder="e.g. Q2 2026 Access Review" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Scope</label>
+                    <select class="pam-select" @bind="_createScopeType">
+                        <option value="AllUsers">All Users</option>
+                        <option value="Group">Specific Group</option>
+                        <option value="Role">Specific Role</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Start Date (UTC)</label>
+                    <input class="pam-input" type="datetime-local" @bind="_createStart" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Deadline (UTC)</label>
+                    <input class="pam-input" type="datetime-local" @bind="_createDeadline" />
+                </div>
+                <div class="pam-form-group pam-check-group">
+                    <input type="checkbox" id="autoRevoke" @bind="_createAutoRevoke" />
+                    <label for="autoRevoke">Auto-revoke access for unanswered items on deadline</label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showCreate = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="CreateCampaign" disabled="@_saving">
+                    @(_saving ? "Creating..." : "Create Campaign")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Detail Modal -->
+@if (_showDetail && _detail != null)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showDetail = false)">
+        <div class="pam-modal pam-modal-xl" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>@_detail.Name</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showDetail = false)">&#x2715;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-stat-row">
+                    <div class="pam-stat">
+                        <span class="pam-stat-label">Total Items</span>
+                        <span class="pam-stat-value">@_detail.TotalItems</span>
+                    </div>
+                    <div class="pam-stat">
+                        <span class="pam-stat-label">Decided</span>
+                        <span class="pam-stat-value pam-text-success">@_detail.DecidedItems</span>
+                    </div>
+                    <div class="pam-stat">
+                        <span class="pam-stat-label">Pending</span>
+                        <span class="pam-stat-value pam-text-warn">@_detail.PendingItems</span>
+                    </div>
+                </div>
+
+                @if (_detail.Decisions != null && _detail.Decisions.Count > 0)
+                {
+                    <table class="pam-table" style="margin-top:1rem">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Resource</th>
+                                <th>Decision</th>
+                                <th>Decided At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _detail.Decisions)
+                            {
+                                <tr>
+                                    <td>@(item.SubjectUsername ?? item.SubjectUserId)</td>
+                                    <td>@(item.ResourceName ?? item.ResourceType ?? "—")</td>
+                                    <td>@((MarkupString)DecisionBadge(item.Decision))</td>
+                                    <td>@(item.DecisionAtUtc.HasValue ? item.DecisionAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm") : "—")</td>
+                                    <td>
+                                        @if (item.Decision == null || item.Decision == 0)
+                                        {
+                                            <button class="pam-btn pam-btn-sm pam-btn-success"
+                                                    @onclick="@(() => SubmitDecision(_detail.Id, item.Id, 1, null))">
+                                                Approve
+                                            </button>
+                                            <button class="pam-btn pam-btn-sm pam-btn-danger"
+                                                    @onclick="@(() => SubmitDecision(_detail.Id, item.Id, 2, null))">
+                                                Revoke
+                                            </button>
+                                            <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                                    @onclick="@(() => SubmitDecision(_detail.Id, item.Id, 3, null))">
+                                                Defer
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showDetail = false)">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AttestationCampaignDto>? _campaigns;
+    private AttestationDetailDto? _detail;
+    private string _tab = "active";
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showCreate;
+    private bool _showDetail;
+    private string? _error;
+    private string? _success;
+
+    private string _createName = "";
+    private string _createScopeType = "AllUsers";
+    private DateTime _createStart = DateTime.UtcNow;
+    private DateTime _createDeadline = DateTime.UtcNow.AddDays(30);
+    private bool _createAutoRevoke;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadCampaigns();
+    }
+
+    private async Task LoadCampaigns()
+    {
+        _loading = true;
+        _campaigns = await Api.GetAttestationsAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void SetTab(string tab)
+    {
+        _tab = tab;
+        _error = null;
+        _success = null;
+    }
+
+    private async Task CreateCampaign()
+    {
+        if (string.IsNullOrWhiteSpace(_createName)) { _error = "Campaign name is required."; return; }
+        _saving = true;
+        _error = null;
+        var scopeJson = "{\"type\":\"" + _createScopeType + "\"}";
+        var ok = await Api.CreateAttestationAsync(_createName, scopeJson, null,
+            _createStart, _createDeadline, _createAutoRevoke);
+        _saving = false;
+        if (ok)
+        {
+            _success = "Campaign created.";
+            _showCreate = false;
+            _createName = "";
+            await LoadCampaigns();
+        }
+        else
+        {
+            _error = "Failed to create campaign.";
+        }
+    }
+
+    private async Task StartCampaign(string id)
+    {
+        _error = null;
+        var ok = await Api.StartAttestationAsync(id);
+        if (ok) { _success = "Campaign started — review items generated."; await LoadCampaigns(); }
+        else _error = "Failed to start campaign.";
+    }
+
+    private async Task CompleteCampaign(string id)
+    {
+        _error = null;
+        var ok = await Api.CompleteAttestationAsync(id);
+        if (ok) { _success = "Campaign completed."; await LoadCampaigns(); }
+        else _error = "Failed to complete campaign.";
+    }
+
+    private async Task OpenDetail(string id)
+    {
+        _detail = await Api.GetAttestationDetailAsync(id);
+        _showDetail = true;
+    }
+
+    private async Task SubmitDecision(string campaignId, long decisionId, byte decision, string? comments)
+    {
+        var ok = await Api.DecideAttestationItemAsync(campaignId, decisionId, decision, comments);
+        if (ok)
+        {
+            _success = "Decision recorded.";
+            _detail = await Api.GetAttestationDetailAsync(campaignId);
+            StateHasChanged();
+        }
+        else
+        {
+            _error = "Failed to record decision.";
+        }
+    }
+
+    private static string CampaignStatusBadge(byte status) => status switch
+    {
+        0 => "<span class=\"pam-badge pam-badge-gray\">Draft</span>",
+        1 => "<span class=\"pam-badge pam-badge-blue\">Active</span>",
+        2 => "<span class=\"pam-badge pam-badge-green\">Completed</span>",
+        3 => "<span class=\"pam-badge pam-badge-red\">Cancelled</span>",
+        _ => "<span class=\"pam-badge\">Unknown</span>"
+    };
+
+    private static string DecisionBadge(byte? decision) => decision switch
+    {
+        null or 0 => "<span class=\"pam-badge pam-badge-gray\">Pending</span>",
+        1 => "<span class=\"pam-badge pam-badge-green\">Approved</span>",
+        2 => "<span class=\"pam-badge pam-badge-red\">Revoked</span>",
+        3 => "<span class=\"pam-badge pam-badge-yellow\">Deferred</span>",
+        _ => "<span class=\"pam-badge\">—</span>"
+    };
+}

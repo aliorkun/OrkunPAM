@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Compliance;
+using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Persistence;
 
 namespace OrkunPAM.WebAPI.Endpoints;
@@ -104,7 +105,7 @@ public static class ComplianceEndpoints
         attestations.MapGet("/", async (OrkunPamDbContext db) =>
         {
             var list = await db.AttestationCampaigns
-                .Select(c => new { c.Id, c.Name, c.StartsAtUtc, c.DeadlineUtc, c.Status, c.AutoRevokeOnMiss })
+                .Select(c => new { c.Id, c.Name, c.StartsAtUtc, c.DeadlineUtc, c.Status, c.AutoRevokeOnMiss, c.ReviewerUserId, c.CompletedAtUtc })
                 .ToListAsync();
             return Results.Ok(new { success = true, data = list });
         });
@@ -116,6 +117,7 @@ public static class ComplianceEndpoints
                 Name = req.Name,
                 ScopeJson = req.ScopeJson,
                 ReviewerRuleJson = req.ReviewerRuleJson,
+                ReviewerUserId = req.ReviewerUserId,
                 StartsAtUtc = req.StartsAtUtc ?? DateTime.UtcNow,
                 DeadlineUtc = req.DeadlineUtc,
                 AutoRevokeOnMiss = req.AutoRevokeOnMiss
@@ -124,6 +126,169 @@ public static class ComplianceEndpoints
             await db.SaveChangesAsync();
             return Results.Created($"/api/v1/compliance/attestations/{campaign.Id}",
                 new { success = true, data = new { campaign.Id, campaign.Name } });
+        });
+
+        attestations.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var campaign = await db.AttestationCampaigns.FindAsync(id);
+            if (campaign == null) return Results.NotFound(new { success = false, errors = new[] { "Campaign not found" } });
+
+            var decisions = await db.AttestationDecisions
+                .Where(d => d.CampaignId == id)
+                .Select(d => new
+                {
+                    d.Id, d.SubjectUserId, d.SubjectUsername,
+                    d.ResourceType, d.ResourceId, d.ResourceName,
+                    d.Decision, d.DecisionAtUtc, d.Comments, d.ReviewerUserId
+                })
+                .ToListAsync();
+
+            var total = decisions.Count;
+            var decided = decisions.Count(d => d.Decision != null && d.Decision != 0);
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    campaign.Id, campaign.Name, campaign.Status, campaign.StartsAtUtc,
+                    campaign.DeadlineUtc, campaign.AutoRevokeOnMiss, campaign.ReviewerUserId,
+                    campaign.CompletedAtUtc,
+                    totalItems = total,
+                    decidedItems = decided,
+                    pendingItems = total - decided,
+                    decisions
+                }
+            });
+        });
+
+        attestations.MapPost("/{id:guid}/start", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var campaign = await db.AttestationCampaigns.FindAsync(id);
+            if (campaign == null) return Results.NotFound(new { success = false, errors = new[] { "Campaign not found" } });
+            if (campaign.Status != 0) return Results.BadRequest(new { success = false, errors = new[] { "Campaign is not in Draft status" } });
+
+            var reviewerId = campaign.ReviewerUserId ?? Guid.Empty;
+
+            List<(Guid UserId, string Username)> subjects = new();
+            var scopeType = "AllUsers";
+            Guid scopeId = Guid.Empty;
+
+            if (!string.IsNullOrEmpty(campaign.ScopeJson))
+            {
+                try
+                {
+                    var scopeDoc = System.Text.Json.JsonDocument.Parse(campaign.ScopeJson);
+                    if (scopeDoc.RootElement.TryGetProperty("type", out var t)) scopeType = t.GetString() ?? "AllUsers";
+                    if (scopeDoc.RootElement.TryGetProperty("groupId", out var g) && g.GetString() is string gs) scopeId = Guid.Parse(gs);
+                    if (scopeDoc.RootElement.TryGetProperty("roleId", out var r) && r.GetString() is string rs) scopeId = Guid.Parse(rs);
+                }
+                catch { }
+            }
+
+            if (scopeType == "Group" && scopeId != Guid.Empty)
+            {
+                var rawList = await db.UserGroups
+                    .Where(ug => ug.GroupId == scopeId)
+                    .Join(db.Users, ug => ug.UserId, u => u.Id, (ug, u) => new { u.Id, u.Username })
+                    .AsNoTracking()
+                    .ToListAsync();
+                subjects = rawList.Select(x => (x.Id, x.Username)).ToList();
+            }
+            else if (scopeType == "Role" && scopeId != Guid.Empty)
+            {
+                var rawList = await db.UserRoles
+                    .Where(ur => ur.RoleId == scopeId)
+                    .Join(db.Users, ur => ur.UserId, u => u.Id, (ur, u) => new { u.Id, u.Username })
+                    .AsNoTracking()
+                    .ToListAsync();
+                subjects = rawList.Select(x => (x.Id, x.Username)).ToList();
+            }
+            else
+            {
+                var rawList = await db.Users
+                    .Select(u => new { u.Id, u.Username })
+                    .AsNoTracking()
+                    .ToListAsync();
+                subjects = rawList.Select(x => (x.Id, x.Username)).ToList();
+            }
+
+            var existingIds = (await db.AttestationDecisions
+                .Where(d => d.CampaignId == id)
+                .Select(d => d.SubjectUserId)
+                .ToListAsync()).ToHashSet();
+
+            int generated = 0;
+            foreach (var (userId, username) in subjects)
+            {
+                if (existingIds.Contains(userId)) continue;
+                db.AttestationDecisions.Add(new AttestationDecision
+                {
+                    CampaignId = id,
+                    ReviewerUserId = reviewerId,
+                    SubjectUserId = userId,
+                    SubjectUsername = username,
+                    ResourceType = "UserAccess",
+                    Decision = 0
+                });
+                generated++;
+            }
+
+            campaign.Status = 1;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { success = true, data = new { campaign.Id, campaign.Status, itemsGenerated = generated } });
+        });
+
+        attestations.MapPost("/{campaignId:guid}/decisions/{decisionId:long}/decide",
+            async (Guid campaignId, long decisionId, AttestationDecideRequest req, OrkunPamDbContext db) =>
+        {
+            var decision = await db.AttestationDecisions
+                .FirstOrDefaultAsync(d => d.Id == decisionId && d.CampaignId == campaignId);
+            if (decision == null) return Results.NotFound(new { success = false, errors = new[] { "Decision item not found" } });
+
+            decision.Decision = req.Decision;
+            decision.DecisionAtUtc = DateTime.UtcNow;
+            decision.Comments = req.Comments;
+
+            if (req.Decision == 2)
+            {
+                var user = await db.Users.FindAsync(decision.SubjectUserId);
+                if (user != null)
+                    user.Status = OrkunPAM.Domain.Enums.UserStatus.Locked;
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, data = new { decisionId, decision.Decision, decision.DecisionAtUtc } });
+        });
+
+        attestations.MapPost("/{id:guid}/complete", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var campaign = await db.AttestationCampaigns.FindAsync(id);
+            if (campaign == null) return Results.NotFound(new { success = false, errors = new[] { "Campaign not found" } });
+            if (campaign.Status != 1) return Results.BadRequest(new { success = false, errors = new[] { "Campaign is not Active" } });
+
+            if (campaign.AutoRevokeOnMiss)
+            {
+                var pendingDecisions = await db.AttestationDecisions
+                    .Where(d => d.CampaignId == id && (d.Decision == null || d.Decision == 0))
+                    .ToListAsync();
+
+                foreach (var d in pendingDecisions)
+                {
+                    d.Decision = 2;
+                    d.DecisionAtUtc = DateTime.UtcNow;
+                    d.Comments = "Auto-revoked on campaign completion (no decision made)";
+                    var user = await db.Users.FindAsync(d.SubjectUserId);
+                    if (user != null)
+                        user.Status = OrkunPAM.Domain.Enums.UserStatus.Locked;
+                }
+            }
+
+            campaign.Status = 2;
+            campaign.CompletedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { success = true, data = new { campaign.Id, campaign.Status, campaign.CompletedAtUtc } });
         });
 
         app.MapPost("/api/v1/compliance/evidence/export", async (EvidenceExportRequest req, OrkunPamDbContext db) =>
@@ -156,5 +321,6 @@ public static class ComplianceEndpoints
 public record CreateFrameworkRequest(string Name, string? Version, string? ControlsJson);
 public record CreateSodRuleRequest(string Name, Guid RoleA, Guid RoleB);
 public record CreateAttestationRequest(string Name, string? ScopeJson, string? ReviewerRuleJson,
-    DateTime? StartsAtUtc, DateTime DeadlineUtc, bool AutoRevokeOnMiss);
+    Guid? ReviewerUserId, DateTime? StartsAtUtc, DateTime DeadlineUtc, bool AutoRevokeOnMiss);
+public record AttestationDecideRequest(byte Decision, string? Comments);
 public record EvidenceExportRequest(DateTime From, DateTime To, string? FrameworkId);
