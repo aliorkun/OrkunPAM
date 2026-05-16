@@ -105,36 +105,55 @@ public static class SystemEndpoints
 
         audit.MapGet("/verify", async (OrkunPamDbContext db) =>
         {
-            var logs = await db.AuditLogs.OrderBy(a => a.Id).ToListAsync();
-
+            const int batchSize = 1000;
+            long lastId = 0;
             byte[]? previousHash = null;
             int checkedCount = 0, tamperedCount = 0;
             long? firstTamperedId = null;
+            var setTampered = new List<long>();
+            var clearTampered = new List<long>();
 
-            foreach (var log in logs)
+            while (true)
             {
-                if (previousHash != null && log.PreviousHash != null)
+                var batch = await db.AuditLogs
+                    .AsNoTracking()
+                    .Where(a => a.Id > lastId)
+                    .OrderBy(a => a.Id)
+                    .Take(batchSize)
+                    .ToListAsync();
+
+                if (batch.Count == 0) break;
+
+                foreach (var log in batch)
                 {
-                    if (!previousHash.SequenceEqual(log.PreviousHash))
+                    if (previousHash != null && log.PreviousHash != null)
                     {
-                        if (!log.IsTampered)
+                        if (!previousHash.SequenceEqual(log.PreviousHash))
                         {
-                            log.IsTampered = true;
-                            tamperedCount++;
-                            firstTamperedId ??= log.Id;
+                            if (!log.IsTampered) { tamperedCount++; firstTamperedId ??= log.Id; setTampered.Add(log.Id); }
+                        }
+                        else if (log.IsTampered)
+                        {
+                            clearTampered.Add(log.Id);
                         }
                     }
-                    else if (log.IsTampered)
-                    {
-                        log.IsTampered = false;
-                    }
+                    previousHash = log.EntryHash;
+                    checkedCount++;
                 }
-                previousHash = log.EntryHash;
-                checkedCount++;
+
+                lastId = batch[^1].Id;
+                if (batch.Count < batchSize) break;
             }
 
-            if (tamperedCount > 0)
+            if (setTampered.Count > 0 || clearTampered.Count > 0)
+            {
+                var toUpdate = await db.AuditLogs
+                    .Where(a => setTampered.Contains(a.Id) || clearTampered.Contains(a.Id))
+                    .ToListAsync();
+                foreach (var log in toUpdate)
+                    log.IsTampered = setTampered.Contains(log.Id);
                 await db.SaveChangesAsync();
+            }
 
             return Results.Ok(new
             {
@@ -221,6 +240,9 @@ public static class SystemEndpoints
 
         emailGroup.MapPost("/test", async (TestEmailRequest req, IEmailService email) =>
         {
+            if (string.IsNullOrWhiteSpace(req.To) || !System.Net.Mail.MailAddress.TryCreate(req.To, out _))
+                return Results.BadRequest(new { success = false, message = "Invalid email address" });
+
             var ok = await email.SendAsync(
                 req.To,
                 "OrkunPAM SMTP Test",

@@ -120,6 +120,31 @@ public sealed class LdapPamSyncService : BackgroundService
             }
         }
 
+        // Orphaned account detection: AD users no longer present in LDAP results
+        var syncedNorms = result.Users.Select(u => u.SamAccountName.ToUpperInvariant()).ToHashSet();
+        var adUsersInPam = await db.Users
+            .Where(u => u.AuthSource == AuthSource.ActiveDirectory && !u.IsDeleted)
+            .ToListAsync(ct);
+
+        foreach (var adUser in adUsersInPam)
+        {
+            var presentInAd = syncedNorms.Contains(adUser.NormalizedUsername);
+            if (!presentInAd && !adUser.IsOrphaned)
+            {
+                adUser.IsOrphaned = true;
+                adUser.OrphanedDetectedAtUtc = DateTime.UtcNow;
+                await audit.LogAsync("User", "User.MarkedOrphaned", null, "System", null,
+                    "User", adUser.Id.ToString(),
+                    new { username = adUser.Username, ldapConfig = config.Name },
+                    AuditOutcome.Failure, ct);
+            }
+            else if (presentInAd && adUser.IsOrphaned)
+            {
+                adUser.IsOrphaned = false;
+                adUser.OrphanedDetectedAtUtc = null;
+            }
+        }
+
         // Group membership sync: create/update PAM groups and sync memberships
         int groupsCreated = 0, membershipsAdded = 0, membershipsRemoved = 0;
         if (result.Groups.Count > 0)

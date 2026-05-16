@@ -29,6 +29,9 @@ public class User : SoftDeletableEntity
     public string Language { get; set; } = "tr-TR";
     public string Timezone { get; set; } = "Europe/Istanbul";
 
+    public bool IsOrphaned { get; set; }
+    public DateTime? OrphanedDetectedAtUtc { get; set; }
+
     // MFA Enrollment Token (admin-generated, one-time use, 24h TTL)
     public Guid? MfaEnrollmentToken { get; set; }
     public DateTime? MfaEnrollmentTokenExpiry { get; set; }
