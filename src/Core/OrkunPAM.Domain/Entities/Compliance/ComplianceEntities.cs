@@ -57,6 +57,19 @@ public class AttestationDecision
     public string? Comments { get; set; }
 }
 
+// Custom Report Builder (#169)
+public class CustomReportDefinition : Entity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string DataSource { get; set; } = "AuditLogs"; // AuditLogs | Sessions | Credentials | Users
+    public string FiltersJson { get; set; } = "{}";
+    public string ColumnsJson { get; set; } = "[]";
+    public Guid? CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? LastRunAtUtc { get; set; }
+}
+
 // Scheduled Report Delivery (#159)
 public class ReportSchedule : Entity
 {
