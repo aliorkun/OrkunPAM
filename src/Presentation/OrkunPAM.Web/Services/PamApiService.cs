@@ -841,6 +841,50 @@ public sealed class PamApiService
         catch (Exception ex) { return (false, ex.Message); }
     }
 
+    // === System Health (#138) ===
+
+    public async Task<SystemHealthSnapshotDto?> GetSystemHealthAsync()
+    {
+        var result = await GetAsync<SingleResult<SystemHealthSnapshotDto>>("/api/v1/system/health");
+        return result?.Data;
+    }
+
+    public async Task<PagedResult<SystemAlarmDto>?> GetSystemAlarmsAsync(
+        string? status = null, string? severity = null, int page = 1, int pageSize = 50)
+    {
+        var url = $"/api/v1/system/health/alarms?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(status))   url += $"&status={status}";
+        if (!string.IsNullOrEmpty(severity))  url += $"&severity={severity}";
+        return await GetAsync<PagedResult<SystemAlarmDto>>(url);
+    }
+
+    public async Task<HealthAlarmConfigDto?> GetHealthAlarmConfigAsync()
+    {
+        var result = await GetAsync<SingleResult<HealthAlarmConfigDto>>("/api/v1/system/health/config");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveHealthAlarmConfigAsync(double cpuPct, double memMb,
+        double diskFreePct, string? recipients)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/health/config",
+                new { cpuWarningPct = cpuPct, memoryWarningMb = memMb,
+                      diskFreeWarningPct = diskFreePct, alarmRecipients = recipients });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ClearAlarmAsync(long id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/system/health/alarms/{id}/clear", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     public async Task<KeyStatusDto?> GetEncryptionStatusAsync()
     {
         var result = await GetAsync<SingleResult<KeyStatusDto>>("/api/v1/system/encryption/status");
@@ -1573,3 +1617,24 @@ public record RdpShadowResult(
     string OriginalSessionId,
     RdpFileInfo RdpFile);
 public record VendorResendResult(bool Success, string? PortalUrl);
+
+// System Health DTOs (#138)
+public record SystemHealthSnapshotDto(
+    double CpuPercent,
+    double MemoryMb,
+    double DiskPercent,
+    List<ProxyServiceStatusDto> Services,
+    List<SystemAlarmDto> RecentAlarms);
+
+public record ProxyServiceStatusDto(string Name, bool Healthy, int LatencyMs);
+
+public record SystemAlarmDto(
+    long Id, DateTime OccurredAtUtc, string MetricName,
+    string Severity, double MetricValue, double Threshold,
+    string Message, string Status, bool EmailSent);
+
+public record HealthAlarmConfigDto(
+    string CpuWarningPct,
+    string MemoryWarningMb,
+    string DiskFreeWarningPct,
+    string AlarmRecipients);

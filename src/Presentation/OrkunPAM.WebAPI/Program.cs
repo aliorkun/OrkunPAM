@@ -90,6 +90,9 @@ try
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IBackupService, OrkunPAM.Persistence.Services.BackupService>();
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BackupSchedulerService>();
 
+    // === System Health Monitoring (#138) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.SystemHealthMonitorService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -332,8 +335,8 @@ try
 
     app.UseHttpsRedirection();
 
-    // === Health Check ===
-    app.MapGet("/api/v1/system/health", () => Results.Ok(new
+    // === Liveness Probe (renamed to /status to avoid conflict with rich /health endpoint) ===
+    app.MapGet("/api/v1/status", () => Results.Ok(new
     {
         status = "healthy",
         version = "0.1.0",
