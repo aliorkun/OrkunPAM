@@ -125,6 +125,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<TrustedCaCertificate> TrustedCaCertificates => Set<TrustedCaCertificate>();
     public DbSet<PkiUserCertificate> PkiUserCertificates => Set<PkiUserCertificate>();
 
+    // Native Desktop Client SSO (#170)
+    public DbSet<LaunchToken> LaunchTokens => Set<LaunchToken>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -412,6 +415,16 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(p => p.CertThumbprint).HasMaxLength(128);
             e.Property(p => p.SubjectDn).HasMaxLength(1024);
             e.Property(p => p.IssuingCaThumbprint).HasMaxLength(128);
+        });
+
+        // === Native Desktop Client SSO (#170) ===
+        modelBuilder.Entity<LaunchToken>(e =>
+        {
+            e.HasIndex(t => t.ExpiresAtUtc);
+            e.HasIndex(t => new { t.UserId, t.CreatedAtUtc });
+            e.Property(t => t.Protocol).HasMaxLength(16);
+            e.Property(t => t.TargetHost).HasMaxLength(512);
+            e.Property(t => t.CreatedByUsername).HasMaxLength(256);
         });
 
         // Seed built-in data

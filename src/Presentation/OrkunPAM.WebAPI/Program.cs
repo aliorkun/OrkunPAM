@@ -406,6 +406,7 @@ try
     api.MapVendorAccessEndpoints();
     api.MapRdpGatewayEndpoints();
     api.MapPkiEndpoints();
+    api.MapLaunchTokenEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

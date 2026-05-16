@@ -1,6 +1,7 @@
 @page "/devices"
 @inject PamApiService Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Devices — OrkunPAM</PageTitle>
 
@@ -89,10 +90,13 @@
                                     @if (d.Protocol == "Ssh")
                                     {
                                         <button class="pam-btn-icon pam-btn-connect" title="Open SSH terminal"
-                                                @onclick="() => ConnectSsh(d.Id)">&#9000;</button>
+                                                @onclick="@(() => ConnectSsh(d.Id))">&#9000;</button>
                                     }
+                                    <button class="pam-btn-icon" title="Open with Native Client (requires OrkunPAM LaunchHelper)"
+                                            disabled="@(_launchingDeviceId == d.Id)"
+                                            @onclick="@(() => LaunchNativeAsync(d.Id))">&#x1F680;</button>
                                     <button class="pam-btn-icon" title="Edit device"
-                                            @onclick="() => OpenEditModal(d)">&#9998;</button>
+                                            @onclick="@(() => OpenEditModal(d))">&#9998;</button>
                                 </div>
                             </td>
                         </tr>
@@ -207,6 +211,9 @@
     private int     _fPort      = 22;
     private string  _fOs        = "";
 
+    private string? _launchingDeviceId;
+    private string? _launchError;
+
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -241,6 +248,37 @@
 
     private void ConnectSsh(string deviceId)
         => Nav.NavigateTo($"/connect?deviceId={deviceId}");
+
+    private async Task LaunchNativeAsync(string deviceId)
+    {
+        _launchingDeviceId = deviceId;
+        _launchError = null;
+        StateHasChanged();
+
+        // Use first available credential for the device (simplified)
+        var creds = await Api.GetCredentialsAsync(deviceId: deviceId, pageSize: 1);
+        var credId = creds?.Data?.FirstOrDefault()?.Id;
+        if (credId == null)
+        {
+            _launchError = "No credentials found for this device.";
+            _launchingDeviceId = null;
+            StateHasChanged();
+            return;
+        }
+
+        var result = await Api.GenerateLaunchTokenAsync(deviceId, credId);
+        if (result == null)
+        {
+            _launchError = "Failed to generate launch token.";
+            _launchingDeviceId = null;
+            StateHasChanged();
+            return;
+        }
+
+        await JS.InvokeVoidAsync("open", result.LaunchUri, "_self");
+        _launchingDeviceId = null;
+        StateHasChanged();
+    }
 
     private void OpenAddModal()
     {

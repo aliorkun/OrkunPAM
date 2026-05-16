@@ -212,11 +212,11 @@
 | #173 | Account Lifecycle & Privilege Change Report | v2-REPORTING | ✅ Tamamlandı |
 | #174 | MFA Enrollment & Usage Report | v2-REPORTING | ✅ Tamamlandı |
 | #169 | Custom Report Builder | v2-REPORTING | ✅ Kapatıldı |
-| #170 | Native Desktop Client SSO Launch | v2-SESSION | 🔲 Açık |
+| #170 | Native Desktop Client SSO Launch | v2-SESSION | ✅ Tamamlandı |
 | #115 | PKI / Smart Card Authentication | v2-COMPLIANCE | ✅ Tamamlandı |
 | #114 | ITSM Integration (ServiceNow/OneDesk) | v2-COMPLIANCE | ✅ Tamamlandı |
 
-**İlerleme:** 9/10 (%90)
+**İlerleme:** 10/10 (%100) — Sprint 10 TAMAMLANDI ✅
 
 **#114 ITSM Integration — TAMAMLANDI ✅**
 - ItsmConfig entity (mevcut) + CRUD endpoints (GET/POST/DELETE/toggle) tamamlandı
@@ -225,6 +225,17 @@
 - Inbound webhook URL ve örnek body gösterimi UI'da
 - Webhook integration ile ApprovalRequest otomatik Approved/Denied olarak güncelleniyor
 - RFP Integration #9 → PC
+
+**#170 Native Desktop Client SSO Launch — TAMAMLANDI ✅**
+- `LaunchToken` entity (Session namespace) — 30s TTL, one-time, DeviceId/CredentialId/Protocol/TargetHost/TargetPort
+- `LaunchTokenEndpoints.cs`: `POST /api/v1/sessions/launch-token` (auth, generates token + `orkunpam://` URI), `GET /api/v1/sessions/launch-token/{id}/redeem` (no-auth, returns decrypted credential + connection info, 410 on reuse/expiry)
+- Stale token cleanup on generate (ExecuteDeleteAsync)
+- Audit: LaunchTokenGenerated / LaunchTokenRedeemed / LaunchTokenExpired / LaunchTokenFailed
+- `Devices.razor`: 🚀 "Open with Native Client" button per device row — generates token, navigates to `orkunpam://` URI via JS
+- `PamApiService.cs`: `GenerateLaunchTokenAsync` + `LaunchTokenResultDto`
+- `OrkunPAM.LaunchHelper/Program.cs`: Windows console app — parses `orkunpam://` URI, calls redeem API, launches `ssh.exe` / PuTTY / `mstsc.exe` with returned credentials, temp key file cleanup, URI scheme self-registration
+- `OrkunPAM.LaunchHelper.csproj`: net8.0-windows, single-file publish ready
+- Registry key: `HKCR\orkunpam\shell\open\command` registered by MSI / --register arg
 
 **#115 PKI / Smart Card Authentication — TAMAMLANDI ✅**
 - `TrustedCaCertificate` entity + `PkiUserCertificate` entity (IntegrationEntities.cs)
