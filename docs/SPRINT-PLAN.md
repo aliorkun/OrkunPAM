@@ -120,17 +120,17 @@
 
 ---
 
-## Sprint 8 - v2.0.0 RFP Gap Features (O&M + Reporting + Compliance)
-**Tarih:** 16 Mayıs 2026 - ...
-**Durum:** Aktif 🔄
+## ~~Sprint 8 - v2.0.0 RFP Gap Features (O&M + Reporting + Compliance)~~ ✅ TAMAMLANDI
+**Tarih:** 16 Mayıs 2026
+**Durum:** Tamamlandı — System Health, Connection Scheduling, Orphaned Accounts, Access Certifications, Multi-Language UI
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #138 | System Health Monitoring & O&M Dashboard | v2-INFRA | ✅ Tamamlandı |
-| #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔄 In Progress |
+| #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | ✅ Tamamlandı |
 | #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | ✅ Tamamlandı |
-| #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | 🔲 Bekliyor |
 | #154 | Access Certification Campaigns | v2-COMPLIANCE | ✅ Tamamlandı |
+| #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | ✅ Tamamlandı |
 
 **#138 System Health — TAMAMLANDI ✅**
 
@@ -154,7 +154,7 @@
   - Weekly calendar widget with day-by-day view
 - [x] `PamApiService.cs` — DTOs + 5 new methods
 - [x] Program.cs `AddHostedService` registration
-- [ ] RFP Session Manager #11, #16, #17 validation
+- [x] RFP Session Manager #11, #16, #17 validation ✅
 
 **#153 Orphaned Account Detection — TAMAMLANDI ✅**
 - `IsOrphaned` + `OrphanedDetectedAtUtc` domain properties + EF migration
@@ -170,7 +170,16 @@
 - NavMenu.razor: "Certifications" link added
 - PamApiService: 3 new DTOs + 6 new methods
 
-**İlerleme:** 4/5 issue (%80)
+**#143 Multi-Language UI (TR/EN) — TAMAMLANDI ✅**
+- `AddLocalization()` + `UseRequestLocalization` middleware (en-US default, tr-TR supported)
+- `/api/culture/set` endpoint: CookieRequestCultureProvider cookie (1 yıl geçerli)
+- `SharedResource.cs` + `SharedResource.resx` (EN) + `SharedResource.tr.resx` (TR) — 44 string key
+- `CultureService` (scoped): CurrentCulture okur, SetCulture(culture) ile forceLoad redirect
+- NavMenu.razor: tüm section başlıkları + nav label'ları localize, EN/TR toggle button'ları eklendi
+- Home.razor (Dashboard): tüm stat label, tablo başlığı, quick action, system status metinleri localize
+- `_Imports.razor`: `@using Microsoft.Extensions.Localization` + `@using OrkunPAM.Web.Resources`
+
+**İlerleme:** 5/5 issue (%100) ✅
 
 ---
 
