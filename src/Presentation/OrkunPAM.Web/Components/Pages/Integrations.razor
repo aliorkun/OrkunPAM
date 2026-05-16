@@ -7,13 +7,17 @@
     <h2 class="pam-page-title">Integrations</h2>
 </div>
 
-<div style="display:flex;gap:4px;margin-bottom:16px">
+<div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap">
     <button class="pam-btn @(_tab == "ldap" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("ldap"))">&#x1F517; LDAP / AD</button>
     <button class="pam-btn @(_tab == "siem" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("siem"))">&#x1F4E1; SIEM / Syslog</button>
     <button class="pam-btn @(_tab == "winauth" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("winauth"))">&#x1FA9F; Windows Auth</button>
+    <button class="pam-btn @(_tab == "itsm" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("itsm"))">&#x1F3AB; ITSM</button>
+    <button class="pam-btn @(_tab == "pki" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("pki"))">&#x1F4DC; PKI / Smart Card</button>
 </div>
 
 @if (_tab == "ldap")
@@ -238,9 +242,283 @@
     </div>
 }
 
+@if (_tab == "itsm")
+{
+    @if (_itsmError != null) { <div class="pam-alert pam-alert-danger">@_itsmError</div> }
+    @if (_itsmMsg != null) { <div class="pam-alert pam-alert-info">@_itsmMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <strong>Add ITSM Integration</strong>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                <input class="pam-input" placeholder="Name (e.g. ServiceNow Prod)" @bind="_itsmName" />
+                <select class="pam-input pam-select" @bind="_itsmProvider">
+                    <option value="ServiceNow">ServiceNow</option>
+                    <option value="OneDesk">OneDesk</option>
+                    <option value="Jira">Jira Service Management</option>
+                    <option value="BMC">BMC Remedy</option>
+                    <option value="Generic">Generic REST</option>
+                </select>
+                <input class="pam-input" placeholder="Base URL (https://instance.service-now.com)" @bind="_itsmBaseUrl" />
+                <input class="pam-input" placeholder="Username (optional)" @bind="_itsmUsername" />
+                <input type="password" class="pam-input" placeholder="API Key / OAuth Token" @bind="_itsmApiKey" />
+                <input type="password" class="pam-input" placeholder="Password (optional)" @bind="_itsmPassword" />
+            </div>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:16px">
+                <label><input type="checkbox" @bind="_itsmRequireTicket" /> Require ticket number for access requests</label>
+                <label><input type="checkbox" @bind="_itsmValidateTicket" /> Validate ticket via API before approval</label>
+                <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="AddItsmAsync" disabled="@_itsmSaving">
+                    @(_itsmSaving ? "Saving…" : "Add")
+                </button>
+            </div>
+            <div style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:4px;font-size:0.82em">
+                <strong>Inbound Webhook URL</strong> (ServiceNow calls this to approve/deny):
+                <code style="display:block;margin-top:4px">POST /api/v1/integrations/itsm/inbound-approve</code>
+                <span style="color:var(--pam-muted)">Body: <code>{ "ticketNumber":"INC001", "action":"approve", "provider":"ServiceNow" }</code></span><br />
+                <span style="color:var(--pam-muted)">Header: <code>X-Itsm-Signature: &lt;HMAC-SHA256 of ticketNumber:action:provider&gt;</code></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_itsmLoading)
+            {
+                <div class="pam-loading-text p-4">Loading…</div>
+            }
+            else if (_itsmConfigs == null || _itsmConfigs.Count == 0)
+            {
+                <div class="pam-empty p-4">No ITSM integrations configured. Add one above to enable ticket-based access approval.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Provider</th>
+                            <th>Base URL</th>
+                            <th>Require Ticket</th>
+                            <th>Validate</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cfg in _itsmConfigs)
+                        {
+                            <tr>
+                                <td>@cfg.Name</td>
+                                <td>@cfg.Provider</td>
+                                <td style="font-size:0.8em;max-width:180px;overflow:hidden;text-overflow:ellipsis">@cfg.BaseUrl</td>
+                                <td>@(cfg.RequireTicket ? "Yes" : "No")</td>
+                                <td>@(cfg.ValidateTicket ? "Yes" : "No")</td>
+                                <td><span class="pam-status @(cfg.IsEnabled ? "pam-status-active" : "pam-status-warning")">@(cfg.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td style="white-space:nowrap">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => TestItsmAsync(cfg.Id))"
+                                            style="margin-right:4px"
+                                            disabled="@(_itsmTesting == cfg.Id)">
+                                        @(_itsmTesting == cfg.Id ? "Testing…" : "Test")
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => ToggleItsmAsync(cfg.Id))"
+                                            style="margin-right:4px">
+                                        @(cfg.IsEnabled ? "Disable" : "Enable")
+                                    </button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => DeleteItsmAsync(cfg.Id))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "pki")
+{
+    @if (_pkiError != null) { <div class="pam-alert pam-alert-danger">@_pkiError</div> }
+    @if (_pkiMsg != null) { <div class="pam-alert pam-alert-info">@_pkiMsg</div> }
+
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="pam-btn @(_pkiSubTab == "cas" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => { _pkiSubTab = "cas"; StateHasChanged(); })">Trusted CAs</button>
+        <button class="pam-btn @(_pkiSubTab == "users" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => { _pkiSubTab = "users"; StateHasChanged(); })">User Certificates</button>
+    </div>
+
+    @if (_pkiSubTab == "cas")
+    {
+        <div class="pam-card" style="margin-bottom:16px">
+            <div class="pam-card-body">
+                <strong>Add Trusted CA Certificate</strong>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                    <input class="pam-input" placeholder="CA Name (e.g. Corporate Root CA)" @bind="_caName" />
+                    <input class="pam-input" placeholder="OCSP URL (optional)" @bind="_caOcspUrl" />
+                    <input class="pam-input" placeholder="CRL Distribution URL (optional)" @bind="_caCrlUrl" />
+                </div>
+                <div style="margin-top:8px">
+                    <label class="pam-label">CA Certificate (PEM format)</label>
+                    <textarea class="pam-input" rows="6" style="font-family:monospace;font-size:0.78em"
+                              placeholder="-----BEGIN CERTIFICATE-----&#10;…&#10;-----END CERTIFICATE-----"
+                              @bind="_caPem"></textarea>
+                </div>
+                <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
+                    <label><input type="checkbox" @bind="_caCheckRevocation" /> Check revocation (OCSP/CRL)</label>
+                    <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="AddTrustedCaAsync" disabled="@_pkiSaving">
+                        @(_pkiSaving ? "Adding…" : "Add CA")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="pam-card">
+            <div class="pam-card-body p-0">
+                @if (_pkiLoading)
+                {
+                    <div class="pam-loading-text p-4">Loading…</div>
+                }
+                else if (_trustedCas == null || _trustedCas.Count == 0)
+                {
+                    <div class="pam-empty p-4">No trusted CA certificates. Add a CA above to enable PKI / Smart Card authentication.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-hover">
+                        <thead>
+                            <tr><th>Name</th><th>Subject</th><th>Thumbprint</th><th>Valid Until</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ca in _trustedCas)
+                            {
+                                <tr>
+                                    <td>@ca.Name</td>
+                                    <td style="font-size:0.78em;max-width:200px;overflow:hidden;text-overflow:ellipsis">@ca.Subject</td>
+                                    <td style="font-family:monospace;font-size:0.72em">@ca.Thumbprint[..16]…</td>
+                                    <td>@ca.NotAfter.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td><span class="pam-status @(ca.IsEnabled ? "pam-status-active" : "pam-status-warning")">@(ca.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                    <td style="white-space:nowrap">
+                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                @onclick="@(() => ToggleCaAsync(ca.Id))"
+                                                style="margin-right:4px">
+                                            @(ca.IsEnabled ? "Disable" : "Enable")
+                                        </button>
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => DeleteCaAsync(ca.Id))">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_pkiSubTab == "users")
+    {
+        <div class="pam-card" style="margin-bottom:16px">
+            <div class="pam-card-body">
+                <strong>Map User to Certificate</strong>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                    <input class="pam-input" placeholder="User ID (UUID)" @bind="_pkiUserId" />
+                </div>
+                <div style="margin-top:8px">
+                    <label class="pam-label">User Certificate (PEM format)</label>
+                    <textarea class="pam-input" rows="6" style="font-family:monospace;font-size:0.78em"
+                              placeholder="-----BEGIN CERTIFICATE-----&#10;…&#10;-----END CERTIFICATE-----"
+                              @bind="_pkiUserPem"></textarea>
+                </div>
+                <div style="margin-top:8px;display:flex;align-items:center;gap:12px">
+                    <label><input type="checkbox" @bind="_pkiRequireOnly" /> Require PKI-only login (disable password for this user)</label>
+                    <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="MapUserCertAsync" disabled="@_pkiUserSaving">
+                        @(_pkiUserSaving ? "Mapping…" : "Map Certificate")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="pam-card">
+            <div class="pam-card-body p-0">
+                @if (_pkiUserLoading)
+                {
+                    <div class="pam-loading-text p-4">Loading…</div>
+                }
+                else if (_pkiUserCerts == null || _pkiUserCerts.Count == 0)
+                {
+                    <div class="pam-empty p-4">No user certificates mapped. Map a certificate above to allow PKI / Smart Card login.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-hover">
+                        <thead>
+                            <tr><th>Username</th><th>Subject DN</th><th>Thumbprint</th><th>Expires</th><th>PKI-Only</th><th>Last Used</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var uc in _pkiUserCerts)
+                            {
+                                <tr>
+                                    <td>@uc.Username</td>
+                                    <td style="font-size:0.78em;max-width:180px;overflow:hidden;text-overflow:ellipsis">@uc.SubjectDn</td>
+                                    <td style="font-family:monospace;font-size:0.72em">@uc.CertThumbprint[..16]…</td>
+                                    <td>@uc.ExpiresAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td>@(uc.RequirePkiOnly ? "Yes" : "No")</td>
+                                    <td>@(uc.LastUsedAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
+                                    <td>
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => DeleteUserCertAsync(uc.Id))">Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // ITSM state
+    private bool _itsmLoading;
+    private bool _itsmSaving;
+    private string? _itsmError;
+    private string? _itsmMsg;
+    private string? _itsmTesting;
+    private List<ItsmConfigDto>? _itsmConfigs;
+    private string _itsmName = "";
+    private string _itsmProvider = "ServiceNow";
+    private string _itsmBaseUrl = "";
+    private string _itsmUsername = "";
+    private string _itsmApiKey = "";
+    private string _itsmPassword = "";
+    private bool _itsmRequireTicket = true;
+    private bool _itsmValidateTicket = true;
+
+    // PKI state
+    private bool _pkiLoading;
+    private bool _pkiSaving;
+    private bool _pkiUserLoading;
+    private bool _pkiUserSaving;
+    private string? _pkiError;
+    private string? _pkiMsg;
+    private string _pkiSubTab = "cas";
+    private List<TrustedCaDto>? _trustedCas;
+    private List<PkiUserCertDto>? _pkiUserCerts;
+    private string _caName = "";
+    private string _caPem = "";
+    private string _caOcspUrl = "";
+    private string _caCrlUrl = "";
+    private bool _caCheckRevocation = true;
+    private string _pkiUserId = "";
+    private string _pkiUserPem = "";
+    private bool _pkiRequireOnly;
     private bool _saving;
     private string? _error;
     private string? _syncMsg;
@@ -292,6 +570,151 @@
             await LoadSiemAsync();
         if (tab == "winauth")
             await LoadWinAuthAsync();
+        if (tab == "itsm" && _itsmConfigs == null)
+            await LoadItsmAsync();
+        if (tab == "pki" && _trustedCas == null)
+            await LoadPkiAsync();
+    }
+
+    // ── ITSM ────────────────────────────────────────────────────────────────────────────
+    private async Task LoadItsmAsync()
+    {
+        _itsmLoading = true; _itsmError = null; StateHasChanged();
+        _itsmConfigs = await Api.GetItsmConfigsAsync();
+        _itsmLoading = false; StateHasChanged();
+    }
+
+    private async Task AddItsmAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_itsmName) || string.IsNullOrWhiteSpace(_itsmBaseUrl))
+        {
+            _itsmError = "Name and Base URL are required.";
+            StateHasChanged();
+            return;
+        }
+        _itsmSaving = true; _itsmError = null; StateHasChanged();
+        var ok = await Api.CreateItsmConfigAsync(_itsmName, _itsmProvider, _itsmBaseUrl,
+            string.IsNullOrEmpty(_itsmUsername) ? null : _itsmUsername,
+            string.IsNullOrEmpty(_itsmApiKey) ? null : _itsmApiKey,
+            string.IsNullOrEmpty(_itsmPassword) ? null : _itsmPassword,
+            _itsmRequireTicket, _itsmValidateTicket);
+        _itsmSaving = false;
+        if (ok)
+        {
+            _itsmName = _itsmBaseUrl = _itsmUsername = _itsmApiKey = _itsmPassword = "";
+            _itsmMsg = "ITSM integration added.";
+            await LoadItsmAsync();
+        }
+        else { _itsmError = "Failed to add ITSM integration."; StateHasChanged(); }
+    }
+
+    private async Task TestItsmAsync(string id)
+    {
+        _itsmTesting = id; _itsmMsg = null; _itsmError = null; StateHasChanged();
+        var r = await Api.TestItsmConfigAsync(id);
+        _itsmTesting = null;
+        if (r != null)
+            _itsmMsg = $"Connected to {r.Provider} ({r.BaseUrl}) — {r.ResponseTimeMs} ms. {r.Message}";
+        else
+            _itsmError = "Connection test failed.";
+        StateHasChanged();
+    }
+
+    private async Task ToggleItsmAsync(string id)
+    {
+        _itsmMsg = null; _itsmError = null;
+        var ok = await Api.ToggleItsmConfigAsync(id);
+        if (ok) await LoadItsmAsync();
+        else { _itsmError = "Failed to toggle."; StateHasChanged(); }
+    }
+
+    private async Task DeleteItsmAsync(string id)
+    {
+        _itsmMsg = null; _itsmError = null;
+        var ok = await Api.DeleteItsmConfigAsync(id);
+        if (ok) await LoadItsmAsync();
+        else { _itsmError = "Failed to delete."; StateHasChanged(); }
+    }
+
+    // ── PKI ─────────────────────────────────────────────────────────────────────────────
+    private async Task LoadPkiAsync()
+    {
+        _pkiLoading = true; _pkiUserLoading = true; _pkiError = null; StateHasChanged();
+        _trustedCas = await Api.GetTrustedCasAsync();
+        _pkiUserCerts = await Api.GetPkiUserCertsAsync();
+        _pkiLoading = false; _pkiUserLoading = false; StateHasChanged();
+    }
+
+    private async Task AddTrustedCaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_caName) || string.IsNullOrWhiteSpace(_caPem))
+        {
+            _pkiError = "Name and PEM certificate are required.";
+            StateHasChanged();
+            return;
+        }
+        _pkiSaving = true; _pkiError = null; StateHasChanged();
+        var ok = await Api.AddTrustedCaAsync(_caName, _caPem,
+            string.IsNullOrEmpty(_caOcspUrl) ? null : _caOcspUrl,
+            string.IsNullOrEmpty(_caCrlUrl) ? null : _caCrlUrl, _caCheckRevocation);
+        _pkiSaving = false;
+        if (ok)
+        {
+            _caName = _caPem = _caOcspUrl = _caCrlUrl = "";
+            _pkiMsg = "Trusted CA added.";
+            await LoadPkiAsync();
+        }
+        else { _pkiError = "Failed to add CA. Check PEM format."; StateHasChanged(); }
+    }
+
+    private async Task ToggleCaAsync(string id)
+    {
+        _pkiMsg = null; _pkiError = null;
+        var ok = await Api.ToggleTrustedCaAsync(id);
+        if (ok) await LoadPkiAsync();
+        else { _pkiError = "Failed to toggle CA."; StateHasChanged(); }
+    }
+
+    private async Task DeleteCaAsync(string id)
+    {
+        _pkiMsg = null; _pkiError = null;
+        var ok = await Api.DeleteTrustedCaAsync(id);
+        if (ok) await LoadPkiAsync();
+        else { _pkiError = "Failed to delete CA."; StateHasChanged(); }
+    }
+
+    private async Task MapUserCertAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_pkiUserId) || string.IsNullOrWhiteSpace(_pkiUserPem))
+        {
+            _pkiError = "User ID and PEM certificate are required.";
+            StateHasChanged();
+            return;
+        }
+        if (!Guid.TryParse(_pkiUserId, out _))
+        {
+            _pkiError = "User ID must be a valid UUID.";
+            StateHasChanged();
+            return;
+        }
+        _pkiUserSaving = true; _pkiError = null; StateHasChanged();
+        var ok = await Api.MapUserCertAsync(_pkiUserId, _pkiUserPem, _pkiRequireOnly);
+        _pkiUserSaving = false;
+        if (ok)
+        {
+            _pkiUserId = _pkiUserPem = "";
+            _pkiMsg = "Certificate mapped to user.";
+            await LoadPkiAsync();
+        }
+        else { _pkiError = "Failed to map certificate. Check User ID and PEM format."; StateHasChanged(); }
+    }
+
+    private async Task DeleteUserCertAsync(string id)
+    {
+        _pkiMsg = null; _pkiError = null;
+        var ok = await Api.DeletePkiUserCertAsync(id);
+        if (ok) await LoadPkiAsync();
+        else { _pkiError = "Failed to remove certificate."; StateHasChanged(); }
     }
 
     private async Task LoadWinAuthAsync()
