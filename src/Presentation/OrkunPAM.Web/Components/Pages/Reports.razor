@@ -719,6 +719,14 @@ else if (_tab == "reports")
     private async Task AuditPrevPage() { _auditPage--; await LoadAuditAsync(); }
     private async Task AuditNextPage() { _auditPage++; await LoadAuditAsync(); }
 
+    private static string SanitizeCsvCell(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        if (value[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
+            value = "'" + value;
+        return value.Replace("\"", "\"\"");
+    }
+
     private async Task ExportAuditCsvAsync()
     {
         var result = await Api.GetAuditLogsAsync(
@@ -736,13 +744,13 @@ else if (_tab == "reports")
                 : (log.TargetType ?? "");
             sb.AppendLine(
                 "\"" + log.Timestamp.ToLocalTime().ToString("O") + "\"," +
-                "\"" + (log.ActorUsername ?? "") + "\"," +
-                "\"" + (log.ActorIpAddress ?? "") + "\"," +
-                "\"" + log.EventCategory + "\"," +
-                "\"" + log.EventType + "\"," +
-                "\"" + target + "\"," +
-                "\"" + log.Outcome + "\"," +
-                "\"" + (log.Details ?? "").Replace("\"", "\"\"") + "\"");
+                "\"" + SanitizeCsvCell(log.ActorUsername) + "\"," +
+                "\"" + SanitizeCsvCell(log.ActorIpAddress) + "\"," +
+                "\"" + SanitizeCsvCell(log.EventCategory) + "\"," +
+                "\"" + SanitizeCsvCell(log.EventType) + "\"," +
+                "\"" + SanitizeCsvCell(target) + "\"," +
+                "\"" + SanitizeCsvCell(log.Outcome.ToString()) + "\"," +
+                "\"" + SanitizeCsvCell(log.Details) + "\"");
         }
         await JS.InvokeVoidAsync("downloadCsvFile",
             "audit-log-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
@@ -877,7 +885,7 @@ else if (_tab == "reports")
         sb.AppendLine(string.Join(",", _reportColumns.Select(c => "\"" + c + "\"") ));
         foreach (var row in _reportRows)
             sb.AppendLine(string.Join(",", _reportColumns.Select(c =>
-                "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
+                "\"" + SanitizeCsvCell(row.GetValueOrDefault(c, "")) + "\"")));
         var filename = (_selectedReport?.Id ?? "report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
         await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
     }
@@ -1172,7 +1180,7 @@ else if (_tab == "reports")
         sb.AppendLine(string.Join(",", _crResultColumns.Select(c => "\"" + c + "\"") ));
         foreach (var row in _crResultRows)
             sb.AppendLine(string.Join(",", _crResultColumns.Select(c =>
-                "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
+                "\"" + SanitizeCsvCell(row.GetValueOrDefault(c, "")) + "\"")));
         var filename = (_crName.Length > 0 ? _crName : "custom-report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
         await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
     }
