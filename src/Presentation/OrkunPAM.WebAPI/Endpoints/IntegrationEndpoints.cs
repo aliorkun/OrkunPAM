@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Integration;
+using OrkunPAM.Domain.Entities.Workflow;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 
@@ -98,6 +99,24 @@ public static class IntegrationEndpoints
                     i.RequireTicket, i.ValidateTicket, i.IsEnabled
                 }).ToListAsync();
             return Results.Ok(new { success = true, data = list });
+        });
+
+        itsm.MapPut("/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var cfg = await db.Set<ItsmConfig>().FindAsync(id);
+            if (cfg == null) return Results.NotFound(new { success = false });
+            cfg.IsEnabled = !cfg.IsEnabled;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, data = new { id, cfg.IsEnabled } });
+        });
+
+        itsm.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var cfg = await db.Set<ItsmConfig>().FindAsync(id);
+            if (cfg == null) return Results.NotFound(new { success = false });
+            db.Set<ItsmConfig>().Remove(cfg);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
         });
 
         itsm.MapPost("/", async (CreateItsmConfigRequest req, OrkunPamDbContext db,
@@ -214,6 +233,87 @@ public static class IntegrationEndpoints
             });
         });
 
+        // Inbound ITSM webhook — ServiceNow/OneDesk calls this to approve a PAM access request.
+        // No AdminPolicy: external system. HMAC-SHA256 header validates authenticity.
+        var itsmInbound = app.MapGroup("/api/v1/integrations/itsm").WithTags("Integrations");
+
+        itsmInbound.MapPost("/inbound-approve", async (ItsmInboundApproveRequest req,
+            OrkunPamDbContext db, IVaultEncryptionService vault,
+            HttpContext ctx, ILogger<Program> logger) =>
+        {
+            // Validate HMAC-SHA256 signature from X-Itsm-Signature header
+            var signatureHeader = ctx.Request.Headers["X-Itsm-Signature"].ToString();
+            var cfg = await db.Set<ItsmConfig>().FirstOrDefaultAsync(c =>
+                c.IsEnabled && (string.IsNullOrEmpty(req.Provider) || c.Provider == req.Provider));
+
+            if (cfg == null)
+                return Results.BadRequest(new { success = false, errors = new[] { "No active ITSM config" } });
+
+            if (!string.IsNullOrEmpty(signatureHeader) && !string.IsNullOrEmpty(cfg.ApiKeyEnc))
+            {
+                string? secret = null;
+                if (!string.IsNullOrEmpty(cfg.ApiKeyEnc))
+                {
+                    var dec = vault.DecryptString(Convert.FromBase64String(cfg.ApiKeyEnc));
+                    if (!dec.IsFailure) secret = dec.Value;
+                }
+                if (secret != null && !HmacHelper.VerifyHmac(req, signatureHeader, secret))
+                {
+                    logger.LogWarning("ITSM inbound webhook: invalid HMAC signature from {IP}",
+                        ctx.Connection.RemoteIpAddress);
+                    return Results.Unauthorized();
+                }
+            }
+
+            // Find the pending approval request by ticket number
+            var approval = await db.ApprovalRequests
+                .Include(a => a.Steps)
+                .FirstOrDefaultAsync(a =>
+                    a.TicketNumber == req.TicketNumber &&
+                    a.Status == OrkunPAM.Domain.Enums.ApprovalStatus.Pending);
+
+            if (approval == null)
+            {
+                logger.LogWarning("ITSM inbound: no pending approval for ticket {Ticket}", req.TicketNumber);
+                return Results.NotFound(new { success = false, errors = new[] { "No pending approval for this ticket" } });
+            }
+
+            if (req.Action.Equals("approve", StringComparison.OrdinalIgnoreCase))
+            {
+                approval.Status = OrkunPAM.Domain.Enums.ApprovalStatus.Approved;
+                approval.CompletedAtUtc = DateTime.UtcNow;
+            }
+            else if (req.Action.Equals("deny", StringComparison.OrdinalIgnoreCase) ||
+                     req.Action.Equals("reject", StringComparison.OrdinalIgnoreCase))
+            {
+                approval.Status = OrkunPAM.Domain.Enums.ApprovalStatus.Denied;
+                approval.CompletedAtUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                return Results.BadRequest(new { success = false, errors = new[] { "Action must be 'approve' or 'deny'" } });
+            }
+
+            db.AuditLogs.Add(new OrkunPAM.Domain.Entities.System.AuditLogEntry
+            {
+                EventCategory = "ITSM",
+                EventType = $"Itsm{(req.Action.Equals("approve", StringComparison.OrdinalIgnoreCase) ? "Approved" : "Rejected")}",
+                ActorUsername = $"ITSM:{cfg.Provider}",
+                ActorIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
+                TargetType = "ApprovalRequest",
+                TargetId = approval.Id.ToString(),
+                Details = $"ticket={req.TicketNumber} provider={cfg.Provider}",
+                Outcome = OrkunPAM.Domain.Enums.AuditOutcome.Success
+            });
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new { approvalId = approval.Id, status = approval.Status.ToString(), ticketNumber = req.TicketNumber }
+            });
+        });
+
         var notifications = app.MapGroup("/api/v1/integrations/notifications").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         notifications.MapGet("/", async (OrkunPamDbContext db) =>
@@ -319,3 +419,18 @@ public record CreateItsmConfigRequest(string Name, string Provider, string BaseU
 public record ValidateTicketRequest(string TicketNumber, string? Provider);
 public record CreateNotificationConfigRequest(string Channel, string? ConfigJson);
 public record TestNotificationRequest(string Channel, string Recipient);
+public record ItsmInboundApproveRequest(string TicketNumber, string Action, string? Provider, string? Comment);
+
+file static class HmacHelper
+{
+    internal static bool VerifyHmac(ItsmInboundApproveRequest req, string signatureHeader, string secret)
+    {
+        var payload = $"{req.TicketNumber}:{req.Action}:{req.Provider}";
+        var keyBytes = System.Text.Encoding.UTF8.GetBytes(secret);
+        var msgBytes = System.Text.Encoding.UTF8.GetBytes(payload);
+        using var hmac = new System.Security.Cryptography.HMACSHA256(keyBytes);
+        var hash = hmac.ComputeHash(msgBytes);
+        var expected = Convert.ToHexString(hash);
+        return string.Equals(signatureHeader.Replace("-", ""), expected, StringComparison.OrdinalIgnoreCase);
+    }
+}
