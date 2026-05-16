@@ -130,7 +130,7 @@
 | #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔄 In Progress |
 | #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | ✅ Tamamlandı |
 | #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | 🔲 Bekliyor |
-| #154 | Access Certification Campaigns | v2-COMPLIANCE | 🔲 Bekliyor |
+| #154 | Access Certification Campaigns | v2-COMPLIANCE | ✅ Tamamlandı |
 
 **#138 System Health — TAMAMLANDI ✅**
 
@@ -163,7 +163,14 @@
 - `GetOrphanedUsersAsync()` in PamApiService + `UserDto` updated
 - Red "Orphaned" badge in Users.razor UI
 
-**İlerleme:** 3/5 issue (%60)
+**#154 Access Certification Campaigns — TAMAMLANDI ✅**
+- AttestationCampaign/Decision entity extensions + migration (ReviewerUserId, CompletedAtUtc, SubjectUsername, ResourceName)
+- API: GET list, POST create, GET /{id} detail, POST start (scope-based item generation), POST decisions/decide (Approve/Revoke/Defer), POST complete (auto-revoke on miss)
+- Compliance.razor: new page — Active/History tabs, create modal, campaign detail modal with per-user decision buttons
+- NavMenu.razor: "Certifications" link added
+- PamApiService: 3 new DTOs + 6 new methods
+
+**İlerleme:** 4/5 issue (%80)
 
 ---
 
