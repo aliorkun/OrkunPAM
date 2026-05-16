@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-16 (PM run #9)
+> Last updated: 2026-05-16 (PM run #10)
 
 ## Platform (44 items)
 
@@ -99,7 +99,7 @@
 | 40 | Solution shall support external threat indicators |  |  |
 | 41 | Solution shall support risk-based authentication |  |  |
 | 42 | Solution shall support adaptive authentication |  |  |
-| 43 | Solution shall support passwordless authentication |  |  |
+| 43 | Solution shall support passwordless authentication | PC | Fido2Endpoints.cs — FIDO2/WebAuthn passkey authentication; passwordless portal login with hardware security keys or platform authenticators; user self-enrollment UI (#158) |
 | 44 | Solution shall support biometric authentication |  |  |
 | 45 | Solution shall support hardware token support |  |  |
 | 46 | Solution shall support smart card authentication |  |  |
@@ -111,14 +111,14 @@
 | # | Requirement | Status | Notes |
 |---|-------------|--------|---------|
 | 1 | Solution shall provide pre-built compliance reports | PC | Reports.razor — 9 pre-built reports: credential-expiry, group-membership, policy-compliance, checkout-history, break-glass, jit-access, privileged-inventory, vendor-access, compliance-summary (#120) |
-| 2 | Solution shall support custom report creation |  |  |
-| 3 | Solution shall support scheduled report delivery |  |  |
+| 2 | Solution shall support custom report creation | PC | CustomReportEndpoints.cs + CustomReportDefinition entity — ad-hoc query builder: data source (AuditLogs/Sessions/Credentials/Users), date range, per-source filters, column selection, preview table, save/run/delete, CSV export; Reports.razor Custom tab (#169) |
+| 3 | Solution shall support scheduled report delivery | PC | ReportScheduleEndpoints.cs + ReportSchedulerService.cs — cron-based schedule (daily/weekly/monthly), SMTP email delivery, RBAC-enforced (AdminPolicy); Reports.razor Scheduled Delivery tab (#159) |
 | 4 | Solution shall support blocked command reporting | PC | Reports.razor — blocked commands per user/device, filter by risk score; SshServerSession.cs command log (#136) |
 | 5 | Solution shall support export in multiple formats | PC | Reports.razor — CSV + JSON export |
-| 6 | Solution shall provide executive dashboards |  |  |
+| 6 | Solution shall provide executive dashboards | PC | Reports.razor Executive tab — CISO KPI widgets: active sessions, credential rotation rate, policy compliance %, MFA adoption %, failed login count, top risky users, risk trend chart (Chart.js); ReportEndpoints executive-dashboard endpoint (#168) |
 | 7 | Solution shall provide operational dashboards | PC | Dashboard.razor — live stats, session/credential/approval metrics |
-| 8 | Solution shall support report scheduling |  |  |
-| 9 | Solution shall support report distribution |  |  |
+| 8 | Solution shall support report scheduling | PC | ReportSchedulerService.cs — Hangfire cron scheduler; daily/weekly/monthly cadence; auto-run + email dispatch; schedule CRUD via UI (#159) |
+| 9 | Solution shall support report distribution | PC | ReportSchedulerService.cs — SMTP email distribution to configured recipients; HTML-safe email body (HTML-encoded, #176); run-now + scheduled delivery; audit logged (#159, #177) |
 | 10 | Solution shall support data retention policies | PC | RecordingRetentionService.cs — configurable retention, auto-purge old recordings |
 | 11 | Solution shall support audit log export | PC | AuditService.cs — CSV/JSON export from Reports.razor |
 | 12 | Solution shall support compliance frameworks (SOX, PCI, HIPAA) |  |  |
@@ -134,7 +134,7 @@
 | 22 | Solution shall support compliance summary report | PC | Reports.razor — compliance-summary report |
 | 23 | Solution shall support credential expiry report | PC | Reports.razor — credential-expiry report |
 | 24 | Solution shall support session activity report | PC | Sessions.razor + Reports.razor — session audit trail |
-| 25 | Solution shall support failed login report |  |  |
+| 25 | Solution shall support failed login report | PC | ReportEndpoints.cs — failed login & brute-force security report: AuditLogs analysis, by-user & by-IP grouping, top-5 attacker summaries, currently locked accounts list (#172) |
 | 26 | Solution shall support to view the session logs with filtering and sorting options | PC | Sessions.razor — filter by user, device, protocol, date |
 | 27 | Solution shall have reports in both table and chart format | PC | Reports.razor — table + Chart.js bar/pie charts |
 | 28 | Solution shall have reports in full text search | PC | Reports.razor — full-text search filter |
@@ -144,9 +144,9 @@
 | 32 | Solution shall support threat intelligence reports |  |  |
 | 33 | Solution shall support access pattern analytics |  |  |
 | 34 | Solution shall support privilege escalation tracking | PC | AuditService.cs — role assignment/escalation events logged |
-| 35 | Solution shall support account lifecycle reports |  |  |
+| 35 | Solution shall support account lifecycle reports | PC | ReportEndpoints.cs — account lifecycle & privilege change history: user/role/password/lock events from AuditLogs, summary counters, per-user event timeline; RFP Reporting #35 (#173) |
 | 36 | Solution shall support password rotation reports | PC | Reports.razor — credential rotation history |
-| 37 | Solution shall support MFA usage reports |  |  |
+| 37 | Solution shall support MFA usage reports | PC | ReportEndpoints.cs — MFA enrollment & usage report: per-user MFA status, MFA event log from AuditLogs, enrollment %, unenrolled users list; RFP Reporting #37 (#174) |
 | 38 | Solution shall support API usage reports |  |  |
 | 39 | Solution shall support capacity planning reports |  |  |
 | 40 | Solution shall support performance reports |  |  |
@@ -164,7 +164,7 @@
 | # | Requirement | Status | Notes |
 |---|-------------|--------|---------|
 | 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enroll/verify; RFC 6238 compliant |
-| 2 | Solution shall support FIDO2/WebAuthn |  |  |
+| 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — WebAuthn credential registration & assertion; hardware security key (YubiKey/Touch ID) support; FIDO2.NET library; passwordless + MFA second factor; user self-enrollment UI (#158) |
 | 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
 | 4 | Solution shall support SMS-based OTP |  |  |
 | 5 | Solution shall support email-based OTP |  |  |
@@ -177,7 +177,7 @@
 | 12 | Solution shall support MFA device management |  |  |
 | 13 | Solution shall support MFA for privileged operations | PC | MFA enforced at login; required for vault checkout and session start |
 | 14 | Solution shall support MFA for admin access | PC | MFA policy applied to all admin roles |
-| 15 | Solution shall support MFA reporting |  |  |
+| 15 | Solution shall support MFA reporting | PC | ReportEndpoints.cs — MFA enrollment & usage report: enrollment %, per-user MFA method, unenrolled list, MFA event history from AuditLogs; Reports.razor MFA tab (#174) |
 | 16 | Solution shall support MFA exception management |  |  |
 | 17 | Solution shall support MFA for API access |  |  |
 | 18 | Solution shall support MFA for service accounts |  |  |
@@ -298,14 +298,14 @@
 
 ## Session Manager (162 items)
 
-| # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+| # | SubCategory | Requirement | Status | Notes |
+|---|-------------|-------------|--------|---------|
 | 1 | General | Solution shall support MFA (Multi Factor Authentication) when a user attempts to open a CLI/RDP/HTTP/SFTP/SQL sessions t | PC | MFA policy enforcement (group/role bazlı) — Policies.razor MFA tab + AuthenticationService.cs; TOTP required before SSH/RDP session opens |
 | 2 | General | Solution shall support SSL protocol for network management and terminal (console) servers. |  |
 | 3 | General | Solution shall support using TELNET, STELNET, SSH, VNC, RDP, HTTP, HTTPS protocols to login to end devices. | PC | SshProxyService.cs — native SSH (RFC 4253); OrkunPAM.RdpProxy — TCP 3389 relay, TPKT/X.224, .rdp download (#23) |
 | 4 | General | Solution shall be able to manage and interact with multiple remote sessions  for both Remote Desktop Protocol (RDP) ,SSH |  |
 | 5 | General | Solution shall be able to launch and configure sessions across multiple  environments with credentials automatically inj | PC | SshServerSession.cs — vault credential injection to target |
-| 6 | General | Solution shall support native CLI clients like SecureCRT, Putty, MobaXterm etc. |  |
+| 6 | General | Solution shall support native CLI clients like SecureCRT, Putty, MobaXterm etc. | PC | ConnectionProfileEndpoints.cs + Devices.razor Profile Export — generates SecureCRT (.ini), PuTTY (.reg), MobaXterm (.mxtsessions) connection profiles with vault credential binding; one-click export for any registered device (#150) |
 | 7 | General | Solution shall support SSH and RDP connections to target servers from any device without any native client or agent inst | FC | WebRdpClient.cs (native C# RDP-over-WebSocket) + RdpTerminal.razor — browser RDP without MSTSC; SshProxyService.cs + WebSshClient (plink removed) — browser SSH; both SSH and RDP from any browser, zero native client required (#116, #151) |
 | 8 | General | Solution shall support double confirmation of execution of the command that can cause a service interrupt or any request | PC | DangerousCommandFilter.cs — SSH double-confirmation for destructive commands (rm -rf, shutdown, reboot, DROP, format, mkfs); configurable command list (#136) |
 | 9 | General | Solution shall support geofence validation through mobile application for the command executions. |  |
