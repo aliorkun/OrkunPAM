@@ -1,0 +1,286 @@
+@page "/system-health"
+@inject PamApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>System Health — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h1 class="pam-page-title">System Health</h1>
+    <div class="pam-page-actions">
+        <button class="pam-btn pam-btn-secondary" @onclick="@(() => LoadDataAsync())">Refresh</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="pam-loading">Loading system metrics...</div>
+}
+else
+{
+    <!-- Metrics Cards -->
+    <div class="pam-grid pam-grid-3" style="gap:1rem;margin-bottom:1.5rem;">
+        <div class="pam-card">
+            <div class="pam-card-header">
+                <span class="pam-card-icon">&#x2699;</span>
+                <h3>CPU Usage</h3>
+            </div>
+            <div class="pam-card-body">
+                <div style="font-size:2rem;font-weight:700;color:@GetMetricColor(_snapshot?.CpuPercent ?? 0, _cpuWarn)">
+                    @(_snapshot?.CpuPercent.ToString("F1") ?? "–")%
+                </div>
+                <div class="pam-progress-bar">
+                    <div class="pam-progress-fill" style="width:@(Math.Min(_snapshot?.CpuPercent ?? 0, 100))%;background:@GetMetricColor(_snapshot?.CpuPercent ?? 0, _cpuWarn)"></div>
+                </div>
+                <small style="color:var(--pam-text-muted)">Warning at @_cpuWarn%</small>
+            </div>
+        </div>
+
+        <div class="pam-card">
+            <div class="pam-card-header">
+                <span class="pam-card-icon">&#x1F4BE;</span>
+                <h3>Memory Usage</h3>
+            </div>
+            <div class="pam-card-body">
+                <div style="font-size:2rem;font-weight:700;color:@GetMetricColor(_snapshot?.MemoryMb ?? 0, _memWarn)">
+                    @(_snapshot?.MemoryMb.ToString("F0") ?? "–") MB
+                </div>
+                <div class="pam-progress-bar">
+                    <div class="pam-progress-fill" style="width:@(GetMemPercent())%;background:@GetMetricColor(_snapshot?.MemoryMb ?? 0, _memWarn)"></div>
+                </div>
+                <small style="color:var(--pam-text-muted)">Warning at @_memWarn MB</small>
+            </div>
+        </div>
+
+        <div class="pam-card">
+            <div class="pam-card-header">
+                <span class="pam-card-icon">&#x1F4BE;</span>
+                <h3>Disk Usage</h3>
+            </div>
+            <div class="pam-card-body">
+                <div style="font-size:2rem;font-weight:700;color:@GetDiskColor()">
+                    @(_snapshot?.DiskPercent.ToString("F1") ?? "–")%
+                </div>
+                <div class="pam-progress-bar">
+                    <div class="pam-progress-fill" style="width:@(Math.Min(_snapshot?.DiskPercent ?? 0, 100))%;background:@GetDiskColor()"></div>
+                </div>
+                <small style="color:var(--pam-text-muted)">Free warning at @_diskFreeWarn% free</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Proxy Service Status -->
+    <div class="pam-card" style="margin-bottom:1.5rem;">
+        <div class="pam-card-header"><h3>Proxy Service Status</h3></div>
+        <div class="pam-card-body" style="display:flex;flex-wrap:wrap;gap:1rem;">
+            @if (_snapshot?.Services != null)
+            {
+                @foreach (var svc in _snapshot.Services)
+                {
+                    <div style="display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;border-radius:6px;background:var(--pam-bg-secondary);">
+                        <span style="font-size:1.2rem;">@(svc.Healthy ? "🟢" : "🔴")</span>
+                        <div>
+                            <div style="font-weight:600;">@svc.Name</div>
+                            <div style="font-size:.8rem;color:var(--pam-text-muted)">
+                                @(svc.Healthy ? $"{svc.LatencyMs}ms" : "Unreachable")
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Alarm Configuration -->
+    <div class="pam-card" style="margin-bottom:1.5rem;">
+        <div class="pam-card-header"><h3>Alarm Thresholds</h3></div>
+        <div class="pam-card-body">
+            <div class="pam-form-grid">
+                <div class="pam-form-group">
+                    <label class="pam-label">CPU Warning (%)</label>
+                    <input class="pam-input" type="number" @bind="_cpuWarn" min="1" max="100" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Memory Warning (MB)</label>
+                    <input class="pam-input" type="number" @bind="_memWarn" min="128" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Disk Free Warning (% free)</label>
+                    <input class="pam-input" type="number" @bind="_diskFreeWarn" min="1" max="99" />
+                </div>
+                <div class="pam-form-group" style="grid-column:span 3;">
+                    <label class="pam-label">Alarm Recipients (semicolon-separated emails)</label>
+                    <input class="pam-input" type="text" @bind="_alarmRecipients"
+                           placeholder="admin@example.com;ops@example.com" />
+                </div>
+            </div>
+            <div style="margin-top:1rem;">
+                <button class="pam-btn pam-btn-primary" @onclick="SaveConfigAsync">Save Configuration</button>
+                @if (!string.IsNullOrEmpty(_configMsg))
+                {
+                    <span style="margin-left:1rem;color:@(_configOk ? "var(--pam-success)" : "var(--pam-danger)")">
+                        @_configMsg
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Alarm History -->
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <h3>Alarm History</h3>
+            <div style="display:flex;gap:.5rem;">
+                <select class="pam-select" @onchange="@(e => { _filterStatus = e.Value?.ToString(); _ = LoadAlarmsAsync(); })">
+                    <option value="">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Cleared">Cleared</option>
+                </select>
+                <select class="pam-select" @onchange="@(e => { _filterSeverity = e.Value?.ToString(); _ = LoadAlarmsAsync(); })">
+                    <option value="">All Severities</option>
+                    <option value="Critical">Critical</option>
+                    <option value="Warning">Warning</option>
+                </select>
+            </div>
+        </div>
+        <div class="pam-card-body">
+            @if (_alarms == null || _alarms.Count == 0)
+            {
+                <div class="pam-empty">No alarms recorded — system is healthy.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Time (UTC)</th>
+                            <th>Metric</th>
+                            <th>Severity</th>
+                            <th>Message</th>
+                            <th>Status</th>
+                            <th>Email</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var alarm in _alarms)
+                        {
+                            <tr>
+                                <td>@alarm.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><code>@alarm.MetricName</code></td>
+                                <td>
+                                    <span class="pam-badge @(alarm.Severity == "Critical" ? "pam-badge-red" : "pam-badge-yellow")">
+                                        @alarm.Severity
+                                    </span>
+                                </td>
+                                <td style="max-width:300px;">@alarm.Message</td>
+                                <td>
+                                    <span class="pam-badge @(alarm.Status == "Active" ? "pam-badge-red" : "pam-badge-green")">
+                                        @alarm.Status
+                                    </span>
+                                </td>
+                                <td>@(alarm.EmailSent ? "✓" : "–")</td>
+                                <td>
+                                    @if (alarm.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                                @onclick="@(() => ClearAlarmAsync(alarm.Id))">
+                                            Clear
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private SystemHealthSnapshotDto? _snapshot;
+    private List<SystemAlarmDto>? _alarms;
+    private bool _loading = true;
+
+    private double _cpuWarn = 80;
+    private double _memWarn = 2048;
+    private double _diskFreeWarn = 10;
+    private string _alarmRecipients = string.Empty;
+
+    private string? _filterStatus;
+    private string? _filterSeverity;
+
+    private string? _configMsg;
+    private bool _configOk;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        await Task.WhenAll(LoadSnapshotAsync(), LoadAlarmsAsync(), LoadConfigAsync());
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadSnapshotAsync()
+    {
+        _snapshot = await Api.GetSystemHealthAsync();
+    }
+
+    private async Task LoadAlarmsAsync()
+    {
+        var result = await Api.GetSystemAlarmsAsync(_filterStatus, _filterSeverity);
+        _alarms = result?.Data ?? [];
+        StateHasChanged();
+    }
+
+    private async Task LoadConfigAsync()
+    {
+        var cfg = await Api.GetHealthAlarmConfigAsync();
+        if (cfg == null) return;
+        _cpuWarn = double.TryParse(cfg.CpuWarningPct, out var c) ? c : 80;
+        _memWarn = double.TryParse(cfg.MemoryWarningMb, out var m) ? m : 2048;
+        _diskFreeWarn = double.TryParse(cfg.DiskFreeWarningPct, out var d) ? d : 10;
+        _alarmRecipients = cfg.AlarmRecipients ?? string.Empty;
+    }
+
+    private async Task SaveConfigAsync()
+    {
+        _configMsg = null;
+        var ok = await Api.SaveHealthAlarmConfigAsync(_cpuWarn, _memWarn, _diskFreeWarn, _alarmRecipients);
+        _configOk  = ok;
+        _configMsg = ok ? "Configuration saved." : "Failed to save.";
+        StateHasChanged();
+    }
+
+    private async Task ClearAlarmAsync(long id)
+    {
+        await Api.ClearAlarmAsync(id);
+        await LoadAlarmsAsync();
+    }
+
+    private string GetMetricColor(double value, double threshold)
+        => value >= threshold ? "var(--pam-danger)" : value >= threshold * 0.8 ? "var(--pam-warning)" : "var(--pam-success)";
+
+    private string GetDiskColor()
+    {
+        var freePercent = 100 - (_snapshot?.DiskPercent ?? 0);
+        return freePercent <= _diskFreeWarn ? "var(--pam-danger)"
+             : freePercent <= _diskFreeWarn * 1.5 ? "var(--pam-warning)"
+             : "var(--pam-success)";
+    }
+
+    private double GetMemPercent()
+    {
+        if (_memWarn <= 0) return 0;
+        return Math.Min((_snapshot?.MemoryMb ?? 0) / (_memWarn * 2) * 100, 100);
+    }
+}

@@ -45,6 +45,20 @@ public class BackgroundJob
     public string? ConfigurationJson { get; set; }
 }
 
+public class SystemAlarmLog
+{
+    public long Id { get; set; }
+    public DateTime OccurredAtUtc { get; set; } = DateTime.UtcNow;
+    public string MetricName { get; set; } = string.Empty; // cpu, memory, disk, service
+    public string Severity { get; set; } = "Warning"; // Warning, Critical
+    public double MetricValue { get; set; }
+    public double Threshold { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string Status { get; set; } = "Active"; // Active, Cleared
+    public DateTime? ClearedAtUtc { get; set; }
+    public bool EmailSent { get; set; }
+}
+
 public class BackupRecord : AuditableEntity
 {
     public string FileName { get; set; } = string.Empty;
