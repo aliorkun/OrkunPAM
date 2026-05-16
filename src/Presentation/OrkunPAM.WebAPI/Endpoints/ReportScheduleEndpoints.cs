@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Compliance;
+using OrkunPAM.Domain.Entities.System;
+using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 
@@ -11,7 +14,7 @@ public static class ReportScheduleEndpoints
     {
         var grp = app.MapGroup("/api/v1/reports/schedules")
             .WithTags("Reports")
-            .RequireAuthorization();
+            .RequireAuthorization("AdminPolicy");
 
         // List schedules
         grp.MapGet("/", async (OrkunPamDbContext db) =>
@@ -31,7 +34,7 @@ public static class ReportScheduleEndpoints
         });
 
         // Create schedule
-        grp.MapPost("/", async (CreateReportScheduleRequest req, OrkunPamDbContext db) =>
+        grp.MapPost("/", async (CreateReportScheduleRequest req, OrkunPamDbContext db, HttpContext ctx) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, errors = new[] { "Name is required" } });
@@ -56,13 +59,23 @@ public static class ReportScheduleEndpoints
             schedule.NextRunAtUtc = ReportSchedulerService.CalculateNextRun(schedule);
 
             db.ReportSchedules.Add(schedule);
+            db.AuditLogs.Add(new AuditLogEntry
+            {
+                EventCategory  = "ReportSchedule",
+                EventType      = "ReportScheduleCreated",
+                ActorUsername  = ctx.User.FindFirstValue(ClaimTypes.Name),
+                ActorIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
+                TargetType     = "ReportSchedule",
+                Details        = $"name='{schedule.Name}' type={schedule.ReportType} recipients={schedule.Recipients}",
+                Outcome        = AuditOutcome.Success
+            });
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, data = new { schedule.Id, schedule.Name, schedule.NextRunAtUtc } });
         });
 
         // Update schedule
-        grp.MapPut("/{id:guid}", async (Guid id, UpdateReportScheduleRequest req, OrkunPamDbContext db) =>
+        grp.MapPut("/{id:guid}", async (Guid id, UpdateReportScheduleRequest req, OrkunPamDbContext db, HttpContext ctx) =>
         {
             var schedule = await db.ReportSchedules.FindAsync(id);
             if (schedule == null)
@@ -76,35 +89,66 @@ public static class ReportScheduleEndpoints
             if (req.DayOfMonth.HasValue)                     schedule.DayOfMonth  = req.DayOfMonth.Value;
             if (req.RunAtHourUtc.HasValue)                   schedule.RunAtHourUtc = req.RunAtHourUtc.Value;
 
-            // Recalculate next run if schedule timing changed
             if (schedule.IsActive)
                 schedule.NextRunAtUtc = ReportSchedulerService.CalculateNextRun(schedule);
 
+            db.AuditLogs.Add(new AuditLogEntry
+            {
+                EventCategory  = "ReportSchedule",
+                EventType      = "ReportScheduleUpdated",
+                ActorUsername  = ctx.User.FindFirstValue(ClaimTypes.Name),
+                ActorIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
+                TargetType     = "ReportSchedule",
+                TargetId       = id.ToString(),
+                Details        = $"name='{schedule.Name}' isActive={schedule.IsActive}",
+                Outcome        = AuditOutcome.Success
+            });
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, data = new { schedule.Id, schedule.Name, schedule.IsActive, schedule.NextRunAtUtc } });
         });
 
         // Delete schedule
-        grp.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        grp.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db, HttpContext ctx) =>
         {
             var schedule = await db.ReportSchedules.FindAsync(id);
             if (schedule == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Schedule not found" } });
 
             db.ReportSchedules.Remove(schedule);
+            db.AuditLogs.Add(new AuditLogEntry
+            {
+                EventCategory  = "ReportSchedule",
+                EventType      = "ReportScheduleDeleted",
+                ActorUsername  = ctx.User.FindFirstValue(ClaimTypes.Name),
+                ActorIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
+                TargetType     = "ReportSchedule",
+                TargetId       = id.ToString(),
+                Details        = $"name='{schedule.Name}' type={schedule.ReportType}",
+                Outcome        = AuditOutcome.Success
+            });
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
         });
 
         // Manual trigger
-        grp.MapPost("/{id:guid}/run-now", async (Guid id, OrkunPamDbContext db) =>
+        grp.MapPost("/{id:guid}/run-now", async (Guid id, OrkunPamDbContext db, HttpContext ctx) =>
         {
             var schedule = await db.ReportSchedules.FindAsync(id);
             if (schedule == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Schedule not found" } });
 
-            // Force NextRunAtUtc to now so the background service picks it up on next tick
             schedule.NextRunAtUtc = DateTime.UtcNow.AddSeconds(-1);
+            db.AuditLogs.Add(new AuditLogEntry
+            {
+                EventCategory  = "ReportSchedule",
+                EventType      = "ReportScheduleTriggered",
+                ActorUsername  = ctx.User.FindFirstValue(ClaimTypes.Name),
+                ActorIpAddress = ctx.Connection.RemoteIpAddress?.ToString(),
+                TargetType     = "ReportSchedule",
+                TargetId       = id.ToString(),
+                Details        = $"name='{schedule.Name}' type={schedule.ReportType} manual run-now",
+                Outcome        = AuditOutcome.Success
+            });
             await db.SaveChangesAsync();
 
             return Results.Ok(new { success = true, message = "Report queued for immediate delivery (runs within 60 seconds)" });

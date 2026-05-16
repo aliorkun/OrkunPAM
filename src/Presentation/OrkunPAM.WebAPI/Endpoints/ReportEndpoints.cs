@@ -26,6 +26,8 @@ public static class ReportEndpoints
                 new { Id = "orphaned-accounts", Name = "Orphaned Account Report", Category = "Security", Description = "Discovered but unmanaged accounts" },
                 new { Id = "user-access-matrix", Name = "User Access Matrix", Category = "Audit", Description = "User x resource permission matrix" },
                 new { Id = "mfa-adoption", Name = "MFA Adoption Report", Category = "Security", Description = "Users with/without MFA" },
+                new { Id = "mfa-usage", Name = "MFA Enrollment & Usage Report", Category = "Security", Description = "MFA adoption rate, bypass events, per-user enrollment status (RFP Reporting #37)" },
+                new { Id = "account-lifecycle", Name = "Account Lifecycle & Privilege Change Report", Category = "Compliance", Description = "Account creation, role changes, disabling, deletion (RFP Reporting #35)" },
                 new { Id = "device-inventory", Name = "Device Inventory Report", Category = "Operational", Description = "Devices by type/status" },
                 new { Id = "session-risk", Name = "Session Risk Report", Category = "Security", Description = "Sessions by risk score" },
                 new { Id = "break-glass", Name = "Break-Glass Usage Report", Category = "Audit", Description = "Emergency access usage" },
@@ -50,8 +52,10 @@ public static class ReportEndpoints
                 "password-age" => await GetPasswordAgeReport(db),
                 "credential-expiry" => await GetCredentialExpiryReport(db),
                 "session-activity" => await GetSessionActivityReport(db, from, to),
-                "failed-logins" => await GetFailedLoginReport(db, from, to),
-                "mfa-adoption" => await GetMfaAdoptionReport(db),
+                "failed-logins"      => await GetFailedLoginReport(db, from, to),
+                "mfa-adoption"       => await GetMfaAdoptionReport(db),
+                "mfa-usage"          => await GetMfaUsageReport(db, from, to),
+                "account-lifecycle"  => await GetAccountLifecycleReport(db, from, to),
                 "device-inventory" => await GetDeviceInventoryReport(db),
                 "rotation-compliance" => await GetRotationComplianceReport(db),
                 "group-membership" => await GetGroupMembershipReport(db),
@@ -267,17 +271,57 @@ public static class ReportEndpoints
 
     private static async Task<object> GetFailedLoginReport(OrkunPamDbContext db, DateTime from, DateTime to)
     {
-        var usersWithFailures = await db.Users
-            .Where(u => u.FailedLoginCount > 0)
-            .Select(u => new { u.Username, u.FailedLoginCount, u.Status, u.LockoutEndUtc })
+        // AuditLogs-based brute force analysis (RFP Reporting #25)
+        var failedEvents = await db.AuditLogs
+            .Where(a => a.Outcome == AuditOutcome.Failure &&
+                        a.Timestamp >= from && a.Timestamp <= to &&
+                        (a.EventCategory == "Auth" ||
+                         a.EventType.Contains("Login") || a.EventType.Contains("Auth")))
+            .Select(a => new { a.ActorUsername, a.ActorIpAddress, a.Timestamp })
+            .ToListAsync();
+
+        var byUser = failedEvents
+            .GroupBy(e => e.ActorUsername ?? "unknown")
+            .Select(g => new
+            {
+                username      = g.Key,
+                failedCount   = g.Count(),
+                firstAttempt  = g.Min(e => e.Timestamp),
+                lastAttempt   = g.Max(e => e.Timestamp),
+                uniqueIps     = g.Select(e => e.ActorIpAddress).Distinct().Count()
+            })
+            .OrderByDescending(x => x.failedCount)
+            .ToList();
+
+        var byIp = failedEvents
+            .Where(e => !string.IsNullOrEmpty(e.ActorIpAddress))
+            .GroupBy(e => e.ActorIpAddress!)
+            .Select(g => new
+            {
+                ipAddress       = g.Key,
+                failedCount     = g.Count(),
+                targetedUsers   = g.Select(e => e.ActorUsername).Distinct().Count(),
+                firstAttempt    = g.Min(e => e.Timestamp),
+                lastAttempt     = g.Max(e => e.Timestamp)
+            })
+            .OrderByDescending(x => x.failedCount)
+            .ToList();
+
+        var lockedUsers = await db.Users
+            .Where(u => u.Status == UserStatus.Locked)
+            .Select(u => new { u.Username, u.FailedLoginCount, u.LockoutEndUtc })
             .OrderByDescending(u => u.FailedLoginCount)
             .ToListAsync();
 
         return new
         {
-            usersWithFailures = usersWithFailures.Count,
-            lockedAccounts = usersWithFailures.Count(u => u.Status == UserStatus.Locked),
-            details = usersWithFailures
+            totalFailedAttempts   = failedEvents.Count,
+            lockedAccountsCount   = lockedUsers.Count,
+            top5TargetedUsers     = byUser.Take(5),
+            top5AttackingIps      = byIp.Take(5),
+            currentlyLockedUsers  = lockedUsers,
+            byUser,
+            byIp
         };
     }
 
@@ -664,6 +708,99 @@ public static class ReportEndpoints
                 ? Math.Round(frameworkSummaries.Average(f => f.compliancePercentage), 1)
                 : 0,
             frameworks = frameworkSummaries
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. MFA Enrollment & Usage Report (RFP Reporting #37) — Issue #174
+    // -----------------------------------------------------------------------
+    private static async Task<object> GetMfaUsageReport(OrkunPamDbContext db, DateTime from, DateTime to)
+    {
+        var users = await db.Users
+            .Where(u => u.Status == UserStatus.Active)
+            .Select(u => new
+            {
+                u.Username, u.MfaEnabled, u.LastLoginAtUtc,
+                u.DisplayName
+            })
+            .ToListAsync();
+
+        var mfaEvents = await db.AuditLogs
+            .Where(a => a.Timestamp >= from && a.Timestamp <= to &&
+                        (a.EventType.Contains("Mfa") || a.EventType.Contains("MFA") ||
+                         a.EventType.Contains("Totp") || a.EventType.Contains("Fido") ||
+                         a.EventType.Contains("WebAuthn")))
+            .OrderByDescending(a => a.Timestamp)
+            .Select(a => new
+            {
+                a.Timestamp, a.EventType, a.ActorUsername,
+                a.ActorIpAddress, Outcome = a.Outcome.ToString()
+            })
+            .ToListAsync();
+
+        var notEnrolled = users
+            .Where(u => !u.MfaEnabled)
+            .Select(u => u.Username)
+            .ToList();
+
+        var totalUsers = users.Count;
+        var enrolledCount = users.Count(u => u.MfaEnabled);
+
+        return new
+        {
+            totalActiveUsers        = totalUsers,
+            mfaEnrolled             = enrolledCount,
+            mfaNotEnrolled          = totalUsers - enrolledCount,
+            enrollmentPercentage    = totalUsers > 0 ? Math.Round((double)enrolledCount / totalUsers * 100, 1) : 0.0,
+            totalMfaEvents          = mfaEvents.Count,
+            successfulVerifications = mfaEvents.Count(e => e.Outcome == "Success"),
+            failedAttempts          = mfaEvents.Count(e => e.Outcome == "Failure"),
+            usersNotEnrolled        = notEnrolled,
+            recentMfaEvents         = mfaEvents.Take(100)
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. Account Lifecycle & Privilege Change Report (RFP Reporting #35) — Issue #173
+    // -----------------------------------------------------------------------
+    private static async Task<object> GetAccountLifecycleReport(OrkunPamDbContext db, DateTime from, DateTime to)
+    {
+        var events = await db.AuditLogs
+            .Where(a => a.Timestamp >= from && a.Timestamp <= to &&
+                        (a.EventCategory == "User" ||
+                         a.EventType.Contains("User") ||
+                         a.EventType.Contains("Role") ||
+                         a.EventType.Contains("Password") ||
+                         a.EventType.Contains("Lock")))
+            .OrderByDescending(a => a.Timestamp)
+            .Select(a => new
+            {
+                a.Timestamp,
+                a.EventType,
+                a.EventCategory,
+                a.ActorUsername,
+                a.TargetId,
+                a.ActorIpAddress,
+                a.Details,
+                Outcome = a.Outcome.ToString()
+            })
+            .ToListAsync();
+
+        var created     = events.Count(e => e.EventType.Contains("Created"));
+        var deleted     = events.Count(e => e.EventType.Contains("Deleted") || e.EventType.Contains("Removed"));
+        var locked      = events.Count(e => e.EventType.Contains("Lock") && !e.EventType.Contains("Unlock"));
+        var roleChanges = events.Count(e => e.EventType.Contains("Role"));
+        var pwResets    = events.Count(e => e.EventType.Contains("Password"));
+
+        return new
+        {
+            totalEvents     = events.Count,
+            newAccounts     = created,
+            deletedAccounts = deleted,
+            lockEvents      = locked,
+            roleChangeEvents = roleChanges,
+            passwordEvents  = pwResets,
+            events
         };
     }
 

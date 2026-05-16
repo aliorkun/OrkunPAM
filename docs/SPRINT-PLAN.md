@@ -183,9 +183,9 @@
 
 ---
 
-## Sprint 9 - RFP Gap: Reporting + Auth + CLI (Aktif)
+## ~~Sprint 9 - RFP Gap: Reporting + Auth + CLI~~ ✅ TAMAMLANDI
 **Tarih:** 16-22 Mayıs 2026
-**Hedef:** Reporting, MFA, UX RFP boşluklarını kapat
+**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarını kapattı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
@@ -196,6 +196,27 @@
 | #158 | FIDO2/WebAuthn | v2-MFA | ✅ Tamamlandı |
 
 **İlerleme:** 5/5 (%100) ✅
+
+---
+
+## Sprint 10 - RFP Gap: Reporting Round 2 + Auth + Desktop Client (Aktif)
+**Tarih:** 16-25 Mayıs 2026
+**Hedef:** RFP raporlama boşluklarını kapat, PKI auth, ITSM entegrasyonu
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #175 | [HIGH] CWE-285: Report Schedule RBAC eksik | security | ✅ Fix'lendi |
+| #176 | [MEDIUM] CWE-116: HTML injection e-posta gövdesi | security | ✅ Fix'lendi |
+| #177 | [MEDIUM] CWE-778: Audit log eksik (schedule CRUD + email) | security | ✅ Fix'lendi |
+| #172 | Failed Login & Brute Force Security Report | v2-REPORTING | ✅ Tamamlandı |
+| #173 | Account Lifecycle & Privilege Change Report | v2-REPORTING | ✅ Tamamlandı |
+| #174 | MFA Enrollment & Usage Report | v2-REPORTING | ✅ Tamamlandı |
+| #169 | Custom Report Builder | v2-REPORTING | 🔲 Açık |
+| #170 | Native Desktop Client SSO Launch | v2-SESSION | 🔲 Açık |
+| #115 | PKI / Smart Card Authentication | v2-COMPLIANCE | 🔲 Açık |
+| #114 | ITSM Integration (ServiceNow/OneDesk) | v2-COMPLIANCE | 🔲 Açık |
+
+**İlerleme:** 6/10 (%60)
 
 ---
 

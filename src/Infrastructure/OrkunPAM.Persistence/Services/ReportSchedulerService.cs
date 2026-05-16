@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Compliance;
+using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Enums;
 
 namespace OrkunPAM.Persistence.Services;
@@ -75,6 +76,19 @@ public sealed class ReportSchedulerService : BackgroundService
             {
                 var ok = await SendReportEmailAsync(db, vault, schedule, csv, from, to, ct);
                 schedule.LastRunStatus = ok ? "Success" : "EmailFailed";
+                if (ok)
+                {
+                    var recipientCount = schedule.Recipients.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+                    db.AuditLogs.Add(new AuditLogEntry
+                    {
+                        EventCategory = "ReportSchedule",
+                        EventType     = "ScheduledReportEmailed",
+                        TargetType    = "ReportSchedule",
+                        TargetId      = schedule.Id.ToString(),
+                        Details       = $"name='{schedule.Name}' type={schedule.ReportType} recipients={recipientCount}",
+                        Outcome       = AuditOutcome.Success
+                    });
+                }
             }
         }
         catch (Exception ex)
@@ -289,8 +303,8 @@ public sealed class ReportSchedulerService : BackgroundService
             msg.IsBodyHtml = true;
             msg.Body = $"""
                 <h3>OrkunPAM Scheduled Report</h3>
-                <p><b>Report:</b> {schedule.Name}<br/>
-                <b>Type:</b> {schedule.ReportType}<br/>
+                <p><b>Report:</b> {System.Net.WebUtility.HtmlEncode(schedule.Name)}<br/>
+                <b>Type:</b> {System.Net.WebUtility.HtmlEncode(schedule.ReportType)}<br/>
                 <b>Period:</b> {from:yyyy-MM-dd} — {to:yyyy-MM-dd}<br/>
                 <b>Generated:</b> {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC</p>
                 <p>See attached CSV file for full data.</p>
