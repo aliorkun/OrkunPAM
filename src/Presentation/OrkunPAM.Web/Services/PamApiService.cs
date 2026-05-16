@@ -468,6 +468,10 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // --- Report Schedules (#159) ---
+
+    // --- Executive Dashboard (#168) ---
+
     // --- FIDO2/WebAuthn Security Keys (#158) ---
 
     public async Task<List<SecurityKeyDto>?> GetFido2CredentialsAsync()
@@ -782,6 +786,22 @@ public sealed class PamApiService
             var resp = await client.PostAsync("/api/v1/integrations/itsm/" + id + "/test", null);
             if (!resp.IsSuccessStatusCode) return null;
             var r = await resp.Content.ReadFromJsonAsync<SingleResult<ItsmTestResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    // === Native Desktop Client SSO (#170) ===
+    public async Task<LaunchTokenResultDto?> GenerateLaunchTokenAsync(
+        string deviceId, string credentialId, string? protocol = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/launch-token",
+                new { deviceId = Guid.Parse(deviceId), credentialId = Guid.Parse(credentialId), protocol });
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<LaunchTokenResultDto>>(JsonOpts);
             return r?.Data;
         }
         catch { return null; }
@@ -1460,7 +1480,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ────────────────────────────────────────────────────────────────────────────────────
+    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1558,7 +1578,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────────────────────────────────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -2187,6 +2207,9 @@ public record ItsmTestResultDto(
     long    ResponseTimeMs,
     string? ServerVersion,
     string? Message);
+
+// Native Desktop Client SSO DTOs (#170)
+public record LaunchTokenResultDto(string Token, string LaunchUri, DateTime ExpiresAt);
 
 // PKI / Smart Card Authentication DTOs (#115)
 public record TrustedCaDto(
