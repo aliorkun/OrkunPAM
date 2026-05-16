@@ -1,0 +1,325 @@
+@page "/executive-dashboard"
+@inject PamApiService Api
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Executive Dashboard — OrkunPAM</PageTitle>
+
+<HeadContent>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</HeadContent>
+
+<div class="pam-page-header">
+    <div>
+        <h2 class="pam-page-title">&#x1F4CA; Executive Dashboard</h2>
+        <span class="pam-page-sub">Security posture summary — @DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") UTC</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+        <select class="pam-input" style="width:auto" @onchange="@(e => OnDaysChanged(e.Value?.ToString()))">
+            <option value="7"  selected="@(_days == 7)">Last 7 days</option>
+            <option value="30" selected="@(_days == 30)">Last 30 days</option>
+            <option value="90" selected="@(_days == 90)">Last 90 days</option>
+        </select>
+        <button class="pam-btn pam-btn-secondary" @onclick="@RefreshAsync" disabled="@_loading">
+            &#x21BA; Refresh
+        </button>
+        <button class="pam-btn pam-btn-primary" @onclick="@PrintAsync">
+            &#x1F5A8; Print / PDF
+        </button>
+    </div>
+</div>
+
+@if (!_authorized)
+{
+    <div class="pam-alert pam-alert-error">Access restricted to GlobalAdmin and Auditor roles.</div>
+}
+else if (_loading)
+{
+    <div class="pam-loading">Loading executive data...</div>
+}
+else if (_data == null)
+{
+    <div class="pam-alert pam-alert-error">Failed to load dashboard data.</div>
+}
+else
+{
+    <!-- KPI Cards -->
+    <div class="pam-stat-row" id="exec-kpi-row">
+        <div class="pam-stat-card pam-stat-blue">
+            <div class="pam-stat-icon">&#x1F464;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.TotalPrivilegedUsers</div>
+                <div class="pam-stat-label">Privileged Users</div>
+                <div style="font-size:11px;color:@(_data.Kpis.UserWeeklyChange >= 0 ? "#22c55e" : "#ef4444")">
+                    @(_data.Kpis.UserWeeklyChange >= 0 ? "+" : "")@_data.Kpis.UserWeeklyChange vs last week
+                </div>
+            </div>
+        </div>
+        <div class="pam-stat-card pam-stat-green">
+            <div class="pam-stat-icon">&#x25B6;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.ActiveSessions</div>
+                <div class="pam-stat-label">Active Sessions</div>
+            </div>
+        </div>
+        <div class="pam-stat-card @(_data.Kpis.OpenAlarms > 0 ? "pam-stat-red" : "pam-stat-green")">
+            <div class="pam-stat-icon">&#x26A0;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.OpenAlarms</div>
+                <div class="pam-stat-label">Open Alarms</div>
+            </div>
+        </div>
+        <div class="pam-stat-card pam-stat-purple">
+            <div class="pam-stat-icon">&#x23F3;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.PendingApprovals</div>
+                <div class="pam-stat-label">Pending Approvals</div>
+            </div>
+        </div>
+        <div class="pam-stat-card @(_data.Kpis.FailedLoginsLast24h > 10 ? "pam-stat-red" : "pam-stat-blue")">
+            <div class="pam-stat-icon">&#x1F6AB;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.FailedLoginsLast24h</div>
+                <div class="pam-stat-label">Failed Logins (24h)</div>
+            </div>
+        </div>
+        <div class="pam-stat-card @(_data.Kpis.ExpiringCredentials > 0 ? "pam-stat-red" : "pam-stat-green")">
+            <div class="pam-stat-icon">&#x1F511;</div>
+            <div class="pam-stat-body">
+                <div class="pam-stat-value">@_data.Kpis.ExpiringCredentials</div>
+                <div class="pam-stat-label">Credentials Expiring &lt;7d</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts row 1: Session Trend + Protocol Distribution -->
+    <div class="pam-grid-2col" style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px">
+        <div class="pam-card">
+            <div class="pam-card-header">Daily Sessions (last @_days days)</div>
+            <div style="height:220px;padding:8px">
+                <canvas id="chartSessionTrend"></canvas>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-header">Protocol Distribution</div>
+            <div style="height:220px;padding:8px">
+                <canvas id="chartProtocol"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts row 2: Failed Logins + Top Devices + Top Users -->
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-top:16px">
+        <div class="pam-card">
+            <div class="pam-card-header">Failed Login Attempts (last @_days days)</div>
+            <div style="height:200px;padding:8px">
+                <canvas id="chartFailedLogins"></canvas>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-header">Top-5 Devices by Sessions</div>
+            <div style="height:200px;padding:8px">
+                <canvas id="chartTopDevices"></canvas>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-header">Top-5 Users by Sessions</div>
+            <div style="height:200px;padding:8px">
+                <canvas id="chartTopUsers"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compliance Score Row -->
+    <div class="pam-card" style="margin-top:16px">
+        <div class="pam-card-header">&#x2714; Compliance & Security Posture</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:16px">
+            <div class="exec-compliance-tile">
+                <div class="exec-compliance-score @(_data.Compliance.RotationCompliance >= 90 ? "score-green" : _data.Compliance.RotationCompliance >= 70 ? "score-yellow" : "score-red")">
+                    @_data.Compliance.RotationCompliance%
+                </div>
+                <div class="exec-compliance-label">Rotation Policy Compliance</div>
+                <div class="exec-compliance-sub">Credentials meeting rotation schedule</div>
+            </div>
+            <div class="exec-compliance-tile">
+                <div class="exec-compliance-score @(_data.Compliance.MfaEnrollmentRate >= 90 ? "score-green" : _data.Compliance.MfaEnrollmentRate >= 70 ? "score-yellow" : "score-red")">
+                    @_data.Compliance.MfaEnrollmentRate%
+                </div>
+                <div class="exec-compliance-label">MFA Enrollment Rate</div>
+                <div class="exec-compliance-sub">Active users with MFA enabled</div>
+            </div>
+            <div class="exec-compliance-tile">
+                <div class="exec-compliance-score @(_data.Compliance.OrphanedAccountCount == 0 ? "score-green" : "score-red")">
+                    @_data.Compliance.OrphanedAccountCount
+                </div>
+                <div class="exec-compliance-label">Orphaned Accounts</div>
+                <div class="exec-compliance-sub">Accounts without active owner</div>
+            </div>
+            <div class="exec-compliance-tile">
+                <div class="exec-compliance-score @(_data.Compliance.CertificationCompleted && _data.Compliance.CertCompletionRate >= 100 ? "score-green" : _data.Compliance.CertCompletionRate > 0 ? "score-yellow" : "score-red")">
+                    @if (_data.Compliance.CertificationCompleted)
+                    {
+                        <text>@_data.Compliance.CertCompletionRate%</text>
+                    }
+                    else
+                    {
+                        <text>N/A</text>
+                    }
+                </div>
+                <div class="exec-compliance-label">Last Cert. Campaign</div>
+                <div class="exec-compliance-sub">Access certification completion</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generated info -->
+    <div style="color:#6b7280;font-size:12px;text-align:right;margin-top:8px">
+        Report generated at @_data.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC &bull; Period: last @_data.PeriodDays days
+    </div>
+}
+
+<style>
+    .exec-compliance-tile {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+    .exec-compliance-score {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    .exec-compliance-label { font-size: 13px; font-weight: 600; color: #374151; }
+    .exec-compliance-sub   { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .score-green  { color: #16a34a; }
+    .score-yellow { color: #d97706; }
+    .score-red    { color: #dc2626; }
+
+    @@media print {
+        .pam-sidebar, .pam-topbar, button, select { display: none !important; }
+        body { background: white !important; }
+        .pam-stat-card { break-inside: avoid; }
+    }
+</style>
+
+@code {
+    private bool              _authorized;
+    private bool              _loading = true;
+    private int               _days    = 30;
+    private ExecutiveDashboardDto? _data;
+    private IJSObjectReference?    _module;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Auth.GetUserAsync();
+        if (user == null)
+        {
+            Nav.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+        _authorized = user.Roles.Contains("GlobalAdmin") || user.Roles.Contains("Auditor");
+        if (!_authorized)
+        {
+            _loading = false;
+            return;
+        }
+        await LoadAsync(user.Username);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _data == null) return;
+        await RenderChartsAsync();
+    }
+
+    private async Task LoadAsync(string? username = null)
+    {
+        _loading = true;
+        StateHasChanged();
+
+        if (username == null)
+        {
+            var user = await Auth.GetUserAsync();
+            username = user?.Username;
+        }
+
+        _data = await Api.GetExecutiveDashboardAsync(_days, username);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadAsync();
+        await RenderChartsAsync();
+    }
+
+    private async Task OnDaysChanged(string? val)
+    {
+        if (int.TryParse(val, out var d)) _days = d;
+        await LoadAsync();
+        await RenderChartsAsync();
+    }
+
+    private async Task RenderChartsAsync()
+    {
+        if (_data == null) return;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/js/executive-dashboard.js");
+
+            // Session trend line chart
+            var stLabels = _data.SessionTrend.Select(x => x.Date).ToArray();
+            var stValues = _data.SessionTrend.Select(x => (object)x.Count).ToArray();
+            await _module.InvokeVoidAsync("renderLineChart",
+                "chartSessionTrend", stLabels, stValues, "Sessions");
+
+            // Protocol doughnut
+            var prLabels = _data.ProtocolDistribution.Select(x => x.Protocol).ToArray();
+            var prValues = _data.ProtocolDistribution.Select(x => (object)x.Count).ToArray();
+            await _module.InvokeVoidAsync("renderDoughnutChart",
+                "chartProtocol", prLabels, prValues);
+
+            // Failed logins bar
+            var flLabels = _data.FailedLoginTrend.Select(x => x.Date).ToArray();
+            var flValues = _data.FailedLoginTrend.Select(x => (object)x.Count).ToArray();
+            await _module.InvokeVoidAsync("renderFailedLoginChart",
+                "chartFailedLogins", flLabels, flValues);
+
+            // Top devices horizontal bar
+            var devLabels = _data.TopDevices.Select(x => x.Name ?? x.IpAddress ?? "Unknown").ToArray();
+            var devValues = _data.TopDevices.Select(x => (object)x.SessionCount).ToArray();
+            await _module.InvokeVoidAsync("renderBarChart",
+                "chartTopDevices", devLabels, devValues, "Sessions", "#3b82f6");
+
+            // Top users horizontal bar
+            var usrLabels = _data.TopUsers.Select(x => x.Username).ToArray();
+            var usrValues = _data.TopUsers.Select(x => (object)x.SessionCount).ToArray();
+            await _module.InvokeVoidAsync("renderBarChart",
+                "chartTopUsers", usrLabels, usrValues, "Sessions", "#10b981");
+        }
+        catch { /* Chart.js may not be loaded yet, ignore */ }
+    }
+
+    private async Task PrintAsync()
+    {
+        if (_module != null)
+            await _module.InvokeVoidAsync("printDashboard");
+        else
+            await JS.InvokeVoidAsync("window.print");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module != null)
+        {
+            try { await _module.InvokeVoidAsync("destroyAll"); } catch { }
+            await _module.DisposeAsync();
+        }
+    }
+}

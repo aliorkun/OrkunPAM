@@ -56,3 +56,22 @@ public class AttestationDecision
     public DateTime? DecisionAtUtc { get; set; }
     public string? Comments { get; set; }
 }
+
+// Scheduled Report Delivery (#159)
+public class ReportSchedule : Entity
+{
+    public string Name { get; set; } = string.Empty;
+    public string ReportType { get; set; } = string.Empty;
+    public string Frequency { get; set; } = "daily";   // daily | weekly | monthly
+    public int DayOfWeek { get; set; } = 1;             // 0=Sun..6=Sat, used for weekly
+    public int DayOfMonth { get; set; } = 1;            // 1-28, used for monthly
+    public int RunAtHourUtc { get; set; } = 8;          // 0-23
+    public string OutputFormat { get; set; } = "csv";
+    public string Recipients { get; set; } = string.Empty; // semicolon-separated emails
+    public bool IsActive { get; set; } = true;
+    public DateTime? LastRunAtUtc { get; set; }
+    public DateTime? NextRunAtUtc { get; set; }
+    public string? LastRunStatus { get; set; }
+    public Guid? CreatedByUserId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}

@@ -468,6 +468,137 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // --- Report Schedules (#159) ---
+
+    // --- Executive Dashboard (#168) ---
+
+    // --- FIDO2/WebAuthn Security Keys (#158) ---
+
+    public async Task<List<SecurityKeyDto>?> GetFido2CredentialsAsync()
+    {
+        var result = await GetAsync<ListResult<SecurityKeyDto>>("/api/v1/auth/fido2/credentials");
+        return result?.Data;
+    }
+
+    public async Task<object?> Fido2RegisterBeginAsync()
+    {
+        var result = await GetAsync<SingleResult<System.Text.Json.JsonElement>>("/api/v1/auth/fido2/register/begin");
+        if (result == null || !result.Success) return null;
+        return result.Data;
+    }
+
+    public async Task<bool> Fido2RegisterCompleteAsync(string credentialJson, string? friendlyName)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(credentialJson);
+            var root = doc.RootElement;
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/fido2/register/complete", new
+            {
+                clientDataJSON    = root.GetProperty("response").GetProperty("clientDataJSON").GetString(),
+                attestationObject = root.GetProperty("response").GetProperty("attestationObject").GetString(),
+                friendlyName
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> Fido2RemoveCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/auth/fido2/credentials/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<Fido2AuthOptionsDto?> Fido2AuthBeginAsync(string username)
+    {
+        var httpClient = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await httpClient.PostAsJsonAsync("/api/v1/auth/fido2/authenticate/begin",
+                new { username });
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<Fido2AuthOptionsDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<LoginResult?> Fido2AuthCompleteAsync(
+        string userId, string credentialId, string assertionJson)
+    {
+        var httpClient = _factory.CreateClient("PamApi");
+        try
+        {
+            using var doc  = System.Text.Json.JsonDocument.Parse(assertionJson);
+            var root = doc.RootElement;
+            var resp = await httpClient.PostAsJsonAsync("/api/v1/auth/fido2/authenticate/complete", new
+            {
+                userId,
+                credentialId,
+                clientDataJSON    = root.GetProperty("response").GetProperty("clientDataJSON").GetString(),
+                authenticatorData = root.GetProperty("response").GetProperty("authenticatorData").GetString(),
+                signature         = root.GetProperty("response").GetProperty("signature").GetString()
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
+    // --- Native CLI Connection Profiles (#150) ---
+
+    public async Task<ConnectionProfileDto?> GetConnectionProfileAsync(string deviceId, string credentialId, string client)
+    {
+        var url = $"/api/v1/sessions/connection-profile?deviceId={Uri.EscapeDataString(deviceId)}&credentialId={Uri.EscapeDataString(credentialId)}&client={Uri.EscapeDataString(client)}";
+        var result = await GetAsync<SingleResult<ConnectionProfileDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<ExecutiveDashboardDto?> GetExecutiveDashboardAsync(int days = 30, string? username = null)
+    {
+        var url = $"/api/v1/dashboard/executive?days={days}";
+        if (!string.IsNullOrEmpty(username))
+            url += "&actorUsername=" + Uri.EscapeDataString(username);
+        var result = await GetAsync<SingleResult<ExecutiveDashboardDto>>(url);
+        return result?.Data;
+    }
+
+    // --- Report Schedules (#159) ---
+
+    public async Task<ListResult<ReportScheduleDto>?> GetReportSchedulesAsync()
+        => await GetAsync<ListResult<ReportScheduleDto>>("/api/v1/reports/schedules/");
+
+    public async Task<bool> CreateReportScheduleAsync(CreateReportScheduleDto dto)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/reports/schedules/", dto)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateReportScheduleAsync(string id, UpdateReportScheduleDto dto)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync("/api/v1/reports/schedules/" + id, dto)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteReportScheduleAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/reports/schedules/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> RunReportScheduleNowAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/reports/schedules/" + id + "/run-now", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
         string? category = null, string? eventType = null,
         DateTime? from = null, DateTime? to = null,
@@ -1779,3 +1910,92 @@ public record AttestationDetailDto(
     int       DecidedItems,
     int       PendingItems,
     List<AttestationDecisionItemDto>? Decisions);
+
+// Scheduled Report Delivery DTOs (#159)
+public record ReportScheduleDto(
+    string    Id,
+    string    Name,
+    string    ReportType,
+    string    Frequency,
+    int       DayOfWeek,
+    int       DayOfMonth,
+    int       RunAtHourUtc,
+    string    OutputFormat,
+    string    Recipients,
+    bool      IsActive,
+    DateTime? LastRunAtUtc,
+    DateTime? NextRunAtUtc,
+    string?   LastRunStatus,
+    DateTime  CreatedAtUtc);
+
+public record CreateReportScheduleDto(
+    string  Name,
+    string  ReportType,
+    string  Frequency,
+    int     DayOfWeek,
+    int     DayOfMonth,
+    int     RunAtHourUtc,
+    string  OutputFormat,
+    string  Recipients);
+
+public record UpdateReportScheduleDto(
+    string? Name        = null,
+    string? Recipients  = null,
+    bool?   IsActive    = null,
+    string? Frequency   = null,
+    int?    DayOfWeek   = null,
+    int?    DayOfMonth  = null,
+    int?    RunAtHourUtc = null);
+
+// Executive Dashboard DTOs (#168)
+public record ExecutiveDashboardDto(
+    DateTime                         GeneratedAtUtc,
+    int                              PeriodDays,
+    ExecKpisDto                      Kpis,
+    List<ExecTrendPointDto>          SessionTrend,
+    List<ExecProtocolDto>            ProtocolDistribution,
+    List<ExecTrendPointDto>          FailedLoginTrend,
+    List<ExecDeviceDto>              TopDevices,
+    List<ExecUserDto>                TopUsers,
+    ExecComplianceDto                Compliance);
+
+public record ExecKpisDto(
+    int TotalPrivilegedUsers,
+    int UserWeeklyChange,
+    int ActiveSessions,
+    int OpenAlarms,
+    int PendingApprovals,
+    int FailedLoginsLast24h,
+    int ExpiringCredentials);
+
+public record ExecTrendPointDto(string Date, int Count);
+
+public record ExecProtocolDto(string Protocol, int Count);
+
+public record ExecDeviceDto(string Id, string? Name, string? IpAddress, int SessionCount);
+
+public record ExecUserDto(string Id, string Username, string? DisplayName, int SessionCount);
+
+public record ExecComplianceDto(
+    double RotationCompliance,
+    double MfaEnrollmentRate,
+    int    OrphanedAccountCount,
+    bool   CertificationCompleted,
+    double CertCompletionRate);
+
+// FIDO2/WebAuthn DTOs (#158)
+public record SecurityKeyDto(string Id, string FriendlyName, DateTime RegisteredAt, DateTime? LastUsed);
+
+public record Fido2AuthOptionsDto(
+    string   Challenge,
+    int      Timeout,
+    string   RpId,
+    string   UserId,
+    System.Text.Json.JsonElement[]? AllowCredentials);
+
+// Native CLI Connection Profiles (#150)
+public record ConnectionProfileDto(
+    string Filename,
+    string Content,
+    string MimeType,
+    string SshCommand);

@@ -190,12 +190,12 @@
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #160 | O&M System Log Viewer | v2-INFRA | ✅ Tamamlandı |
-| #159 | Scheduled Report Delivery | v2-REPORTING | 🔲 Açık |
-| #168 | Executive Dashboard & CISO KPIs | v2-REPORTING | 🔲 Açık |
-| #150 | Native CLI Connection Profiles | v2-UX | 🔲 Açık |
-| #158 | FIDO2/WebAuthn | v2-MFA | 🔲 Açık |
+| #159 | Scheduled Report Delivery | v2-REPORTING | ✅ Tamamlandı |
+| #168 | Executive Dashboard & CISO KPIs | v2-REPORTING | ✅ Tamamlandı |
+| #150 | Native CLI Connection Profiles | v2-UX | ✅ Tamamlandı |
+| #158 | FIDO2/WebAuthn | v2-MFA | ✅ Tamamlandı |
 
-**İlerleme:** 1/5 (%20)
+**İlerleme:** 5/5 (%100) ✅
 
 ---
 

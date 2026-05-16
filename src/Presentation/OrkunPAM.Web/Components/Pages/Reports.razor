@@ -15,6 +15,8 @@
             @onclick="@(() => SetTab("audit"))">&#x1F4CB; Audit Log</button>
     <button class="pam-btn @(_tab == "reports" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("reports"))">&#x1F4CA; Reports</button>
+    <button class="pam-btn @(_tab == "schedule" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("schedule"))">&#x1F551; Schedule</button>
 </div>
 
 @if (_tab == "audit")
@@ -239,6 +241,136 @@ else
     }
 }
 
+@if (_tab == "schedule")
+{
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <h4 style="margin-bottom:12px">New Scheduled Report</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                    <label class="pam-label">Schedule Name</label>
+                    <input class="pam-input" placeholder="e.g. Weekly Checkout Report" @bind="_schName" />
+                </div>
+                <div>
+                    <label class="pam-label">Report Type</label>
+                    <select class="pam-input pam-select" @bind="_schReportType">
+                        <option value="">— Select —</option>
+                        <option value="checkout-history">Checkout History</option>
+                        <option value="session-activity">Session Activity</option>
+                        <option value="failed-logins">Failed Logins</option>
+                        <option value="password-age">Password Age</option>
+                        <option value="mfa-adoption">MFA Adoption</option>
+                        <option value="rotation-compliance">Rotation Compliance</option>
+                        <option value="policy-compliance">Policy Compliance</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Frequency</label>
+                    <select class="pam-input pam-select" @bind="_schFrequency">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Run at Hour (UTC, 0-23)</label>
+                    <input type="number" class="pam-input" min="0" max="23" @bind="_schHour" />
+                </div>
+                @if (_schFrequency == "weekly")
+                {
+                    <div>
+                        <label class="pam-label">Day of Week</label>
+                        <select class="pam-input pam-select" @bind="_schDayOfWeek">
+                            <option value="0">Sunday</option>
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5">Friday</option>
+                            <option value="6">Saturday</option>
+                        </select>
+                    </div>
+                }
+                @if (_schFrequency == "monthly")
+                {
+                    <div>
+                        <label class="pam-label">Day of Month (1-28)</label>
+                        <input type="number" class="pam-input" min="1" max="28" @bind="_schDayOfMonth" />
+                    </div>
+                }
+                <div style="grid-column:1/-1">
+                    <label class="pam-label">Recipients (semicolon-separated emails)</label>
+                    <input class="pam-input" placeholder="admin@company.com;ciso@company.com" @bind="_schRecipients" />
+                </div>
+            </div>
+            @if (_schError != null) { <div class="pam-alert pam-alert-danger" style="margin-top:8px">@_schError</div> }
+            @if (_schSuccess != null) { <div class="pam-alert pam-alert-info" style="margin-top:8px">@_schSuccess</div> }
+            <div style="margin-top:12px">
+                <button class="pam-btn pam-btn-primary" @onclick="CreateScheduleAsync" disabled="@_schSaving">
+                    @(_schSaving ? "Saving…" : "+ Create Schedule")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (_schLoading)
+    {
+        <div class="pam-loading-text">Loading schedules…</div>
+    }
+    else if (_schedules == null || _schedules.Count == 0)
+    {
+        <div class="pam-alert pam-alert-info">No scheduled reports yet. Create one above.</div>
+    }
+    else
+    {
+        <div class="pam-card">
+            <div class="pam-card-body p-0">
+                <table class="pam-table pam-table-hover" style="font-size:0.85em">
+                    <thead>
+                        <tr>
+                            <th>Name</th><th>Report Type</th><th>Frequency</th>
+                            <th>Recipients</th><th>Status</th>
+                            <th>Last Run</th><th>Next Run</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _schedules)
+                        {
+                            <tr>
+                                <td>@s.Name</td>
+                                <td><span class="pam-badge">@s.ReportType</span></td>
+                                <td>@FormatFrequency(s)</td>
+                                <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis" title="@s.Recipients">@s.Recipients</td>
+                                <td>
+                                    @if (s.IsActive)
+                                    { <span class="pam-status pam-status-active">Active</span> }
+                                    else
+                                    { <span class="pam-status pam-status-warn">Paused</span> }
+                                    @if (!string.IsNullOrEmpty(s.LastRunStatus))
+                                    { <span class="pam-badge" style="margin-left:4px">@s.LastRunStatus</span> }
+                                </td>
+                                <td>@(s.LastRunAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
+                                <td>@(s.NextRunAtUtc?.ToLocalTime().ToString("MM/dd HH:mm") ?? "—")</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => RunNowAsync(s.Id))">▶ Run</button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => ToggleActiveAsync(s))">
+                                        @(s.IsActive ? "Pause" : "Resume")
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            style="color:#dc3545"
+                                            @onclick="@(() => DeleteScheduleAsync(s.Id))">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
 @code {
     private string _tab = "audit";
     private AuditVerifyResult? _integrityResult;
@@ -279,7 +411,12 @@ else
         await LoadReportsAsync();
     }
 
-    private void SetTab(string tab) { _tab = tab; }
+    private async Task SetTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "schedule" && _schedules == null)
+            await LoadSchedulesAsync();
+    }
 
     private async Task ApplyPreset(string preset)
     {
@@ -477,5 +614,82 @@ else
                 "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
         var filename = (_selectedReport?.Id ?? "report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
         await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
+    }
+
+    // ---- Schedule tab state ----
+    private bool    _schLoading;
+    private bool    _schSaving;
+    private string? _schError;
+    private string? _schSuccess;
+    private string  _schName       = "";
+    private string  _schReportType = "";
+    private string  _schFrequency  = "daily";
+    private int     _schHour       = 8;
+    private int     _schDayOfWeek  = 1;
+    private int     _schDayOfMonth = 1;
+    private string  _schRecipients = "";
+    private List<ReportScheduleDto>? _schedules;
+
+    private async Task LoadSchedulesAsync()
+    {
+        _schLoading = true; StateHasChanged();
+        var result = await Api.GetReportSchedulesAsync();
+        _schedules = result?.Data ?? [];
+        _schLoading = false; StateHasChanged();
+    }
+
+    private async Task CreateScheduleAsync()
+    {
+        _schError = null; _schSuccess = null;
+        if (string.IsNullOrWhiteSpace(_schName))         { _schError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_schReportType))   { _schError = "Report type is required."; return; }
+        if (string.IsNullOrWhiteSpace(_schRecipients))   { _schError = "At least one recipient is required."; return; }
+
+        _schSaving = true; StateHasChanged();
+        var ok = await Api.CreateReportScheduleAsync(new CreateReportScheduleDto(
+            _schName, _schReportType, _schFrequency,
+            _schDayOfWeek, _schDayOfMonth, _schHour, "csv", _schRecipients));
+
+        if (ok)
+        {
+            _schSuccess = "Schedule created. First run at next scheduled time.";
+            _schName = ""; _schReportType = ""; _schRecipients = "";
+            await LoadSchedulesAsync();
+        }
+        else
+        {
+            _schError = "Failed to create schedule.";
+        }
+        _schSaving = false; StateHasChanged();
+    }
+
+    private async Task ToggleActiveAsync(ReportScheduleDto s)
+    {
+        await Api.UpdateReportScheduleAsync(s.Id, new UpdateReportScheduleDto(IsActive: !s.IsActive));
+        await LoadSchedulesAsync();
+    }
+
+    private async Task RunNowAsync(string id)
+    {
+        await Api.RunReportScheduleNowAsync(id);
+        _schSuccess = "Report queued — will be delivered within 60 seconds.";
+        StateHasChanged();
+    }
+
+    private async Task DeleteScheduleAsync(string id)
+    {
+        await Api.DeleteReportScheduleAsync(id);
+        await LoadSchedulesAsync();
+    }
+
+    private static string FormatFrequency(ReportScheduleDto s)
+    {
+        var dayNames = new[] { "Sun","Mon","Tue","Wed","Thu","Fri","Sat" };
+        return s.Frequency switch
+        {
+            "weekly"  => "Weekly " + (s.DayOfWeek >= 0 && s.DayOfWeek < 7 ? dayNames[s.DayOfWeek] : s.DayOfWeek.ToString()) + " " + s.RunAtHourUtc.ToString("D2") + ":00 UTC",
+            "monthly" => "Monthly day " + s.DayOfMonth + " " + s.RunAtHourUtc.ToString("D2") + ":00 UTC",
+            _         => "Daily " + s.RunAtHourUtc.ToString("D2") + ":00 UTC"
+        };
     }
 }

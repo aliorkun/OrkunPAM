@@ -9,7 +9,7 @@
     <h2 class="pam-page-title">Connect to Device</h2>
 </div>
 
-<div class="pam-card" style="max-width:560px">
+<div class="pam-card" style="max-width:600px">
     <div class="pam-card-body">
         <div class="pam-form-group">
             <label class="pam-label">Device</label>
@@ -52,6 +52,54 @@
                     @onclick="@(() => LaunchSshTerminal())">
                 &#9000; Open SSH Terminal
             </button>
+
+            @if (!string.IsNullOrEmpty(_deviceId) && !string.IsNullOrEmpty(_credId))
+            {
+                <!-- Native Client section -->
+                <div style="margin-top:20px; border-top:1px solid #2a2d38; padding-top:16px">
+                    <div style="color:#8895aa; font-size:0.8em; font-weight:600; letter-spacing:.05em; margin-bottom:10px; text-transform:uppercase">
+                        Native Client Connection
+                    </div>
+
+                    <div style="background:#1a1d23; border:1px solid #2a2d38; border-radius:6px; padding:10px 12px; margin-bottom:12px; display:flex; align-items:center; gap:8px">
+                        <code style="flex:1; color:#4f8ef7; font-size:0.85em; word-break:break-all">
+                            ssh @(SelectedCredUsername)@@@_pamHost -p 2222
+                        </code>
+                        <button class="pam-btn pam-btn-sm" style="white-space:nowrap; min-width:64px"
+                                @onclick="@CopyCommandAsync">
+                            @(_copied ? "Copied!" : "Copy")
+                        </button>
+                    </div>
+
+                    <div style="color:#8895aa; font-size:0.8em; margin-bottom:8px">Download session profile for your client:</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@_profileBusy"
+                                @onclick="@(() => DownloadProfileAsync("putty"))">
+                            PuTTY (.reg)
+                        </button>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@_profileBusy"
+                                @onclick="@(() => DownloadProfileAsync("mobaxterm"))">
+                            MobaXterm (.mxtsessions)
+                        </button>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@_profileBusy"
+                                @onclick="@(() => DownloadProfileAsync("securecrt"))">
+                            SecureCRT (.ini)
+                        </button>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@_profileBusy"
+                                @onclick="@(() => DownloadProfileAsync("sshconfig"))">
+                            ~/.ssh/config
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_profileError))
+                    {
+                        <div class="pam-alert pam-alert-danger" style="margin-top:8px">@_profileError</div>
+                    }
+                </div>
+            }
         }
 
         @if (IsProtocol("Rdp"))
@@ -91,12 +139,22 @@
     private string              _deviceId      = "";
     private string              _credId        = "";
     private bool                _launching;
+    private bool                _profileBusy;
+    private bool                _copied;
     private string?             _error;
     private string?             _successMsg;
+    private string?             _profileError;
+    private string              _pamHost       = "localhost";
+
+    private string SelectedCredUsername =>
+        _creds.FirstOrDefault(c => c.Id == _credId)?.Username ?? "user";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        _pamHost = new Uri(Nav.BaseUri).Host;
+
         var result = await Api.GetDevicesAsync(pageSize: 200);
         _devices = result?.Data ?? [];
 
@@ -115,6 +173,7 @@
         _creds          = [];
         _error          = null;
         _successMsg     = null;
+        _profileError   = null;
         _selectedDevice = _devices.FirstOrDefault(d => d.Id == _deviceId);
         if (!string.IsNullOrEmpty(_deviceId))
             await LoadCredsAsync();
@@ -140,6 +199,45 @@
     {
         if (!string.IsNullOrEmpty(_deviceId) && !string.IsNullOrEmpty(_credId))
             Nav.NavigateTo("/rdp-terminal/" + _deviceId + "/" + _credId);
+    }
+
+    private async Task CopyCommandAsync()
+    {
+        var cmd = $"ssh {SelectedCredUsername}@{_pamHost} -p 2222";
+        await JS.InvokeVoidAsync("copyToClipboard", cmd);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+        StateHasChanged();
+    }
+
+    private async Task DownloadProfileAsync(string client)
+    {
+        if (string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_credId)) return;
+        _profileBusy  = true;
+        _profileError = null;
+        StateHasChanged();
+
+        try
+        {
+            var profile = await Api.GetConnectionProfileAsync(_deviceId, _credId, client);
+            if (profile == null)
+            {
+                _profileError = "Failed to generate profile. Check API connectivity.";
+                return;
+            }
+            await JS.InvokeVoidAsync("downloadTextFile", profile.Filename, profile.Content, profile.MimeType);
+        }
+        catch (Exception ex)
+        {
+            _profileError = "Error: " + ex.Message;
+        }
+        finally
+        {
+            _profileBusy = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LaunchRdpSessionAsync()

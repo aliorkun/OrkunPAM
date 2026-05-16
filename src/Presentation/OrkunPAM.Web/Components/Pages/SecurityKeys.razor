@@ -1,0 +1,188 @@
+@page "/security-keys"
+@inject PamApiService Api
+@inject IJSRuntime JS
+@inject AuthStateService Auth
+
+<PageTitle>Security Keys — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">&#x1F5DD; Security Keys (FIDO2/WebAuthn)</h2>
+</div>
+
+<div class="pam-card" style="max-width:680px">
+    <div class="pam-card-body">
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="pam-alert pam-alert-danger" style="margin-bottom:12px">@_error</div>
+        }
+        @if (!string.IsNullOrEmpty(_success))
+        {
+            <div class="pam-alert pam-alert-success" style="margin-bottom:12px">@_success</div>
+        }
+
+        <p style="color:#8895aa; font-size:0.9em; margin-bottom:16px">
+            Register a hardware security key (YubiKey, Windows Hello, Touch ID, etc.) as a second factor.
+            Once registered you can sign in using your key instead of a TOTP code.
+        </p>
+
+        <!-- Registered keys list -->
+        @if (_keys.Count == 0 && !_loading)
+        {
+            <div style="text-align:center; color:#8895aa; padding:24px 0">No security keys registered yet.</div>
+        }
+
+        @if (_keys.Count > 0)
+        {
+            <table class="pam-table" style="margin-bottom:16px">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Registered</th>
+                        <th>Last Used</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var k in _keys)
+                    {
+                        <tr>
+                            <td>@k.FriendlyName</td>
+                            <td>@k.RegisteredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@(k.LastUsed.HasValue ? k.LastUsed.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—")</td>
+                            <td>
+                                <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                        @onclick="@(() => RemoveKeyAsync(k.Id))"
+                                        disabled="@_busy">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <!-- Register new key -->
+        <div style="border-top:1px solid #2a2d38; padding-top:16px">
+            <div class="pam-form-group">
+                <label class="pam-label">Key name (optional)</label>
+                <input class="pam-input" style="max-width:280px" @bind="_newKeyName"
+                       placeholder="e.g. YubiKey 5C" />
+            </div>
+
+            <button class="pam-btn pam-btn-primary"
+                    @onclick="RegisterKeyAsync"
+                    disabled="@_busy">
+                @(_busy ? "Working…" : "&#x2795; Register New Key")
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private List<SecurityKeyDto> _keys   = [];
+    private string?              _error;
+    private string?              _success;
+    private string               _newKeyName = "";
+    private bool                 _loading;
+    private bool                 _busy;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadKeysAsync();
+    }
+
+    private async Task LoadKeysAsync()
+    {
+        _loading = true;
+        _keys    = await Api.GetFido2CredentialsAsync() ?? [];
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task RegisterKeyAsync()
+    {
+        _error   = null;
+        _success = null;
+        _busy    = true;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Get registration options from server
+            var options = await Api.Fido2RegisterBeginAsync();
+            if (options == null)
+            {
+                _error = "Failed to get registration options from server.";
+                return;
+            }
+
+            // Step 2: Call browser WebAuthn API
+            string resultJson;
+            try
+            {
+                resultJson = await JS.InvokeAsync<string>("fido2CreateCredential",
+                    System.Text.Json.JsonSerializer.Serialize(options));
+            }
+            catch (JSException ex)
+            {
+                _error = "Security key operation failed: " + ex.Message;
+                return;
+            }
+
+            // Step 3: Complete registration
+            var ok = await Api.Fido2RegisterCompleteAsync(resultJson, _newKeyName);
+            if (ok)
+            {
+                _success    = "Security key registered successfully!";
+                _newKeyName = "";
+                await LoadKeysAsync();
+            }
+            else
+            {
+                _error = "Registration failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "Error: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveKeyAsync(string id)
+    {
+        _error   = null;
+        _success = null;
+        _busy    = true;
+        StateHasChanged();
+
+        try
+        {
+            var ok = await Api.Fido2RemoveCredentialAsync(id);
+            if (ok)
+            {
+                _success = "Security key removed.";
+                await LoadKeysAsync();
+            }
+            else
+            {
+                _error = "Failed to remove key.";
+            }
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private record SecurityKeyDto(string Id, string FriendlyName, DateTime RegisteredAt, DateTime? LastUsed);
+}

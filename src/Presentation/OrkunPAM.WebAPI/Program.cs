@@ -96,6 +96,9 @@ try
     // === Connection Scheduling (#142) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.SessionSchedulerService>();
 
+    // === Scheduled Report Delivery (#159) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.ReportSchedulerService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -386,6 +389,10 @@ try
     api.MapWebRdpEndpoints();
     api.MapDiscoveryEndpoints();
     api.MapReportEndpoints();
+    api.MapReportScheduleEndpoints();
+    api.MapExecutiveDashboardEndpoints();
+    api.MapConnectionProfileEndpoints();
+    api.MapFido2Endpoints();
     api.MapComplianceEndpoints();
     api.MapAnalyticsEndpoints();
     api.MapIntegrationEndpoints();

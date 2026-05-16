@@ -112,6 +112,12 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Connection Scheduling (#142)
     public DbSet<ScheduledSession> ScheduledSessions => Set<ScheduledSession>();
 
+    // Scheduled Report Delivery (#159)
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+
+    // FIDO2/WebAuthn (#158)
+    public DbSet<Fido2Credential> Fido2Credentials => Set<Fido2Credential>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -371,6 +377,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(s => s.Reason).HasMaxLength(1024);
             e.Property(s => s.AdminNotes).HasMaxLength(1024);
             e.Property(s => s.ApprovedByUsername).HasMaxLength(256);
+        });
+
+        // === FIDO2/WebAuthn (#158) ===
+        modelBuilder.Entity<Fido2Credential>(e =>
+        {
+            e.HasIndex(f => f.CredentialIdB64).IsUnique();
+            e.HasIndex(f => f.UserId);
+            e.Property(f => f.FriendlyName).HasMaxLength(256);
+            e.Property(f => f.CredentialIdB64).HasMaxLength(512);
         });
 
         // Seed built-in data

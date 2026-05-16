@@ -82,6 +82,12 @@
         <NavLink class="pam-nav-link" href="/reports">
             <span class="pam-nav-icon">&#x1F4CA;</span> @L["nav_reports"]
         </NavLink>
+        @if (_user?.Roles.Contains("GlobalAdmin") == true || _user?.Roles.Contains("Auditor") == true)
+        {
+            <NavLink class="pam-nav-link" href="/executive-dashboard">
+                <span class="pam-nav-icon">&#x1F4C8;</span> Executive Dashboard
+            </NavLink>
+        }
         <NavLink class="pam-nav-link" href="/compliance">
             <span class="pam-nav-icon">&#x2714;</span> @L["nav_certifications"]
         </NavLink>
@@ -97,6 +103,11 @@
         </NavLink>
         <NavLink class="pam-nav-link" href="/rdp-management">
             <span class="pam-nav-icon">&#x1F5A5;</span> @L["nav_rdp_management"]
+        </NavLink>
+
+        <div class="pam-nav-section">Security</div>
+        <NavLink class="pam-nav-link" href="/security-keys">
+            <span class="pam-nav-icon">&#x1F5DD;</span> Security Keys
         </NavLink>
 
         <div class="pam-nav-section">@L["nav_section_system"]</div>

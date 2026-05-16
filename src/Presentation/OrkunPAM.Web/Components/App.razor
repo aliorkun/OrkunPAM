@@ -106,6 +106,87 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        // Download any text file (client profiles, config snippets, etc.)
+        function downloadTextFile(filename, content, mimeType) {
+            const blob = new Blob([content], { type: mimeType || 'text/plain' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        // Copy text to clipboard (falls back to execCommand for HTTP contexts)
+        function copyToClipboard(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).catch(() => _copyFallback(text));
+            } else {
+                _copyFallback(text);
+            }
+        }
+        function _copyFallback(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity  = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        // ── FIDO2/WebAuthn helpers ──
+        function _b64urlToBuffer(b64) {
+            const s = b64.replace(/-/g, '+').replace(/_/g, '/');
+            const pad = (4 - s.length % 4) % 4;
+            const bin = atob(s + '==='.slice(0, pad));
+            const buf = new ArrayBuffer(bin.length);
+            const u8  = new Uint8Array(buf);
+            for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+            return buf;
+        }
+        function _bufToB64url(buf) {
+            const u8 = new Uint8Array(buf);
+            let bin = '';
+            for (let i = 0; i < u8.byteLength; i++) bin += String.fromCharCode(u8[i]);
+            return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        }
+        async function fido2CreateCredential(optionsJson) {
+            const o = JSON.parse(optionsJson);
+            o.challenge = _b64urlToBuffer(o.challenge);
+            o.user.id   = _b64urlToBuffer(o.user.id);
+            if (o.excludeCredentials)
+                o.excludeCredentials = o.excludeCredentials.map(c => ({ ...c, id: _b64urlToBuffer(c.id) }));
+            const cred = await navigator.credentials.create({ publicKey: o });
+            return JSON.stringify({
+                id:    cred.id,
+                rawId: _bufToB64url(cred.rawId),
+                type:  cred.type,
+                response: {
+                    clientDataJSON:    _bufToB64url(cred.response.clientDataJSON),
+                    attestationObject: _bufToB64url(cred.response.attestationObject)
+                }
+            });
+        }
+        async function fido2GetAssertion(optionsJson) {
+            const o = JSON.parse(optionsJson);
+            o.challenge = _b64urlToBuffer(o.challenge);
+            if (o.allowCredentials)
+                o.allowCredentials = o.allowCredentials.map(c => ({ ...c, id: _b64urlToBuffer(c.id) }));
+            const asr = await navigator.credentials.get({ publicKey: o });
+            return JSON.stringify({
+                id:    asr.id,
+                rawId: _bufToB64url(asr.rawId),
+                type:  asr.type,
+                response: {
+                    clientDataJSON:    _bufToB64url(asr.response.clientDataJSON),
+                    authenticatorData: _bufToB64url(asr.response.authenticatorData),
+                    signature:         _bufToB64url(asr.response.signature),
+                    userHandle: asr.response.userHandle ? _bufToB64url(asr.response.userHandle) : null
+                }
+            });
+        }
     </script>
 </body>
 
