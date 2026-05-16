@@ -183,6 +183,22 @@
 
 ---
 
+## Sprint 9 - RFP Gap: Reporting + Auth + CLI (Aktif)
+**Tarih:** 16-22 Mayıs 2026
+**Hedef:** Reporting, MFA, UX RFP boşluklarını kapat
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #160 | O&M System Log Viewer | v2-INFRA | ✅ Tamamlandı |
+| #159 | Scheduled Report Delivery | v2-REPORTING | 🔲 Açık |
+| #168 | Executive Dashboard & CISO KPIs | v2-REPORTING | 🔲 Açık |
+| #150 | Native CLI Connection Profiles | v2-UX | 🔲 Açık |
+| #158 | FIDO2/WebAuthn | v2-MFA | 🔲 Açık |
+
+**İlerleme:** 1/5 (%20)
+
+---
+
 ## Sonraki Adım: v1.0.0 GA Tag
 **Kriter:** Sprint 6 tamamlandı → CI yeşil → `v1.0.0` tag atılacak
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
