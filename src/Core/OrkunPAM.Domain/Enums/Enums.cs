@@ -52,3 +52,13 @@ public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2,
 public enum JitAccessStatus : byte { Pending = 0, Approved = 1, Active = 2, Expired = 3, Revoked = 4, Denied = 5 }
 
 public enum VendorAccessStatus : byte { Pending = 0, Active = 1, Expired = 2, Revoked = 3 }
+
+public enum ScheduledSessionStatus : byte
+{
+    Pending = 0,    // awaiting admin approval
+    Approved = 1,   // approved, waiting for start time
+    Active = 2,     // session started (ProxySession created)
+    Completed = 3,  // end time reached
+    Expired = 4,    // unapproved past expiry window
+    Cancelled = 5   // manually cancelled
+}

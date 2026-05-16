@@ -126,26 +126,37 @@
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #138 | System Health Monitoring & O&M Dashboard | v2-INFRA | 🔄 In Progress |
-| #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔲 Bekliyor |
+| #138 | System Health Monitoring & O&M Dashboard | v2-INFRA | ✅ Tamamlandı |
+| #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔄 In Progress |
 | #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | 🔲 Bekliyor |
 | #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | 🔲 Bekliyor |
 | #154 | Access Certification Campaigns | v2-COMPLIANCE | 🔲 Bekliyor |
 
-**#138 System Health İlerleme:**
-- [x] `SystemAlarmLog` domain entity
-- [x] `OrkunPamDbContext` DbSet + model config
-- [x] `SystemHealthMonitorService` (BackgroundService, 60s interval)
-  - CPU%, Memory MB, Disk% metrics
-  - TCP port check: SSH :2222, RDP :3389, TACACS+ :49, HTTP :8080, SQL :1433, VNC :5900
-  - Threshold-based alarm with email notification (5-min cooldown)
-- [x] API endpoints: GET /health, GET /health/alarms, GET/PUT /health/config, POST /alarms/{id}/clear
-- [x] `SystemHealth.razor` — CPU/memory/disk progress bars, service status, alarm config, alarm history
-- [x] NavMenu "System Health" link
-- [x] `PamApiService.cs` methods + DTOs
-- [ ] RFP O&M #1-5 validation (build + smoke test)
+**#138 System Health — TAMAMLANDI ✅**
 
-**İlerleme:** 1/5 issue (%20)
+**#142 Connection Scheduling İlerleme:**
+- [x] `ScheduledSessionStatus` enum (Pending/Approved/Active/Completed/Expired/Cancelled)
+- [x] `ScheduledSession` domain entity
+- [x] `OrkunPamDbContext` DbSet + model config + indexes
+- [x] `SessionSchedulerService` (BackgroundService, 60s): auto-expire, auto-activate, auto-complete
+- [x] API endpoints:
+  - `POST /api/v1/sessions/scheduled` — create reservation (conflict detection)
+  - `GET /api/v1/sessions/scheduled` — list with status filter + pagination
+  - `GET /api/v1/sessions/scheduled/calendar` — weekly calendar view
+  - `GET /api/v1/sessions/scheduled/{id}` — detail
+  - `PUT /api/v1/sessions/scheduled/{id}/approve` — admin approve + optional time change
+  - `PUT /api/v1/sessions/scheduled/{id}/cancel` — requester or admin cancel
+- [x] `Approvals.razor` — "Scheduled Sessions" 3rd tab:
+  - Reservation form (device, credential, protocol, start/end, reason, expiry)
+  - Conflict warning on create
+  - Approve modal (admin can adjust time window + notes)
+  - Status-filtered list with badge colors
+  - Weekly calendar widget with day-by-day view
+- [x] `PamApiService.cs` — DTOs + 5 new methods
+- [x] Program.cs `AddHostedService` registration
+- [ ] RFP Session Manager #11, #16, #17 validation
+
+**İlerleme:** 2/5 issue (%40)
 
 ---
 

@@ -93,6 +93,9 @@ try
     // === System Health Monitoring (#138) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.SystemHealthMonitorService>();
 
+    // === Connection Scheduling (#142) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.SessionSchedulerService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 

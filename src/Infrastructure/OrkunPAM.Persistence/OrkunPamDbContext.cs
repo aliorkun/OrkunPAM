@@ -109,6 +109,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // System Health Monitoring (#138)
     public DbSet<SystemAlarmLog> SystemAlarmLogs => Set<SystemAlarmLog>();
 
+    // Connection Scheduling (#142)
+    public DbSet<ScheduledSession> ScheduledSessions => Set<ScheduledSession>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -346,6 +349,19 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(v => v.Company).HasMaxLength(256);
             e.Property(v => v.Email).HasMaxLength(512);
             e.Property(v => v.InviteToken).HasMaxLength(128);
+        });
+
+        // === Connection Scheduling (#142) ===
+        modelBuilder.Entity<ScheduledSession>(e =>
+        {
+            e.HasIndex(s => s.RequesterId);
+            e.HasIndex(s => s.Status);
+            e.HasIndex(s => new { s.ScheduledStartUtc, s.Status });
+            e.Property(s => s.RequesterUsername).HasMaxLength(256);
+            e.Property(s => s.DeviceName).HasMaxLength(256);
+            e.Property(s => s.Reason).HasMaxLength(1024);
+            e.Property(s => s.AdminNotes).HasMaxLength(1024);
+            e.Property(s => s.ApprovedByUsername).HasMaxLength(256);
         });
 
         // Seed built-in data
