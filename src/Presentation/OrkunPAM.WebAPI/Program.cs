@@ -390,6 +390,7 @@ try
     api.MapDiscoveryEndpoints();
     api.MapReportEndpoints();
     api.MapReportScheduleEndpoints();
+    api.MapCustomReportEndpoints();
     api.MapExecutiveDashboardEndpoints();
     api.MapConnectionProfileEndpoints();
     api.MapFido2Endpoints();
