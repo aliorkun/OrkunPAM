@@ -86,14 +86,16 @@ public static class CustomReportEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // Preview — ad-hoc run, up to 50 rows, no persistence
+        // Preview — ad-hoc run, up to 500 rows, no persistence
         grp.MapPost("/preview", async (CustomReportPreviewRequest req, OrkunPamDbContext db, HttpContext ctx) =>
         {
+            const int PreviewMaxCap = 500;
+            var previewRows = req.MaxRows > 0 ? Math.Min(req.MaxRows, PreviewMaxCap) : 50;
             var result = await ExecuteReportAsync(db,
                 req.DataSource ?? "AuditLogs",
                 req.FiltersJson ?? "{}",
                 req.ColumnsJson ?? "[]",
-                req.MaxRows > 0 ? req.MaxRows : 50);
+                previewRows);
 
             db.AuditLogs.Add(new AuditLogEntry
             {

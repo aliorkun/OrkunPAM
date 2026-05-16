@@ -2,6 +2,35 @@ using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Domain.Entities.Integration;
 
+// === PKI / Smart Card Authentication (#115) ===
+
+public class TrustedCaCertificate : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string PemCertificate { get; set; } = string.Empty;
+    public string Thumbprint { get; set; } = string.Empty;   // SHA-1 hex
+    public string Subject { get; set; } = string.Empty;
+    public string? Issuer { get; set; }
+    public DateTime NotBefore { get; set; }
+    public DateTime NotAfter { get; set; }
+    public string? OcspUrl { get; set; }
+    public string? CrlUrl { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public bool CheckRevocation { get; set; } = true;
+}
+
+public class PkiUserCertificate : AuditableEntity
+{
+    public Guid UserId { get; set; }
+    public string CertThumbprint { get; set; } = string.Empty;  // SHA-1 hex
+    public string SubjectDn { get; set; } = string.Empty;
+    public string IssuingCaThumbprint { get; set; } = string.Empty;
+    public DateTime ExpiresAtUtc { get; set; }
+    public bool RequirePkiOnly { get; set; }  // blocks password login when true
+    public bool IsEnabled { get; set; } = true;
+    public DateTime? LastUsedAtUtc { get; set; }
+}
+
 public class WebhookConfig : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;

@@ -32,6 +32,9 @@ public class User : SoftDeletableEntity
     public bool IsOrphaned { get; set; }
     public DateTime? OrphanedDetectedAtUtc { get; set; }
 
+    // PKI / Smart Card authentication (#115)
+    public bool RequirePkiAuth { get; set; }
+
     // MFA Enrollment Token (admin-generated, one-time use, 24h TTL)
     public Guid? MfaEnrollmentToken { get; set; }
     public DateTime? MfaEnrollmentTokenExpiry { get; set; }
