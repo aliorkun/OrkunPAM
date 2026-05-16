@@ -118,6 +118,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // FIDO2/WebAuthn (#158)
     public DbSet<Fido2Credential> Fido2Credentials => Set<Fido2Credential>();
 
+    // Custom Report Builder (#169)
+    public DbSet<CustomReportDefinition> CustomReportDefinitions => Set<CustomReportDefinition>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
