@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-16 (PM run #8)
+> Last updated: 2026-05-16 (PM run #9)
 
 ## Platform (44 items)
 
@@ -81,8 +81,8 @@
 | 22 | Solution shall support privileged user management | PC | UserEndpoints.cs + RoleEndpoints.cs — privileged role assignment/revocation |
 | 23 | Solution shall support emergency access accounts | PC | BreakGlassEndpoints.cs — emergency access, full audit, time-limited |
 | 24 | Solution shall support account reconciliation |  |  |
-| 25 | Solution shall support orphaned account detection |  |  |
-| 26 | Solution shall support access certification |  |  |
+| 25 | Solution shall support orphaned account detection | PC | GET /api/v1/users/orphaned + Users.razor orphaned badge; accounts inactive >90 days or removed from AD marked IsOrphaned; OrphanedDetectedAtUtc field; daily background check (#153) |
+| 26 | Solution shall support access certification | PC | AttestationCampaign entity + Compliance.razor — access certification campaigns; reviewer assignments, Approve/Revoke decisions, campaign progress tracking, audit trail (#154) |
 | 27 | Solution shall support user risk scoring |  |  |
 | 28 | Solution shall support behavioral analytics for users |  |  |
 | 29 | Solution shall support geolocation-based access control |  |  |
@@ -92,7 +92,7 @@
 | 33 | Solution shall support context-aware access control |  |  |
 | 34 | Solution shall support just-in-time access | PC | JitAccessEndpoints.cs — time-limited JIT credential checkout |
 | 35 | Solution shall support access request workflows | PC | Approvals.razor — request + multi-step approval (#79) |
-| 36 | Solution shall support access review campaigns |  |  |
+| 36 | Solution shall support access review campaigns | PC | Compliance.razor — attestation campaign manager; campaign creation, reviewer assignments, Approve/Revoke decisions, completion % tracking (#154) |
 | 37 | Solution shall support privileged access analytics |  |  |
 | 38 | Solution shall support user behavior baseline |  |  |
 | 39 | Solution shall support insider threat detection |  |  |
@@ -293,7 +293,7 @@
 | 44 | Solution shall support database credential management | PC | CredentialEndpoints.cs — DB credential type (SQL Server, MySQL, PostgreSQL) |
 | 45 | Solution shall support application credential management | PC | CredentialEndpoints.cs — API/app credential type |
 | 46 | Solution shall support network device credential management | PC | CredentialEndpoints.cs + TacacsProxyService.cs — network device credential type |
-| 47 | Solution shall support privileged account discovery |  |  |
+| 47 | Solution shall support privileged account discovery | PC | GET /api/v1/users/orphaned — orphaned privileged accounts flagged with IsOrphaned + OrphanedDetectedAtUtc; Users.razor orphaned badge + filter; UserDto includes IsOrphaned field (#153) |
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
@@ -559,5 +559,5 @@
 | 5 | Solution shall support disk usage monitoring | PC | SystemHealthMonitorService.cs — disk usage via DriveInfo; progress bar with threshold indicator in SystemHealth.razor (#138) |
 | 6 | Solution shall support service status monitoring | PC | SystemHealthMonitorService.cs — TCP ping to proxy services → Green/Yellow/Red status badges in SystemHealth.razor (#138) |
 | 7 | Solution shall support alarm threshold configuration | PC | GET/PUT /api/v1/system/health/config — admin configures CPU/disk alarm thresholds; alarms cleared when condition normalises (#138) |
-| 8 | Solution shall support system log viewer | NC | Planned: #160 O&M System Log Viewer (SystemLogs.razor + Serilog JSON reader) |
-| 9 | Solution shall support system log search and filter | NC | Planned: #160 O&M System Log Viewer — filter bar: time range, log level, free-text search |
+| 8 | Solution shall support system log viewer | PC | SystemLogs.razor — Serilog JSON reader, paginated log entries, log level badges (Info/Warn/Error/Fatal), sortable table, NavMenu link (admin only) (#160) |
+| 9 | Solution shall support system log search and filter | PC | SystemLogs.razor — filter bar: time range picker, log level dropdown, free-text search; level-based row coloring (#160) |
