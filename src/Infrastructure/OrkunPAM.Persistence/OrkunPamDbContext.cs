@@ -128,6 +128,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Native Desktop Client SSO (#170)
     public DbSet<LaunchToken> LaunchTokens => Set<LaunchToken>();
 
+    // Email OTP MFA (#178)
+    public DbSet<EmailOtpToken> EmailOtpTokens => Set<EmailOtpToken>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -425,6 +428,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(t => t.Protocol).HasMaxLength(16);
             e.Property(t => t.TargetHost).HasMaxLength(512);
             e.Property(t => t.CreatedByUsername).HasMaxLength(256);
+        });
+
+        // === Email OTP MFA (#178) ===
+        modelBuilder.Entity<EmailOtpToken>(e =>
+        {
+            e.HasIndex(t => t.UserId);
+            e.HasIndex(t => t.ExpiresAtUtc);
+            e.Property(t => t.HashedCode).HasMaxLength(64);
+            e.Property(t => t.RequestedFromIp).HasMaxLength(64);
         });
 
         // Seed built-in data
