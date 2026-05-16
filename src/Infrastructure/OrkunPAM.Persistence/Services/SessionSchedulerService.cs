@@ -53,10 +53,17 @@ public sealed class SessionSchedulerService : BackgroundService
         foreach (var s in toExpire)
         {
             s.Status = ScheduledSessionStatus.Expired;
-            _ = audit.LogAsync("Session", "ScheduledSessionExpired", s.RequesterId, s.RequesterUsername,
-                null, "ScheduledSession", s.Id.ToString(),
-                new { device = s.DeviceName, start = s.ScheduledStartUtc },
-                AuditOutcome.Success, ct);
+            try
+            {
+                await audit.LogAsync("Session", "ScheduledSessionExpired", s.RequesterId, s.RequesterUsername,
+                    null, "ScheduledSession", s.Id.ToString(),
+                    new { device = s.DeviceName, start = s.ScheduledStartUtc },
+                    AuditOutcome.Success, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Audit log failed for ScheduledSessionExpired {SessionId}", s.Id);
+            }
         }
 
         // 2. Activate approved sessions whose start time arrived
@@ -68,10 +75,17 @@ public sealed class SessionSchedulerService : BackgroundService
         {
             s.Status = ScheduledSessionStatus.Active;
             s.ActualStartUtc = now;
-            _ = audit.LogAsync("Session", "ScheduledSessionActivated", s.RequesterId, s.RequesterUsername,
-                null, "ScheduledSession", s.Id.ToString(),
-                new { device = s.DeviceName },
-                AuditOutcome.Success, ct);
+            try
+            {
+                await audit.LogAsync("Session", "ScheduledSessionActivated", s.RequesterId, s.RequesterUsername,
+                    null, "ScheduledSession", s.Id.ToString(),
+                    new { device = s.DeviceName },
+                    AuditOutcome.Success, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Audit log failed for ScheduledSessionActivated {SessionId}", s.Id);
+            }
         }
 
         // 3. Complete active sessions whose end time passed
@@ -92,10 +106,17 @@ public sealed class SessionSchedulerService : BackgroundService
                     proxy.Terminate(Guid.Empty, "Scheduled session end time reached");
             }
 
-            _ = audit.LogAsync("Session", "ScheduledSessionCompleted", s.RequesterId, s.RequesterUsername,
-                null, "ScheduledSession", s.Id.ToString(),
-                new { device = s.DeviceName, durationMin = (int)(s.ScheduledEndUtc - s.ScheduledStartUtc).TotalMinutes },
-                AuditOutcome.Success, ct);
+            try
+            {
+                await audit.LogAsync("Session", "ScheduledSessionCompleted", s.RequesterId, s.RequesterUsername,
+                    null, "ScheduledSession", s.Id.ToString(),
+                    new { device = s.DeviceName, durationMin = (int)(s.ScheduledEndUtc - s.ScheduledStartUtc).TotalMinutes },
+                    AuditOutcome.Success, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Audit log failed for ScheduledSessionCompleted {SessionId}", s.Id);
+            }
         }
 
         var changed = toExpire.Count + toActivate.Count + toComplete.Count;

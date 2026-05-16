@@ -11,7 +11,7 @@ public static class SystemEndpoints
 {
     public static void MapSystemEndpoints(this IEndpointRouteBuilder app)
     {
-        var config = app.MapGroup("/api/v1/system/config").WithTags("System");
+        var config = app.MapGroup("/api/v1/system/config").WithTags("System").RequireAuthorization("AdminPolicy");
 
         config.MapGet("/", async (OrkunPamDbContext db, string? category) =>
         {
@@ -71,7 +71,7 @@ public static class SystemEndpoints
             return Results.Ok(new { success = true });
         });
 
-        var audit = app.MapGroup("/api/v1/audit-logs").WithTags("Audit");
+        var audit = app.MapGroup("/api/v1/audit-logs").WithTags("Audit").RequireAuthorization("AdminPolicy");
 
         audit.MapGet("/", async (OrkunPamDbContext db, string? category, string? eventType,
             Guid? userId, string? targetType, DateTime? from, DateTime? to,
@@ -152,7 +152,7 @@ public static class SystemEndpoints
             });
         });
 
-        var jobs = app.MapGroup("/api/v1/system/jobs").WithTags("System");
+        var jobs = app.MapGroup("/api/v1/system/jobs").WithTags("System").RequireAuthorization("AdminPolicy");
 
         jobs.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -166,7 +166,7 @@ public static class SystemEndpoints
         });
 
         // === SMTP Configuration ===
-        var emailGroup = app.MapGroup("/api/v1/system/email").WithTags("System");
+        var emailGroup = app.MapGroup("/api/v1/system/email").WithTags("System").RequireAuthorization("AdminPolicy");
 
         emailGroup.MapGet("/config", async (OrkunPamDbContext db) =>
         {
@@ -234,7 +234,7 @@ public static class SystemEndpoints
         });
 
         // === Account Lifecycle Policy ===
-        var accountGroup = app.MapGroup("/api/v1/system/account-policy").WithTags("System");
+        var accountGroup = app.MapGroup("/api/v1/system/account-policy").WithTags("System").RequireAuthorization("AdminPolicy");
 
         accountGroup.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -278,7 +278,7 @@ public static class SystemEndpoints
         });
 
         // === System Health Monitoring (#138) ===
-        var healthGroup = app.MapGroup("/api/v1/system/health").WithTags("System");
+        var healthGroup = app.MapGroup("/api/v1/system/health").WithTags("System").RequireAuthorization("AdminPolicy");
 
         healthGroup.MapGet("/", async (OrkunPamDbContext db, CancellationToken ct) =>
         {
@@ -363,7 +363,7 @@ public static class SystemEndpoints
         });
 
         // === Windows / Kerberos Auth Settings (#126) ===
-        var winAuthGroup = app.MapGroup("/api/v1/system/windows-auth").WithTags("System");
+        var winAuthGroup = app.MapGroup("/api/v1/system/windows-auth").WithTags("System").RequireAuthorization("AdminPolicy");
 
         winAuthGroup.MapGet("/", async (OrkunPamDbContext db) =>
         {
