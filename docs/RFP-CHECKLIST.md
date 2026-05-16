@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-15 (PM run #7)
+> Last updated: 2026-05-16 (PM run #8)
 
 ## Platform (44 items)
 
@@ -310,13 +310,13 @@
 | 8 | General | Solution shall support double confirmation of execution of the command that can cause a service interrupt or any request | PC | DangerousCommandFilter.cs — SSH double-confirmation for destructive commands (rm -rf, shutdown, reboot, DROP, format, mkfs); configurable command list (#136) |
 | 9 | General | Solution shall support geofence validation through mobile application for the command executions. |  |
 | 10 | General | Solution shall support duration based restriction policy for the sessions | PC | SessionPolicyService.cs — session duration/timeout enforcement at runtime (#84) |
-| 11 | General | Solution shall have a connection reservation functionalty for future date connections |  |
+| 11 | General | Solution shall have a connection reservation functionalty for future date connections | PC | Approvals.razor Scheduled tab — future date/time reservation form (device, credential, protocol, start/end, reason), conflict detection, auto-activate/complete; ScheduledSession entity + SessionSchedulerService.cs (#142) |
 | 12 | General | Solution shall support to open SSH/RDP/HTTP sessions via desktop application on user workstation (without logging into P |  |
 | 13 | General | Solution shall support to log users' client IP addresses even if users access the Web GUI through the loadbalancer. |  |
 | 14 | General | Solution shall support to use its own secure tunnel (connector) to connect to target devices located in remote data cent |  |
 | 15 | General | Solution shall support users to create a connection reservation request for a future date and get administrator approval | PC | Approvals.razor — approval workflow, expiry countdown, multi-step approval (#79) |
-| 16 | General | Solution shall support expiration of connection reservation requests that are not approved/devied for a certain period o |  |
-| 17 | General | Solution shall support administrators to change the selected date/time during connection request approval. |  |
+| 16 | General | Solution shall support expiration of connection reservation requests that are not approved/devied for a certain period o | PC | SessionSchedulerService.cs — configurable expiry threshold; unprocessed Pending reservations auto-expire, status → Expired, requester email notification sent (#142) |
+| 17 | General | Solution shall support administrators to change the selected date/time during connection request approval. | PC | Approvals.razor approve modal — admin adjusts start/end time window + adds approval notes before confirming; audit log records original vs adjusted times (#142) |
 | 18 | General | Solution shall allow connections to target Linux/Unix and Windows systems by entering IP addresses, restr |  |
 | 19 | General | Solution shall allow connections to target Linux/Unix and Windows systems by entering IP addresses, restr |  |
 | 20 | General | Solution shall support a connection retry mechanism to ensure reliable sessions when initial connection attempts fail. |  |
@@ -547,3 +547,17 @@
 | 25 | Solution shall support patch management integration |  |  |
 | 26 | Solution shall support backup integration |  |  |
 | 27 | Solution shall support monitoring integration | PC | Reports.razor + Dashboard.razor — session activity and operational stats monitoring (#27) |
+
+## Operation & Maintenance (9 items)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|---------|
+| 1 | Solution shall support system status monitoring | PC | SystemHealthMonitorService.cs — BackgroundService (60s loop): CPU%, memory MB, disk%, service liveness (SshProxy :2222, RdpProxy :3389, TacacsProxy :49, RADIUS :1812, HttpProxy :8080); SystemHealth.razor admin dashboard (#138) |
+| 2 | Solution shall support system alarm management | PC | SystemAlarmLogs DB table + alarm threshold config — CPU >80%, disk <10% triggers email via SmtpNotificationService.SendSystemAlarmAsync; alarm list with severity/status active/cleared (#138) |
+| 3 | Solution shall support CPU usage monitoring | PC | SystemHealthMonitorService.cs — real-time CPU% via PerformanceCounter/Environment; progress bar + trend sparkline in SystemHealth.razor (#138) |
+| 4 | Solution shall support memory usage monitoring | PC | SystemHealthMonitorService.cs — real-time memory MB via Environment.WorkingSet; progress bar + trend sparkline in SystemHealth.razor (#138) |
+| 5 | Solution shall support disk usage monitoring | PC | SystemHealthMonitorService.cs — disk usage via DriveInfo; progress bar with threshold indicator in SystemHealth.razor (#138) |
+| 6 | Solution shall support service status monitoring | PC | SystemHealthMonitorService.cs — TCP ping to proxy services → Green/Yellow/Red status badges in SystemHealth.razor (#138) |
+| 7 | Solution shall support alarm threshold configuration | PC | GET/PUT /api/v1/system/health/config — admin configures CPU/disk alarm thresholds; alarms cleared when condition normalises (#138) |
+| 8 | Solution shall support system log viewer | NC | Planned: #160 O&M System Log Viewer (SystemLogs.razor + Serilog JSON reader) |
+| 9 | Solution shall support system log search and filter | NC | Planned: #160 O&M System Log Viewer — filter bar: time range, log level, free-text search |
