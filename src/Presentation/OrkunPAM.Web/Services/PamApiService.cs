@@ -1156,7 +1156,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ───────────────────────────────────────────────────────────────────────────────────────────
+    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1254,7 +1254,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ────────────────────────────────────────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ───────────────────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1263,6 +1263,59 @@ public sealed class PamApiService
 
     public Task<bool> DeleteTacacsCommandPolicyAsync(string id)
         => Task.FromResult(false);
+
+    // === Access Certification Campaigns (#154) ===
+    public async Task<List<AttestationCampaignDto>?> GetAttestationsAsync()
+    {
+        var result = await GetAsync<ListResult<AttestationCampaignDto>>("/api/v1/compliance/attestations");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateAttestationAsync(string name, string? scopeJson, Guid? reviewerUserId,
+        DateTime startsAtUtc, DateTime deadlineUtc, bool autoRevokeOnMiss)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/compliance/attestations",
+                new { name, scopeJson, reviewerUserId, startsAtUtc, deadlineUtc, autoRevokeOnMiss });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<AttestationDetailDto?> GetAttestationDetailAsync(string id)
+    {
+        var result = await GetAsync<SingleResult<AttestationDetailDto>>("/api/v1/compliance/attestations/" + id);
+        return result?.Data;
+    }
+
+    public async Task<bool> StartAttestationAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/compliance/attestations/" + id + "/start", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DecideAttestationItemAsync(string campaignId, long decisionId, byte decision, string? comments)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync(
+                "/api/v1/compliance/attestations/" + campaignId + "/decisions/" + decisionId + "/decide",
+                new { decision, comments });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> CompleteAttestationAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/compliance/attestations/" + id + "/complete", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -1661,3 +1714,39 @@ public record HealthAlarmConfigDto(
     string MemoryWarningMb,
     string DiskFreeWarningPct,
     string AlarmRecipients);
+
+// Access Certification DTOs (#154)
+public record AttestationCampaignDto(
+    string    Id,
+    string    Name,
+    byte      Status,
+    DateTime  StartsAtUtc,
+    DateTime  DeadlineUtc,
+    bool      AutoRevokeOnMiss,
+    string?   ReviewerUserId,
+    DateTime? CompletedAtUtc);
+
+public record AttestationDecisionItemDto(
+    long      Id,
+    string    SubjectUserId,
+    string?   SubjectUsername,
+    string?   ResourceType,
+    string?   ResourceId,
+    string?   ResourceName,
+    byte?     Decision,
+    DateTime? DecisionAtUtc,
+    string?   Comments);
+
+public record AttestationDetailDto(
+    string    Id,
+    string    Name,
+    byte      Status,
+    DateTime  StartsAtUtc,
+    DateTime  DeadlineUtc,
+    bool      AutoRevokeOnMiss,
+    string?   ReviewerUserId,
+    DateTime? CompletedAtUtc,
+    int       TotalItems,
+    int       DecidedItems,
+    int       PendingItems,
+    List<AttestationDecisionItemDto>? Decisions);
