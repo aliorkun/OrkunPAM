@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+
+  <!-- Nav sections -->
+  <data name="nav_section_overview" xml:space="preserve"><value>GENEL BAKIŞ</value></data>
+  <data name="nav_section_access" xml:space="preserve"><value>ERİŞİM</value></data>
+  <data name="nav_section_identity" xml:space="preserve"><value>KİMLİK</value></data>
+  <data name="nav_section_workflow" xml:space="preserve"><value>İŞ AKIŞI</value></data>
+  <data name="nav_section_reporting" xml:space="preserve"><value>RAPORLAMA</value></data>
+  <data name="nav_section_terminal" xml:space="preserve"><value>TERMINAL</value></data>
+  <data name="nav_section_network" xml:space="preserve"><value>AĞ</value></data>
+  <data name="nav_section_system" xml:space="preserve"><value>SİSTEM</value></data>
+
+  <!-- Nav links -->
+  <data name="nav_dashboard" xml:space="preserve"><value>Pano</value></data>
+  <data name="nav_my_portal" xml:space="preserve"><value>Portalom</value></data>
+  <data name="nav_active_sessions" xml:space="preserve"><value>Aktif Oturumlar</value></data>
+  <data name="nav_session_playback" xml:space="preserve"><value>Oturum Kaydı</value></data>
+  <data name="nav_vault" xml:space="preserve"><value>Kasa</value></data>
+  <data name="nav_devices" xml:space="preserve"><value>Cihazlar</value></data>
+  <data name="nav_users" xml:space="preserve"><value>Kullanıcılar</value></data>
+  <data name="nav_policies" xml:space="preserve"><value>Politikalar</value></data>
+  <data name="nav_approvals" xml:space="preserve"><value>Onaylar</value></data>
+  <data name="nav_break_glass" xml:space="preserve"><value>Acil Erişim</value></data>
+  <data name="nav_jit_access" xml:space="preserve"><value>JIT Erişim</value></data>
+  <data name="nav_vendor_access" xml:space="preserve"><value>Tedarikçi Erişimi</value></data>
+  <data name="nav_reports" xml:space="preserve"><value>Raporlar</value></data>
+  <data name="nav_certifications" xml:space="preserve"><value>Sertifikasyonlar</value></data>
+  <data name="nav_ssh_rdp" xml:space="preserve"><value>SSH/RDP Bağlan</value></data>
+  <data name="nav_tacacs_radius" xml:space="preserve"><value>TACACS+/RADIUS</value></data>
+  <data name="nav_rdp_management" xml:space="preserve"><value>RDP Yönetimi</value></data>
+  <data name="nav_system_health" xml:space="preserve"><value>Sistem Sağlığı</value></data>
+  <data name="nav_discovery" xml:space="preserve"><value>Keşif</value></data>
+  <data name="nav_integrations" xml:space="preserve"><value>Entegrasyonlar</value></data>
+  <data name="nav_encryption" xml:space="preserve"><value>Şifreleme</value></data>
+  <data name="nav_sign_out" xml:space="preserve"><value>Çıkış Yap</value></data>
+
+  <!-- Dashboard -->
+  <data name="dash_title" xml:space="preserve"><value>Pano</value></data>
+  <data name="dash_active_sessions" xml:space="preserve"><value>Aktif Oturumlar</value></data>
+  <data name="dash_total_users" xml:space="preserve"><value>Toplam Kullanıcı</value></data>
+  <data name="dash_managed_devices" xml:space="preserve"><value>Yönetilen Cihazlar</value></data>
+  <data name="dash_vault_credentials" xml:space="preserve"><value>Kasa Kimlik Bilgileri</value></data>
+  <data name="dash_pending_approvals" xml:space="preserve"><value>Bekleyen Onaylar</value></data>
+  <data name="dash_recent_sessions" xml:space="preserve"><value>Son Oturumlar</value></data>
+  <data name="dash_quick_actions" xml:space="preserve"><value>Hızlı İşlemler</value></data>
+  <data name="dash_system_status" xml:space="preserve"><value>Sistem Durumu</value></data>
+  <data name="dash_view_all" xml:space="preserve"><value>Tümünü Gör →</value></data>
+  <data name="dash_start_ssh" xml:space="preserve"><value>SSH Oturumu Başlat</value></data>
+  <data name="dash_add_device" xml:space="preserve"><value>Cihaz Ekle</value></data>
+  <data name="dash_manage_users" xml:space="preserve"><value>Kullanıcıları Yönet</value></data>
+  <data name="dash_open_vault" xml:space="preserve"><value>Kasayı Aç</value></data>
+  <data name="dash_ssh_proxy" xml:space="preserve"><value>SSH Proxy</value></data>
+  <data name="dash_vault_engine" xml:space="preserve"><value>Kasa Motoru</value></data>
+  <data name="dash_audit_log" xml:space="preserve"><value>Denetim Günlüğü</value></data>
+  <data name="dash_online" xml:space="preserve"><value>Çevrimiçi</value></data>
+  <data name="dash_loading" xml:space="preserve"><value>Yükleniyor...</value></data>
+  <data name="dash_no_sessions" xml:space="preserve"><value>Henüz oturum yok.</value></data>
+  <data name="dash_col_type" xml:space="preserve"><value>Tür</value></data>
+  <data name="dash_col_target" xml:space="preserve"><value>Hedef</value></data>
+  <data name="dash_col_status" xml:space="preserve"><value>Durum</value></data>
+  <data name="dash_col_started" xml:space="preserve"><value>Başlangıç</value></data>
+</root>

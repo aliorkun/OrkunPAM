@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+
+  <!-- Nav sections -->
+  <data name="nav_section_overview" xml:space="preserve"><value>OVERVIEW</value></data>
+  <data name="nav_section_access" xml:space="preserve"><value>ACCESS</value></data>
+  <data name="nav_section_identity" xml:space="preserve"><value>IDENTITY</value></data>
+  <data name="nav_section_workflow" xml:space="preserve"><value>WORKFLOW</value></data>
+  <data name="nav_section_reporting" xml:space="preserve"><value>REPORTING</value></data>
+  <data name="nav_section_terminal" xml:space="preserve"><value>TERMINAL</value></data>
+  <data name="nav_section_network" xml:space="preserve"><value>NETWORK</value></data>
+  <data name="nav_section_system" xml:space="preserve"><value>SYSTEM</value></data>
+
+  <!-- Nav links -->
+  <data name="nav_dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="nav_my_portal" xml:space="preserve"><value>My Portal</value></data>
+  <data name="nav_active_sessions" xml:space="preserve"><value>Active Sessions</value></data>
+  <data name="nav_session_playback" xml:space="preserve"><value>Session Playback</value></data>
+  <data name="nav_vault" xml:space="preserve"><value>Vault</value></data>
+  <data name="nav_devices" xml:space="preserve"><value>Devices</value></data>
+  <data name="nav_users" xml:space="preserve"><value>Users</value></data>
+  <data name="nav_policies" xml:space="preserve"><value>Policies</value></data>
+  <data name="nav_approvals" xml:space="preserve"><value>Approvals</value></data>
+  <data name="nav_break_glass" xml:space="preserve"><value>Break-Glass</value></data>
+  <data name="nav_jit_access" xml:space="preserve"><value>JIT Access</value></data>
+  <data name="nav_vendor_access" xml:space="preserve"><value>Vendor Access</value></data>
+  <data name="nav_reports" xml:space="preserve"><value>Reports</value></data>
+  <data name="nav_certifications" xml:space="preserve"><value>Certifications</value></data>
+  <data name="nav_ssh_rdp" xml:space="preserve"><value>SSH/RDP Connect</value></data>
+  <data name="nav_tacacs_radius" xml:space="preserve"><value>TACACS+/RADIUS</value></data>
+  <data name="nav_rdp_management" xml:space="preserve"><value>RDP Management</value></data>
+  <data name="nav_system_health" xml:space="preserve"><value>System Health</value></data>
+  <data name="nav_discovery" xml:space="preserve"><value>Discovery</value></data>
+  <data name="nav_integrations" xml:space="preserve"><value>Integrations</value></data>
+  <data name="nav_encryption" xml:space="preserve"><value>Encryption</value></data>
+  <data name="nav_sign_out" xml:space="preserve"><value>Sign Out</value></data>
+
+  <!-- Dashboard -->
+  <data name="dash_title" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="dash_active_sessions" xml:space="preserve"><value>Active Sessions</value></data>
+  <data name="dash_total_users" xml:space="preserve"><value>Total Users</value></data>
+  <data name="dash_managed_devices" xml:space="preserve"><value>Managed Devices</value></data>
+  <data name="dash_vault_credentials" xml:space="preserve"><value>Vault Credentials</value></data>
+  <data name="dash_pending_approvals" xml:space="preserve"><value>Pending Approvals</value></data>
+  <data name="dash_recent_sessions" xml:space="preserve"><value>Recent Sessions</value></data>
+  <data name="dash_quick_actions" xml:space="preserve"><value>Quick Actions</value></data>
+  <data name="dash_system_status" xml:space="preserve"><value>System Status</value></data>
+  <data name="dash_view_all" xml:space="preserve"><value>View all →</value></data>
+  <data name="dash_start_ssh" xml:space="preserve"><value>Start SSH Session</value></data>
+  <data name="dash_add_device" xml:space="preserve"><value>Add Device</value></data>
+  <data name="dash_manage_users" xml:space="preserve"><value>Manage Users</value></data>
+  <data name="dash_open_vault" xml:space="preserve"><value>Open Vault</value></data>
+  <data name="dash_ssh_proxy" xml:space="preserve"><value>SSH Proxy</value></data>
+  <data name="dash_vault_engine" xml:space="preserve"><value>Vault Engine</value></data>
+  <data name="dash_audit_log" xml:space="preserve"><value>Audit Log</value></data>
+  <data name="dash_online" xml:space="preserve"><value>Online</value></data>
+  <data name="dash_loading" xml:space="preserve"><value>Loading...</value></data>
+  <data name="dash_no_sessions" xml:space="preserve"><value>No sessions yet.</value></data>
+  <data name="dash_col_type" xml:space="preserve"><value>Type</value></data>
+  <data name="dash_col_target" xml:space="preserve"><value>Target</value></data>
+  <data name="dash_col_status" xml:space="preserve"><value>Status</value></data>
+  <data name="dash_col_started" xml:space="preserve"><value>Started</value></data>
+</root>

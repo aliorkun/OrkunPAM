@@ -1,1 +1,32 @@
 /* NavMenu scoped styles — all layout is in app.css using .pam-* classes */
+
+.pam-lang-switcher {
+    display: flex;
+    gap: 4px;
+    padding: 6px 12px 2px;
+}
+
+.pam-lang-btn {
+    flex: 1;
+    padding: 3px 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.pam-lang-btn:hover {
+    border-color: rgba(255,255,255,0.5);
+    color: rgba(255,255,255,0.9);
+}
+
+.pam-lang-btn.pam-lang-active {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.6);
+    color: #fff;
+}
