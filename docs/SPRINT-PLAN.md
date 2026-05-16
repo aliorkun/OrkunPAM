@@ -132,53 +132,6 @@
 | #154 | Access Certification Campaigns | v2-COMPLIANCE | ✅ Tamamlandı |
 | #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | ✅ Tamamlandı |
 
-**#138 System Health — TAMAMLANDI ✅**
-
-**#142 Connection Scheduling İlerleme:**
-- [x] `ScheduledSessionStatus` enum (Pending/Approved/Active/Completed/Expired/Cancelled)
-- [x] `ScheduledSession` domain entity
-- [x] `OrkunPamDbContext` DbSet + model config + indexes
-- [x] `SessionSchedulerService` (BackgroundService, 60s): auto-expire, auto-activate, auto-complete
-- [x] API endpoints:
-  - `POST /api/v1/sessions/scheduled` — create reservation (conflict detection)
-  - `GET /api/v1/sessions/scheduled` — list with status filter + pagination
-  - `GET /api/v1/sessions/scheduled/calendar` — weekly calendar view
-  - `GET /api/v1/sessions/scheduled/{id}` — detail
-  - `PUT /api/v1/sessions/scheduled/{id}/approve` — admin approve + optional time change
-  - `PUT /api/v1/sessions/scheduled/{id}/cancel` — requester or admin cancel
-- [x] `Approvals.razor` — "Scheduled Sessions" 3rd tab:
-  - Reservation form (device, credential, protocol, start/end, reason, expiry)
-  - Conflict warning on create
-  - Approve modal (admin can adjust time window + notes)
-  - Status-filtered list with badge colors
-  - Weekly calendar widget with day-by-day view
-- [x] `PamApiService.cs` — DTOs + 5 new methods
-- [x] Program.cs `AddHostedService` registration
-- [x] RFP Session Manager #11, #16, #17 validation ✅
-
-**#153 Orphaned Account Detection — TAMAMLANDI ✅**
-- `IsOrphaned` + `OrphanedDetectedAtUtc` domain properties + EF migration
-- `LdapPamSyncService` orphaned detection after each sync (auto-mark & auto-clear)
-- `GET /api/v1/users/orphaned` API endpoint
-- `GetOrphanedUsersAsync()` in PamApiService + `UserDto` updated
-- Red "Orphaned" badge in Users.razor UI
-
-**#154 Access Certification Campaigns — TAMAMLANDI ✅**
-- AttestationCampaign/Decision entity extensions + migration (ReviewerUserId, CompletedAtUtc, SubjectUsername, ResourceName)
-- API: GET list, POST create, GET /{id} detail, POST start (scope-based item generation), POST decisions/decide (Approve/Revoke/Defer), POST complete (auto-revoke on miss)
-- Compliance.razor: new page — Active/History tabs, create modal, campaign detail modal with per-user decision buttons
-- NavMenu.razor: "Certifications" link added
-- PamApiService: 3 new DTOs + 6 new methods
-
-**#143 Multi-Language UI (TR/EN) — TAMAMLANDI ✅**
-- `AddLocalization()` + `UseRequestLocalization` middleware (en-US default, tr-TR supported)
-- `/api/culture/set` endpoint: CookieRequestCultureProvider cookie (1 yıl geçerli)
-- `SharedResource.cs` + `SharedResource.resx` (EN) + `SharedResource.tr.resx` (TR) — 44 string key
-- `CultureService` (scoped): CurrentCulture okur, SetCulture(culture) ile forceLoad redirect
-- NavMenu.razor: tüm section başlıkları + nav label'ları localize, EN/TR toggle button'ları eklendi
-- Home.razor (Dashboard): tüm stat label, tablo başlığı, quick action, system status metinleri localize
-- `_Imports.razor`: `@using Microsoft.Extensions.Localization` + `@using OrkunPAM.Web.Resources`
-
 **İlerleme:** 5/5 issue (%100) ✅
 
 ---
@@ -199,9 +152,9 @@
 
 ---
 
-## Sprint 10 - RFP Gap: Reporting Round 2 + Auth + Desktop Client (Aktif)
+## ~~Sprint 10 - RFP Gap: Reporting Round 2 + Auth + Desktop Client~~ ✅ TAMAMLANDI
 **Tarih:** 16-25 Mayıs 2026
-**Hedef:** RFP raporlama boşluklarını kapat, PKI auth, ITSM entegrasyonu
+**Durum:** Tamamlandı — PKI auth, ITSM, Custom Reports, Desktop SSO, Security fixes
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
@@ -218,37 +171,32 @@
 
 **İlerleme:** 10/10 (%100) — Sprint 10 TAMAMLANDI ✅
 
-**#114 ITSM Integration — TAMAMLANDI ✅**
-- ItsmConfig entity (mevcut) + CRUD endpoints (GET/POST/DELETE/toggle) tamamlandı
-- Inbound webhook: `POST /api/v1/integrations/itsm/inbound-approve` — ServiceNow/OneDesk'ten HMAC-SHA256 doğrulamalı otomatik onay/ret
-- ITSM tab in Integrations.razor: provider seçimi, config CRUD, test, enable/disable
-- Inbound webhook URL ve örnek body gösterimi UI'da
-- Webhook integration ile ApprovalRequest otomatik Approved/Denied olarak güncelleniyor
-- RFP Integration #9 → PC
+---
 
-**#170 Native Desktop Client SSO Launch — TAMAMLANDI ✅**
-- `LaunchToken` entity (Session namespace) — 30s TTL, one-time, DeviceId/CredentialId/Protocol/TargetHost/TargetPort
-- `LaunchTokenEndpoints.cs`: `POST /api/v1/sessions/launch-token` (auth, generates token + `orkunpam://` URI), `GET /api/v1/sessions/launch-token/{id}/redeem` (no-auth, returns decrypted credential + connection info, 410 on reuse/expiry)
-- Stale token cleanup on generate (ExecuteDeleteAsync)
-- Audit: LaunchTokenGenerated / LaunchTokenRedeemed / LaunchTokenExpired / LaunchTokenFailed
-- `Devices.razor`: 🚀 "Open with Native Client" button per device row — generates token, navigates to `orkunpam://` URI via JS
-- `PamApiService.cs`: `GenerateLaunchTokenAsync` + `LaunchTokenResultDto`
-- `OrkunPAM.LaunchHelper/Program.cs`: Windows console app — parses `orkunpam://` URI, calls redeem API, launches `ssh.exe` / PuTTY / `mstsc.exe` with returned credentials, temp key file cleanup, URI scheme self-registration
-- `OrkunPAM.LaunchHelper.csproj`: net8.0-windows, single-file publish ready
-- Registry key: `HKCR\orkunpam\shell\open\command` registered by MSI / --register arg
+## Sprint 11 - v2 Auth + Compliance (Aktif)
+**Tarih:** 16-25 Mayıs 2026
+**Hedef:** Email OTP MFA, SOX/PCI-DSS uyumluluk raporları, FIPS 140-2
 
-**#115 PKI / Smart Card Authentication — TAMAMLANDI ✅**
-- `TrustedCaCertificate` entity + `PkiUserCertificate` entity (IntegrationEntities.cs)
-- `RequirePkiAuth` flag on User entity
-- DbContext DbSet registrations + model config (HasIndex, HasMaxLength)
-- PkiEndpoints.cs: trusted CA CRUD (GET/POST/DELETE/toggle), user-cert mapping CRUD
-- `POST /api/v1/auth/pki/login` — cert validation against trusted CAs, user mapping lookup, JWT issuance
-- X509 chain validation with extra CA store, issuer DN matching
-- Rate limiting (auth limiter) on `/pki/login`
-- Audit log: TrustedCaAdded/Removed/Toggled, UserCertMapped/Unmapped, PKILoginSuccess/Failed
-- PKI tab in Integrations.razor: Trusted CAs sub-tab (PEM upload, OCSP/CRL), User Certs sub-tab (user mapping)
-- PamApiService: GetTrustedCasAsync, AddTrustedCaAsync, ToggleTrustedCaAsync, DeleteTrustedCaAsync, GetPkiUserCertsAsync, MapUserCertAsync, DeletePkiUserCertAsync
-- RFP Platform #10 → PC
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #178 | Email OTP — E-Posta Tabanlı MFA | v2-MFA | ✅ Tamamlandı |
+| #179 | SOX / PCI-DSS / ISO 27001 Uyumluluk Rapor Şablonları | v2-COMPLIANCE | 🔲 Açık |
+| #180 | FIPS 140-2 Kriptografik Uyumluluk | v2-SECURITY | 🔲 Açık |
+
+**İlerleme:** 1/3 (%33)
+
+**#178 Email OTP MFA — TAMAMLANDI ✅**
+- `MfaType.EmailOtp = 4` enum değeri eklendi
+- `EmailOtpToken` entity: UserId, HashedCode (SHA-256), ExpiresAtUtc (10 dk), IsUsed, FailedAttempts, RequestedFromIp
+- `DbContext`: EmailOtpTokens DbSet + model config (UserId/ExpiresAtUtc index)
+- `POST /api/v1/auth/email-otp/request`: Credentials doğrular, CSPRNG 6-digit OTP üretir, SHA-256 hash ile saklar, SMTP ile gönderir. Rate limit: 3 req/15 dk/kullanıcı. Kullanıcı enumeration önleme (her zaman 200 döner)
+- `POST /api/v1/auth/email-otp/verify`: OTP hash karşılaştırması (FixedTimeEquals), single-use, 5 başarısız deneme → token invalidation + hesap kilidi. Başarıda tam JWT döner
+- `AuthResult` + `AuthenticationService`: MfaType alanı eklendi; login yanıtında `mfaType` (örn: "EmailOtp", "Totp") döner
+- `Login.razor`: Email OTP MFA adımı — "Send Code to My Email" butonu, 6-digit input, Verify, Resend Code
+- `PamApiService`: RequestEmailOtpAsync + VerifyEmailOtpAsync metotları; LoginData'ya MfaType eklendi
+- `Policies.razor + PolicyEndpoints`: MFA politikasına "Allow Email OTP as MFA method" checkbox (EmailOtpEnabled)
+- Audit log: EMAIL_OTP_REQUESTED / EMAIL_OTP_VERIFY_SUCCESS / EMAIL_OTP_VERIFY_FAILED
+- RFP MFA Manager #5 → PC
 
 ---
 
