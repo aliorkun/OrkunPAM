@@ -468,10 +468,6 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // --- Report Schedules (#159) ---
-
-    // --- Executive Dashboard (#168) ---
-
     // --- FIDO2/WebAuthn Security Keys (#158) ---
 
     public async Task<List<SecurityKeyDto>?> GetFido2CredentialsAsync()
@@ -803,6 +799,32 @@ public sealed class PamApiService
             if (!resp.IsSuccessStatusCode) return null;
             var r = await resp.Content.ReadFromJsonAsync<SingleResult<LaunchTokenResultDto>>(JsonOpts);
             return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    // === Email OTP MFA (#178) ===
+    public async Task<bool> RequestEmailOtpAsync(string username, string password)
+    {
+        var client = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/email-otp/request",
+                new { username, password });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<LoginResult?> VerifyEmailOtpAsync(string username, string code)
+    {
+        var client = _factory.CreateClient("PamApi");
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/email-otp/verify",
+                new { username, code });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
         }
         catch { return null; }
     }
@@ -1480,7 +1502,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    // Session Recording Playback
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1578,7 +1600,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    // TACACS+ Command Policies (deferred -- v2+ stubs)
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1651,6 +1673,7 @@ public record LoginData(
     string   Username,
     string   DisplayName,
     bool     MfaRequired,
+    string?  MfaType,
     bool     MfaEnrollmentRequired,
     bool     MustChangePassword,
     bool     PasswordExpired);
@@ -1957,7 +1980,7 @@ public record TacacsCommandPolicyDto(
     string Id, string Username, string DevicePattern, string Mode, string? Commands, bool IsEnabled, DateTime CreatedAtUtc);
 
 // MFA Policy DTO
-public record MfaPolicySettingsDto(bool MfaRequired);
+public record MfaPolicySettingsDto(bool MfaRequired, bool EmailOtpEnabled = false);
 
 public record AccountPolicyDto(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore);
 
