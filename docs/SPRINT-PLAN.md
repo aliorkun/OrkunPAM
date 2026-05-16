@@ -211,12 +211,33 @@
 | #172 | Failed Login & Brute Force Security Report | v2-REPORTING | ✅ Tamamlandı |
 | #173 | Account Lifecycle & Privilege Change Report | v2-REPORTING | ✅ Tamamlandı |
 | #174 | MFA Enrollment & Usage Report | v2-REPORTING | ✅ Tamamlandı |
-| #169 | Custom Report Builder | v2-REPORTING | 🔲 Açık |
+| #169 | Custom Report Builder | v2-REPORTING | ✅ Kapatıldı |
 | #170 | Native Desktop Client SSO Launch | v2-SESSION | 🔲 Açık |
-| #115 | PKI / Smart Card Authentication | v2-COMPLIANCE | 🔲 Açık |
-| #114 | ITSM Integration (ServiceNow/OneDesk) | v2-COMPLIANCE | 🔲 Açık |
+| #115 | PKI / Smart Card Authentication | v2-COMPLIANCE | ✅ Tamamlandı |
+| #114 | ITSM Integration (ServiceNow/OneDesk) | v2-COMPLIANCE | ✅ Tamamlandı |
 
-**İlerleme:** 6/10 (%60)
+**İlerleme:** 9/10 (%90)
+
+**#114 ITSM Integration — TAMAMLANDI ✅**
+- ItsmConfig entity (mevcut) + CRUD endpoints (GET/POST/DELETE/toggle) tamamlandı
+- Inbound webhook: `POST /api/v1/integrations/itsm/inbound-approve` — ServiceNow/OneDesk'ten HMAC-SHA256 doğrulamalı otomatik onay/ret
+- ITSM tab in Integrations.razor: provider seçimi, config CRUD, test, enable/disable
+- Inbound webhook URL ve örnek body gösterimi UI'da
+- Webhook integration ile ApprovalRequest otomatik Approved/Denied olarak güncelleniyor
+- RFP Integration #9 → PC
+
+**#115 PKI / Smart Card Authentication — TAMAMLANDI ✅**
+- `TrustedCaCertificate` entity + `PkiUserCertificate` entity (IntegrationEntities.cs)
+- `RequirePkiAuth` flag on User entity
+- DbContext DbSet registrations + model config (HasIndex, HasMaxLength)
+- PkiEndpoints.cs: trusted CA CRUD (GET/POST/DELETE/toggle), user-cert mapping CRUD
+- `POST /api/v1/auth/pki/login` — cert validation against trusted CAs, user mapping lookup, JWT issuance
+- X509 chain validation with extra CA store, issuer DN matching
+- Rate limiting (auth limiter) on `/pki/login`
+- Audit log: TrustedCaAdded/Removed/Toggled, UserCertMapped/Unmapped, PKILoginSuccess/Failed
+- PKI tab in Integrations.razor: Trusted CAs sub-tab (PEM upload, OCSP/CRL), User Certs sub-tab (user mapping)
+- PamApiService: GetTrustedCasAsync, AddTrustedCaAsync, ToggleTrustedCaAsync, DeleteTrustedCaAsync, GetPkiUserCertsAsync, MapUserCertAsync, DeletePkiUserCertAsync
+- RFP Platform #10 → PC
 
 ---
 

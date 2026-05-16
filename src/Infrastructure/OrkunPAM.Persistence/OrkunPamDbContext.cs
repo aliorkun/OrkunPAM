@@ -121,6 +121,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Custom Report Builder (#169)
     public DbSet<CustomReportDefinition> CustomReportDefinitions => Set<CustomReportDefinition>();
 
+    // PKI / Smart Card Authentication (#115)
+    public DbSet<TrustedCaCertificate> TrustedCaCertificates => Set<TrustedCaCertificate>();
+    public DbSet<PkiUserCertificate> PkiUserCertificates => Set<PkiUserCertificate>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -389,6 +393,25 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(f => f.UserId);
             e.Property(f => f.FriendlyName).HasMaxLength(256);
             e.Property(f => f.CredentialIdB64).HasMaxLength(512);
+        });
+
+        // === PKI / Smart Card Authentication (#115) ===
+        modelBuilder.Entity<TrustedCaCertificate>(e =>
+        {
+            e.HasIndex(c => c.Thumbprint).IsUnique();
+            e.Property(c => c.Name).HasMaxLength(256);
+            e.Property(c => c.Thumbprint).HasMaxLength(128);
+            e.Property(c => c.Subject).HasMaxLength(1024);
+            e.Property(c => c.Issuer).HasMaxLength(1024);
+        });
+
+        modelBuilder.Entity<PkiUserCertificate>(e =>
+        {
+            e.HasIndex(p => p.CertThumbprint).IsUnique();
+            e.HasIndex(p => p.UserId);
+            e.Property(p => p.CertThumbprint).HasMaxLength(128);
+            e.Property(p => p.SubjectDn).HasMaxLength(1024);
+            e.Property(p => p.IssuingCaThumbprint).HasMaxLength(128);
         });
 
         // Seed built-in data
