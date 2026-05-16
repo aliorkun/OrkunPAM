@@ -17,6 +17,8 @@
             @onclick="@(() => SetTab("reports"))">&#x1F4CA; Reports</button>
     <button class="pam-btn @(_tab == "schedule" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("schedule"))">&#x1F551; Schedule</button>
+    <button class="pam-btn @(_tab == "custom" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("custom"))">&#x1F527; Custom</button>
 </div>
 
 @if (_tab == "audit")
@@ -131,7 +133,7 @@
         </div>
     </div>
 }
-else
+else if (_tab == "reports")
 {
     <div class="pam-filters">
         <span style="font-size:0.9em;color:#555;line-height:32px">Range:</span>
@@ -239,6 +241,268 @@ else
             </div>
         }
     }
+}
+
+@if (_tab == "custom")
+{
+    <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="width:260px;flex-shrink:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <strong style="font-size:0.9em">Saved Reports</strong>
+                <button class="pam-btn pam-btn-primary pam-btn-sm"
+                        @onclick="@(() => StartNewReport())">+ New</button>
+            </div>
+            @if (_crLoading)
+            { <div class="pam-loading-text">Loading…</div> }
+            else if (_crSavedReports == null || _crSavedReports.Count == 0)
+            { <div style="font-size:0.85em;color:#888;padding:4px">No saved reports yet.</div> }
+            else
+            {
+                @foreach (var cr in _crSavedReports)
+                {
+                    <div class="pam-card" style="margin-bottom:6px;cursor:pointer"
+                         @onclick="@(() => SelectSavedReport(cr))">
+                        <div class="pam-card-body" style="padding:8px">
+                            <div style="font-weight:600;font-size:0.88em">@cr.Name</div>
+                            <div style="font-size:0.75em;color:#888">
+                                @cr.DataSource
+                                @if (cr.LastRunAtUtc.HasValue)
+                                { <span>· @cr.LastRunAtUtc.Value.ToLocalTime().ToString("MM/dd")</span> }
+                                else { <span>· never run</span> }
+                            </div>
+                            <div style="display:flex;gap:4px;margin-top:4px">
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="@(() => RunSavedReportAsync(cr.Id))"
+                                        disabled="@_crRunning">▶</button>
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                        style="color:#dc3545"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="@(() => DeleteSavedReportAsync(cr.Id))">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div style="flex:1;min-width:0">
+            <div class="pam-card" style="margin-bottom:12px">
+                <div class="pam-card-body">
+                    <h4 style="margin-bottom:12px">Custom Report Builder</h4>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                        <div>
+                            <label class="pam-label">Report Name</label>
+                            <input class="pam-input" placeholder="e.g. VaultAdmin RDP Last 90 Days" @bind="_crName" />
+                        </div>
+                        <div>
+                            <label class="pam-label">Data Source</label>
+                            <select class="pam-input pam-select"
+                                    value="@_crDataSource"
+                                    @onchange="@(e => OnDataSourceChanged(e.Value?.ToString() ?? "AuditLogs"))">
+                                <option value="AuditLogs">Audit Logs</option>
+                                <option value="Sessions">Sessions</option>
+                                <option value="Credentials">Credentials</option>
+                                <option value="Users">Users</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    @if (_crDataSource == "AuditLogs" || _crDataSource == "Sessions")
+                    {
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                            <div>
+                                <label class="pam-label">Date From</label>
+                                <input type="date" class="pam-input" @bind="_crDateFrom" @bind:format="yyyy-MM-dd" />
+                            </div>
+                            <div>
+                                <label class="pam-label">Date To</label>
+                                <input type="date" class="pam-input" @bind="_crDateTo" @bind:format="yyyy-MM-dd" />
+                            </div>
+                        </div>
+                    }
+
+                    @if (_crDataSource == "AuditLogs")
+                    {
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+                            <div>
+                                <label class="pam-label">Actor Username</label>
+                                <input class="pam-input" placeholder="contains…" @bind="_crFilterUsername" />
+                            </div>
+                            <div>
+                                <label class="pam-label">Category</label>
+                                <select class="pam-input pam-select" @bind="_crFilterCategory">
+                                    <option value="">All</option>
+                                    <option value="Auth">Auth</option>
+                                    <option value="User">User</option>
+                                    <option value="Vault">Vault</option>
+                                    <option value="Session">Session</option>
+                                    <option value="Device">Device</option>
+                                    <option value="Report">Report</option>
+                                    <option value="System">System</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="pam-label">Outcome</label>
+                                <select class="pam-input pam-select" @bind="_crFilterOutcome">
+                                    <option value="">All</option>
+                                    <option value="Success">Success</option>
+                                    <option value="Failure">Failure</option>
+                                    <option value="Denied">Denied</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:10px">
+                            <label class="pam-label">Event Type Contains</label>
+                            <input class="pam-input" placeholder="e.g. Login" @bind="_crFilterEventType" style="max-width:280px" />
+                        </div>
+                    }
+                    else if (_crDataSource == "Sessions")
+                    {
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+                            <div>
+                                <label class="pam-label">Protocol</label>
+                                <select class="pam-input pam-select" @bind="_crFilterProtocol">
+                                    <option value="">All</option>
+                                    <option value="Ssh">SSH</option>
+                                    <option value="Rdp">RDP</option>
+                                    <option value="Vnc">VNC</option>
+                                    <option value="Http">HTTP</option>
+                                    <option value="Sql">SQL</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="pam-label">Min Risk Score</label>
+                                <input type="number" class="pam-input" min="0" max="100" @bind="_crFilterMinRisk" placeholder="0" />
+                            </div>
+                            <div>
+                                <label class="pam-label">Max Risk Score</label>
+                                <input type="number" class="pam-input" min="0" max="100" @bind="_crFilterMaxRisk" placeholder="100" />
+                            </div>
+                        </div>
+                    }
+                    else if (_crDataSource == "Credentials")
+                    {
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                            <div>
+                                <label class="pam-label">Credential Type</label>
+                                <select class="pam-input pam-select" @bind="_crFilterCredType">
+                                    <option value="">All</option>
+                                    <option value="UserPassword">User Password</option>
+                                    <option value="SshKey">SSH Key</option>
+                                    <option value="ApiKey">API Key</option>
+                                    <option value="Certificate">Certificate</option>
+                                    <option value="ConnectionString">Connection String</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="pam-label">Status</label>
+                                <select class="pam-input pam-select" @bind="_crFilterCredStatus">
+                                    <option value="">All</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Disabled">Disabled</option>
+                                    <option value="CheckedOut">Checked Out</option>
+                                    <option value="Rotating">Rotating</option>
+                                </select>
+                            </div>
+                        </div>
+                    }
+                    else if (_crDataSource == "Users")
+                    {
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                            <div>
+                                <label class="pam-label">Status</label>
+                                <select class="pam-input pam-select" @bind="_crFilterUserStatus">
+                                    <option value="">All</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Disabled">Disabled</option>
+                                    <option value="Locked">Locked</option>
+                                    <option value="Expired">Expired</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="pam-label">MFA Enabled</label>
+                                <select class="pam-input pam-select" @bind="_crFilterMfaEnabled">
+                                    <option value="">All</option>
+                                    <option value="yes">Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+
+                            </div>
+                        </div>
+                    }
+
+                    <div style="margin-bottom:12px">
+                        <label class="pam-label">Columns</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:4px">
+                            @foreach (var col in GetAvailableCols())
+                            {
+                                <label style="display:flex;align-items:center;gap:4px;font-size:0.85em;cursor:pointer">
+                                    <input type="checkbox"
+                                           checked="@_crSelectedColumns.Contains(col)"
+                                           @onchange="@(e => ToggleColumn(col, (bool)(e.Value ?? false)))" />
+                                    @col
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    @if (_crError != null) { <div class="pam-alert pam-alert-danger" style="margin-bottom:8px">@_crError</div> }
+                    @if (_crSuccess != null) { <div class="pam-alert pam-alert-info" style="margin-bottom:8px">@_crSuccess</div> }
+
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="pam-btn pam-btn-primary"
+                                @onclick="PreviewReportAsync"
+                                disabled="@_crRunning">
+                            @(_crRunning ? "Running…" : "&#x1F50D; Preview (50 rows)")
+                        </button>
+                        <button class="pam-btn pam-btn-secondary"
+                                @onclick="SaveReportAsync"
+                                disabled="@(_crSaving || string.IsNullOrWhiteSpace(_crName))">
+                            @(_crSaving ? "Saving…" : "&#x1F4BE; Save")
+                        </button>
+                        @if (_crResultRows.Count > 0)
+                        {
+                            <button class="pam-btn pam-btn-secondary" @onclick="ExportCustomCsvAsync">
+                                &#x1F4C4; Export CSV
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @if (_crResultRows.Count > 0)
+            {
+                <div class="pam-card">
+                    <div class="pam-card-body p-0">
+                        <div style="padding:8px 12px;font-size:0.78em;color:#666;border-bottom:1px solid #f0f0f0">
+                            @_crFilterSummary — @_crResultRows.Count rows
+                        </div>
+                        <div style="overflow-x:auto">
+                            <table class="pam-table pam-table-hover" style="font-size:0.82em">
+                                <thead>
+                                    <tr>
+                                        @foreach (var col in _crResultColumns)
+                                        { <th>@FormatKey(col)</th> }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _crResultRows)
+                                    {
+                                        <tr>
+                                            @foreach (var col in _crResultColumns)
+                                            { <td>@row.GetValueOrDefault(col, "—")</td> }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
 }
 
 @if (_tab == "schedule")
@@ -416,6 +680,8 @@ else
         _tab = tab;
         if (tab == "schedule" && _schedules == null)
             await LoadSchedulesAsync();
+        if (tab == "custom" && _crSavedReports == null)
+            await LoadCustomReportsAsync();
     }
 
     private async Task ApplyPreset(string preset)
@@ -608,7 +874,7 @@ else
     {
         if (_reportColumns.Count == 0 || _reportRows.Count == 0) return;
         var sb = new StringBuilder();
-        sb.AppendLine(string.Join(",", _reportColumns.Select(c => "\"" + c + "\"")));
+        sb.AppendLine(string.Join(",", _reportColumns.Select(c => "\"" + c + "\"") ));
         foreach (var row in _reportRows)
             sb.AppendLine(string.Join(",", _reportColumns.Select(c =>
                 "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
@@ -691,5 +957,223 @@ else
             "monthly" => "Monthly day " + s.DayOfMonth + " " + s.RunAtHourUtc.ToString("D2") + ":00 UTC",
             _         => "Daily " + s.RunAtHourUtc.ToString("D2") + ":00 UTC"
         };
+    }
+
+    // ---- Custom Report Builder (#169) ----
+
+    private static readonly Dictionary<string, string[]> _srcCols = new()
+    {
+        ["AuditLogs"]   = ["Timestamp","EventCategory","EventType","ActorUsername","ActorIpAddress","TargetType","TargetId","Outcome","Details"],
+        ["Sessions"]    = ["Id","UserId","SessionType","Status","TargetIpAddress","TargetPort","StartedAtUtc","EndedAtUtc","DurationSeconds","RiskScore","Reason","TicketNumber"],
+        ["Credentials"] = ["Id","Name","Username","DeviceId","CredentialType","Status","LastRotatedAtUtc","NextRotationAtUtc","RequiresApproval","IsDiscovered"],
+        ["Users"]       = ["Id","Username","DisplayName","Email","Status","MfaEnabled","LastLoginAtUtc","CreatedAtUtc","IsTemporary"]
+    };
+
+    private static string[] DefaultColsFor(string src) => src switch
+    {
+        "Sessions"    => ["StartedAtUtc","SessionType","Status","TargetIpAddress","DurationSeconds","RiskScore"],
+        "Credentials" => ["Name","Username","CredentialType","Status","LastRotatedAtUtc"],
+        "Users"       => ["Username","DisplayName","Email","Status","MfaEnabled","LastLoginAtUtc"],
+        _             => ["Timestamp","EventCategory","EventType","ActorUsername","Outcome"]
+    };
+
+    private IEnumerable<string> GetAvailableCols() =>
+        _srcCols.TryGetValue(_crDataSource, out var c) ? c : _srcCols["AuditLogs"];
+
+    private bool   _crLoading;
+    private bool   _crRunning;
+    private bool   _crSaving;
+    private string? _crError;
+    private string? _crSuccess;
+
+    private string  _crName           = "";
+    private string  _crDataSource     = "AuditLogs";
+    private DateTime _crDateFrom      = DateTime.Today.AddDays(-30);
+    private DateTime _crDateTo        = DateTime.Today;
+    private string  _crFilterUsername = "";
+    private string  _crFilterCategory = "";
+    private string  _crFilterEventType= "";
+    private string  _crFilterOutcome  = "";
+    private string  _crFilterProtocol = "";
+    private int?    _crFilterMinRisk;
+    private int?    _crFilterMaxRisk;
+    private string  _crFilterCredType   = "";
+    private string  _crFilterCredStatus = "";
+    private string  _crFilterUserStatus = "";
+    private string  _crFilterMfaEnabled = "";
+    private HashSet<string> _crSelectedColumns = new(["Timestamp","EventCategory","EventType","ActorUsername","Outcome"]);
+
+    private List<string> _crResultColumns = [];
+    private List<Dictionary<string, string>> _crResultRows = [];
+    private string _crFilterSummary = "";
+
+    private List<CustomReportDefinitionDto>? _crSavedReports;
+
+    private void OnDataSourceChanged(string src)
+    {
+        _crDataSource = src;
+        _crSelectedColumns = new HashSet<string>(DefaultColsFor(src));
+        _crResultColumns = [];
+        _crResultRows = [];
+        _crError = null; _crSuccess = null;
+    }
+
+    private void ToggleColumn(string col, bool selected)
+    {
+        if (selected) _crSelectedColumns.Add(col);
+        else _crSelectedColumns.Remove(col);
+    }
+
+    private void StartNewReport()
+    {
+        _crName = ""; _crDataSource = "AuditLogs";
+        _crDateFrom = DateTime.Today.AddDays(-30); _crDateTo = DateTime.Today;
+        _crFilterUsername = ""; _crFilterCategory = ""; _crFilterEventType = "";
+        _crFilterOutcome = ""; _crFilterProtocol = ""; _crFilterMinRisk = null;
+        _crFilterMaxRisk = null; _crFilterCredType = ""; _crFilterCredStatus = "";
+        _crFilterUserStatus = ""; _crFilterMfaEnabled = "";
+        _crSelectedColumns = new HashSet<string>(DefaultColsFor("AuditLogs"));
+        _crResultColumns = []; _crResultRows = [];
+        _crError = null; _crSuccess = null;
+    }
+
+    private void SelectSavedReport(CustomReportDefinitionDto cr)
+    {
+        _crName = cr.Name;
+        _crDataSource = cr.DataSource;
+        LoadFiltersFromJson(cr.FiltersJson);
+        LoadColumnsFromJson(cr.ColumnsJson);
+        _crResultColumns = []; _crResultRows = [];
+        _crError = null; _crSuccess = null;
+    }
+
+    private void LoadFiltersFromJson(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+            if (r.TryGetProperty("dateFrom", out var df) && df.ValueKind == JsonValueKind.String && DateTime.TryParse(df.GetString(), out var dfp)) _crDateFrom = dfp;
+            if (r.TryGetProperty("dateTo", out var dt) && dt.ValueKind == JsonValueKind.String && DateTime.TryParse(dt.GetString(), out var dtp)) _crDateTo = dtp;
+            _crFilterUsername    = r.TryGetProperty("username",        out var u)   ? u.GetString()  ?? "" : "";
+            _crFilterCategory    = r.TryGetProperty("eventCategory",   out var ec)  ? ec.GetString() ?? "" : "";
+            _crFilterEventType   = r.TryGetProperty("eventType",       out var et)  ? et.GetString() ?? "" : "";
+            _crFilterOutcome     = r.TryGetProperty("outcome",         out var oc)  ? oc.GetString() ?? "" : "";
+            _crFilterProtocol    = r.TryGetProperty("protocol",        out var pt)  ? pt.GetString() ?? "" : "";
+            _crFilterCredType    = r.TryGetProperty("credentialType",  out var crt) ? crt.GetString() ?? "" : "";
+            _crFilterCredStatus  = r.TryGetProperty("credentialStatus",out var cs)  ? cs.GetString() ?? "" : "";
+            _crFilterUserStatus  = r.TryGetProperty("userStatus",      out var us)  ? us.GetString() ?? "" : "";
+            _crFilterMinRisk     = r.TryGetProperty("minRiskScore", out var mr) && mr.ValueKind == JsonValueKind.Number ? mr.GetInt32() : null;
+            _crFilterMaxRisk     = r.TryGetProperty("maxRiskScore", out var xr) && xr.ValueKind == JsonValueKind.Number ? xr.GetInt32() : null;
+            if (r.TryGetProperty("mfaEnabled", out var mfa) && mfa.ValueKind == JsonValueKind.True)
+                _crFilterMfaEnabled = "yes";
+            else if (r.TryGetProperty("mfaEnabled", out var mfa2) && mfa2.ValueKind == JsonValueKind.False)
+                _crFilterMfaEnabled = "no";
+            else _crFilterMfaEnabled = "";
+        }
+        catch { }
+    }
+
+    private void LoadColumnsFromJson(string json)
+    {
+        try
+        {
+            var cols = JsonSerializer.Deserialize<List<string>>(json);
+            _crSelectedColumns = cols != null && cols.Count > 0
+                ? new HashSet<string>(cols)
+                : new HashSet<string>(DefaultColsFor(_crDataSource));
+        }
+        catch { }
+    }
+
+    private string BuildFiltersJson()
+    {
+        var d = new Dictionary<string, object>();
+        d["dateFrom"] = _crDateFrom;
+        d["dateTo"]   = _crDateTo;
+        if (!string.IsNullOrWhiteSpace(_crFilterUsername))    d["username"]        = _crFilterUsername;
+        if (!string.IsNullOrWhiteSpace(_crFilterCategory))    d["eventCategory"]   = _crFilterCategory;
+        if (!string.IsNullOrWhiteSpace(_crFilterEventType))   d["eventType"]       = _crFilterEventType;
+        if (!string.IsNullOrWhiteSpace(_crFilterOutcome))     d["outcome"]         = _crFilterOutcome;
+        if (!string.IsNullOrWhiteSpace(_crFilterProtocol))    d["protocol"]        = _crFilterProtocol;
+        if (_crFilterMinRisk.HasValue)                        d["minRiskScore"]    = _crFilterMinRisk.Value;
+        if (_crFilterMaxRisk.HasValue)                        d["maxRiskScore"]    = _crFilterMaxRisk.Value;
+        if (!string.IsNullOrWhiteSpace(_crFilterCredType))    d["credentialType"]  = _crFilterCredType;
+        if (!string.IsNullOrWhiteSpace(_crFilterCredStatus))  d["credentialStatus"]= _crFilterCredStatus;
+        if (!string.IsNullOrWhiteSpace(_crFilterUserStatus))  d["userStatus"]      = _crFilterUserStatus;
+        if (!string.IsNullOrWhiteSpace(_crFilterMfaEnabled))  d["mfaEnabled"]      = _crFilterMfaEnabled == "yes";
+        return JsonSerializer.Serialize(d);
+    }
+
+    private string BuildColumnsJson() => JsonSerializer.Serialize(_crSelectedColumns.ToList());
+
+    private async Task LoadCustomReportsAsync()
+    {
+        _crLoading = true; StateHasChanged();
+        _crSavedReports = await Api.GetCustomReportsAsync();
+        _crLoading = false; StateHasChanged();
+    }
+
+    private async Task PreviewReportAsync()
+    {
+        if (_crSelectedColumns.Count == 0) { _crError = "Select at least one column."; return; }
+        _crRunning = true; _crError = null; _crSuccess = null; StateHasChanged();
+        var result = await Api.PreviewCustomReportAsync(_crDataSource, BuildFiltersJson(), BuildColumnsJson(), 50);
+        _crRunning = false;
+        if (result == null)
+            _crError = "Preview failed. Check server logs.";
+        else
+        {
+            _crResultColumns = result.Columns;
+            _crResultRows    = result.Rows;
+            _crFilterSummary = result.FilterSummary;
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveReportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_crName)) { _crError = "Report name is required."; return; }
+        _crSaving = true; _crError = null; _crSuccess = null; StateHasChanged();
+        var ok = await Api.SaveCustomReportAsync(_crName, null, _crDataSource, BuildFiltersJson(), BuildColumnsJson());
+        _crSaving = false;
+        if (ok) { _crSuccess = "Report saved."; await LoadCustomReportsAsync(); }
+        else _crError = "Failed to save report.";
+        StateHasChanged();
+    }
+
+    private async Task RunSavedReportAsync(string id)
+    {
+        _crRunning = true; _crError = null; StateHasChanged();
+        var result = await Api.RunSavedCustomReportAsync(id);
+        _crRunning = false;
+        if (result == null) _crError = "Failed to run report.";
+        else
+        {
+            _crResultColumns = result.Columns;
+            _crResultRows    = result.Rows;
+            _crFilterSummary = result.FilterSummary;
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeleteSavedReportAsync(string id)
+    {
+        var ok = await Api.DeleteCustomReportAsync(id);
+        if (ok) await LoadCustomReportsAsync();
+        StateHasChanged();
+    }
+
+    private async Task ExportCustomCsvAsync()
+    {
+        if (_crResultColumns.Count == 0 || _crResultRows.Count == 0) return;
+        var sb = new StringBuilder();
+        sb.AppendLine("# " + _crFilterSummary);
+        sb.AppendLine(string.Join(",", _crResultColumns.Select(c => "\"" + c + "\"") ));
+        foreach (var row in _crResultRows)
+            sb.AppendLine(string.Join(",", _crResultColumns.Select(c =>
+                "\"" + (row.GetValueOrDefault(c, "") ?? "").Replace("\"", "\"\"") + "\"")));
+        var filename = (_crName.Length > 0 ? _crName : "custom-report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
+        await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
     }
 }
