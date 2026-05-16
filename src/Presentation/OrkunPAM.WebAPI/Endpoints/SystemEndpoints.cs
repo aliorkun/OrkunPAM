@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
@@ -276,6 +277,91 @@ public static class SystemEndpoints
             return Results.Ok(new { success = true, message = "Account policy saved" });
         });
 
+        // === System Health Monitoring (#138) ===
+        var healthGroup = app.MapGroup("/api/v1/system/health").WithTags("System");
+
+        healthGroup.MapGet("/", async (OrkunPamDbContext db, CancellationToken ct) =>
+        {
+            var snapshot = await SystemHealthMonitorService.CollectSnapshotAsync(db, ct);
+            return Results.Ok(new { success = true, data = snapshot });
+        });
+
+        healthGroup.MapGet("/alarms", async (OrkunPamDbContext db, string? status,
+            string? severity, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
+        {
+            var query = db.SystemAlarmLogs.AsQueryable();
+            if (!string.IsNullOrEmpty(status))   query = query.Where(a => a.Status == status);
+            if (!string.IsNullOrEmpty(severity))  query = query.Where(a => a.Severity == severity);
+
+            var total = await query.CountAsync(ct);
+            var alarms = await query
+                .OrderByDescending(a => a.OccurredAtUtc)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(a => new
+                {
+                    a.Id, a.OccurredAtUtc, a.MetricName, a.Severity,
+                    a.MetricValue, a.Threshold, a.Message, a.Status, a.EmailSent
+                }).ToListAsync(ct);
+
+            return Results.Ok(new { success = true, data = alarms,
+                meta = new { page, pageSize, totalCount = total } });
+        });
+
+        healthGroup.MapGet("/config", async (OrkunPamDbContext db, CancellationToken ct) =>
+        {
+            var keys = new[] { "health.cpu.warn_pct", "health.mem.warn_mb",
+                "health.disk.free_warn_pct", "health.alarm.recipients" };
+            var configs = await db.SystemConfigs
+                .Where(c => keys.Contains(c.Key))
+                .ToDictionaryAsync(c => c.Key, c => c.Value ?? string.Empty, ct);
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    cpuWarningPct  = configs.GetValueOrDefault("health.cpu.warn_pct") ?? "80",
+                    memoryWarningMb= configs.GetValueOrDefault("health.mem.warn_mb") ?? "2048",
+                    diskFreeWarningPct = configs.GetValueOrDefault("health.disk.free_warn_pct") ?? "10",
+                    alarmRecipients    = configs.GetValueOrDefault("health.alarm.recipients") ?? string.Empty
+                }
+            });
+        });
+
+        healthGroup.MapPut("/config", async (HealthAlarmConfigRequest req, OrkunPamDbContext db,
+            CancellationToken ct) =>
+        {
+            var entries = new[]
+            {
+                ("health.cpu.warn_pct",        req.CpuWarningPct.ToString()),
+                ("health.mem.warn_mb",         req.MemoryWarningMb.ToString()),
+                ("health.disk.free_warn_pct",  req.DiskFreeWarningPct.ToString()),
+                ("health.alarm.recipients",    req.AlarmRecipients ?? string.Empty)
+            };
+
+            foreach (var (key, value) in entries)
+            {
+                var cfg = await db.SystemConfigs.FindAsync([key], ct);
+                if (cfg == null)
+                    db.SystemConfigs.Add(new SystemConfig { Key = key, Value = value, Category = "health" });
+                else
+                { cfg.Value = value; cfg.UpdatedAtUtc = DateTime.UtcNow; }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { success = true, message = "Health alarm configuration saved" });
+        });
+
+        healthGroup.MapPost("/alarms/{id}/clear", async (long id, OrkunPamDbContext db, CancellationToken ct) =>
+        {
+            var alarm = await db.SystemAlarmLogs.FindAsync([id], ct);
+            if (alarm == null) return Results.NotFound();
+            alarm.Status = "Cleared";
+            alarm.ClearedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { success = true });
+        });
+
         // === Windows / Kerberos Auth Settings (#126) ===
         var winAuthGroup = app.MapGroup("/api/v1/system/windows-auth").WithTags("System");
 
@@ -329,3 +415,5 @@ public record SmtpConfigRequest(string? Host, int? Port, string? From, string? F
 public record TestEmailRequest(string To);
 public record AccountPolicyRequest(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore = 7);
 public record WindowsAuthSettingsRequest(bool Enabled, bool AutoProvision, bool MfaBypass, string? TrustedDomains);
+public record HealthAlarmConfigRequest(double CpuWarningPct, double MemoryWarningMb,
+    double DiskFreeWarningPct, string? AlarmRecipients);

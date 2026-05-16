@@ -106,6 +106,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Backup (#55)
     public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
 
+    // System Health Monitoring (#138)
+    public DbSet<SystemAlarmLog> SystemAlarmLogs => Set<SystemAlarmLog>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -269,6 +272,17 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(sc => sc.Key);
             e.Property(sc => sc.Key).HasMaxLength(256);
+        });
+
+        modelBuilder.Entity<SystemAlarmLog>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).ValueGeneratedOnAdd();
+            e.HasIndex(s => s.OccurredAtUtc);
+            e.HasIndex(s => new { s.MetricName, s.Status });
+            e.Property(s => s.MetricName).HasMaxLength(64);
+            e.Property(s => s.Severity).HasMaxLength(32);
+            e.Property(s => s.Status).HasMaxLength(32);
         });
 
         // === Analytics ===
