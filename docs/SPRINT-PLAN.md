@@ -106,32 +106,46 @@
 
 ---
 
-## Sprint 7 - v2.0.0 Network Device Access (TACACS+/RADIUS)
-**Tarih:** 14 Mayıs 2026 - ...
+## ~~Sprint 7 - v2.0.0 Network Device Access (TACACS+/RADIUS)~~ ✅ TAMAMLANDI
+**Tarih:** 14 Mayıs 2026
+**Durum:** Tamamlandı — TACACS+/RADIUS native C# + RDP Full Integration
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #111 | TACACS+/RADIUS Built-in Server | v2-PROXY | ✅ Kapatıldı |
+| #110 | RDP Full Integration (RDS Gateway) | v2-PROXY | ✅ Kapatıldı |
+| #112 | Multi-Tenancy (MSP) | v2-ARCH | 🔲 v3+ ertelendi (CLAUDE.md) |
+
+**İlerleme:** 2/2 aktif item = %100 ✅
+
+---
+
+## Sprint 8 - v2.0.0 RFP Gap Features (O&M + Reporting + Compliance)
+**Tarih:** 16 Mayıs 2026 - ...
 **Durum:** Aktif 🔄
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #111 | TACACS+/RADIUS Built-in Server | v2-PROXY | 🔄 In Progress (%95) |
-| #110 | RDP Full Integration (RDS Gateway) | v2-PROXY | 🔲 Bekliyor |
-| #112 | Multi-Tenancy (MSP) | v2-ARCH | 🔲 Bekliyor |
+| #138 | System Health Monitoring & O&M Dashboard | v2-INFRA | 🔄 In Progress |
+| #142 | Connection Scheduling (Future Date Reservation) | v2-SESSION | 🔲 Bekliyor |
+| #153 | Privileged Account Discovery & Orphaned Account | v2-VAULT | 🔲 Bekliyor |
+| #143 | Multi-Language UI (TR/EN) | v2-PLATFORM | 🔲 Bekliyor |
+| #154 | Access Certification Campaigns | v2-COMPLIANCE | 🔲 Bekliyor |
 
-**#111 TACACS+/RADIUS İlerleme:**
-- [x] Native C# TACACS+ server (RFC 1492) — `OrkunPAM.TacacsProxy` projesi
-- [x] TCP :49 listener, per-IP rate limiting
-- [x] Authentication: ASCII multi-step (GETUSER/GETPASS) + PAP
-- [x] Authorization: command-level (AV-pair), PermitAll/DenyAll/Policy mode
-- [x] Accounting: START/STOP/WATCHDOG → PAM audit log + SIEM
-- [x] Body encryption: MD5 pseudo-pad (RFC 1492 §5.2)
-- [x] Per-device shared secret + fallback default
-- [x] PAM API integration: `/api/v1/tacacs/authenticate|authorize|accounting`
-- [x] RADIUS server (RFC 2865/2866) — UDP :1812/:1813 (`RadiusProxyService`)
-- [x] CIDR prefix matching for shared secrets (`CidrMatcher.cs`)
-- [x] MFA TOTP integration in TACACS+ ASCII auth flow
-- [x] Blazor UI: Network Access page — device list + command policies + protocol info
-- [ ] Cisco IOS test / Juniper JUNOS validation (manual)
+**#138 System Health İlerleme:**
+- [x] `SystemAlarmLog` domain entity
+- [x] `OrkunPamDbContext` DbSet + model config
+- [x] `SystemHealthMonitorService` (BackgroundService, 60s interval)
+  - CPU%, Memory MB, Disk% metrics
+  - TCP port check: SSH :2222, RDP :3389, TACACS+ :49, HTTP :8080, SQL :1433, VNC :5900
+  - Threshold-based alarm with email notification (5-min cooldown)
+- [x] API endpoints: GET /health, GET /health/alarms, GET/PUT /health/config, POST /alarms/{id}/clear
+- [x] `SystemHealth.razor` — CPU/memory/disk progress bars, service status, alarm config, alarm history
+- [x] NavMenu "System Health" link
+- [x] `PamApiService.cs` methods + DTOs
+- [ ] RFP O&M #1-5 validation (build + smoke test)
 
-**İlerleme:** 1/3 issue (TACACS+/RADIUS core %95 — Cisco/Juniper validation kaldı)
+**İlerleme:** 1/5 issue (%20)
 
 ---
 
