@@ -1104,6 +1104,17 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<List<OrphanedUserDto>?> GetOrphanedUsersAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var r = await client.GetFromJsonAsync<PagedResult<OrphanedUserDto>>("/api/v1/users/orphaned", JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
     public async Task<ImportResultDto?> BulkImportUsersAsync(
         Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
     {
@@ -1145,7 +1156,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────
+    // ── Session Recording Playback ───────────────────────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1243,7 +1254,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ─────────────────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ────────────────────────────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1285,7 +1296,19 @@ public record UserDto(
     bool      IsTemporary,
     DateTime? TemporaryExpiresUtc,
     DateTime? LastLoginAtUtc,
-    DateTime  CreatedAtUtc);
+    DateTime  CreatedAtUtc,
+    bool      IsOrphaned = false,
+    DateTime? OrphanedDetectedAtUtc = null);
+
+public record OrphanedUserDto(
+    string    Id,
+    string    Username,
+    string?   DisplayName,
+    string?   Email,
+    string    AuthSource,
+    string    Status,
+    DateTime? LastLoginAtUtc,
+    DateTime? OrphanedDetectedAtUtc);
 
 public record DeviceDto(
     string  Id,
