@@ -66,19 +66,23 @@
                                 <span class="pam-status @(u.Status == "Active" ? "pam-status-active" : "pam-status-error")">
                                     @u.Status
                                 </span>
+                                @if (u.IsOrphaned)
+                                {
+                                    <span class="pam-badge pam-badge-red" title="@("Not found in AD — orphaned since " + (u.OrphanedDetectedAtUtc?.ToString("yyyy-MM-dd") ?? "unknown"))">Orphaned</span>
+                                }
                             </td>
                             <td>
                                 @if (u.MfaEnabled)
                                 {
                                     <span class="pam-status pam-status-active">✅ On</span>
                                     <button class="pam-btn-icon" title="Reset MFA"
-                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">🔄</button>
+                                            @onclick="@(() => ResetMfaAsync(u.Id, u.Username))">&#x1F504;</button>
                                 }
                                 else
                                 {
                                     <span class="pam-status pam-status-done">Off</span>
                                     <button class="pam-btn-icon" title="Send MFA Setup Link"
-                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">🔑</button>
+                                            @onclick="@(() => SendMfaSetupAsync(u.Id))">&#x1F511;</button>
                                 }
                             </td>
                             <td>@(u.LastLoginAtUtc?.ToLocalTime().ToString("MM/dd/yy HH:mm") ?? "Never")</td>

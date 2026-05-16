@@ -34,7 +34,8 @@ public static class UserEndpoints
                     AuthSource = u.AuthSource.ToString(),
                     Status = u.Status.ToString(),
                     u.MfaEnabled, u.IsTemporary, u.TemporaryExpiresUtc,
-                    u.LastLoginAtUtc, u.CreatedAtUtc
+                    u.LastLoginAtUtc, u.CreatedAtUtc,
+                    u.IsOrphaned, u.OrphanedDetectedAtUtc
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = users, meta = new { page, pageSize, totalCount = total } });
@@ -155,7 +156,7 @@ public static class UserEndpoints
             if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
 
             user.Status = UserStatus.Locked;
-            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100); // Manual lock = indefinite
+            user.LockoutEndUtc = DateTime.UtcNow.AddYears(100);
             await db.SaveChangesAsync();
 
             await audit.LogAsync("User", "User.Locked", ParseActorId(context),
@@ -215,7 +216,6 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, message = "Password reset successfully" });
         });
 
-        // Admin MFA management
         group.MapPost("/{id:guid}/mfa/reset", async (Guid id, OrkunPamDbContext db,
             IAuditService audit, HttpContext context) =>
         {
@@ -267,7 +267,6 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, data = new { roles, permissions } });
         });
 
-        // Role assignment
         group.MapPost("/{id:guid}/roles/{roleId:guid}", async (Guid id, Guid roleId, OrkunPamDbContext db,
             IAuditService audit, HttpContext context) =>
         {
@@ -279,7 +278,6 @@ public static class UserEndpoints
             if (await db.UserRoles.AnyAsync(ur => ur.UserId == id && ur.RoleId == roleId))
                 return Results.Conflict(new { success = false, errors = new[] { "Role already assigned" } });
 
-            // SoD guard: PasswordViewer cannot be self-assigned (RFP Vault #26)
             if (targetRole.Name == "PasswordViewer")
             {
                 var actorIdStr = context.User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
@@ -318,10 +316,6 @@ public static class UserEndpoints
             return Results.Ok(new { success = true, message = "Role removed" });
         });
 
-        // -----------------------------------------------------------------------
-        // Bulk User Import (CSV)
-        // -----------------------------------------------------------------------
-
         group.MapGet("/import/template", () =>
         {
             const string csv = "username,displayName,email,department,role,groupName\n" +
@@ -352,7 +346,6 @@ public static class UserEndpoints
             if (lines.Count < 2)
                 return Results.BadRequest(new { success = false, errors = new[] { "CSV must have a header row and at least one data row" } });
 
-            // Pre-fetch roles and groups once to avoid N+1 queries
             var allRoles  = await db.Roles.ToListAsync();
             var allGroups = await db.Groups.ToListAsync();
 
@@ -383,7 +376,6 @@ public static class UserEndpoints
                     continue;
                 }
 
-                // Generate a temporary random password — user must change on first login
                 var tempPassword = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
 
                 var result = await auth.CreateLocalUserAsync(username, tempPassword, displayName, email);
@@ -396,7 +388,6 @@ public static class UserEndpoints
                 var user = result.Value;
                 user.MustChangePassword = true;
 
-                // Assign role if specified
                 if (roleName != null)
                 {
                     var role = allRoles.FirstOrDefault(r => r.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase));
@@ -404,7 +395,6 @@ public static class UserEndpoints
                         db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
                 }
 
-                // Assign group if specified
                 if (groupName != null)
                 {
                     var group = allGroups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
@@ -427,6 +417,21 @@ public static class UserEndpoints
                 data = new { imported = successCount, failed = errors.Count, errors }
             });
         }).DisableAntiforgery();
+
+        group.MapGet("/orphaned", async (OrkunPamDbContext db) =>
+        {
+            var orphaned = await db.Users
+                .Where(u => u.IsOrphaned && !u.IsDeleted)
+                .OrderByDescending(u => u.OrphanedDetectedAtUtc)
+                .Select(u => new
+                {
+                    u.Id, u.Username, u.DisplayName, u.Email,
+                    AuthSource = u.AuthSource.ToString(),
+                    Status = u.Status.ToString(),
+                    u.LastLoginAtUtc, u.OrphanedDetectedAtUtc
+                }).ToListAsync();
+            return Results.Ok(new { success = true, data = orphaned, meta = new { totalCount = orphaned.Count } });
+        });
     }
 
     private static Guid? ParseActorId(HttpContext context)
