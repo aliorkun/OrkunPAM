@@ -274,6 +274,13 @@
                     </label>
                     <span class="pam-hint">When enabled, users who have not enrolled in MFA will be prompted to set up their authenticator at next login.</span>
                 </div>
+                <div class="pam-form-group" style="margin-top:.75rem">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_emailOtpEnabled" />
+                        <strong>Allow Email OTP as MFA method</strong>
+                    </label>
+                    <span class="pam-hint">When enabled, users can choose Email OTP (one-time code sent via email) as their MFA method instead of an authenticator app.</span>
+                </div>
                 <div style="margin-top:1rem">
                     <button class="pam-btn pam-btn-primary" @onclick="SaveMfaPolicyAsync" disabled="@_mfaSaving">
                         @if (_mfaSaving) { <span class="pam-spinner-sm"></span> } Save
@@ -413,9 +420,10 @@
     private string  _sessDoubleConfirmCommands  = "";
 
     // MFA policy
-    private bool _mfaLoading  = false;
-    private bool _mfaSaving   = false;
-    private bool _mfaRequired = false;
+    private bool _mfaLoading      = false;
+    private bool _mfaSaving       = false;
+    private bool _mfaRequired     = false;
+    private bool _emailOtpEnabled = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -576,14 +584,14 @@
     {
         _mfaLoading = true; StateHasChanged();
         var s = await Api.GetMfaPolicyAsync();
-        if (s != null) { _mfaRequired = s.MfaRequired; }
+        if (s != null) { _mfaRequired = s.MfaRequired; _emailOtpEnabled = s.EmailOtpEnabled; }
         _mfaLoading = false; StateHasChanged();
     }
 
     private async Task SaveMfaPolicyAsync()
     {
         _mfaSaving = true; StateHasChanged();
-        var ok = await Api.SaveMfaPolicyAsync(new MfaPolicySettingsDto(_mfaRequired));
+        var ok = await Api.SaveMfaPolicyAsync(new MfaPolicySettingsDto(_mfaRequired, _emailOtpEnabled));
         _mfaSaving = false;
         _successMsg = ok ? "MFA policy saved." : null;
         if (!ok) _error = "Failed to save MFA policy.";
