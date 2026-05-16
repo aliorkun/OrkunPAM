@@ -468,10 +468,6 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // --- Report Schedules (#159) ---
-
-    // --- Executive Dashboard (#168) ---
-
     // --- FIDO2/WebAuthn Security Keys (#158) ---
 
     public async Task<List<SecurityKeyDto>?> GetFido2CredentialsAsync()
@@ -742,6 +738,111 @@ public sealed class PamApiService
             return (r?.Success ?? false, r?.Data?.Error, r?.Data?.ResponseTimeMs ?? 0);
         }
         catch (Exception ex) { return (false, ex.Message, 0); }
+    }
+
+    // === ITSM Integration (#114) ===
+    public async Task<List<ItsmConfigDto>?> GetItsmConfigsAsync()
+    {
+        var result = await GetAsync<ListResult<ItsmConfigDto>>("/api/v1/integrations/itsm");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateItsmConfigAsync(string name, string provider, string baseUrl,
+        string? username, string? apiKey, string? password, bool requireTicket, bool validateTicket)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/integrations/itsm",
+                new { name, provider, baseUrl, username, apiKey, password, requireTicket, validateTicket });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteItsmConfigAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/integrations/itsm/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleItsmConfigAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsync("/api/v1/integrations/itsm/" + id + "/toggle", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<ItsmTestResultDto?> TestItsmConfigAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/integrations/itsm/" + id + "/test", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ItsmTestResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    // === PKI / Smart Card (#115) ===
+    public async Task<List<TrustedCaDto>?> GetTrustedCasAsync()
+    {
+        var result = await GetAsync<ListResult<TrustedCaDto>>("/api/v1/auth/pki/trusted-cas");
+        return result?.Data;
+    }
+
+    public async Task<bool> AddTrustedCaAsync(string name, string pemCertificate, string? ocspUrl, string? crlUrl, bool checkRevocation)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/pki/trusted-cas",
+                new { name, pemCertificate, ocspUrl, crlUrl, checkRevocation });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteTrustedCaAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/auth/pki/trusted-cas/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleTrustedCaAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsync("/api/v1/auth/pki/trusted-cas/" + id + "/toggle", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<List<PkiUserCertDto>?> GetPkiUserCertsAsync()
+    {
+        var result = await GetAsync<ListResult<PkiUserCertDto>>("/api/v1/auth/pki/user-certs");
+        return result?.Data;
+    }
+
+    public async Task<bool> MapUserCertAsync(string userId, string pemCertificate, bool requirePkiOnly)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/pki/user-certs",
+                new { userId, pemCertificate, requirePkiOnly });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeletePkiUserCertAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/auth/pki/user-certs/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
     }
 
     // === Vendor Access (#127) ===
@@ -1359,7 +1460,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    // ── Session Recording Playback ────────────────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1457,7 +1558,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ───────────────────────────────────────────────────────────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ──────────────────────────────────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -2069,3 +2170,46 @@ public record CustomReportResultDto(
     List<Dictionary<string, string>> Rows,
     int                             TotalRows,
     string                          FilterSummary);
+
+// ITSM Integration DTOs (#114)
+public record ItsmConfigDto(
+    string  Id,
+    string  Name,
+    string  Provider,
+    string  BaseUrl,
+    bool    RequireTicket,
+    bool    ValidateTicket,
+    bool    IsEnabled);
+
+public record ItsmTestResultDto(
+    string  Provider,
+    string  BaseUrl,
+    long    ResponseTimeMs,
+    string? ServerVersion,
+    string? Message);
+
+// PKI / Smart Card Authentication DTOs (#115)
+public record TrustedCaDto(
+    string   Id,
+    string   Name,
+    string   Subject,
+    string?  Issuer,
+    string   Thumbprint,
+    DateTime NotBefore,
+    DateTime NotAfter,
+    bool     IsEnabled,
+    bool     CheckRevocation,
+    string?  OcspUrl,
+    string?  CrlUrl);
+
+public record PkiUserCertDto(
+    string    Id,
+    string    UserId,
+    string    Username,
+    string    CertThumbprint,
+    string    SubjectDn,
+    string    IssuingCaThumbprint,
+    DateTime  ExpiresAtUtc,
+    bool      RequirePkiOnly,
+    bool      IsEnabled,
+    DateTime? LastUsedAtUtc);
