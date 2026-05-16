@@ -599,6 +599,59 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // --- Custom Report Builder (#169) ---
+
+    public async Task<List<CustomReportDefinitionDto>?> GetCustomReportsAsync()
+    {
+        var result = await GetAsync<ListResult<CustomReportDefinitionDto>>("/api/v1/reports/custom/");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveCustomReportAsync(
+        string name, string? description, string dataSource,
+        string filtersJson, string columnsJson)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsJsonAsync("/api/v1/reports/custom/",
+            new { name, description, dataSource, filtersJson, columnsJson })).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCustomReportAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/reports/custom/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<CustomReportResultDto?> PreviewCustomReportAsync(
+        string dataSource, string filtersJson, string columnsJson, int maxRows = 50)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/reports/custom/preview",
+                new { dataSource, filtersJson, columnsJson, maxRows });
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<CustomReportResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<CustomReportResultDto?> RunSavedCustomReportAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/reports/custom/" + id + "/run", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<CustomReportResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
         string? category = null, string? eventType = null,
         DateTime? from = null, DateTime? to = null,
@@ -1306,7 +1359,7 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── Session Recording Playback ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+    // ── Session Recording Playback ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
     {
         var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
@@ -1404,7 +1457,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── TACACS+ Command Policies (deferred — v2+ stubs) ───────────────────────────────────────────────────────────────────────────
+    // ── TACACS+ Command Policies (deferred — v2+ stubs) ───────────────────────────────────────────────────────────────────────────────────────────────────────
     public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
         => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
 
@@ -1999,3 +2052,20 @@ public record ConnectionProfileDto(
     string Content,
     string MimeType,
     string SshCommand);
+
+// Custom Report Builder DTOs (#169)
+public record CustomReportDefinitionDto(
+    string    Id,
+    string    Name,
+    string?   Description,
+    string    DataSource,
+    string    FiltersJson,
+    string    ColumnsJson,
+    DateTime  CreatedAtUtc,
+    DateTime? LastRunAtUtc);
+
+public record CustomReportResultDto(
+    List<string>                    Columns,
+    List<Dictionary<string, string>> Rows,
+    int                             TotalRows,
+    string                          FilterSummary);
