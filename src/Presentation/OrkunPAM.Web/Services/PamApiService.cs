@@ -841,6 +841,25 @@ public sealed class PamApiService
         catch (Exception ex) { return (false, ex.Message); }
     }
 
+    // === System Log Viewer (#160) ===
+
+    public async Task<PagedResult<SystemLogEntryDto>?> GetSystemLogsAsync(
+        string source = "api",
+        string? level = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        string? search = null,
+        int page = 1,
+        int pageSize = 100)
+    {
+        var url = $"/api/v1/system/logs?source={source}&page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(level))  url += "&level=" + level;
+        if (from.HasValue)                 url += "&from=" + Uri.EscapeDataString(from.Value.ToString("o"));
+        if (to.HasValue)                   url += "&to="   + Uri.EscapeDataString(to.Value.ToString("o"));
+        if (!string.IsNullOrEmpty(search)) url += "&search=" + Uri.EscapeDataString(search);
+        return await GetAsync<PagedResult<SystemLogEntryDto>>(url);
+    }
+
     // === System Health (#138) ===
 
     public async Task<SystemHealthSnapshotDto?> GetSystemHealthAsync()
@@ -1714,6 +1733,16 @@ public record HealthAlarmConfigDto(
     string MemoryWarningMb,
     string DiskFreeWarningPct,
     string AlarmRecipients);
+
+// System Log Viewer DTOs (#160)
+public record SystemLogEntryDto(
+    string Timestamp,
+    string Level,
+    string Source,
+    string Message,
+    string? Username,
+    string? IpAddress,
+    string? Details);
 
 // Access Certification DTOs (#154)
 public record AttestationCampaignDto(

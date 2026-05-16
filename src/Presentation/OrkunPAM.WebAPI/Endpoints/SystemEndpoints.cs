@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.System;
+using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 using OrkunPAM.SharedKernel;
@@ -382,6 +384,149 @@ public static class SystemEndpoints
             alarm.ClearedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
             return Results.Ok(new { success = true });
+        });
+
+        // === System Log Viewer (#160) ===
+        var sysLogsGroup = app.MapGroup("/api/v1/system/logs").WithTags("System").RequireAuthorization("AdminPolicy");
+
+        sysLogsGroup.MapGet("/", async (
+            OrkunPamDbContext db, IAuditService audit, HttpContext ctx,
+            string source = "api",
+            string? level = null,
+            DateTime? from = null,
+            DateTime? to = null,
+            string? search = null,
+            int page = 1,
+            int pageSize = 100,
+            CancellationToken ct = default) =>
+        {
+            var userIdClaim = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var usernameClaim = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+            var ip = ctx.Connection.RemoteIpAddress?.ToString();
+            _ = Guid.TryParse(userIdClaim, out var actorId);
+            _ = audit.LogAsync("System", "SystemLog.View",
+                actorId == Guid.Empty ? null : actorId, usernameClaim, ip,
+                "SystemLogs", source, $"source={source}", AuditOutcome.Success, ct);
+
+            if (source == "audit" || source == "security")
+            {
+                var query = db.AuditLogs.AsQueryable();
+
+                if (source == "security")
+                    query = query.Where(a =>
+                        a.EventCategory == "Auth" ||
+                        a.EventType.Contains("lock") ||
+                        a.EventType.Contains("Lock") ||
+                        a.EventType.Contains("Role") ||
+                        a.Outcome != AuditOutcome.Success);
+
+                if (from.HasValue)  query = query.Where(a => a.Timestamp >= from.Value);
+                if (to.HasValue)    query = query.Where(a => a.Timestamp <= to.Value);
+                if (!string.IsNullOrEmpty(level))
+                {
+                    if (level.Equals("ERR", StringComparison.OrdinalIgnoreCase))
+                        query = query.Where(a => a.Outcome == AuditOutcome.Failure);
+                    else if (level.Equals("WRN", StringComparison.OrdinalIgnoreCase))
+                        query = query.Where(a => a.Outcome == AuditOutcome.Denied);
+                    else if (level.Equals("INF", StringComparison.OrdinalIgnoreCase))
+                        query = query.Where(a => a.Outcome == AuditOutcome.Success);
+                }
+                if (!string.IsNullOrEmpty(search))
+                    query = query.Where(a =>
+                        a.EventType.Contains(search) ||
+                        (a.Details != null && a.Details.Contains(search)) ||
+                        (a.ActorUsername != null && a.ActorUsername.Contains(search)) ||
+                        (a.ActorIpAddress != null && a.ActorIpAddress.Contains(search)));
+
+                var total = await query.CountAsync(ct);
+                var items = await query
+                    .OrderByDescending(a => a.Timestamp)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(a => new
+                    {
+                        Timestamp = a.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"),
+                        Level = a.Outcome == AuditOutcome.Success ? "INF" :
+                                a.Outcome == AuditOutcome.Denied  ? "WRN" : "ERR",
+                        Source = source,
+                        Message = a.EventCategory + " / " + a.EventType,
+                        Username = a.ActorUsername,
+                        IpAddress = a.ActorIpAddress,
+                        Details = a.Details
+                    })
+                    .ToListAsync(ct);
+
+                return Results.Ok(new { success = true, data = items, meta = new { page, pageSize, totalCount = total } });
+            }
+
+            // source == "api" — read Serilog rolling log files
+            var logDir = "logs";
+            if (!Directory.Exists(logDir))
+                logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+
+            var entries = new List<(string Timestamp, string Level, string Message)>();
+
+            if (Directory.Exists(logDir))
+            {
+                var files = Directory.GetFiles(logDir, "orkunpam-*.log")
+                    .OrderByDescending(f => f)
+                    .Take(7)
+                    .ToList();
+
+                foreach (var file in files)
+                {
+                    var fname    = Path.GetFileNameWithoutExtension(file);
+                    var datePart = fname.Length > 9 ? fname[9..] : string.Empty;
+                    DateTime fileDate = DateTime.UtcNow.Date;
+                    if (datePart.Length == 8 &&
+                        DateTime.TryParseExact(datePart, "yyyyMMdd",
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.None, out var pd))
+                        fileDate = pd;
+
+                    string[] lines;
+                    try { lines = await File.ReadAllLinesAsync(file, ct); }
+                    catch { continue; }
+
+                    foreach (var line in lines)
+                    {
+                        if (string.IsNullOrEmpty(line) || line[0] != '[') continue;
+                        var close = line.IndexOf(']');
+                        if (close < 5) continue;
+                        var header = line[1..close].Split(' ');
+                        if (header.Length < 2) continue;
+                        var lvl = header[1];
+                        var msg = line[(close + 1)..].TrimStart();
+
+                        if (!TimeSpan.TryParse(header[0], out var ts)) continue;
+                        var entryTime = fileDate.Add(ts);
+
+                        if (from.HasValue && entryTime < from.Value) continue;
+                        if (to.HasValue   && entryTime > to.Value)   continue;
+                        if (!string.IsNullOrEmpty(level) &&
+                            !lvl.Equals(level, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!string.IsNullOrEmpty(search) &&
+                            !msg.Contains(search, StringComparison.OrdinalIgnoreCase)) continue;
+
+                        entries.Add((entryTime.ToString("yyyy-MM-dd HH:mm:ss"), lvl, msg));
+                    }
+                }
+            }
+
+            var totalApi = entries.Count;
+            var pageItems = entries
+                .OrderByDescending(e => e.Timestamp)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(e => new
+                {
+                    e.Timestamp, e.Level, Source = "api", Message = e.Message,
+                    Username = (string?)null, IpAddress = (string?)null, Details = (string?)null
+                })
+                .ToList();
+
+            return Results.Ok(new { success = true, data = pageItems,
+                meta = new { page, pageSize, totalCount = totalApi } });
         });
 
         // === Windows / Kerberos Auth Settings (#126) ===

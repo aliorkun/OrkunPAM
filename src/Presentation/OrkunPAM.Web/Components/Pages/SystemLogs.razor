@@ -1,0 +1,231 @@
+@page "/system-logs"
+@implements IDisposable
+@inject PamApiService Api
+@inject IJSRuntime JS
+
+<PageTitle>System Logs — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h1 class="pam-page-title">System Logs</h1>
+    <div class="pam-page-actions">
+        <button class="pam-btn @(_autoRefresh ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => ToggleAutoRefresh())">
+            @(_autoRefresh ? "Auto-Refresh ON" : "Auto-Refresh OFF")
+        </button>
+        <button class="pam-btn pam-btn-secondary" @onclick="@(() => ExportCsvAsync())">Export CSV</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="@(() => LoadAsync())">Refresh</button>
+    </div>
+</div>
+
+<!-- Tab bar -->
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;">
+    <button class="pam-btn @(_activeTab == "api"      ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("api"))">API Logs</button>
+    <button class="pam-btn @(_activeTab == "audit"    ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("audit"))">Audit Log</button>
+    <button class="pam-btn @(_activeTab == "security" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("security"))">Security Events</button>
+</div>
+
+<!-- Filters -->
+<div class="pam-card" style="margin-bottom:1rem;">
+    <div class="pam-card-body" style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;">
+        <div>
+            <label class="pam-label">Level</label>
+            <select class="pam-input" style="width:8rem;" @bind="_filterLevel">
+                <option value="">All</option>
+                <option value="INF">Info</option>
+                <option value="WRN">Warning</option>
+                <option value="ERR">Error</option>
+                <option value="DBG">Debug</option>
+            </select>
+        </div>
+        <div>
+            <label class="pam-label">From</label>
+            <input class="pam-input" type="datetime-local" style="width:12rem;"
+                   value="@_fromStr" @oninput="@(e => _fromStr = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+        <div>
+            <label class="pam-label">To</label>
+            <input class="pam-input" type="datetime-local" style="width:12rem;"
+                   value="@_toStr" @oninput="@(e => _toStr = e.Value?.ToString() ?? string.Empty)" />
+        </div>
+        <div style="flex:1;min-width:12rem;">
+            <label class="pam-label">Search</label>
+            <input class="pam-input" placeholder="Filter by message, user, IP..." @bind="_searchText" @bind:event="oninput" />
+        </div>
+        <button class="pam-btn pam-btn-primary" @onclick="@(() => { _page = 1; LoadAsync(); })">Search</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="@(() => ClearFilters())">Clear</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="pam-loading">Loading logs...</div>
+}
+else
+{
+    <!-- Table -->
+    <div class="pam-card">
+        <div class="pam-card-body" style="padding:0;">
+            <table class="pam-table">
+                <thead>
+                    <tr>
+                        <th style="width:10rem;">Timestamp</th>
+                        <th style="width:4rem;">Level</th>
+                        <th>Message</th>
+                        @if (_activeTab != "api")
+                        {
+                            <th style="width:9rem;">User</th>
+                            <th style="width:9rem;">IP</th>
+                        }
+                        <th style="width:10rem;">Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_entries == null || _entries.Count == 0)
+                    {
+                        <tr><td colspan="6" style="text-align:center;color:var(--pam-text-muted);">No log entries found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var e in _entries)
+                        {
+                            <tr style="@GetRowStyle(e.Level)">
+                                <td style="font-size:.8rem;white-space:nowrap;">@e.Timestamp</td>
+                                <td><span class="pam-badge @GetLevelBadge(e.Level)">@e.Level</span></td>
+                                <td style="font-size:.85rem;word-break:break-word;">@e.Message</td>
+                                @if (_activeTab != "api")
+                                {
+                                    <td style="font-size:.8rem;">@(e.Username ?? "–")</td>
+                                    <td style="font-size:.8rem;">@(e.IpAddress ?? "–")</td>
+                                }
+                                <td style="font-size:.75rem;color:var(--pam-text-muted);word-break:break-all;">@(e.Details ?? "–")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    @if (_totalCount > _pageSize)
+    {
+        <div style="display:flex;align-items:center;gap:.75rem;margin-top:1rem;justify-content:flex-end;">
+            <button class="pam-btn pam-btn-secondary" disabled="@(_page <= 1)"
+                    @onclick="@(() => { _page--; LoadAsync(); })">&lt; Prev</button>
+            <span style="color:var(--pam-text-muted);font-size:.875rem;">
+                Page @_page of @TotalPages — @_totalCount entries
+            </span>
+            <button class="pam-btn pam-btn-secondary" disabled="@(_page >= TotalPages)"
+                    @onclick="@(() => { _page++; LoadAsync(); })">Next &gt;</button>
+        </div>
+    }
+    else if (_totalCount > 0)
+    {
+        <div style="margin-top:.5rem;color:var(--pam-text-muted);font-size:.875rem;text-align:right;">
+            @_totalCount entries
+        </div>
+    }
+}
+
+@code {
+    private string _activeTab = "api";
+    private string _filterLevel = "";
+    private string _fromStr = "";
+    private string _toStr = "";
+    private string _searchText = "";
+    private bool _loading;
+    private bool _autoRefresh;
+    private System.Threading.Timer? _timer;
+    private List<SystemLogEntryDto>? _entries;
+    private int _totalCount;
+    private int _page = 1;
+    private const int _pageSize = 100;
+    private int TotalPages => (int)Math.Ceiling((double)_totalCount / _pageSize);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task SetTab(string tab)
+    {
+        _activeTab = tab;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        DateTime? from = DateTime.TryParse(_fromStr, out var fd) ? fd : null;
+        DateTime? to   = DateTime.TryParse(_toStr,   out var td) ? td : null;
+
+        var result = await Api.GetSystemLogsAsync(
+            source: _activeTab,
+            level:  string.IsNullOrEmpty(_filterLevel) ? null : _filterLevel,
+            from:   from,
+            to:     to,
+            search: string.IsNullOrEmpty(_searchText) ? null : _searchText,
+            page:   _page,
+            pageSize: _pageSize);
+
+        _entries    = result?.Data ?? new();
+        _totalCount = result?.Meta?.TotalCount ?? 0;
+        _loading    = false;
+        StateHasChanged();
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        _autoRefresh = !_autoRefresh;
+        if (_autoRefresh)
+            _timer = new System.Threading.Timer(async _ => await InvokeAsync(LoadAsync), null, 30000, 30000);
+        else
+        {
+            _timer?.Dispose();
+            _timer = null;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        _filterLevel = "";
+        _fromStr = "";
+        _toStr = "";
+        _searchText = "";
+        _page = 1;
+        _ = LoadAsync();
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (_entries == null || _entries.Count == 0) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Timestamp,Level,Source,Message,Username,IpAddress,Details");
+        foreach (var e in _entries)
+            sb.AppendLine($"\"{e.Timestamp}\",\"{e.Level}\",\"{e.Source}\"," +
+                          $"\"{e.Message?.Replace("\"", "'")}\",\"{e.Username}\",\"{e.IpAddress}\"," +
+                          $"\"{e.Details?.Replace("\"", "'")}\"");
+        var fname = $"systemlogs-{_activeTab}-{DateTime.UtcNow:yyyyMMddHHmm}.csv";
+        await JS.InvokeVoidAsync("downloadCsvFile", fname, sb.ToString());
+    }
+
+    private static string GetRowStyle(string level) => level switch
+    {
+        "ERR" or "FTL" => "background:rgba(239,68,68,.08);",
+        "WRN"          => "background:rgba(245,158,11,.06);",
+        _              => string.Empty
+    };
+
+    private static string GetLevelBadge(string level) => level switch
+    {
+        "ERR" or "FTL" => "pam-badge-danger",
+        "WRN"          => "pam-badge-warning",
+        "INF"          => "pam-badge-success",
+        _              => "pam-badge-neutral"
+    };
+
+    public void Dispose() { _timer?.Dispose(); }
+}
