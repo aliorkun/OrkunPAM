@@ -280,5 +280,6 @@ public record SessionPolicySettings
 
 public record MfaPolicySettings
 {
-    public bool MfaRequired { get; init; }
+    public bool MfaRequired     { get; init; }
+    public bool EmailOtpEnabled { get; init; }
 }

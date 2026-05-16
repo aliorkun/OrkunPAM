@@ -13,7 +13,7 @@ public interface IAuthenticationService
     Task<Result<User>> CreateLocalUserAsync(string username, string password, string? displayName, string? email, CancellationToken ct = default);
 }
 
-public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, bool MfaEnrollmentRequired, bool MustChangePassword, bool PasswordExpired);
+public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, string? MfaType, bool MfaEnrollmentRequired, bool MustChangePassword, bool PasswordExpired);
 
 public sealed class AuthenticationService : IAuthenticationService
 {
@@ -177,8 +177,9 @@ public sealed class AuthenticationService : IAuthenticationService
         _logger.LogInformation("User '{Username}' logged in successfully (IP: {Ip}, Roles: {Roles})",
             username, ipAddress, string.Join(",", roles));
 
+        string? mfaTypeName = mfaRequired ? user.MfaType.ToString() : null;
         return Result<AuthResult>.Success(new AuthResult(
-            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mfaEnrollmentRequired, mustChangePassword, passwordExpired));
+            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mfaTypeName, mfaEnrollmentRequired, mustChangePassword, passwordExpired));
     }
 
     public async Task<Result<User>> CreateLocalUserAsync(string username, string password,
@@ -219,5 +220,6 @@ public sealed class AuthenticationService : IAuthenticationService
 
 public record MfaPolicySettings
 {
-    public bool MfaRequired { get; init; }
+    public bool MfaRequired     { get; init; }
+    public bool EmailOtpEnabled { get; init; }
 }

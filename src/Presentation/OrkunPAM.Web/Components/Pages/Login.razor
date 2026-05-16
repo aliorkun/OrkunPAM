@@ -40,6 +40,50 @@
                 </button>
             </EditForm>
         }
+        else if (_mfaType == "EmailOtp")
+        {
+            <div class="pam-mfa-step">
+                <div class="pam-mfa-icon">📧</div>
+                <p class="pam-login-sub">
+                    @if (!_emailOtpSent)
+                    {
+                        <span>Click below to receive a one-time code at your registered email address.</span>
+                    }
+                    else
+                    {
+                        <span>A 6-digit code has been sent to your email. Enter it below (valid for 10 minutes).</span>
+                    }
+                </p>
+                @if (!_emailOtpSent)
+                {
+                    <button class="pam-btn pam-btn-primary w-100" @onclick="SendEmailOtpAsync"
+                            disabled="@_loading">
+                        @if (_loading) { <span class="pam-spinner-sm"></span> } Send Code to My Email
+                    </button>
+                }
+                else
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Verification Code</label>
+                        <input class="pam-input pam-mfa-input" type="text" inputmode="numeric"
+                               maxlength="6" placeholder="000000" @bind="_mfaCode" @bind:event="oninput"
+                               @onkeyup="OnEmailOtpKeyUp" disabled="@_loading" autocomplete="one-time-code" />
+                    </div>
+                    <button class="pam-btn pam-btn-primary w-100" @onclick="HandleEmailOtpAsync"
+                            disabled="@(_loading || _mfaCode.Length != 6)">
+                        @if (_loading) { <span class="pam-spinner-sm"></span> } Verify
+                    </button>
+                    <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
+                            @onclick="SendEmailOtpAsync" disabled="@_loading">
+                        Resend Code
+                    </button>
+                }
+                <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
+                        @onclick="ResetToLogin" disabled="@_loading">
+                    ← Back to Sign In
+                </button>
+            </div>
+        }
         else
         {
             <div class="pam-mfa-step">
@@ -75,9 +119,11 @@
 @code {
     private readonly LoginModel _model = new();
     private bool   _loading;
-    private string _error   = "";
+    private string _error       = "";
     private bool   _mfaStep;
-    private string _mfaCode = "";
+    private string _mfaType     = "";
+    private string _mfaCode     = "";
+    private bool   _emailOtpSent;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -106,9 +152,11 @@
             }
             if (d.MfaRequired)
             {
-                _mfaStep = true;
-                _mfaCode = "";
-                _loading = false;
+                _mfaStep    = true;
+                _mfaType    = d.MfaType ?? "Totp";
+                _mfaCode    = "";
+                _emailOtpSent = false;
+                _loading    = false;
                 StateHasChanged();
                 return;
             }
@@ -155,7 +203,46 @@
             await HandleMfaAsync();
     }
 
-    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; }
+    private async Task SendEmailOtpAsync()
+    {
+        _loading = true;
+        _error   = "";
+        StateHasChanged();
+
+        await Api.RequestEmailOtpAsync(_model.Username, _model.Password);
+        _emailOtpSent = true;
+        _mfaCode      = "";
+        _loading      = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleEmailOtpAsync()
+    {
+        if (_mfaCode.Length != 6) return;
+        _loading = true;
+        _error   = "";
+        StateHasChanged();
+
+        var result = await Api.VerifyEmailOtpAsync(_model.Username, _mfaCode);
+        if (result?.Success == true && result.Data != null)
+        {
+            await CompleteLoginAsync(result.Data);
+        }
+        else
+        {
+            _error   = "Invalid or expired code. Please try again.";
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnEmailOtpKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _mfaCode.Length == 6)
+            await HandleEmailOtpAsync();
+    }
+
+    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; }
 
     private sealed class LoginModel
     {
