@@ -307,6 +307,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(d => d.Id);
             e.Property(d => d.Id).ValueGeneratedOnAdd();
+            e.Property(d => d.SubjectUsername).HasMaxLength(256);
+            e.Property(d => d.ResourceName).HasMaxLength(512);
+            e.HasIndex(d => d.CampaignId);
+        });
+
+        modelBuilder.Entity<AttestationCampaign>(e =>
+        {
+            e.Property(c => c.Name).HasMaxLength(256);
+            e.HasIndex(c => c.Status);
         });
 
         // === AAPM ===
