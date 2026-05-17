@@ -19,6 +19,8 @@
             @onclick="@(() => SetTab("schedule"))">&#x1F551; Schedule</button>
     <button class="pam-btn @(_tab == "custom" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("custom"))">&#x1F527; Custom</button>
+    <button class="pam-btn @(_tab == "compliance" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("compliance"))">&#x2705; Compliance</button>
 </div>
 
 @if (_tab == "audit")
@@ -635,6 +637,129 @@ else if (_tab == "reports")
     }
 }
 
+@if (_tab == "compliance")
+{
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+                <div>
+                    <label class="pam-label">Framework</label>
+                    <select class="pam-input pam-select" style="width:220px" @bind="_cmpFramework">
+                        <option value="sox">SOX PAM Controls</option>
+                        <option value="pci-dss">PCI-DSS (Chapter 7/8/10)</option>
+                        <option value="iso27001">ISO 27001 (A.9 / A.12)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Period</label>
+                    <select class="pam-input pam-select" style="width:140px" @bind="_cmpPeriodDays">
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="180">Last 180 days</option>
+                        <option value="365">Last 365 days</option>
+                    </select>
+                </div>
+                <div style="align-self:flex-end">
+                    <button class="pam-btn pam-btn-primary" @onclick="RunComplianceReportAsync"
+                            disabled="@_cmpLoading">
+                        @(_cmpLoading ? "Evaluating…" : "Evaluate Controls")
+                    </button>
+                </div>
+                @if (_cmpReport != null)
+                {
+                    <div style="align-self:flex-end">
+                        <button class="pam-btn pam-btn-secondary" @onclick="ExportComplianceHtmlAsync">
+                            &#x1F4BE; Download Auditor Report
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (_cmpError != null)
+    {
+        <div class="pam-alert pam-alert-danger">@_cmpError</div>
+    }
+
+    @if (_cmpReport != null)
+    {
+        var passCount    = _cmpReport.Summary.Passed;
+        var partialCount = _cmpReport.Summary.Partial;
+        var failCount    = _cmpReport.Summary.Failed;
+        var score        = _cmpReport.Summary.Score;
+        var statusColor  = score >= 90 ? "#28a745" : score >= 70 ? "#ffc107" : "#dc3545";
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+            <div class="pam-card">
+                <div class="pam-card-body" style="text-align:center">
+                    <div style="font-size:2em;font-weight:700;color:@statusColor">@score%</div>
+                    <div style="font-size:0.8em;color:#888">Compliance Score</div>
+                    <div style="font-size:0.85em;font-weight:600;color:@statusColor;margin-top:4px">@_cmpReport.Summary.OverallStatus</div>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body" style="text-align:center">
+                    <div style="font-size:2em;font-weight:700;color:#28a745">@passCount</div>
+                    <div style="font-size:0.8em;color:#888">Passed</div>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body" style="text-align:center">
+                    <div style="font-size:2em;font-weight:700;color:#ffc107">@partialCount</div>
+                    <div style="font-size:0.8em;color:#888">Partial</div>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body" style="text-align:center">
+                    <div style="font-size:2em;font-weight:700;color:#dc3545">@failCount</div>
+                    <div style="font-size:0.8em;color:#888">Failed</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="font-size:0.8em;color:#888;margin-bottom:8px">
+            @_cmpReport.FrameworkName &mdash;
+            @_cmpReport.Period.From.ToString("yyyy-MM-dd") to @_cmpReport.Period.To.ToString("yyyy-MM-dd") &mdash;
+            Generated @_cmpReport.GeneratedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        </div>
+
+        @foreach (var ctrl in _cmpReport.Controls)
+        {
+            var icon  = ctrl.Status == "pass" ? "✅" : ctrl.Status == "partial" ? "⚠️" : "❌";
+            var color = ctrl.Status == "pass" ? "#d4edda" : ctrl.Status == "partial" ? "#fff3cd" : "#f8d7da";
+            var border= ctrl.Status == "pass" ? "#28a745" : ctrl.Status == "partial" ? "#ffc107" : "#dc3545";
+
+            <div style="border-left:4px solid @border;background:@color;border-radius:4px;padding:12px 16px;margin-bottom:10px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                    <span style="font-size:1.1em">@icon</span>
+                    <strong>@ctrl.Code</strong>
+                    <span style="color:#555">@ctrl.Name</span>
+                    <span style="margin-left:auto;font-size:0.75em;color:#888">@ctrl.Reference</span>
+                </div>
+                <div style="font-size:0.88em;color:#333;margin-bottom:8px">@ctrl.Finding</div>
+                @if (ctrl.Evidence != null && ctrl.Evidence.Count > 0)
+                {
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        @foreach (var ev in ctrl.Evidence)
+                        {
+                            <span style="background:rgba(0,0,0,0.07);border-radius:4px;padding:2px 8px;font-size:0.78em">
+                                @FormatKey(ev.Key): <strong>@ev.Value</strong>
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+    else if (!_cmpLoading)
+    {
+        <div class="pam-alert pam-alert-info">
+            Select a framework and period, then click "Evaluate Controls" to generate the compliance report.
+        </div>
+    }
+}
+
 @code {
     private string _tab = "audit";
     private AuditVerifyResult? _integrityResult;
@@ -674,6 +799,13 @@ else if (_tab == "reports")
         await LoadAuditAsync();
         await LoadReportsAsync();
     }
+
+    // ---- Compliance state ----
+    private string               _cmpFramework  = "sox";
+    private int                  _cmpPeriodDays = 90;
+    private bool                 _cmpLoading;
+    private string?              _cmpError;
+    private ComplianceReportResultDto? _cmpReport;
 
     private async Task SetTab(string tab)
     {
@@ -1182,6 +1314,66 @@ else if (_tab == "reports")
             sb.AppendLine(string.Join(",", _crResultColumns.Select(c =>
                 "\"" + SanitizeCsvCell(row.GetValueOrDefault(c, "")) + "\"")));
         var filename = (_crName.Length > 0 ? _crName : "custom-report") + "-" + DateTime.Now.ToString("yyyyMMdd") + ".csv";
+        await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
+    }
+
+    // ── Compliance Report (#179) ──────────────────────────────────────────────────
+
+    private async Task RunComplianceReportAsync()
+    {
+        _cmpLoading = true; _cmpError = null; _cmpReport = null; StateHasChanged();
+        var from = DateTime.UtcNow.AddDays(-_cmpPeriodDays);
+        var to   = DateTime.UtcNow;
+        _cmpReport = await Api.GenerateComplianceReportAsync(_cmpFramework, from, to);
+        if (_cmpReport == null) _cmpError = "Failed to generate compliance report. Check server logs.";
+        _cmpLoading = false; StateHasChanged();
+    }
+
+    private async Task ExportComplianceHtmlAsync()
+    {
+        if (_cmpReport == null) return;
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
+        sb.AppendLine("<title>" + System.Net.WebUtility.HtmlEncode(_cmpReport.FrameworkName) + " — Compliance Report</title>");
+        sb.AppendLine("<style>body{font-family:Arial,sans-serif;margin:40px;color:#333}");
+        sb.AppendLine("h1{color:#1a1a2e}table{border-collapse:collapse;width:100%}");
+        sb.AppendLine("th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}");
+        sb.AppendLine("th{background:#f5f5f5}.pass{background:#d4edda}.partial{background:#fff3cd}.fail{background:#f8d7da}");
+        sb.AppendLine(".score{font-size:2.5em;font-weight:bold}.summary-grid{display:flex;gap:24px;margin:16px 0}");
+        sb.AppendLine(".kpi{text-align:center;border:1px solid #ddd;padding:12px 24px;border-radius:6px}");
+        sb.AppendLine(".kpi-value{font-size:2em;font-weight:bold}.kpi-label{font-size:0.8em;color:#888}</style></head><body>");
+
+        sb.AppendLine("<h1>" + System.Net.WebUtility.HtmlEncode(_cmpReport.FrameworkName) + "</h1>");
+        sb.AppendLine("<p><strong>Period:</strong> " + _cmpReport.Period.From.ToString("yyyy-MM-dd") +
+                      " to " + _cmpReport.Period.To.ToString("yyyy-MM-dd") + "</p>");
+        sb.AppendLine("<p><strong>Generated:</strong> " + _cmpReport.GeneratedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") + "</p>");
+
+        var s = _cmpReport.Summary;
+        var scoreColor = s.Score >= 90 ? "#28a745" : s.Score >= 70 ? "#e6a817" : "#dc3545";
+        sb.AppendLine("<div class=\"summary-grid\">");
+        sb.AppendLine("<div class=\"kpi\"><div class=\"kpi-value\" style=\"color:" + scoreColor + "\">" + s.Score + "%</div><div class=\"kpi-label\">Compliance Score</div><div style=\"font-weight:bold;color:" + scoreColor + "\">" + s.OverallStatus + "</div></div>");
+        sb.AppendLine("<div class=\"kpi\"><div class=\"kpi-value\" style=\"color:#28a745\">" + s.Passed + "</div><div class=\"kpi-label\">Passed</div></div>");
+        sb.AppendLine("<div class=\"kpi\"><div class=\"kpi-value\" style=\"color:#e6a817\">" + s.Partial + "</div><div class=\"kpi-label\">Partial</div></div>");
+        sb.AppendLine("<div class=\"kpi\"><div class=\"kpi-value\" style=\"color:#dc3545\">" + s.Failed + "</div><div class=\"kpi-label\">Failed</div></div>");
+        sb.AppendLine("</div>");
+
+        sb.AppendLine("<h2>Control Assessment</h2>");
+        sb.AppendLine("<table><thead><tr><th>Code</th><th>Control</th><th>Reference</th><th>Status</th><th>Finding</th><th>Evidence</th></tr></thead><tbody>");
+        foreach (var ctrl in _cmpReport.Controls)
+        {
+            var cls   = ctrl.Status;
+            var label = ctrl.Status == "pass" ? "PASS" : ctrl.Status == "partial" ? "PARTIAL" : "FAIL";
+            var ev    = ctrl.Evidence != null
+                ? string.Join("; ", ctrl.Evidence.Select(x => FormatKey(x.Key) + ": " + x.Value))
+                : "";
+            sb.AppendLine("<tr class=\"" + cls + "\"><td>" + ctrl.Code + "</td><td>" + System.Net.WebUtility.HtmlEncode(ctrl.Name) +
+                          "</td><td>" + ctrl.Reference + "</td><td><strong>" + label + "</strong></td><td>" +
+                          System.Net.WebUtility.HtmlEncode(ctrl.Finding) + "</td><td style=\"font-size:0.85em\">" +
+                          System.Net.WebUtility.HtmlEncode(ev) + "</td></tr>");
+        }
+        sb.AppendLine("</tbody></table></body></html>");
+
+        var filename = _cmpReport.Framework + "-compliance-" + DateTime.Now.ToString("yyyyMMdd") + ".html";
         await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
     }
 }
