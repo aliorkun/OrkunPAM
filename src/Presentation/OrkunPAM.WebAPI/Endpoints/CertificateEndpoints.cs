@@ -12,7 +12,7 @@ public static class CertificateEndpoints
 {
     public static void MapCertificateEndpoints(this IEndpointRouteBuilder app)
     {
-        var certs = app.MapGroup("/api/v1/certificates").WithTags("Certificates");
+        var certs = app.MapGroup("/api/v1/certificates").WithTags("Certificates").RequireAuthorization("AdminPolicy");
 
         certs.MapGet("/", async (OrkunPamDbContext db, string? source) =>
         {
@@ -96,6 +96,9 @@ public static class CertificateEndpoints
             if (await db.ManagedCertificates.AnyAsync(c => c.Thumbprint == thumbprint))
                 return Results.Conflict(new { success = false, errors = new[] { "Certificate with this thumbprint already exists" } });
 
+            var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var actorGuid = actorId != null ? Guid.Parse(actorId) : (Guid?)null;
+
             string? pemEnc = null;
             if (!string.IsNullOrEmpty(req.PemCertificate))
             {
@@ -136,14 +139,14 @@ public static class CertificateEndpoints
                 FolderId = req.FolderId,
                 Notes = req.Notes,
                 Source = req.Source ?? "Manual",
-                CreatedBy = req.CreatedBy
+                CreatedBy = actorGuid
             };
 
             db.ManagedCertificates.Add(managed);
             await db.SaveChangesAsync();
 
             var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            await audit.LogAsync("Certificate", "CERT_IMPORTED", req.CreatedBy, null, ip,
+            await audit.LogAsync("Certificate", "CERT_IMPORTED", actorGuid, null, ip,
                 "ManagedCertificate", managed.Id.ToString(),
                 new { managed.SubjectCN, managed.Thumbprint, managed.NotAfter });
 
@@ -179,5 +182,4 @@ public record ImportCertificateRequest(
     Guid? DeviceId,
     Guid? FolderId,
     string? Notes,
-    string? Source,
-    Guid? CreatedBy);
+    string? Source);

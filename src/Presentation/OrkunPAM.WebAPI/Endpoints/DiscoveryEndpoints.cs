@@ -14,7 +14,7 @@ public static class DiscoveryEndpoints
 {
     public static void MapDiscoveryEndpoints(this IEndpointRouteBuilder app)
     {
-        var jobs = app.MapGroup("/api/v1/vault/discovery-jobs").WithTags("Discovery");
+        var jobs = app.MapGroup("/api/v1/vault/discovery-jobs").WithTags("Discovery").RequireAuthorization("AdminPolicy");
 
         jobs.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -28,15 +28,18 @@ public static class DiscoveryEndpoints
             return Results.Ok(new { success = true, data = list });
         });
 
-        jobs.MapPost("/", async (CreateDiscoveryJobRequest req, OrkunPamDbContext db) =>
+        jobs.MapPost("/", async (CreateDiscoveryJobRequest req, OrkunPamDbContext db, HttpContext context) =>
         {
+            var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var actorGuid = actorId != null ? Guid.Parse(actorId) : (Guid?)null;
+
             var job = new DiscoveryJob
             {
                 Name = req.Name,
                 DiscoveryType = req.DiscoveryType,
                 TargetScopeJson = req.TargetScope,
                 Schedule = req.Schedule,
-                CreatedBy = req.CreatedBy
+                CreatedBy = actorGuid
             };
             db.DiscoveryJobs.Add(job);
             await db.SaveChangesAsync();
@@ -52,7 +55,10 @@ public static class DiscoveryEndpoints
             if (job == null) return Results.NotFound(new { success = false, errors = new[] { "Job not found" } });
 
             var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_STARTED", null, null, ip,
+            var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var actorGuid = actorId != null ? Guid.Parse(actorId) : (Guid?)null;
+
+            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_STARTED", actorGuid, null, ip,
                 "DiscoveryJob", id.ToString(), new { job.Name, Type = job.DiscoveryType.ToString() });
 
             var scanResult = await discoveryService.RunScanAsync(job.DiscoveryType, job.TargetScopeJson);
@@ -74,7 +80,7 @@ public static class DiscoveryEndpoints
 
             await db.SaveChangesAsync();
 
-            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_COMPLETED", null, null, ip,
+            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_COMPLETED", actorGuid, null, ip,
                 "DiscoveryJob", id.ToString(), new { job.Name, AccountsFound = newAccounts.Count, scanResult.Message });
 
             logger.LogInformation("Discovery job '{Name}' completed. Found {Count} accounts", job.Name, newAccounts.Count);
@@ -92,7 +98,7 @@ public static class DiscoveryEndpoints
             });
         });
 
-        var accounts = app.MapGroup("/api/v1/vault/discovered-accounts").WithTags("Discovery");
+        var accounts = app.MapGroup("/api/v1/vault/discovered-accounts").WithTags("Discovery").RequireAuthorization("AdminPolicy");
 
         accounts.MapGet("/", async (OrkunPamDbContext db, string? status) =>
         {
@@ -222,7 +228,7 @@ public static class DiscoveryEndpoints
             return Results.Ok(new { success = true });
         });
 
-        var rotation = app.MapGroup("/api/v1/vault/rotation-policies").WithTags("Vault");
+        var rotation = app.MapGroup("/api/v1/vault/rotation-policies").WithTags("Vault").RequireAuthorization("AdminPolicy");
 
         rotation.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -326,11 +332,11 @@ public static class DiscoveryEndpoints
                     message = result.Message
                 }
             });
-        }).WithTags("Vault");
+        }).WithTags("Vault").RequireAuthorization("AdminPolicy");
     }
 }
 
-public record CreateDiscoveryJobRequest(string Name, DiscoveryType DiscoveryType, string? TargetScope, string? Schedule, Guid? CreatedBy);
+public record CreateDiscoveryJobRequest(string Name, DiscoveryType DiscoveryType, string? TargetScope, string? Schedule);
 public record TakeoverRequest(Guid FolderId);
 public record BulkImportRequest(List<Guid> AccountIds, Guid FolderId);
 public record CreateRotationPolicyRequest(string Name, int? IntervalDays, string? PasswordComplexityJson,

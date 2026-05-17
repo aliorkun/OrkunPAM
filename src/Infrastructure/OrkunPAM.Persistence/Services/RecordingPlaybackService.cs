@@ -34,16 +34,21 @@ public interface IRecordingPlaybackService
 public class RecordingPlaybackService : IRecordingPlaybackService
 {
     private readonly IVaultEncryptionService _vault;
+    private readonly IKeyStore _keyStore;
     private readonly ILogger<RecordingPlaybackService> _logger;
+
+    // HKDF info label for recording integrity key derivation
+    private static readonly byte[] RecordingIntegrityLabel = "OrkunPAM-Recording-Integrity-v1"u8.ToArray();
 
     // Recording file magic bytes for format detection
     private static readonly byte[] SshMagic = "OPAM-SSH-REC"u8.ToArray();
     private static readonly byte[] RdpMagic = "OPAM-RDP-REC"u8.ToArray();
     private static readonly byte[] HttpMagic = "OPAM-HTTP-REC"u8.ToArray();
 
-    public RecordingPlaybackService(IVaultEncryptionService vault, ILogger<RecordingPlaybackService> logger)
+    public RecordingPlaybackService(IVaultEncryptionService vault, IKeyStore keyStore, ILogger<RecordingPlaybackService> logger)
     {
         _vault = vault;
+        _keyStore = keyStore;
         _logger = logger;
     }
 
@@ -62,7 +67,6 @@ public class RecordingPlaybackService : IRecordingPlaybackService
 
             var metadata = new RecordingMetadata
             {
-                FilePath = recordingPath,
                 FileSizeBytes = fileInfo.Length,
                 Format = format,
                 CreatedAtUtc = fileInfo.CreationTimeUtc
@@ -194,7 +198,6 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         {
             var fileBytes = await File.ReadAllBytesAsync(recordingPath);
 
-            // Check for hash chain footer (last 64 bytes = SHA-256 hash chain)
             if (fileBytes.Length < 96)
             {
                 return new RecordingIntegrityResult
@@ -204,24 +207,45 @@ public class RecordingPlaybackService : IRecordingPlaybackService
                 };
             }
 
-            // Read the stored hash from the last 32 bytes
-            var storedHash = new byte[32];
-            Array.Copy(fileBytes, fileBytes.Length - 32, storedHash, 0, 32);
+            // Read the stored MAC from the last 32 bytes
+            var storedMac = new byte[32];
+            Array.Copy(fileBytes, fileBytes.Length - 32, storedMac, 0, 32);
 
-            // Compute hash over content (everything except the last 32 bytes)
             var contentBytes = new byte[fileBytes.Length - 32];
             Array.Copy(fileBytes, 0, contentBytes, 0, contentBytes.Length);
 
-            var computedHash = SHA256.HashData(contentBytes);
-
-            var isValid = storedHash.SequenceEqual(computedHash);
-
-            return new RecordingIntegrityResult
+            // Require vault key store to be initialized for HMAC-SHA256 verification
+            var dekResult = _keyStore.GetActiveDataEncryptionKey("SessionRecordings");
+            if (!dekResult.IsSuccess)
             {
-                IsValid = isValid,
-                Message = isValid ? "Hash chain integrity verified" : "Hash chain mismatch - recording may be tampered",
-                FileHash = Convert.ToHexString(computedHash).ToLowerInvariant()
-            };
+                return new RecordingIntegrityResult
+                {
+                    IsValid = false,
+                    Message = "Vault not initialized — cannot verify recording integrity"
+                };
+            }
+
+            // Derive a purpose-specific 256-bit HMAC key via HKDF so the DEK itself is not used directly
+            var dekBytes = dekResult.Value.Key;
+            var hmacKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, dekBytes, 32, null, RecordingIntegrityLabel);
+            try
+            {
+                using var hmac = new HMACSHA256(hmacKey);
+                var expectedMac = hmac.ComputeHash(contentBytes);
+                var isValid = CryptographicOperations.FixedTimeEquals(storedMac, expectedMac);
+
+                return new RecordingIntegrityResult
+                {
+                    IsValid = isValid,
+                    Message = isValid ? "HMAC-SHA256 integrity verified" : "Integrity check failed — recording may be tampered",
+                    FileHash = Convert.ToHexString(expectedMac).ToLowerInvariant()
+                };
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(hmacKey);
+                CryptographicOperations.ZeroMemory(dekBytes);
+            }
         }
         catch (Exception ex)
         {
@@ -234,7 +258,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         }
     }
 
-    // ── Private helpers ──────────────────────────────────────────────
+    // ── Private helpers ──────────────────────────────────
 
     private byte[]? DecryptRecording(byte[] encryptedBytes)
     {
@@ -373,11 +397,9 @@ public class RecordingPlaybackService : IRecordingPlaybackService
     };
 }
 
-// ── DTOs ─────────────────────────────────────────────────────────────
-
+// ── DTOs ────────────────────────────────────────────────────\n
 public class RecordingMetadata
 {
-    public string FilePath { get; set; } = "";
     public long FileSizeBytes { get; set; }
     public RecordingFormat Format { get; set; }
     public DateTime CreatedAtUtc { get; set; }
