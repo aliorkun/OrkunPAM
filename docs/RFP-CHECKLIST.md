@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-17 (PM run #11)
+> Last updated: 2026-05-17 (PM run #12)
 
 ## Platform (44 items)
 
@@ -11,7 +11,7 @@
 | 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 + OrkunPAM.Installer CLI — component selection, DB init, cert gen, service registration; single-package Windows Server deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
 | 3 | Solution shall be deployable On‑Premise and provided as a cloud  offering. |  |  |
-| 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se |  |  |
+| 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se | PC | All session proxies (SSH :2222, RDP :3389, VNC, HTTP, TACACS+ :49, RADIUS :1812) connect to target systems via standard protocols — no agent installation on managed devices; credential injection via SshServerSession.cs / RdpProxyService.cs / VncProxyService.cs |
 | 5 | Solution GUI shall run with updated version of well-known browsers (i.e. Microsoft Edge, Google Chrome, Firefox, Safari) | PC | OrkunPAM.Web (Blazor Server — Edge/Chrome/Firefox) |
 | 6 | Solution shall support SSO (Single-Sign-On) | PC | SAML 2.0 SSO implemented — SamlAuthEndpoints.cs SP-initiated flow, SamlCallback.razor (#45) |
 | 7 | Solution shall support both CLI and web interfaces | PC | Blazor web UI (OrkunPAM.Web) + REST API (OrkunPAM.WebAPI) |
@@ -38,7 +38,7 @@
 | 28 | Solution shall support business and operational model of geographically distributed organizations |  |  |
 | 29 | Solution shall support end-to-end encryption. | PC | TLS 1.3 (all comms) + AES-256-GCM (vault) + column-level encryption (#3, #4) |
 | 30 | Solution shall support FIPS 140-2 encryption standard | PC | FipsUtils.cs + VaultEncryptionService.cs — OS FIPS registry + appsettings Security.FipsMode override; AesCng when FIPS active; startup compliance validator; admin FIPS status badge (Integrations.razor); TLS 1.3 enforced; PBKDF2-SHA256 for passwords (#180) |
-| 31 | Solution shall support hardware security module (HSM) for key storage |  |  |
+| 31 | Solution shall support hardware security module (HSM) for key storage | PC | HsmKeyStore.cs — IHsmProvider abstraction; SoftHsmProvider (dev/test), Pkcs11HsmProvider (Thales Luna/nCipher/SafeNet/AWS CloudHSM), AzureKeyVaultHsmProvider (Azure Managed HSM), AwsCloudHsmProvider (AWS KMS); MEK never leaves HSM (WrapKeyAsync/UnwrapKeyAsync); GET /api/v1/system/hsm/status + POST /api/v1/system/hsm/rotate (AdminPolicy); Security:HsmMode appsettings config (#187) |
 | 32 | Solution shall support AES encryption for password management. | PC | VaultEncryptionService.cs — AES-256-GCM, 3-tier key hierarchy (KEK/DEK/MEK) |
 | 33 | Solution shall support audit log management. | FC | AuditService.cs — immutable hash-chained audit log, all operations recorded |
 | 34 | Solution shall provide real-time alerts for critical events. | PC | InProcessEventBus.cs + SessionEventRelayService.cs — real-time event relay via SignalR |
@@ -76,7 +76,7 @@
 | 17 | Solution shall support audit logging for user actions | FC | AuditService.cs — all user CRUD + auth events logged |
 | 18 | Solution shall support user import/export | PC | AdSyncService.cs — LDAP import; CSV export via Reports.razor |
 | 19 | Solution shall support self-service password reset | PC | ForgotPassword.razor — email token flow, secure reset (#135) |
-| 20 | Solution shall support delegated administration |  |  |
+| 20 | Solution shall support delegated administration | PC | VendorEndpoints.cs — sponsor users delegated control over vendor accounts: onboard, extend access (PUT /{id}/extend), revoke (PUT /{id}/revoke), view sessions; scoped delegation via VendorSponsorUserId without GlobalAdmin rights (#186) |
 | 21 | Solution shall support user activity monitoring | PC | Sessions.razor Live Monitor — active session tracking per user |
 | 22 | Solution shall support privileged user management | PC | UserEndpoints.cs + RoleEndpoints.cs — privileged role assignment/revocation |
 | 23 | Solution shall support emergency access accounts | PC | BreakGlassEndpoints.cs — emergency access, full audit, time-limited |
