@@ -68,8 +68,23 @@ public static class VaultEndpoints
             });
         });
 
-        folders.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db) =>
+        folders.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db, HttpContext context) =>
         {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin");
+            if (!isAdmin)
+            {
+                var hasAccess = await db.CredentialPermissions.AnyAsync(p =>
+                    p.FolderId == id && p.PrincipalId == userId);
+                var isOwner = await db.VaultFolders.AnyAsync(f =>
+                    f.Id == id && f.IsPersonalVault && f.OwnerUserId == userId);
+                if (!hasAccess && !isOwner)
+                    return Results.Forbid();
+            }
+
             var creds = await db.Credentials
                 .Where(c => c.FolderId == id)
                 .Select(c => new
@@ -383,6 +398,15 @@ public static class VaultEndpoints
             var cred = await db.Credentials.FindAsync(id);
             if (cred == null) return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
 
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin");
+            if (!isAdmin)
+            {
+                var hasCanShare = await db.CredentialPermissions.AnyAsync(p =>
+                    p.FolderId == cred.FolderId && p.PrincipalId == sharedByUserId && p.CanShare);
+                if (!hasCanShare)
+                    return Results.Forbid();
+            }
+
             var share = new CredentialShare
             {
                 CredentialId = id,
@@ -654,7 +678,7 @@ public static class VaultEndpoints
         }).RequireAuthorization();
 
         // === Vault Permissions ===
-        var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault").RequireAuthorization();
+        var perms = app.MapGroup("/api/v1/vault/permissions").WithTags("Vault").RequireAuthorization("AdminPolicy");
 
         perms.MapGet("/{folderId:guid}", async (Guid folderId, OrkunPamDbContext db) =>
         {
