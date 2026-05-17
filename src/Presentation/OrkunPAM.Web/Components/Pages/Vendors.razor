@@ -6,191 +6,395 @@
 <div class="pam-page-header">
     <h2 class="pam-page-title">Vendor Access Management</h2>
     <p style="color:var(--pam-muted);font-size:0.85em;margin:4px 0 0">
-        Grant time-limited, audited access to third-party vendors without creating permanent PAM accounts.
+        Manage third-party vendor accounts and time-limited access profiles.
     </p>
 </div>
 
 @if (_msg != null) { <div class="pam-alert pam-alert-info">@_msg</div> }
 @if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
 
-<div style="display:flex;gap:4px;margin-bottom:16px">
-    <button class="pam-btn @(_tab == "list" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("list"))">Active Vendors</button>
-    <button class="pam-btn @(_tab == "create" ? "pam-btn-primary" : "pam-btn-secondary")"
-            @onclick="@(() => SetTab("create"))">+ Create Vendor Access</button>
+<!-- Mode tabs -->
+<div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--pam-border);padding-bottom:8px">
+    <button class="pam-btn @(_mode == \"users\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+            @onclick="@(() => SetMode(\"users\"))">Vendor Users</button>
+    <button class="pam-btn @(_mode == \"profiles\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+            @onclick="@(() => SetMode(\"profiles\"))">Access Profiles (Token)</button>
 </div>
 
-@if (_tab == "create")
+@if (_mode == "users")
 {
-    <div class="pam-card" style="max-width:760px">
-        <div class="pam-card-body">
-            <strong>New Vendor Access Profile</strong>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
-                <div>
-                    <label class="pam-label">Vendor Name *</label>
-                    <input class="pam-input" placeholder="e.g. John Smith" @bind="_name" />
-                </div>
-                <div>
-                    <label class="pam-label">Company</label>
-                    <input class="pam-input" placeholder="e.g. Cisco Systems" @bind="_company" />
-                </div>
-                <div>
-                    <label class="pam-label">Email *</label>
-                    <input class="pam-input" type="email" placeholder="vendor@company.com" @bind="_email" />
-                </div>
-                <div>
-                    <label class="pam-label">Phone</label>
-                    <input class="pam-input" placeholder="+1 555 0000" @bind="_phone" />
-                </div>
-                <div>
-                    <label class="pam-label">Access Start (UTC) *</label>
-                    <input class="pam-input" type="datetime-local" @bind="_startAt" />
-                </div>
-                <div>
-                    <label class="pam-label">Access End (UTC) *</label>
-                    <input class="pam-input" type="datetime-local" @bind="_endAt" />
-                </div>
-                <div>
-                    <label class="pam-label">Allowed Hours Start (0-23, blank = any)</label>
-                    <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 9" @bind="_hoursStart" />
-                </div>
-                <div>
-                    <label class="pam-label">Allowed Hours End (0-23, blank = any)</label>
-                    <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 18" @bind="_hoursEnd" />
-                </div>
-                <div>
-                    <label class="pam-label">Max Session (minutes/day)</label>
-                    <input class="pam-input" type="number" min="30" max="1440" @bind="_maxMinutes" />
-                </div>
-                <div>
-                    <label class="pam-label">IP Whitelist (comma-sep, blank = any)</label>
-                    <input class="pam-input" placeholder="203.0.113.0,198.51.100.0" @bind="_ipWhitelist" />
-                </div>
-            </div>
+    <!-- Vendor Users mode (UserType.Vendor PAM accounts) -->
+    <div style="display:flex;gap:4px;margin-bottom:16px">
+        <button class="pam-btn @(_tab == \"list\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                @onclick="@(() => SetTab(\"list\"))">Active Vendors</button>
+        <button class="pam-btn @(_tab == \"onboard\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                @onclick="@(() => SetTab(\"onboard\"))">+ Onboard Vendor</button>
+    </div>
 
-            <div style="margin-top:12px">
-                <label class="pam-label">Authorized Device IDs (one per line)</label>
-                <textarea class="pam-input" rows="4"
-                          placeholder="Paste device UUIDs, one per line"
-                          @bind="_deviceIdsText" style="font-family:monospace;font-size:0.8em"></textarea>
-                <div style="font-size:0.75em;color:var(--pam-muted)">
-                    Find device IDs on the Devices page. The vendor will only see these devices in their portal.
+    @if (_tab == "onboard")
+    {
+        <div class="pam-card" style="max-width:760px">
+            <div class="pam-card-body">
+                <strong>Onboard New Vendor User</strong>
+                <p style="font-size:0.82em;color:var(--pam-muted);margin:4px 0 12px">
+                    Creates a temporary PAM account. Vendor receives invite email with setup link (48h valid).
+                </p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div>
+                        <label class="pam-label">Full Name *</label>
+                        <input class="pam-input" placeholder="e.g. John Smith" @bind="_vName" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Company</label>
+                        <input class="pam-input" placeholder="e.g. Cisco Systems" @bind="_vCompany" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Email *</label>
+                        <input class="pam-input" type="email" placeholder="vendor@company.com" @bind="_vEmail" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Phone</label>
+                        <input class="pam-input" placeholder="+1 555 0000" @bind="_vPhone" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Access Expires (UTC) * (max 30 days)</label>
+                        <input class="pam-input" type="datetime-local" @bind="_vExpires" />
+                    </div>
                 </div>
-            </div>
-
-            <div style="margin-top:10px">
-                <label style="display:flex;align-items:center;gap:8px">
-                    <input type="checkbox" @bind="_singleUse" />
-                    <span>Single-use invite link (link becomes invalid after first access)</span>
-                </label>
-            </div>
-
-            <div style="margin-top:14px;display:flex;gap:8px">
-                <button class="pam-btn pam-btn-primary" @onclick="CreateAsync" disabled="@_saving">
-                    @(_saving ? "Creating..." : "Create & Send Invite")
-                </button>
-                <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab("list"))">Cancel</button>
+                <div style="margin-top:12px">
+                    <label class="pam-label">Authorized Device IDs (one per line)</label>
+                    <textarea class="pam-input" rows="4"
+                              placeholder="Paste device UUIDs, one per line"
+                              @bind="_vDeviceIdsText" style="font-family:monospace;font-size:0.8em"></textarea>
+                    <div style="font-size:0.75em;color:var(--pam-muted)">
+                        Vendor will only be able to connect to these devices.
+                    </div>
+                </div>
+                <div style="margin-top:14px;display:flex;gap:8px">
+                    <button class="pam-btn pam-btn-primary" @onclick="OnboardAsync" disabled="@_vSaving">
+                        @(_vSaving ? "Creating..." : "Onboard & Send Invite")
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab(\"list\"))">Cancel</button>
+                </div>
             </div>
         </div>
-    </div>
+    }
+
+    @if (_tab == "list")
+    {
+        <div class="pam-card">
+            <div class="pam-card-body" style="padding:8px 12px;border-bottom:1px solid var(--pam-border)">
+                <div style="display:flex;gap:8px;align-items:center">
+                    <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
+                    @foreach (var s in new[] { "All", "Active", "Locked" })
+                    {
+                        <button class="pam-btn pam-btn-sm @(_vStatusFilter == s ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                                @onclick="@(() => FilterVendors(s))">@s</button>
+                    }
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadVendorUsersAsync">&#x21BB; Refresh</button>
+                </div>
+            </div>
+            <div class="pam-card-body p-0">
+                @if (_vLoading)
+                {
+                    <div class="pam-loading-text p-4">Loading...</div>
+                }
+                else if (_vendorUsers == null || _vendorUsers.Count == 0)
+                {
+                    <div class="pam-empty p-4">No vendor users found. Use &ldquo;Onboard Vendor&rdquo; to create one.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Access Expires (UTC)</th>
+                                <th>MFA</th>
+                                <th>Status</th>
+                                <th>Sponsor</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var v in _vendorUsers)
+                            {
+                                <tr>
+                                    <td><strong>@(v.DisplayName ?? v.Username)</strong></td>
+                                    <td style="font-size:0.85em;color:var(--pam-muted)">@v.Username</td>
+                                    <td style="font-size:0.85em">@v.Email</td>
+                                    <td style="font-size:0.8em;white-space:nowrap">
+                                        @if (v.TemporaryExpiresUtc.HasValue)
+                                        {
+                                            var isExpired = v.TemporaryExpiresUtc < DateTime.UtcNow;
+                                            var expColor = isExpired ? "var(--pam-danger)" : (v.TemporaryExpiresUtc < DateTime.UtcNow.AddHours(48) ? "var(--pam-warning)" : "inherit");
+                                            <span style="color:@expColor">@v.TemporaryExpiresUtc.Value.ToLocalTime().ToString("MM/dd HH:mm")</span>
+                                        }
+                                        else { <span style="color:var(--pam-muted)">&#x2014;</span> }
+                                    </td>
+                                    <td style="text-align:center">
+                                        @if (v.MfaEnabled) { <span style="color:var(--pam-success)">&#10003;</span> }
+                                        else { <span style="color:var(--pam-muted)">&#8212;</span> }
+                                    </td>
+                                    <td>
+                                        <span class="pam-status @VendorStatusClass(v.Status)">@v.Status</span>
+                                    </td>
+                                    <td style="font-size:0.8em">@(v.VendorSponsorUsername ?? "&#x2014;")</td>
+                                    <td style="white-space:nowrap">
+                                        @if (v.Status != "Locked")
+                                        {
+                                            <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                    style="margin-right:4px"
+                                                    @onclick="@(() => ShowExtend(v.Id))"
+                                                    disabled="@(_vActionId2 == v.Id)">
+                                                Extend
+                                            </button>
+                                            <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                    @onclick="@(() => RevokeVendorUserAsync(v.Id))"
+                                                    disabled="@(_vActionId2 == v.Id)">
+                                                Revoke
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span style="font-size:0.8em;color:var(--pam-muted)">Revoked</span>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (_extendId == v.Id)
+                                {
+                                    <tr>
+                                        <td colspan="8" style="background:var(--pam-surface-alt);padding:12px">
+                                            <strong>Extend Access for @(v.DisplayName ?? v.Username)</strong>
+                                            <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                                                <label class="pam-label" style="margin:0;white-space:nowrap">New Expiry (max 30 days):</label>
+                                                <input class="pam-input" type="datetime-local" style="width:220px"
+                                                       @bind="_extendDate" />
+                                                <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                                        @onclick="@(() => ExtendVendorAsync(v.Id))"
+                                                        disabled="@(_vActionId2 == v.Id)">
+                                                    Save
+                                                </button>
+                                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                        @onclick="@(() => _extendId = null)">Cancel</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
 }
 
-@if (_tab == "list")
+@if (_mode == "profiles")
 {
-    <div class="pam-card">
-        <div class="pam-card-body" style="padding:8px 12px;border-bottom:1px solid var(--pam-border)">
-            <div style="display:flex;gap:8px;align-items:center">
-                <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
-                @foreach (var s in new[] { "All", "Active", "Expired", "Revoked" })
-                {
-                    <button class="pam-btn pam-btn-sm @(_statusFilter == s ? "pam-btn-primary" : "pam-btn-secondary")"
-                            @onclick="@(() => FilterStatus(s))">@s</button>
-                }
-                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadAsync">&#x21BB; Refresh</button>
+    <!-- Token-based Vendor Access Profiles (legacy/simple) -->
+    <div style="display:flex;gap:4px;margin-bottom:16px">
+        <button class="pam-btn @(_tab == \"list\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                @onclick="@(() => SetTab(\"list\"))">Active Profiles</button>
+        <button class="pam-btn @(_tab == \"create\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                @onclick="@(() => SetTab(\"create\"))">+ Create Profile</button>
+    </div>
+
+    @if (_tab == "create")
+    {
+        <div class="pam-card" style="max-width:760px">
+            <div class="pam-card-body">
+                <strong>New Vendor Access Profile</strong>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+                    <div>
+                        <label class="pam-label">Vendor Name *</label>
+                        <input class="pam-input" placeholder="e.g. John Smith" @bind="_name" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Company</label>
+                        <input class="pam-input" placeholder="e.g. Cisco Systems" @bind="_company" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Email *</label>
+                        <input class="pam-input" type="email" placeholder="vendor@company.com" @bind="_email" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Phone</label>
+                        <input class="pam-input" placeholder="+1 555 0000" @bind="_phone" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Access Start (UTC) *</label>
+                        <input class="pam-input" type="datetime-local" @bind="_startAt" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Access End (UTC) *</label>
+                        <input class="pam-input" type="datetime-local" @bind="_endAt" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Allowed Hours Start (0-23, blank = any)</label>
+                        <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 9" @bind="_hoursStart" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Allowed Hours End (0-23, blank = any)</label>
+                        <input class="pam-input" type="number" min="0" max="23" placeholder="e.g. 18" @bind="_hoursEnd" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Max Session (minutes/day)</label>
+                        <input class="pam-input" type="number" min="30" max="1440" @bind="_maxMinutes" />
+                    </div>
+                    <div>
+                        <label class="pam-label">IP Whitelist (comma-sep, blank = any)</label>
+                        <input class="pam-input" placeholder="203.0.113.0,198.51.100.0" @bind="_ipWhitelist" />
+                    </div>
+                </div>
+
+                <div style="margin-top:12px">
+                    <label class="pam-label">Authorized Device IDs (one per line)</label>
+                    <textarea class="pam-input" rows="4"
+                              placeholder="Paste device UUIDs, one per line"
+                              @bind="_deviceIdsText" style="font-family:monospace;font-size:0.8em"></textarea>
+                </div>
+
+                <div style="margin-top:10px">
+                    <label style="display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" @bind="_singleUse" />
+                        <span>Single-use invite link</span>
+                    </label>
+                </div>
+
+                <div style="margin-top:14px;display:flex;gap:8px">
+                    <button class="pam-btn pam-btn-primary" @onclick="CreateAsync" disabled="@_saving">
+                        @(_saving ? "Creating..." : "Create & Send Invite")
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab(\"list\"))">Cancel</button>
+                </div>
             </div>
         </div>
-        <div class="pam-card-body p-0">
-            @if (_loading)
-            {
-                <div class="pam-loading-text p-4">Loading...</div>
-            }
-            else if (_vendors == null || _vendors.Count == 0)
-            {
-                <div class="pam-empty p-4">No vendor access profiles. Create one to grant third-party access.</div>
-            }
-            else
-            {
-                <table class="pam-table pam-table-hover">
-                    <thead>
-                        <tr>
-                            <th>Vendor</th>
-                            <th>Company</th>
-                            <th>Email</th>
-                            <th>Access Window (UTC)</th>
-                            <th>Status</th>
-                            <th>Created By</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var v in _vendors)
-                        {
+    }
+
+    @if (_tab == "list")
+    {
+        <div class="pam-card">
+            <div class="pam-card-body" style="padding:8px 12px;border-bottom:1px solid var(--pam-border)">
+                <div style="display:flex;gap:8px;align-items:center">
+                    <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
+                    @foreach (var s in new[] { "All", "Active", "Expired", "Revoked" })
+                    {
+                        <button class="pam-btn pam-btn-sm @(_statusFilter == s ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                                @onclick="@(() => FilterStatus(s))">@s</button>
+                    }
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadAsync">&#x21BB; Refresh</button>
+                </div>
+            </div>
+            <div class="pam-card-body p-0">
+                @if (_loading)
+                {
+                    <div class="pam-loading-text p-4">Loading...</div>
+                }
+                else if (_vendors == null || _vendors.Count == 0)
+                {
+                    <div class="pam-empty p-4">No vendor access profiles.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-hover">
+                        <thead>
                             <tr>
-                                <td><strong>@v.VendorName</strong></td>
-                                <td>@(v.Company ?? "—")</td>
-                                <td style="font-size:0.85em">@v.Email</td>
-                                <td style="font-size:0.8em;white-space:nowrap">
-                                    @v.StartAtUtc.ToLocalTime().ToString("MM/dd HH:mm") —
-                                    @v.EndAtUtc.ToLocalTime().ToString("MM/dd HH:mm")
-                                    @if (v.AllowedHoursStart.HasValue && v.AllowedHoursEnd.HasValue)
-                                    {
-                                        <span style="color:var(--pam-muted)"> (@v.AllowedHoursStart:00–@v.AllowedHoursEnd:00 UTC)</span>
-                                    }
-                                </td>
-                                <td>
-                                    <span class="pam-status @StatusClass(v.Status)">@v.Status</span>
-                                </td>
-                                <td style="font-size:0.8em">@v.CreatedByUsername</td>
-                                <td style="white-space:nowrap">
-                                    @if (v.Status != "Revoked")
-                                    {
-                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                                                style="margin-right:4px"
-                                                @onclick="@(() => ResendAsync(v.Id))"
-                                                disabled="@(_actionId == v.Id)">
-                                            Resend
-                                        </button>
-                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
-                                                @onclick="@(() => RevokeAsync(v.Id))"
-                                                disabled="@(_actionId == v.Id)">
-                                            Revoke
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span style="font-size:0.8em;color:var(--pam-muted)">@(v.RevokeReason ?? "Revoked")</span>
-                                    }
-                                </td>
+                                <th>Vendor</th>
+                                <th>Company</th>
+                                <th>Email</th>
+                                <th>Access Window (UTC)</th>
+                                <th>Status</th>
+                                <th>Created By</th>
+                                <th></th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+                        </thead>
+                        <tbody>
+                            @foreach (var v in _vendors)
+                            {
+                                <tr>
+                                    <td><strong>@v.VendorName</strong></td>
+                                    <td>@(v.Company ?? "&#x2014;")</td>
+                                    <td style="font-size:0.85em">@v.Email</td>
+                                    <td style="font-size:0.8em;white-space:nowrap">
+                                        @v.StartAtUtc.ToLocalTime().ToString("MM/dd HH:mm") &#x2014;
+                                        @v.EndAtUtc.ToLocalTime().ToString("MM/dd HH:mm")
+                                        @if (v.AllowedHoursStart.HasValue && v.AllowedHoursEnd.HasValue)
+                                        {
+                                            <span style="color:var(--pam-muted)"> (@v.AllowedHoursStart:00&#x2013;@v.AllowedHoursEnd:00 UTC)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="pam-status @StatusClass(v.Status)">@v.Status</span>
+                                    </td>
+                                    <td style="font-size:0.8em">@v.CreatedByUsername</td>
+                                    <td style="white-space:nowrap">
+                                        @if (v.Status != "Revoked")
+                                        {
+                                            <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                    style="margin-right:4px"
+                                                    @onclick="@(() => ResendAsync(v.Id))"
+                                                    disabled="@(_actionId == v.Id)">
+                                                Resend
+                                            </button>
+                                            <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                    @onclick="@(() => RevokeAsync(v.Id))"
+                                                    disabled="@(_actionId == v.Id)">
+                                                Revoke
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span style="font-size:0.8em;color:var(--pam-muted)">@(v.RevokeReason ?? "Revoked")</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
         </div>
-    </div>
+    }
 }
 
 @code {
+    // Mode: "users" = Vendor PAM accounts, "profiles" = token-based access
+    private string _mode = "users";
     private string _tab = "list";
-    private bool _loading = true;
-    private bool _saving;
+
+    // Shared state
     private string? _msg;
     private string? _error;
+
+    // === Vendor Users (UserType.Vendor) ===
+    private bool _vLoading = true;
+    private bool _vSaving;
+    private string? _vActionId;
+    private Guid? _vActionId2;
+    private string _vStatusFilter = "All";
+    private List<VendorUserDto>? _vendorUsers;
+    private Guid? _extendId;
+    private DateTime _extendDate = DateTime.Today.AddDays(7);
+
+    // Onboard form
+    private string _vName = "";
+    private string _vCompany = "";
+    private string _vEmail = "";
+    private string _vPhone = "";
+    private DateTime _vExpires = DateTime.Today.AddDays(7);
+    private string _vDeviceIdsText = "";
+
+    // === Token-based Profiles ===
+    private bool _loading = true;
+    private bool _saving;
     private string? _actionId;
     private string _statusFilter = "All";
     private List<VendorAccessDto>? _vendors;
 
-    // Create form fields
+    // Create profile form
     private string _name = "";
     private string _company = "";
     private string _email = "";
@@ -207,16 +411,114 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        await LoadAsync();
+        await LoadVendorUsersAsync();
+    }
+
+    private async Task SetMode(string mode)
+    {
+        _mode = mode; _tab = "list"; _msg = null; _error = null;
+        if (mode == "users") await LoadVendorUsersAsync();
+        else await LoadAsync();
     }
 
     private async Task SetTab(string tab)
     {
-        _tab = tab;
-        _msg = null; _error = null;
-        if (tab == "list") await LoadAsync();
+        _tab = tab; _msg = null; _error = null;
+        if (tab == "list")
+        {
+            if (_mode == "users") await LoadVendorUsersAsync();
+            else await LoadAsync();
+        }
     }
 
+    // === Vendor Users logic ===
+    private async Task FilterVendors(string status)
+    {
+        _vStatusFilter = status;
+        await LoadVendorUsersAsync();
+    }
+
+    private async Task LoadVendorUsersAsync()
+    {
+        _vLoading = true; StateHasChanged();
+        var filter = _vStatusFilter == "All" ? null : _vStatusFilter;
+        _vendorUsers = await Api.GetVendorUsersAsync(filter);
+        _vLoading = false; StateHasChanged();
+    }
+
+    private async Task OnboardAsync()
+    {
+        _msg = null; _error = null;
+        if (string.IsNullOrWhiteSpace(_vName) || string.IsNullOrWhiteSpace(_vEmail))
+        {
+            _error = "Full name and email are required.";
+            StateHasChanged(); return;
+        }
+        if (_vExpires <= DateTime.UtcNow)
+        {
+            _error = "Access expiry must be in the future.";
+            StateHasChanged(); return;
+        }
+        if (_vExpires > DateTime.UtcNow.AddDays(30))
+        {
+            _error = "Access cannot exceed 30 days.";
+            StateHasChanged(); return;
+        }
+
+        var deviceIds = _vDeviceIdsText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => Guid.TryParse(s, out _))
+            .Select(Guid.Parse)
+            .ToList();
+
+        _vSaving = true; StateHasChanged();
+        var result = await Api.OnboardVendorAsync(
+            _vName.Trim(), _vEmail.Trim(), _vPhone.Trim(), _vCompany.Trim(),
+            _vExpires.ToUniversalTime(), deviceIds);
+        _vSaving = false;
+
+        if (result != null)
+        {
+            _msg = $"Vendor account created for {_vEmail}. Invite sent.";
+            _vName = _vCompany = _vEmail = _vPhone = _vDeviceIdsText = "";
+            _vExpires = DateTime.Today.AddDays(7);
+            _tab = "list";
+            await LoadVendorUsersAsync();
+        }
+        else
+        {
+            _error = "Failed to onboard vendor. Check that email is valid.";
+        }
+        StateHasChanged();
+    }
+
+    private void ShowExtend(Guid id)
+    {
+        _extendId = id;
+        _extendDate = DateTime.Today.AddDays(7);
+        StateHasChanged();
+    }
+
+    private async Task ExtendVendorAsync(Guid id)
+    {
+        _msg = null; _error = null; _vActionId2 = id; StateHasChanged();
+        var ok = await Api.ExtendVendorAccessAsync(id, _extendDate.ToUniversalTime());
+        _vActionId2 = null; _extendId = null;
+        if (ok) { _msg = "Vendor access extended."; await LoadVendorUsersAsync(); }
+        else { _error = "Failed to extend vendor access."; StateHasChanged(); }
+    }
+
+    private async Task RevokeVendorUserAsync(Guid id)
+    {
+        _msg = null; _error = null; _vActionId2 = id; StateHasChanged();
+        var ok = await Api.RevokeVendorUserAsync(id, "Revoked by sponsor");
+        _vActionId2 = null;
+        if (ok) { _msg = "Vendor account revoked."; await LoadVendorUsersAsync(); }
+        else { _error = "Failed to revoke vendor account."; StateHasChanged(); }
+    }
+
+    // === Token Profile logic ===
     private async Task FilterStatus(string status)
     {
         _statusFilter = status;
@@ -237,14 +539,12 @@
         if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_email))
         {
             _error = "Vendor name and email are required.";
-            StateHasChanged();
-            return;
+            StateHasChanged(); return;
         }
         if (_endAt <= _startAt)
         {
             _error = "End time must be after start time.";
-            StateHasChanged();
-            return;
+            StateHasChanged(); return;
         }
 
         var deviceIds = _deviceIdsText
@@ -264,7 +564,7 @@
 
         if (result != null)
         {
-            _msg = $"Vendor access created. Invite sent to {_email}. Portal URL: {result.PortalUrl}";
+            _msg = $"Vendor access profile created. Invite sent to {_email}.";
             _name = _company = _email = _phone = _deviceIdsText = _ipWhitelist = "";
             _startAt = DateTime.Today; _endAt = DateTime.Today.AddDays(7);
             _hoursStart = null; _hoursEnd = null; _maxMinutes = 120; _singleUse = false;
@@ -292,10 +592,18 @@
         _msg = null; _error = null; _actionId = id; StateHasChanged();
         var url = await Api.ResendVendorInviteAsync(id);
         _actionId = null;
-        if (url != null) _msg = $"Invite resent. New portal URL: {url}";
+        if (url != null) _msg = $"Invite resent. Portal URL: {url}";
         else _error = "Failed to resend invite.";
         StateHasChanged();
     }
+
+    private static string VendorStatusClass(string status) => status switch
+    {
+        "Active"   => "pam-status-active",
+        "Locked"   => "pam-status-error",
+        "Expired"  => "pam-status-warning",
+        _          => "pam-status-pending"
+    };
 
     private static string StatusClass(string status) => status switch
     {

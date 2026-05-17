@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Domain.Entities.Identity;
@@ -208,7 +209,7 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // ── Recording Playback endpoints ────────────────────────────────────
+        // ── Recording Playback endpoints ─────────────────────────────────────────────
         sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
             IRecordingPlaybackService playback, HttpContext context) =>
         {
@@ -491,6 +492,23 @@ public static class SessionEndpoints
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
 
+        // Vendor device restriction: vendor users may only connect to their authorized devices
+        var connectingUser = await db.Users.FindAsync(userId);
+        if (connectingUser?.UserType == UserType.Vendor)
+        {
+            List<Guid> vendorDevices = [];
+            if (!string.IsNullOrEmpty(connectingUser.VendorDeviceIdsJson))
+            {
+                try { vendorDevices = JsonSerializer.Deserialize<List<Guid>>(connectingUser.VendorDeviceIdsJson) ?? []; }
+                catch { vendorDevices = []; }
+            }
+            if (!vendorDevices.Contains(req.DeviceId))
+            {
+                logger.LogWarning("Vendor {UserId} blocked: device {DeviceId} not in authorized device list", userId, req.DeviceId);
+                return Results.Forbid();
+            }
+        }
+
         string? password = null;
         if (cred.PasswordEnc != null)
         {
@@ -581,6 +599,23 @@ public static class SessionEndpoints
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
+
+        // Vendor device restriction for RDP sessions
+        var rdpConnectingUser = await db.Users.FindAsync(userId);
+        if (rdpConnectingUser?.UserType == UserType.Vendor)
+        {
+            List<Guid> rdpVendorDevices = [];
+            if (!string.IsNullOrEmpty(rdpConnectingUser.VendorDeviceIdsJson))
+            {
+                try { rdpVendorDevices = JsonSerializer.Deserialize<List<Guid>>(rdpConnectingUser.VendorDeviceIdsJson) ?? []; }
+                catch { rdpVendorDevices = []; }
+            }
+            if (!rdpVendorDevices.Contains(req.DeviceId))
+            {
+                logger.LogWarning("Vendor {UserId} blocked RDP: device {DeviceId} not in authorized device list", userId, req.DeviceId);
+                return Results.Forbid();
+            }
+        }
 
         // Concurrent session limit check
         var rdpConcurrentLimit = await GetMaxConcurrentSessionsAsync(db, cache);
