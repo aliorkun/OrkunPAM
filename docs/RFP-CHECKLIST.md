@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-17 (PM run #12)
+> Last updated: 2026-05-17 (PM run #13)
 
 ## Platform (44 items)
 
@@ -10,7 +10,7 @@
 |---|-------------|--------|---------|
 | 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 + OrkunPAM.Installer CLI — component selection, DB init, cert gen, service registration; single-package Windows Server deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
-| 3 | Solution shall be deployable On‑Premise and provided as a cloud  offering. |  |  |
+| 3 | Solution shall be deployable On‑Premise and provided as a cloud  offering. | PC | MSI installer (WiX v4) + PowerShell Install.ps1 — single-package Windows Server on-prem deployment (#36); Cloud PAM module — AWS/Azure/GCP cloud resource privileged access, JIT cloud credentials, multi-cloud dashboard (CloudPam.razor + CloudEndpoints.cs, #37) |
 | 4 | Solution shall support agent-less architecture. No additional software agent shall be required to install on devices, se | PC | All session proxies (SSH :2222, RDP :3389, VNC, HTTP, TACACS+ :49, RADIUS :1812) connect to target systems via standard protocols — no agent installation on managed devices; credential injection via SshServerSession.cs / RdpProxyService.cs / VncProxyService.cs |
 | 5 | Solution GUI shall run with updated version of well-known browsers (i.e. Microsoft Edge, Google Chrome, Firefox, Safari) | PC | OrkunPAM.Web (Blazor Server — Edge/Chrome/Firefox) |
 | 6 | Solution shall support SSO (Single-Sign-On) | PC | SAML 2.0 SSO implemented — SamlAuthEndpoints.cs SP-initiated flow, SamlCallback.razor (#45) |
@@ -212,7 +212,7 @@
 | 18 | Solution shall support load balancing | PC | RdsLoadBalancer.cs — TCP health-check + least-connections routing across RDS HA cluster nodes; background service with health loop (#110) |
 | 19 | Solution shall support failover | PC | RdsLoadBalancer.cs — auto-failover to healthy RDS nodes; unhealthy nodes removed from pool until TCP health check recovers (#110) |
 | 20 | Solution shall support geo-redundancy |  |  |
-| 21 | Solution shall support session watermarking |  |  |
+| 21 | Solution shall support session watermarking | PC | WatermarkPolicy entity + WatermarkEndpoints.cs — configurable watermark text (username/IP/timestamp), applied to SSH/RDP/VNC session recordings and metadata; Policies.razor Watermarking tab; CRUD + enable/disable toggle; SessionWatermarkService.cs; audit logged (#190) |
 | 22 | Solution shall support clipboard control | PC | RdpProxyService.cs — clipboard channel audit/control in RDP PDU |
 | 23 | Solution shall support file transfer control | PC | SshProxyService.cs — SFTP audit/control |
 | 24 | Solution shall support printer redirection control | PC | RdpProxyService.cs — printer/drive redirection audit |
@@ -251,7 +251,7 @@
 | 2 | Solution shall support credential retrieval | FC | CredentialEndpoints.cs — RBAC-enforced checkout flow |
 | 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job |
 | 4 | Solution shall support credential expiry | PC | CredentialEndpoints.cs — expiry date, Reports.razor credential-expiry report |
-| 5 | Solution shall support credential discovery |  |  |
+| 5 | Solution shall support credential discovery | PC | DiscoveryEndpoints.cs — POST /api/v1/vault/discovery (create scan config), POST /{id}/run (trigger AD scan); AD group-based privileged account discovery + bulk import to vault; DiscoveredCredential entity with status lifecycle; audit logged (#189) |
 | 6 | Solution shall support credential onboarding | PC | Vault.razor — Add Credential form; manual onboarding |
 | 7 | Solution shall support credential lifecycle management | PC | CredentialEndpoints.cs — create/update/rotate/archive/delete |
 | 8 | Solution shall support credential access control | PC | GroupEndpoints.cs + CredentialEndpoints.cs — group-based access binding |
@@ -273,7 +273,7 @@
 | 24 | Solution shall support credential compliance | PC | PolicyEndpoints.cs — policy-compliance report for credentials |
 | 25 | Solution shall support credential risk scoring |  |  |
 | 26 | Solution shall support credential dual control | PC | PasswordViewer SoD — admin cannot checkout without separate PasswordViewer role; dual-control enforcement (#140) |
-| 27 | Solution shall support credential checkout | PC | CredentialEndpoints.cs — self-assignment prevention: PasswordViewer cannot be granted by same user (#140) |
+| 27 | Solution shall support credential checkout | PC | CredentialEndpoints.cs — self-assignment prevention: PasswordViewer cannot be granted by same user (#140); POST /api/v1/vault/credentials/{id}/request-access — approval-gated checkout: reason + ticket, 48h TTL, duplicate detection, admin group notification; Vault.razor Request Access modal (Sprint 14) |
 | 28 | Solution shall support credential check-in | PC | CredentialEndpoints.cs — check-in after session/manual checkout |
 | 29 | Solution shall support credential time-limited access | PC | JitAccessEndpoints.cs — time-limited JIT credential access |
 | 30 | Solution shall support credential just-in-time access | PC | JitAccessEndpoints.cs — JIT access with approval workflow |
@@ -287,13 +287,13 @@
 | 38 | Solution shall support credential orchestration |  |  |
 | 39 | Solution shall support SSH key management | PC | SshKeyEndpoints.cs — RSA/OpenSSH key pair generation, encrypted storage, device binding |
 | 40 | Solution shall support API key management | PC | CredentialEndpoints.cs — API key type credential |
-| 41 | Solution shall support certificate management |  |  |
+| 41 | Solution shall support certificate management | PC | CertificateEndpoints.cs + Certificates.razor — X.509 certificate inventory: import PEM/PFX, expiry tracking (Subject/Issuer/Thumbprint/NotAfter), expiry alert emails; Vault.razor Certificates tab; Certificate entity + DB migration; audit logged (#191) |
 | 42 | Solution shall support service account management | PC | CredentialEndpoints.cs — service account type credentials |
 | 43 | Solution shall support cloud credential management | PC | CloudEndpoints.cs + CloudPam.razor — AWS IAM/EC2/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS credential management; cloud account CRUD; resource sync; multi-cloud dashboard (#37) |
 | 44 | Solution shall support database credential management | PC | CredentialEndpoints.cs — DB credential type (SQL Server, MySQL, PostgreSQL) |
 | 45 | Solution shall support application credential management | PC | CredentialEndpoints.cs — API/app credential type |
 | 46 | Solution shall support network device credential management | PC | CredentialEndpoints.cs + TacacsProxyService.cs — network device credential type |
-| 47 | Solution shall support privileged account discovery | PC | GET /api/v1/users/orphaned — orphaned privileged accounts flagged with IsOrphaned + OrphanedDetectedAtUtc; Users.razor orphaned badge + filter; UserDto includes IsOrphaned field (#153) |
+| 47 | Solution shall support privileged account discovery | PC | GET /api/v1/users/orphaned — orphaned privileged accounts flagged with IsOrphaned + OrphanedDetectedAtUtc; Users.razor orphaned badge + filter; UserDto includes IsOrphaned field (#153); DiscoveryEndpoints.cs — AD group-based privileged account scanning + bulk vault import (#189) |
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
