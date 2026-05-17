@@ -18,6 +18,8 @@
             @onclick="@(() => SetTab("itsm"))">&#x1F3AB; ITSM</button>
     <button class="pam-btn @(_tab == "pki" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("pki"))">&#x1F4DC; PKI / Smart Card</button>
+    <button class="pam-btn @(_tab == "soar" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("soar"))">&#x26A1; SOAR</button>
 </div>
 
 @if (_tab == "ldap")
@@ -481,9 +483,106 @@
     }
 }
 
+@if (_tab == "soar")
+{
+    @if (_soarError != null) { <div class="pam-alert pam-alert-danger">@_soarError</div> }
+    @if (_soarMsg != null)   { <div class="pam-alert pam-alert-success">@_soarMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:1rem">
+        <div class="pam-card-body">
+            <p style="margin-bottom:1rem;font-size:0.9rem;color:#aaa">
+                Configure SOAR providers (Splunk SOAR, Palo Alto XSOAR, Generic REST) for bi-directional PAM-SOC automation.
+                Inbound SOAR actions require <code>X-Soar-Config-Id</code> and <code>X-Soar-Signature</code> headers (HMAC-SHA256).
+            </p>
+            <h4 style="margin-bottom:0.75rem">Add SOAR Provider</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:600px">
+                <input class="pam-input" @bind="_soarName" placeholder="Config name (e.g. Splunk SOAR Prod)" />
+                <select class="pam-select" @bind="_soarProvider">
+                    <option value="SplunkSOAR">Splunk SOAR</option>
+                    <option value="PaloAltoXSOAR">Palo Alto XSOAR</option>
+                    <option value="GenericREST">Generic REST</option>
+                </select>
+                <input class="pam-input" @bind="_soarWebhookUrl" placeholder="SOAR webhook URL (PAM → SOAR outbound)" />
+                <input class="pam-input" @bind="_soarSecret" placeholder="HMAC signing secret (SOAR → PAM inbound)" type="password" />
+            </div>
+            <button class="pam-btn pam-btn-primary" style="margin-top:8px"
+                    @onclick="AddSoarAsync" disabled="@_soarSaving">
+                @(_soarSaving ? "Adding..." : "Add Provider")
+            </button>
+        </div>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body">
+            @if (_soarLoading)
+            {
+                <div class="pam-loading-text">Loading SOAR configurations...</div>
+            }
+            else if (_soarConfigs == null || _soarConfigs.Count == 0)
+            {
+                <div class="pam-empty">No SOAR providers configured.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr><th>Name</th><th>Provider</th><th>Webhook URL</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _soarConfigs)
+                        {
+                            <tr>
+                                <td>@(s.Name ?? "—")</td>
+                                <td>@(s.Provider ?? "—")</td>
+                                <td style="font-size:0.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">@(s.WebhookUrl ?? "—")</td>
+                                <td>@((MarkupString)(s.IsEnabled ? "<span class=\"pam-badge pam-badge-green\">Enabled</span>" : "<span class=\"pam-badge pam-badge-gray\">Disabled</span>"))</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                            @onclick="@(() => ToggleSoarAsync(s.Id ?? ""))">
+                                        @(s.IsEnabled ? "Disable" : "Enable")
+                                    </button>
+                                    <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                            @onclick="@(() => TestSoarAsync(s.Id ?? ""))">Test</button>
+                                    <button class="pam-btn pam-btn-sm pam-btn-danger"
+                                            @onclick="@(() => DeleteSoarAsync(s.Id ?? ""))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;border-radius:6px;font-size:0.85rem">
+                    <strong>Inbound SOAR Action Endpoints:</strong>
+                    <ul style="margin-top:0.5rem;color:#aaa;list-style:disc;padding-left:1.5rem">
+                        <li><code>POST /api/v1/integrations/soar/terminate-session</code></li>
+                        <li><code>POST /api/v1/integrations/soar/lock-account</code></li>
+                        <li><code>POST /api/v1/integrations/soar/revoke-jit</code></li>
+                        <li><code>POST /api/v1/integrations/soar/rotate-credential</code></li>
+                        <li><code>GET /api/v1/integrations/soar/session-details/{id}</code></li>
+                    </ul>
+                    <div style="margin-top:0.5rem;color:#888">
+                        Required headers: <code>X-Soar-Config-Id</code>, <code>X-Soar-Signature: sha256=...</code>, <code>X-Soar-Timestamp</code>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // SOAR state (#197)
+    private List<SoarConfigDto>? _soarConfigs;
+    private bool _soarLoading;
+    private bool _soarSaving;
+    private string? _soarError;
+    private string? _soarMsg;
+    private string _soarName = "";
+    private string _soarProvider = "SplunkSOAR";
+    private string _soarWebhookUrl = "";
+    private string _soarSecret = "";
 
     // ITSM state
     private bool _itsmLoading;
@@ -574,6 +673,8 @@
             await LoadItsmAsync();
         if (tab == "pki" && _trustedCas == null)
             await LoadPkiAsync();
+        if (tab == "soar" && _soarConfigs == null)
+            await LoadSoarAsync();
     }
 
     // ── ITSM ────────────────────────────────────────────────────────────────────────────
@@ -821,5 +922,49 @@
         var ok = await Api.DeleteSiemTargetAsync(id);
         if (ok) await LoadSiemAsync();
         else { _siemError = "Failed to delete SIEM target."; StateHasChanged(); }
+    }
+
+    // SOAR methods (#197)
+    private async Task LoadSoarAsync()
+    {
+        _soarLoading = true; StateHasChanged();
+        _soarConfigs = await Api.GetSoarConfigsAsync();
+        _soarLoading = false; StateHasChanged();
+    }
+
+    private async Task AddSoarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_soarName) || string.IsNullOrWhiteSpace(_soarSecret))
+        { _soarError = "Name and HMAC secret are required."; return; }
+        _soarSaving = true; _soarError = null; StateHasChanged();
+        var ok = await Api.CreateSoarConfigAsync(_soarName, _soarProvider, _soarWebhookUrl, _soarSecret);
+        _soarSaving = false;
+        if (ok) { _soarMsg = "SOAR provider added."; _soarName = _soarWebhookUrl = _soarSecret = ""; await LoadSoarAsync(); }
+        else { _soarError = "Failed to add SOAR provider."; StateHasChanged(); }
+    }
+
+    private async Task ToggleSoarAsync(string id)
+    {
+        _soarMsg = null; _soarError = null;
+        var ok = await Api.ToggleSoarConfigAsync(id);
+        if (ok) await LoadSoarAsync();
+        else { _soarError = "Failed to toggle."; StateHasChanged(); }
+    }
+
+    private async Task TestSoarAsync(string id)
+    {
+        _soarMsg = null; _soarError = null;
+        var ok = await Api.TestSoarConfigAsync(id);
+        _soarMsg = ok ? "Test webhook sent successfully." : null;
+        if (!ok) _soarError = "Test webhook delivery failed.";
+        StateHasChanged();
+    }
+
+    private async Task DeleteSoarAsync(string id)
+    {
+        _soarMsg = null; _soarError = null;
+        var ok = await Api.DeleteSoarConfigAsync(id);
+        if (ok) { _soarMsg = "SOAR provider removed."; await LoadSoarAsync(); }
+        else { _soarError = "Failed to delete."; StateHasChanged(); }
     }
 }

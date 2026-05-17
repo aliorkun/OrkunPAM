@@ -1965,6 +1965,57 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // ── SOAR Integration (#197) ───────────────────────────────────────────────
+    public async Task<List<SoarConfigDto>?> GetSoarConfigsAsync()
+    {
+        var result = await GetAsync<ListResult<SoarConfigDto>>("/api/v1/integrations/soar");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateSoarConfigAsync(string name, string provider, string webhookUrl, string hmacSecret)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/integrations/soar", new { name, provider, webhookUrl, hmacSecret });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleSoarConfigAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsync($"/api/v1/integrations/soar/{id}/toggle", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> TestSoarConfigAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/integrations/soar/{id}/test", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteSoarConfigAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/integrations/soar/{id}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── Push Notification MFA (#196) ─────────────────────────────────────────
     public async Task<List<PushDeviceDto>?> GetPushDevicesAsync()
     {
@@ -2816,6 +2867,9 @@ public record ManagedCertificateDto(
     DateTime  CreatedAtUtc,
     int       DaysUntilExpiry,
     bool      IsExpired);
+
+// SOAR DTOs (#197)
+public record SoarConfigDto(string? Id, string? Name, string? Provider, string? WebhookUrl, bool IsEnabled, string? CreatedAt);
 
 // Push MFA DTOs (#196)
 public record PushDeviceDto(string? Id, string? Name, DateTime? RegisteredAt);

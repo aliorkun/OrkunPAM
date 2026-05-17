@@ -463,6 +463,7 @@ try
     api.MapCloudPamEndpoints();
     api.MapCertificateEndpoints();
     api.MapPushMfaEndpoints();
+    api.MapSoarEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
