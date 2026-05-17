@@ -147,6 +147,11 @@
                                             }
                                             else
                                             {
+                                                @if (c.RequiresApproval)
+                                                {
+                                                    <button class="pam-btn-icon" title="Request access approval"
+                                                            @onclick="@(() => OpenRequestAccess(c.Id, c.Name))">&#x1F4CB;</button>
+                                                }
                                                 <button class="pam-btn-icon" title="Checkout credential"
                                                         @onclick="@(() => OpenCheckout(c.Id, c.Name))">↗</button>
                                             }
@@ -226,6 +231,55 @@
                     @if (_coSaving) { <span class="pam-spinner-sm"></span> }
                     Checkout
                 </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Request Access Modal -->
+@if (_showRequestAccess)
+{
+    <div class="pam-modal-overlay" @onclick="() => _showRequestAccess = false">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Request Access — @_raCredName</h3>
+                <button class="pam-close-btn" @onclick="() => _showRequestAccess = false">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_raError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_raError</div>
+                }
+                @if (_raSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success">@_raSuccess</div>
+                }
+                @if (_raSuccess == null)
+                {
+                    <div class="pam-alert pam-alert-warning" style="margin-bottom:12px">
+                        This credential requires approval before checkout. Submit a request and an administrator will grant access.
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Reason <span style="color:var(--pam-danger)">*</span></label>
+                        <input class="pam-input w-100-input" @bind="_raReason"
+                               placeholder="e.g. Planned maintenance — INC-1234" />
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Ticket Number</label>
+                        <input class="pam-input w-100-input" @bind="_raTicket"
+                               placeholder="e.g. INC-1234 or CHG-5678" />
+                    </div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="() => _showRequestAccess = false">Close</button>
+                @if (_raSuccess == null)
+                {
+                    <button class="pam-btn pam-btn-primary" @onclick="SubmitRequestAccessAsync" disabled="@_raSaving">
+                        @if (_raSaving) { <span class="pam-spinner-sm"></span> }
+                        Submit Request
+                    </button>
+                }
             </div>
         </div>
     </div>
@@ -527,6 +581,16 @@
     private bool    _coSaving;
     private string? _coError;
 
+    // Request Access modal
+    private bool    _showRequestAccess;
+    private string? _raCredId;
+    private string? _raCredName;
+    private string  _raReason  = "";
+    private string  _raTicket  = "";
+    private bool    _raSaving;
+    private string? _raError;
+    private string? _raSuccess;
+
     // Password reveal modal
     private bool      _showReveal;
     private string?   _revealName;
@@ -690,6 +754,43 @@
         _showReveal    = true;
 
         await LoadAsync();
+    }
+
+    private void OpenRequestAccess(string credId, string credName)
+    {
+        _raCredId = credId; _raCredName = credName;
+        _raReason = ""; _raTicket = "";
+        _raError = null; _raSuccess = null; _raSaving = false;
+        _showRequestAccess = true;
+    }
+
+    private async Task SubmitRequestAccessAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_raReason))
+        {
+            _raError = "Reason is required.";
+            return;
+        }
+        _raError = null; _raSaving = true; StateHasChanged();
+
+        var result = await Api.RequestCredentialAccessAsync(
+            _raCredId!,
+            _raReason.Trim(),
+            string.IsNullOrWhiteSpace(_raTicket) ? null : _raTicket.Trim());
+
+        _raSaving = false;
+
+        if (result == null || !result.Success)
+        {
+            _raError = result?.Message ?? "Failed to submit request. Please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        _raSuccess = result.Status == "Approved"
+            ? "Access already approved — you can checkout this credential now."
+            : result.Message ?? "Access request submitted. An administrator will review it. Check the Approvals page for status.";
+        StateHasChanged();
     }
 
     private void CloseReveal()

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Vault;
+using OrkunPAM.Domain.Entities.Workflow;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Persistence;
@@ -309,6 +310,67 @@ public static class VaultEndpoints
             logger.LogInformation("Credential '{Name}' checked in by user {UserId}", cred.Name, userId);
 
             return Results.Ok(new { success = true, message = $"Credential '{cred.Name}' checked in" });
+        }).RequireAuthorization();
+
+        // === Request Access (for credentials that require approval) ===
+        creds.MapPost("/{id:guid}/request-access", async (Guid id, RequestAccessRequest req, OrkunPamDbContext db, ILogger<Program> logger, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var cred = await db.Credentials.FindAsync(id);
+            if (cred == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            if (!cred.RequiresApproval)
+                return Results.BadRequest(new { success = false, errors = new[] { "This credential does not require approval." } });
+
+            // Check for an already-approved, non-expired request
+            var alreadyApproved = await db.ApprovalRequests
+                .AnyAsync(ar => ar.ResourceId == id
+                             && ar.RequesterId == userId
+                             && ar.Status == ApprovalStatus.Approved
+                             && (ar.ExpiresAtUtc == null || ar.ExpiresAtUtc > DateTime.UtcNow));
+            if (alreadyApproved)
+                return Results.Ok(new { success = true, status = "Approved", message = "Access already approved. You can now checkout this credential." });
+
+            // Check for an existing pending request (avoid duplicates)
+            var existing = await db.ApprovalRequests
+                .FirstOrDefaultAsync(ar => ar.ResourceId == id
+                                        && ar.RequesterId == userId
+                                        && ar.Status == ApprovalStatus.Pending);
+            if (existing != null)
+                return Results.Ok(new { success = true, status = "Pending", requestId = existing.Id, message = "Access request already pending. Check the Approvals page for status." });
+
+            // Sentinel group GUID: means "any admin can approve" (non-null triggers admin visibility)
+            var adminGroupSentinel = new Guid("00000000-0000-0000-0000-000000000001");
+
+            var approvalRequest = new ApprovalRequest
+            {
+                WorkflowId = Guid.Empty,
+                RequesterId = userId,
+                ResourceType = "Credential",
+                ResourceId = id,
+                Reason = req.Reason,
+                TicketNumber = req.TicketNumber,
+                ExpiresAtUtc = DateTime.UtcNow.AddHours(48)
+            };
+            approvalRequest.Steps.Add(new ApprovalStep
+            {
+                RequestId = approvalRequest.Id,
+                StepOrder = 0,
+                ApproverGroupId = adminGroupSentinel
+            });
+
+            db.ApprovalRequests.Add(approvalRequest);
+            await db.SaveChangesAsync();
+
+            logger.LogInformation("Credential access request {RequestId} created by user {UserId} for credential {CredentialId} ('{Name}')",
+                approvalRequest.Id, userId, id, cred.Name);
+
+            return Results.Created($"/api/v1/approval-requests/{approvalRequest.Id}",
+                new { success = true, status = "Pending", requestId = approvalRequest.Id, message = "Access request submitted. An administrator will review it shortly." });
         }).RequireAuthorization();
 
         // === Share Credential ===
@@ -666,3 +728,4 @@ public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
 public record RotateCredentialRequest(string? Host, int? Port, string Connector, string? Domain);
+public record RequestAccessRequest(string? Reason, string? TicketNumber);
