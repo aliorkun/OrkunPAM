@@ -1,0 +1,707 @@
+@page "/cloud-pam"
+@inject PamApiService Api
+
+<PageTitle>Cloud PAM &#x2014; OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Cloud PAM</h2>
+    <p style="color:var(--pam-muted);font-size:0.85em;margin:4px 0 0">
+        Privileged access management for AWS, Azure, and GCP cloud resources. JIT access, IAM governance, and multi-cloud visibility.
+    </p>
+</div>
+
+@if (_msg != null) { <div class="pam-alert pam-alert-info">@_msg</div> }
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+
+<div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="pam-btn @(_tab == "dashboard" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("dashboard"))">&#x229E; Dashboard</button>
+    <button class="pam-btn @(_tab == "accounts" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("accounts"))">&#x2601; Cloud Accounts</button>
+    <button class="pam-btn @(_tab == "resources" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("resources"))">&#x1F5B4; Resources</button>
+    <button class="pam-btn @(_tab == "jit" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("jit"))">&#x23F1; JIT Access</button>
+</div>
+
+@if (_tab == "dashboard" && _dashboard != null)
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">
+        <div class="pam-card">
+            <div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:700;color:var(--pam-primary)">@_dashboard.TotalAccounts</div>
+                <div style="color:var(--pam-muted);font-size:0.82em">Cloud Accounts</div>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:700;color:var(--pam-primary)">@_dashboard.TotalResources</div>
+                <div style="color:var(--pam-muted);font-size:0.82em">Discovered Resources</div>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:700;color:var(--pam-warning)">@_dashboard.PendingJitRequests</div>
+                <div style="color:var(--pam-muted);font-size:0.82em">Pending JIT</div>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:700;color:var(--pam-success)">@_dashboard.ActiveJitRequests</div>
+                <div style="color:var(--pam-muted);font-size:0.82em">Active JIT Sessions</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="pam-card">
+            <div class="pam-card-body" style="border-bottom:1px solid var(--pam-border)"><strong>By Provider</strong></div>
+            <div class="pam-card-body p-0">
+                <table class="pam-table">
+                    <thead><tr><th>Provider</th><th>Accounts</th><th>Resources</th><th>Active JIT</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _dashboard.ByProvider)
+                        {
+                            <tr>
+                                <td>
+                                    <span style="font-weight:600;color:@ProviderColor(p.Provider)">@ProviderIcon(p.Provider) @p.Provider</span>
+                                </td>
+                                <td>@p.Accounts</td>
+                                <td>@p.Resources</td>
+                                <td>@p.ActiveJit</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="pam-card">
+            <div class="pam-card-body" style="border-bottom:1px solid var(--pam-border)"><strong>Recent JIT Requests</strong></div>
+            <div class="pam-card-body p-0">
+                @if (_dashboard.RecentJit.Count == 0)
+                {
+                    <div class="pam-empty p-4">No JIT requests yet.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-sm">
+                        <thead><tr><th>User</th><th>Permission</th><th>Status</th><th>Time</th></tr></thead>
+                        <tbody>
+                            @foreach (var j in _dashboard.RecentJit)
+                            {
+                                <tr>
+                                    <td style="font-size:0.82em">@j.RequestedByUsername</td>
+                                    <td style="font-size:0.82em">@j.Permission</td>
+                                    <td><span class="pam-status @JitStatusClass(j.Status)">@j.Status</span></td>
+                                    <td style="font-size:0.78em">@j.RequestedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (_tab == "accounts")
+{
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="pam-btn pam-btn-primary" @onclick="ShowAddAccount">+ Add Cloud Account</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="LoadAccountsAsync">&#x21BB; Refresh</button>
+    </div>
+
+    @if (_showAddAccount)
+    {
+        <div class="pam-card" style="max-width:680px;margin-bottom:16px">
+            <div class="pam-card-body" style="border-bottom:1px solid var(--pam-border)"><strong>Add Cloud Account</strong></div>
+            <div class="pam-card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div>
+                        <label class="pam-label">Name *</label>
+                        <input class="pam-input" placeholder="e.g. Production AWS" @bind="_accName" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Provider *</label>
+                        <select class="pam-input" @bind="_accProvider">
+                            <option value="">&#x2014; select &#x2014;</option>
+                            <option value="AWS">AWS</option>
+                            <option value="Azure">Azure</option>
+                            <option value="GCP">GCP</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pam-label">@AccountIdLabel *</label>
+                        <input class="pam-input" placeholder="@AccountIdPlaceholder" @bind="_accIdentifier" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Default Region</label>
+                        <input class="pam-input" placeholder="e.g. us-east-1 / eastus" @bind="_accRegion" />
+                    </div>
+                    <div>
+                        <label class="pam-label">@KeyIdLabel</label>
+                        <input class="pam-input" placeholder="@KeyIdPlaceholder" @bind="_accKeyId" />
+                    </div>
+                    <div>
+                        <label class="pam-label">@SecretLabel</label>
+                        <input class="pam-input" type="password" placeholder="@SecretPlaceholder" @bind="_accSecret" />
+                    </div>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button class="pam-btn pam-btn-primary" @onclick="AddAccountAsync" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Add Account")
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showAddAccount = false)">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_accounts == null || _accounts.Count == 0)
+            {
+                <div class="pam-empty p-4">No cloud accounts configured. Add an AWS, Azure, or GCP account to get started.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th>Provider</th>
+                            <th>Account ID</th>
+                            <th>Region</th>
+                            <th>Resources</th>
+                            <th>Last Sync</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _accounts)
+                        {
+                            <tr>
+                                <td><strong>@a.Name</strong></td>
+                                <td>
+                                    <span style="font-weight:600;color:@ProviderColor(a.Provider)">@ProviderIcon(a.Provider) @a.Provider</span>
+                                </td>
+                                <td style="font-size:0.82em;font-family:monospace">@a.AccountIdentifier</td>
+                                <td style="font-size:0.82em">@(a.Region ?? "&#x2014;")</td>
+                                <td>@a.ResourceCount</td>
+                                <td style="font-size:0.78em">
+                                    @(a.LastSyncAtUtc.HasValue ? a.LastSyncAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm") : "Never")
+                                </td>
+                                <td>
+                                    <span class="pam-status @(a.IsEnabled ? "pam-status-active" : "pam-status-error")">
+                                        @(a.IsEnabled ? "Enabled" : "Disabled")
+                                    </span>
+                                </td>
+                                <td style="white-space:nowrap">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => SyncAccountAsync(a.Id))"
+                                            disabled="@(_actionId == a.Id)">
+                                        &#x21BB; Sync
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => ToggleAccountAsync(a.Id))"
+                                            disabled="@(_actionId == a.Id)"
+                                            style="margin-left:4px">
+                                        @(a.IsEnabled ? "Disable" : "Enable")
+                                    </button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => DeleteAccountAsync(a.Id))"
+                                            style="margin-left:4px">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "resources")
+{
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
+        @foreach (var p in new[] { "All", "AWS", "Azure", "GCP" })
+        {
+            <button class="pam-btn pam-btn-sm @(_providerFilter == p ? "pam-btn-primary" : "pam-btn-secondary")"
+                    @onclick="@(() => SetProviderFilter(p))">@p</button>
+        }
+        <select class="pam-input" style="width:180px;height:32px;padding:4px 8px;font-size:0.85em" @bind="_typeFilter" @bind:after="LoadResourcesAsync">
+            <option value="">All Types</option>
+            <option value="EC2Instance">EC2 Instance</option>
+            <option value="IAMUser">IAM User</option>
+            <option value="IAMRole">IAM Role</option>
+            <option value="S3Bucket">S3 Bucket</option>
+            <option value="VirtualMachine">Azure VM</option>
+            <option value="KeyVault">Key Vault</option>
+            <option value="ServicePrincipal">Service Principal</option>
+            <option value="GCEInstance">GCE Instance</option>
+            <option value="ServiceAccount">GCP Service Account</option>
+            <option value="GCSBucket">GCS Bucket</option>
+        </select>
+        <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadResourcesAsync">&#x21BB; Refresh</button>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_resources == null || _resources.Count == 0)
+            {
+                <div class="pam-empty p-4">No cloud resources found. Add a cloud account and run Sync to discover resources.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Provider</th>
+                            <th>Type</th>
+                            <th>Region</th>
+                            <th>Status</th>
+                            <th>IP</th>
+                            <th>Last Seen</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _resources)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@r.Name</strong>
+                                    <div style="font-size:0.72em;color:var(--pam-muted);font-family:monospace;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@r.NativeId</div>
+                                </td>
+                                <td><span style="color:@ProviderColor(r.Provider)">@ProviderIcon(r.Provider) @r.Provider</span></td>
+                                <td style="font-size:0.82em">@r.ResourceType</td>
+                                <td style="font-size:0.82em">@(r.Region ?? "&#x2014;")</td>
+                                <td>
+                                    <span class="pam-status @ResourceStatusClass(r.Status)">@(r.Status ?? "Unknown")</span>
+                                </td>
+                                <td style="font-size:0.82em">@(r.IpAddress ?? "&#x2014;")</td>
+                                <td style="font-size:0.78em">@(r.LastSeenAtUtc.HasValue ? r.LastSeenAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm") : "&#x2014;")</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                            @onclick="@(() => RequestJitForResource(r.Id, r.Name, r.Provider))">
+                                        JIT Access
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_tab == "jit")
+{
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:0.85em;color:var(--pam-muted)">Status:</span>
+        @foreach (var s in new[] { "All", "Pending", "Active", "Expired", "Revoked", "Denied" })
+        {
+            <button class="pam-btn pam-btn-sm @(_jitStatusFilter == s ? "pam-btn-primary" : "pam-btn-secondary")"
+                    @onclick="@(() => SetJitFilter(s))">@s</button>
+        }
+        <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadJitAsync">&#x21BB; Refresh</button>
+        <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="@(() => _showJitForm = true)" style="margin-left:auto">
+            + Request JIT Access
+        </button>
+    </div>
+
+    @if (_showJitForm)
+    {
+        <div class="pam-card" style="max-width:620px;margin-bottom:16px">
+            <div class="pam-card-body" style="border-bottom:1px solid var(--pam-border)"><strong>Request JIT Cloud Access</strong></div>
+            <div class="pam-card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div style="grid-column:1/-1">
+                        <label class="pam-label">Cloud Resource *</label>
+                        <select class="pam-input" @bind="_jitResourceId">
+                            <option value="">&#x2014; select resource &#x2014;</option>
+                            @if (_resources != null)
+                            {
+                                @foreach (var r in _resources)
+                                {
+                                    <option value="@r.Id">[@r.Provider] @r.Name (@r.ResourceType)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pam-label">Permission *</label>
+                        <select class="pam-input" @bind="_jitPermission">
+                            <option value="">&#x2014; select &#x2014;</option>
+                            <option value="ReadOnly">ReadOnly</option>
+                            <option value="PowerUser">PowerUser</option>
+                            <option value="Admin">Admin</option>
+                            <option value="SSHAccess">SSH Access</option>
+                            <option value="RDPAccess">RDP Access</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pam-label">Duration (minutes) *</label>
+                        <input class="pam-input" type="number" min="15" max="480" @bind="_jitDuration" />
+                    </div>
+                    <div style="grid-column:1/-1">
+                        <label class="pam-label">Justification *</label>
+                        <textarea class="pam-input" rows="3" placeholder="Describe why you need this access..."
+                                  @bind="_jitJustification"></textarea>
+                    </div>
+                    <div>
+                        <label class="pam-label">Ticket Number</label>
+                        <input class="pam-input" placeholder="e.g. INC-12345" @bind="_jitTicket" />
+                    </div>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button class="pam-btn pam-btn-primary" @onclick="SubmitJitAsync" disabled="@_saving">
+                        @(_saving ? "Submitting..." : "Submit Request")
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showJitForm = false)">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_jitRequests == null || _jitRequests.Count == 0)
+            {
+                <div class="pam-empty p-4">No JIT access requests matching filter.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Resource</th>
+                            <th>Permission</th>
+                            <th>Status</th>
+                            <th>Requested</th>
+                            <th>Expires</th>
+                            <th>Ticket</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var j in _jitRequests)
+                        {
+                            <tr>
+                                <td style="font-size:0.85em">@j.RequestedByUsername</td>
+                                <td style="font-size:0.82em">
+                                    @if (j.Resource != null)
+                                    {
+                                        <span style="color:@ProviderColor(j.Resource.Provider)">@ProviderIcon(j.Resource.Provider)</span>
+                                        <span> @j.Resource.Name</span>
+                                        <div style="font-size:0.78em;color:var(--pam-muted)">@j.Resource.ResourceType @(j.Resource.Region != null ? "&#xB7; " + j.Resource.Region : "")</div>
+                                    }
+                                </td>
+                                <td><span style="font-family:monospace;font-size:0.82em">@j.Permission</span></td>
+                                <td><span class="pam-status @JitStatusClass(j.Status)">@j.Status</span></td>
+                                <td style="font-size:0.78em">@j.RequestedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td style="font-size:0.78em">
+                                    @if (j.ExpiresAtUtc.HasValue)
+                                    {
+                                        var expired = j.ExpiresAtUtc.Value < DateTime.UtcNow;
+                                        <span style="color:@(expired ? "var(--pam-danger)" : "inherit")">
+                                            @j.ExpiresAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm")
+                                        </span>
+                                    }
+                                    else { <span style="color:var(--pam-muted)">&#x2014;</span> }
+                                </td>
+                                <td style="font-size:0.82em">@(j.TicketNumber ?? "&#x2014;")</td>
+                                <td style="white-space:nowrap">
+                                    @if (j.Status == "Pending")
+                                    {
+                                        <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                                @onclick="@(() => ApproveJitAsync(j.Id))"
+                                                disabled="@(_actionId == j.Id)">
+                                            Approve
+                                        </button>
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => DenyJitAsync(j.Id))"
+                                                disabled="@(_actionId == j.Id)"
+                                                style="margin-left:4px">
+                                            Deny
+                                        </button>
+                                    }
+                                    else if (j.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => RevokeJitAsync(j.Id))"
+                                                disabled="@(_actionId == j.Id)">
+                                            Revoke
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string _tab = "dashboard";
+    private bool _loading = true;
+    private bool _saving;
+    private string? _msg;
+    private string? _error;
+    private string? _actionId;
+
+    // Dashboard
+    private CloudDashboardDto? _dashboard;
+
+    // Accounts tab
+    private List<CloudAccountDto>? _accounts;
+    private bool _showAddAccount;
+    private string _accName = "";
+    private string _accProvider = "AWS";
+    private string _accIdentifier = "";
+    private string _accRegion = "";
+    private string _accKeyId = "";
+    private string _accSecret = "";
+
+    // Resources tab
+    private List<CloudResourceDto>? _resources;
+    private string _providerFilter = "All";
+    private string _typeFilter = "";
+
+    // JIT tab
+    private List<CloudJitDto>? _jitRequests;
+    private string _jitStatusFilter = "All";
+    private bool _showJitForm;
+    private string _jitResourceId = "";
+    private string _jitPermission = "";
+    private int _jitDuration = 60;
+    private string _jitJustification = "";
+    private string _jitTicket = "";
+
+    private string AccountIdLabel => _accProvider switch { "Azure" => "Tenant ID", "GCP" => "Project ID", _ => "Account ID" };
+    private string AccountIdPlaceholder => _accProvider switch { "Azure" => "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", "GCP" => "my-project-id", _ => "123456789012" };
+    private string KeyIdLabel => _accProvider switch { "Azure" => "Client ID", "GCP" => "Service Account Key (JSON)", _ => "Access Key ID" };
+    private string KeyIdPlaceholder => _accProvider switch { "Azure" => "Application (client) ID", "GCP" => "service-account@project.iam.gserviceaccount.com", _ => "AKIAIOSFODNN7EXAMPLE" };
+    private string SecretLabel => _accProvider switch { "Azure" => "Client Secret", "GCP" => "Private Key", _ => "Secret Access Key" };
+    private string SecretPlaceholder => _accProvider switch { "Azure" => "Client secret value", "GCP" => "-----BEGIN RSA PRIVATE KEY-----", _ => "wJalrXUtnFEMI/K7MDENG/bPxRfiCY..." };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadTabAsync();
+    }
+
+    private async Task SetTab(string tab)
+    {
+        _tab = tab; _msg = null; _error = null;
+        await LoadTabAsync();
+    }
+
+    private async Task LoadTabAsync()
+    {
+        _loading = true; StateHasChanged();
+        switch (_tab)
+        {
+            case "dashboard": _dashboard = await Api.GetCloudDashboardAsync(); break;
+            case "accounts": await LoadAccountsAsync(); break;
+            case "resources": await LoadResourcesAsync(); break;
+            case "jit":
+                await LoadResourcesAsync();
+                await LoadJitAsync();
+                break;
+        }
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        _accounts = await Api.GetCloudAccountsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadResourcesAsync()
+    {
+        var pf = _providerFilter == "All" ? null : _providerFilter;
+        var tf = string.IsNullOrEmpty(_typeFilter) ? null : _typeFilter;
+        _resources = await Api.GetCloudResourcesAsync(pf, tf);
+        StateHasChanged();
+    }
+
+    private async Task LoadJitAsync()
+    {
+        var sf = _jitStatusFilter == "All" ? null : _jitStatusFilter;
+        _jitRequests = await Api.GetCloudJitRequestsAsync(sf);
+        StateHasChanged();
+    }
+
+    private void ShowAddAccount()
+    {
+        _showAddAccount = true;
+        _accName = ""; _accProvider = "AWS"; _accIdentifier = "";
+        _accRegion = ""; _accKeyId = ""; _accSecret = "";
+    }
+
+    private async Task AddAccountAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_accName) || string.IsNullOrWhiteSpace(_accProvider) || string.IsNullOrWhiteSpace(_accIdentifier))
+        {
+            _error = "Name, provider, and account identifier are required.";
+            StateHasChanged();
+            return;
+        }
+        _saving = true; StateHasChanged();
+        var ok = await Api.CreateCloudAccountAsync(_accName, _accProvider, _accIdentifier, _accRegion, _accKeyId, _accSecret);
+        _saving = false;
+        if (ok) { _msg = $"{_accProvider} account '{_accName}' added."; _showAddAccount = false; await LoadAccountsAsync(); }
+        else { _error = "Failed to add cloud account."; StateHasChanged(); }
+    }
+
+    private async Task SyncAccountAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        var result = await Api.SyncCloudAccountAsync(id);
+        _actionId = null;
+        if (result != null) _msg = $"Sync complete. Discovered {result.NewResources} new resources (total: {result.TotalResources}).";
+        else _error = "Sync failed.";
+        await LoadAccountsAsync();
+    }
+
+    private async Task ToggleAccountAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        await Api.ToggleCloudAccountAsync(id);
+        _actionId = null;
+        await LoadAccountsAsync();
+    }
+
+    private async Task DeleteAccountAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        var ok = await Api.DeleteCloudAccountAsync(id);
+        _actionId = null;
+        if (ok) { _msg = "Cloud account deleted."; await LoadAccountsAsync(); }
+        else { _error = "Failed to delete cloud account."; StateHasChanged(); }
+    }
+
+    private async Task SetProviderFilter(string p)
+    {
+        _providerFilter = p;
+        await LoadResourcesAsync();
+    }
+
+    private void RequestJitForResource(string resourceId, string resourceName, string provider)
+    {
+        _jitResourceId = resourceId;
+        _jitPermission = "";
+        _jitDuration = 60;
+        _jitJustification = "";
+        _jitTicket = "";
+        _showJitForm = true;
+        _tab = "jit";
+    }
+
+    private async Task SetJitFilter(string s)
+    {
+        _jitStatusFilter = s;
+        await LoadJitAsync();
+    }
+
+    private async Task SubmitJitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_jitResourceId) || string.IsNullOrWhiteSpace(_jitPermission) || string.IsNullOrWhiteSpace(_jitJustification))
+        {
+            _error = "Resource, permission, and justification are required.";
+            StateHasChanged();
+            return;
+        }
+        _saving = true; StateHasChanged();
+        var ok = await Api.CreateCloudJitRequestAsync(_jitResourceId, _jitPermission, _jitJustification, _jitDuration, _jitTicket);
+        _saving = false;
+        if (ok) { _msg = "JIT access request submitted. Awaiting approval."; _showJitForm = false; _jitStatusFilter = "Pending"; await LoadJitAsync(); }
+        else { _error = "Failed to submit JIT request."; StateHasChanged(); }
+    }
+
+    private async Task ApproveJitAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        var ok = await Api.ApproveCloudJitAsync(id);
+        _actionId = null;
+        if (ok) { _msg = "JIT access approved."; await LoadJitAsync(); }
+        else { _error = "Failed to approve JIT request."; StateHasChanged(); }
+    }
+
+    private async Task DenyJitAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        var ok = await Api.DenyCloudJitAsync(id);
+        _actionId = null;
+        if (ok) { _msg = "JIT request denied."; await LoadJitAsync(); }
+        else { _error = "Failed to deny JIT request."; StateHasChanged(); }
+    }
+
+    private async Task RevokeJitAsync(string id)
+    {
+        _actionId = id; StateHasChanged();
+        var ok = await Api.RevokeCloudJitAsync(id);
+        _actionId = null;
+        if (ok) { _msg = "JIT access revoked."; await LoadJitAsync(); }
+        else { _error = "Failed to revoke JIT access."; StateHasChanged(); }
+    }
+
+    private static string ProviderColor(string provider) => provider switch
+    {
+        "AWS" => "#FF9900",
+        "Azure" => "#0078D4",
+        "GCP" => "#4285F4",
+        _ => "var(--pam-muted)"
+    };
+
+    private static string ProviderIcon(string provider) => provider switch
+    {
+        "AWS" => "&#x2601;",
+        "Azure" => "&#x26C5;",
+        "GCP" => "&#x1F30D;",
+        _ => "&#x2601;"
+    };
+
+    private static string JitStatusClass(string status) => status switch
+    {
+        "Active" => "pam-status-active",
+        "Pending" => "pam-status-pending",
+        "Expired" => "pam-status-warning",
+        "Revoked" => "pam-status-error",
+        "Denied" => "pam-status-error",
+        _ => "pam-status-pending"
+    };
+
+    private static string ResourceStatusClass(string? status) => status?.ToLower() switch
+    {
+        "running" => "pam-status-active",
+        "available" => "pam-status-active",
+        "active" => "pam-status-active",
+        "stopped" => "pam-status-warning",
+        "terminated" => "pam-status-error",
+        _ => "pam-status-pending"
+    };
+}
