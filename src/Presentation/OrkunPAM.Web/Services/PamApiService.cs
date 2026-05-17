@@ -946,6 +946,60 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // === Vendor Users (#186) ===
+    public async Task<List<VendorUserDto>?> GetVendorUsersAsync(string? status = null)
+    {
+        var url = "/api/v1/vendor";
+        if (!string.IsNullOrEmpty(status)) url += "?status=" + status;
+        var result = await GetAsync<PagedResult<VendorUserDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<VendorOnboardResult?> OnboardVendorAsync(
+        string displayName, string email, string? phone, string? company,
+        DateTime accessExpiresUtc, List<Guid>? authorizedDeviceIds)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/vendor/onboard", new
+            {
+                displayName, email, phone, company, accessExpiresUtc, authorizedDeviceIds
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadFromJsonAsync<VendorOnboardResult>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> ExtendVendorAccessAsync(Guid id, DateTime newExpiresUtc)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/vendor/{id}/extend", new { newExpiresUtc });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RevokeVendorUserAsync(Guid id, string? reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/vendor/{id}/revoke", new { reason });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<VendorSessionDto>?> GetVendorSessionsAsync(Guid id)
+    {
+        var result = await GetAsync<PagedResult<VendorSessionDto>>($"/api/v1/vendor/{id}/sessions");
+        return result?.Data;
+    }
+
     // === Windows Auth Settings (#126) ===
     public async Task<WindowsAuthSettingsDto?> GetWindowsAuthSettingsAsync()
     {
@@ -1663,7 +1717,7 @@ public sealed class PamApiService
         catch { return false; }
     }
 
-    // ── Compliance Report Templates (#179) ────────────────────────────────────────────
+    // ── Compliance Report Templates (#179) ────────────────────────────────────────────────
 
     public async Task<List<ComplianceTemplateDto>?> GetComplianceTemplatesAsync()
     {
@@ -1696,14 +1750,14 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── FIPS 140-2 Status (#180) ───────────────────────────────────────────────────
+    // ── FIPS 140-2 Status (#180) ──────────────────────────────────────────────────────
     public async Task<FipsStatusDto?> GetFipsStatusAsync()
     {
         var result = await GetAsync<SingleResult<FipsStatusDto>>("/api/v1/system/encryption/fips-status");
         return result?.Data;
     }
 
-    // ── Cloud PAM (#37) ────────────────────────────────────────────────────────────────
+    // ── Cloud PAM (#37) ─────────────────────────────────────────────────────────────
     public async Task<CloudDashboardDto?> GetCloudDashboardAsync()
     {
         var result = await GetAsync<SingleResult<CloudDashboardDto>>("/api/v1/cloud/dashboard");
@@ -2215,6 +2269,40 @@ public record RdpShadowResult(
     string OriginalSessionId,
     RdpFileInfo RdpFile);
 public record VendorResendResult(bool Success, string? PortalUrl);
+
+// Vendor User DTOs (#186)
+public record VendorUserDto(
+    Guid      Id,
+    string    Username,
+    string?   DisplayName,
+    string    Email,
+    string?   Phone,
+    string    Status,
+    string    UserType,
+    Guid?     VendorSponsorUserId,
+    string?   VendorSponsorUsername,
+    string?   VendorDeviceIdsJson,
+    bool      IsTemporary,
+    DateTime? TemporaryExpiresUtc,
+    bool      MfaEnabled,
+    DateTime? LastLoginAtUtc,
+    DateTime  CreatedAtUtc,
+    bool      MustChangePassword);
+
+public record VendorOnboardResult(bool Success, VendorUserDto? Data, string? InviteUrl);
+
+public record VendorSessionDto(
+    string    Id,
+    string    SessionType,
+    string    Status,
+    DateTime  StartedAtUtc,
+    DateTime? EndedAtUtc,
+    int?      DurationSeconds,
+    string?   ClientIpAddress,
+    string?   TargetIpAddress,
+    int?      TargetPort,
+    string?   RecordingPath,
+    int?      RiskScore);
 
 // System Health DTOs (#138)
 public record SystemHealthSnapshotDto(
