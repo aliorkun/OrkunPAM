@@ -1965,6 +1965,56 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // ── Push Notification MFA (#196) ─────────────────────────────────────────
+    public async Task<List<PushDeviceDto>?> GetPushDevicesAsync()
+    {
+        var result = await GetAsync<ListResult<PushDeviceDto>>("/api/v1/auth/push/devices");
+        return result?.Data;
+    }
+
+    public async Task<PushEnrollResultDto?> EnrollPushDeviceAsync(string deviceName)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/push/enroll", new { deviceName });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<PushEnrollResultDto>>(JsonOpts);
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RemovePushDeviceAsync(string deviceId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/auth/push/devices/{deviceId}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<PushChallengeDto?> InitiatePushChallengeAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/push/initiate", new { });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<PushChallengeDto>>(JsonOpts);
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<PushChallengeStatusDto?> GetPushChallengeStatusAsync(string challengeId)
+    {
+        var result = await GetAsync<SingleResult<PushChallengeStatusDto>>($"/api/v1/auth/push/{challengeId}/status");
+        return result?.Data;
+    }
+
     // ── Account Reconciliation (#195) ────────────────────────────────────────
     public async Task<List<ReconciliationDriftDto>?> GetReconciliationReportAsync()
     {
@@ -2766,6 +2816,12 @@ public record ManagedCertificateDto(
     DateTime  CreatedAtUtc,
     int       DaysUntilExpiry,
     bool      IsExpired);
+
+// Push MFA DTOs (#196)
+public record PushDeviceDto(string? Id, string? Name, DateTime? RegisteredAt);
+public record PushEnrollResultDto(string DeviceId, string DeviceToken, string DeviceName, string Message);
+public record PushChallengeDto(string ChallengeId, DateTime ExpiresAt, string Message);
+public record PushChallengeStatusDto(string ChallengeId, string Status, DateTime ExpiresAt);
 
 // Reconciliation DTOs (#195)
 public record ReconciliationDriftDto(

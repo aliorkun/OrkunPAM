@@ -1,0 +1,167 @@
+@page "/push-devices"
+@inject PamApiService Api
+@inject AuthStateService Auth
+
+<PageTitle>Push MFA Devices — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Push Notification MFA Devices</h2>
+    <span class="pam-page-sub">Register mobile devices for one-tap push approval during login</span>
+    <button class="pam-btn pam-btn-primary" @onclick="@(() => _showEnroll = true)">+ Register Device</button>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+@if (_success != null)
+{
+    <div class="pam-alert pam-alert-success">@_success</div>
+}
+
+@if (_enrollResult != null)
+{
+    <div class="pam-card" style="border:2px solid #f59e0b;margin-bottom:1rem">
+        <div class="pam-card-body">
+            <h4 style="color:#f59e0b">Device Token (show once)</h4>
+            <p style="margin-bottom:0.5rem">Copy this device token into your mobile PAM app. It will not be shown again.</p>
+            <div style="font-family:monospace;background:#1e1e1e;color:#4ec9b0;padding:0.75rem;border-radius:4px;word-break:break-all">
+                @_enrollResult.DeviceToken
+            </div>
+            <div style="margin-top:0.75rem;font-size:0.85rem;color:#888">
+                Device: <strong>@_enrollResult.DeviceName</strong> &nbsp; ID: <code>@_enrollResult.DeviceId</code>
+            </div>
+            <button class="pam-btn pam-btn-secondary" style="margin-top:0.75rem"
+                    @onclick="@(() => _enrollResult = null)">Close</button>
+        </div>
+    </div>
+}
+
+<div class="pam-card">
+    <div class="pam-card-body">
+        @if (_loading)
+        {
+            <div class="pam-loading-text">Loading devices...</div>
+        }
+        else if (_devices == null || _devices.Count == 0)
+        {
+            <div class="pam-empty">No push devices registered. Register a device to enable push MFA.</div>
+        }
+        else
+        {
+            <table class="pam-table">
+                <thead>
+                    <tr>
+                        <th>Device Name</th>
+                        <th>Device ID</th>
+                        <th>Registered At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _devices)
+                    {
+                        <tr>
+                            <td>@(d.Name ?? "—")</td>
+                            <td><code style="font-size:0.8rem">@(d.Id ?? "—")</code></td>
+                            <td>@(d.RegisteredAt.HasValue ? d.RegisteredAt.Value.ToLocalTime().ToString("MM/dd/yyyy HH:mm") : "—")</td>
+                            <td>
+                                <button class="pam-btn pam-btn-sm pam-btn-danger"
+                                        @onclick="@(() => RemoveDevice(d.Id ?? ""))">Remove</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@if (_showEnroll)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showEnroll = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>Register Push Device</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showEnroll = false)">&#x2715;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-form-group">
+                    <label class="pam-label">Device Name</label>
+                    <input class="pam-input" @bind="_enrollName" placeholder="e.g. iPhone 15, Samsung S24" />
+                </div>
+                <p class="pam-text-muted" style="font-size:0.85rem;margin-top:0.5rem">
+                    After registration, copy the device token into your PAM mobile app.
+                </p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showEnroll = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="EnrollDevice" disabled="@_saving">
+                    @(_saving ? "Registering..." : "Register")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PushDeviceDto>? _devices;
+    private PushEnrollResultDto? _enrollResult;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _showEnroll;
+    private string _enrollName = "";
+    private string? _error;
+    private string? _success;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadDevices();
+    }
+
+    private async Task LoadDevices()
+    {
+        _loading = true;
+        _devices = await Api.GetPushDevicesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task EnrollDevice()
+    {
+        if (string.IsNullOrWhiteSpace(_enrollName)) { _error = "Device name is required."; return; }
+        _saving = true;
+        _error = null;
+        var result = await Api.EnrollPushDeviceAsync(_enrollName.Trim());
+        _saving = false;
+        if (result != null)
+        {
+            _enrollResult = result;
+            _showEnroll = false;
+            _enrollName = "";
+            _success = "Device registered. Copy the token shown below into your mobile app.";
+            await LoadDevices();
+        }
+        else
+        {
+            _error = "Failed to register device.";
+        }
+    }
+
+    private async Task RemoveDevice(string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId)) return;
+        _error = null;
+        var ok = await Api.RemovePushDeviceAsync(deviceId);
+        if (ok)
+        {
+            _success = "Device removed.";
+            await LoadDevices();
+        }
+        else
+        {
+            _error = "Failed to remove device.";
+        }
+    }
+}
