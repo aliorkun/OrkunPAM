@@ -117,7 +117,7 @@ try
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
-    // === gRPC Services (proxy↔core internal communication) ===
+    // === gRPC Services (proxy⇔core internal communication) ===
     builder.Services.AddGrpc(options =>
     {
         options.MaxReceiveMessageSize = 4 * 1024 * 1024; // 4 MB
@@ -405,12 +405,13 @@ try
     api.MapBackupEndpoints();
     api.MapSystemEndpoints();
     api.MapVendorAccessEndpoints();
+    api.MapVendorEndpoints();
     api.MapRdpGatewayEndpoints();
     api.MapPkiEndpoints();
     api.MapLaunchTokenEndpoints();
     api.MapCloudPamEndpoints();
 
-    // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
+    // === gRPC Endpoints (proxy⇔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
     app.MapGrpcService<VaultGrpcService>().RequireAuthorization("GrpcProxy");
     app.MapGrpcService<AuditGrpcService>().RequireAuthorization("GrpcProxy");
