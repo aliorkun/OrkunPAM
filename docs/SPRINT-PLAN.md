@@ -173,30 +173,49 @@
 
 ---
 
-## Sprint 11 - v2 Auth + Compliance (Aktif)
+## ~~Sprint 11 - v2 Auth + Compliance~~ ✅ TAMAMLANDI
 **Tarih:** 16-25 Mayıs 2026
-**Hedef:** Email OTP MFA, SOX/PCI-DSS uyumluluk raporları, FIPS 140-2
+**Durum:** Tamamlandı — Email OTP MFA, SOX/PCI-DSS/ISO 27001 uyumluluk raporları, FIPS 140-2
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #178 | Email OTP — E-Posta Tabanlı MFA | v2-MFA | ✅ Tamamlandı |
-| #179 | SOX / PCI-DSS / ISO 27001 Uyumluluk Rapor Şablonları | v2-COMPLIANCE | 🔲 Açık |
-| #180 | FIPS 140-2 Kriptografik Uyumluluk | v2-SECURITY | 🔲 Açık |
+| #179 | SOX / PCI-DSS / ISO 27001 Uyumluluk Rapor Şablonları | v2-COMPLIANCE | ✅ Tamamlandı |
+| #180 | FIPS 140-2 Kriptografik Uyumluluk | v2-SECURITY | ✅ Tamamlandı |
 
-**İlerleme:** 1/3 (%33)
+**İlerleme:** 3/3 (%100) ✅
 
-**#178 Email OTP MFA — TAMAMLANDI ✅**
-- `MfaType.EmailOtp = 4` enum değeri eklendi
-- `EmailOtpToken` entity: UserId, HashedCode (SHA-256), ExpiresAtUtc (10 dk), IsUsed, FailedAttempts, RequestedFromIp
-- `DbContext`: EmailOtpTokens DbSet + model config (UserId/ExpiresAtUtc index)
-- `POST /api/v1/auth/email-otp/request`: Credentials doğrular, CSPRNG 6-digit OTP üretir, SHA-256 hash ile saklar, SMTP ile gönderir. Rate limit: 3 req/15 dk/kullanıcı. Kullanıcı enumeration önleme (her zaman 200 döner)
-- `POST /api/v1/auth/email-otp/verify`: OTP hash karşılaştırması (FixedTimeEquals), single-use, 5 başarısız deneme → token invalidation + hesap kilidi. Başarıda tam JWT döner
-- `AuthResult` + `AuthenticationService`: MfaType alanı eklendi; login yanıtında `mfaType` (örn: "EmailOtp", "Totp") döner
-- `Login.razor`: Email OTP MFA adımı — "Send Code to My Email" butonu, 6-digit input, Verify, Resend Code
-- `PamApiService`: RequestEmailOtpAsync + VerifyEmailOtpAsync metotları; LoginData'ya MfaType eklendi
-- `Policies.razor + PolicyEndpoints`: MFA politikasına "Allow Email OTP as MFA method" checkbox (EmailOtpEnabled)
-- Audit log: EMAIL_OTP_REQUESTED / EMAIL_OTP_VERIFY_SUCCESS / EMAIL_OTP_VERIFY_FAILED
-- RFP MFA Manager #5 → PC
+---
+
+## ~~Sprint 12 - Cloud PAM~~ ✅ TAMAMLANDI
+**Tarih:** 17 Mayıs 2026
+**Durum:** Tamamlandı — AWS/Azure/GCP privileged access, JIT cloud erişimi, multi-cloud dashboard
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #37 | Cloud PAM — AWS/Azure/GCP Privileged Access | v2-CLOUD | ✅ Tamamlandı |
+
+**İlerleme:** 1/1 (%100) ✅
+
+**#37 Cloud PAM — Tamamlanan bileşenler (2026-05-17):**
+- `CloudAccount` entity: Provider, AccountIdentifier, AccessKeyIdEnc, SecretKeyEnc, LastSyncAtUtc, ResourceCount
+- `CloudResource` entity: NativeId, ResourceType, Region, Status, IpAddress, LastSeenAtUtc (cascade delete)
+- `CloudJitRequest` entity: Permission, Justification, Status lifecycle, ExpiresAtUtc, CloudGrantReference
+- DbContext: CloudAccounts, CloudResources, CloudJitRequests DbSets + model config + FK ilişkileri
+- Migration: `20260517_AddCloudPam.cs` — 3 tablo, index'ler
+- API: `GET /api/v1/cloud/dashboard` — multi-cloud özet (hesap, kaynak, JIT sayıları, son istekler)
+- API: `GET/POST /api/v1/cloud/accounts` — cloud hesap CRUD
+- API: `PUT /api/v1/cloud/accounts/{id}/toggle` — etkinleştir/devre dışı
+- API: `DELETE /api/v1/cloud/accounts/{id}` — sil
+- API: `POST /api/v1/cloud/accounts/{id}/sync` — kaynak keşfi (AWS EC2/IAM/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS simüle)
+- API: `GET /api/v1/cloud/resources?provider=&type=` — filtrelenebilir kaynak listesi
+- API: `PUT /api/v1/cloud/resources/{id}/toggle` — kaynak etkinleştir/devre dışı
+- API: `GET/POST /api/v1/cloud/jit` — JIT istek oluşturma
+- API: `PUT /api/v1/cloud/jit/{id}/approve|deny|revoke` — JIT yaşam döngüsü
+- Audit: CloudAccountCreated/Deleted/Synced, CloudJitRequested/Approved/Denied/Revoked
+- `CloudPam.razor`: 4 tab UI — Dashboard (provider kartları, son JIT), Accounts (CRUD + sync), Resources (filtreli tablo + JIT başlat), JIT (istek formu + onay/reddet/iptal)
+- `PamApiService.cs`: GetCloudDashboardAsync, GetCloudAccountsAsync, CreateCloudAccountAsync, SyncCloudAccountAsync, ToggleCloudAccountAsync, DeleteCloudAccountAsync, GetCloudResourcesAsync, GetCloudJitRequestsAsync, CreateCloudJitRequestAsync, ApproveCloudJitAsync, DenyCloudJitAsync, RevokeCloudJitAsync + tüm DTO'lar
+- NavMenu.razor: "Cloud" section + Cloud PAM linki eklendi
 
 ---
 
