@@ -13,11 +13,12 @@
 </div>
 
 <div class="pam-tabs" style="margin-bottom:1.5rem">
-    <button class="pam-tab @(_tab=="list"?"pam-tab-active":"")"     @onclick="@(() => SwitchTab("list"))">Policy List</button>
-    <button class="pam-tab @(_tab=="password"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("password"))">Password Policy</button>
-    <button class="pam-tab @(_tab=="lockout"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("lockout"))">Account Lockout</button>
-    <button class="pam-tab @(_tab=="session"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("session"))">Session Policy</button>
-    <button class="pam-tab @(_tab=="mfa"?"pam-tab-active":"")"     @onclick="@(() => SwitchTab("mfa"))">MFA Policy</button>
+    <button class="pam-tab @(_tab=="list"?"pam-tab-active":"")"       @onclick="@(() => SwitchTab("list"))">Policy List</button>
+    <button class="pam-tab @(_tab=="password"?"pam-tab-active":"")"   @onclick="@(() => SwitchTab("password"))">Password Policy</button>
+    <button class="pam-tab @(_tab=="lockout"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("lockout"))">Account Lockout</button>
+    <button class="pam-tab @(_tab=="session"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("session"))">Session Policy</button>
+    <button class="pam-tab @(_tab=="mfa"?"pam-tab-active":"")"        @onclick="@(() => SwitchTab("mfa"))">MFA Policy</button>
+    <button class="pam-tab @(_tab=="watermark"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("watermark"))">Watermark</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -291,6 +292,68 @@
     </div>
 }
 
+@if (_tab == "watermark")
+{
+    <div class="pam-card" style="max-width:640px">
+        <div class="pam-card-header"><strong>Session Watermark Policy</strong></div>
+        <div class="pam-card-body">
+            @if (_wmLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_wmEnabled" />
+                        <strong>Enable session watermarking</strong>
+                    </label>
+                    <span class="pam-hint">Embeds user identity and session metadata into recording files for legal accountability and tamper detection.</span>
+                </div>
+
+                <div class="pam-form-group" style="margin-top:1rem">
+                    <label class="pam-label">Watermark template</label>
+                    <input class="pam-input" style="width:100%;font-family:monospace" @bind="_wmTemplate"
+                           placeholder="{username} | {ip} | {device} | {utc}" />
+                    <span class="pam-hint">Supported variables: {username}, {ip}, {device}, {utc}, {sessionId}</span>
+                </div>
+
+                <div class="pam-form-group" style="margin-top:1rem">
+                    <label class="pam-label">Marker interval (minutes)</label>
+                    <input type="number" class="pam-input" style="width:140px" min="1" max="120" @bind="_wmMarkerIntervalMin" />
+                    <span class="pam-hint">SSH recordings get a watermark marker line inserted every N minutes. Recommended: 15.</span>
+                </div>
+
+                <hr style="margin:1.5rem 0" />
+                <div style="font-weight:600;margin-bottom:1rem">Protocol Coverage</div>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin-bottom:1rem">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_wmEnableSsh" /> SSH sessions
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_wmEnableRdp" /> RDP sessions
+                    </label>
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_wmEnableVnc" /> VNC sessions
+                    </label>
+                </div>
+
+                <div class="pam-alert pam-alert-info" style="font-size:0.85rem;margin-top:0.5rem">
+                    <strong>How watermarking works:</strong><br />
+                    SSH: watermark embedded in recording header title and as periodic marker events.<br />
+                    RDP/VNC: user/IP/device metadata stored in binary recording header block.
+                </div>
+
+                <div style="margin-top:1.5rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveWatermarkPolicyAsync" disabled="@_wmSaving">
+                        @if (_wmSaving) { <span class="pam-spinner-sm"></span> } Save Watermark Policy
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -425,6 +488,16 @@
     private bool _mfaRequired     = false;
     private bool _emailOtpEnabled = false;
 
+    // Watermark policy (#190)
+    private bool   _wmLoading          = false;
+    private bool   _wmSaving           = false;
+    private bool   _wmEnabled          = false;
+    private string _wmTemplate         = "{username} | {ip} | {device} | {utc}";
+    private int    _wmMarkerIntervalMin = 15;
+    private bool   _wmEnableSsh        = true;
+    private bool   _wmEnableRdp        = true;
+    private bool   _wmEnableVnc        = true;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -436,11 +509,12 @@
         _tab = tab; _error = null; _successMsg = null; StateHasChanged();
         switch (tab)
         {
-            case "list":     await LoadPoliciesAsync();        break;
-            case "password": await LoadPasswordPolicyAsync();  break;
-            case "lockout":  await LoadLockoutPolicyAsync();   break;
-            case "session":  await LoadSessionPolicyAsync();   break;
-            case "mfa":      await LoadMfaPolicyAsync();       break;
+            case "list":      await LoadPoliciesAsync();          break;
+            case "password":  await LoadPasswordPolicyAsync();    break;
+            case "lockout":   await LoadLockoutPolicyAsync();     break;
+            case "session":   await LoadSessionPolicyAsync();     break;
+            case "mfa":       await LoadMfaPolicyAsync();         break;
+            case "watermark": await LoadWatermarkPolicyAsync();   break;
         }
     }
 
@@ -595,6 +669,34 @@
         _mfaSaving = false;
         _successMsg = ok ? "MFA policy saved." : null;
         if (!ok) _error = "Failed to save MFA policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadWatermarkPolicyAsync()
+    {
+        _wmLoading = true; StateHasChanged();
+        var s = await Api.GetWatermarkPolicyAsync();
+        if (s != null)
+        {
+            _wmEnabled           = s.Enabled;
+            _wmTemplate          = s.Template;
+            _wmMarkerIntervalMin = s.MarkerIntervalMin;
+            _wmEnableSsh         = s.EnableSsh;
+            _wmEnableRdp         = s.EnableRdp;
+            _wmEnableVnc         = s.EnableVnc;
+        }
+        _wmLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveWatermarkPolicyAsync()
+    {
+        _wmSaving = true; StateHasChanged();
+        var ok = await Api.SaveWatermarkPolicyAsync(new WatermarkPolicySettingsDto(
+            _wmEnabled, _wmTemplate, _wmMarkerIntervalMin, _wmEnableSsh, _wmEnableRdp, _wmEnableVnc));
+        _wmSaving = false;
+        _successMsg = ok ? "Watermark policy saved." : null;
+        if (!ok) _error = "Failed to save watermark policy.";
         StateHasChanged();
         if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }

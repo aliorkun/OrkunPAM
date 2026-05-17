@@ -242,7 +242,8 @@ public static class SessionEndpoints
                     createdAtUtc = metadata.CreatedAtUtc,
                     integrityValid = integrity.IsValid,
                     integrityMessage = integrity.Message,
-                    fileHash = integrity.FileHash
+                    fileHash = integrity.FileHash,
+                    watermarkTitle = metadata.WatermarkTitle
                 }
             });
         });

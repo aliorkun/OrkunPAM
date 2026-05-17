@@ -1610,6 +1610,20 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Watermark Policy (#190)
+    public async Task<WatermarkPolicySettingsDto?> GetWatermarkPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<WatermarkPolicySettingsDto>>("/api/v1/policy/watermark");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveWatermarkPolicyAsync(WatermarkPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync("/api/v1/policy/watermark", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     // Self-Service Password Reset
     public async Task<bool> ForgotPasswordAsync(string username, string email)
     {
@@ -2171,7 +2185,8 @@ public record BackupRestoreResultDto(int RestoredCount, string Message);
 public record RecordingMetadataDto(
     string SessionId, string Format, long FileSizeBytes, double DurationSeconds,
     int? TerminalWidth, int? TerminalHeight, DateTime CreatedAtUtc,
-    bool IntegrityValid, string? IntegrityMessage, string? FileHash);
+    bool IntegrityValid, string? IntegrityMessage, string? FileHash,
+    string? WatermarkTitle = null);
 
 public class RecordingStreamDto
 {
@@ -2210,6 +2225,15 @@ public record TacacsCommandPolicyDto(
 
 // MFA Policy DTO
 public record MfaPolicySettingsDto(bool MfaRequired, bool EmailOtpEnabled = false);
+
+// Watermark Policy DTO (#190)
+public record WatermarkPolicySettingsDto(
+    bool   Enabled,
+    string Template,
+    int    MarkerIntervalMin,
+    bool   EnableSsh,
+    bool   EnableRdp,
+    bool   EnableVnc);
 
 public record AccountPolicyDto(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore);
 
