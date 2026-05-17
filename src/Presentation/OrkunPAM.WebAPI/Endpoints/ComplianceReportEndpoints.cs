@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -8,7 +10,7 @@ public static class ComplianceReportEndpoints
 {
     public static void MapComplianceReportEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/v1/compliance").WithTags("ComplianceReports");
+        var group = app.MapGroup("/api/v1/compliance").WithTags("ComplianceReports").RequireAuthorization();
 
         group.MapGet("/report-templates", () =>
         {
@@ -88,7 +90,8 @@ public static class ComplianceReportEndpoints
             });
         });
 
-        group.MapPost("/report/generate", async (ComplianceReportRequest req, OrkunPamDbContext db) =>
+        group.MapPost("/report/generate", async (ComplianceReportRequest req, OrkunPamDbContext db,
+                                                 HttpContext ctx, IAuditService audit) =>
         {
             var dateFrom = req.From ?? DateTime.UtcNow.AddDays(-90);
             var dateTo   = req.To   ?? DateTime.UtcNow;
@@ -111,6 +114,14 @@ public static class ComplianceReportEndpoints
                 "iso27001" => "ISO 27001 PAM Controls (A.9 / A.12)",
                 _          => req.Framework
             };
+
+            var actorId   = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+            var actorName = ctx.User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            _ = audit.LogAsync("Compliance", "ComplianceReportGenerated",
+                Guid.TryParse(actorId, out var aid) ? aid : Guid.Empty,
+                actorName, ip, "ComplianceReport", req.Framework,
+                new { framework = req.Framework, score, from = dateFrom, to = dateTo });
 
             return Results.Ok(new
             {

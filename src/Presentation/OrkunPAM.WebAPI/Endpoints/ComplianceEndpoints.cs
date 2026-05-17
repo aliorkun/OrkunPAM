@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -9,7 +11,7 @@ public static class ComplianceEndpoints
 {
     public static void MapComplianceEndpoints(this IEndpointRouteBuilder app)
     {
-        var frameworks = app.MapGroup("/api/v1/compliance/frameworks").WithTags("Compliance");
+        var frameworks = app.MapGroup("/api/v1/compliance/frameworks").WithTags("Compliance").RequireAuthorization();
 
         frameworks.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -62,7 +64,7 @@ public static class ComplianceEndpoints
             });
         });
 
-        var sod = app.MapGroup("/api/v1/compliance/sod").WithTags("Compliance");
+        var sod = app.MapGroup("/api/v1/compliance/sod").WithTags("Compliance").RequireAuthorization();
 
         sod.MapGet("/rules", async (OrkunPamDbContext db) =>
         {
@@ -100,7 +102,7 @@ public static class ComplianceEndpoints
             return Results.Ok(new { success = true, data = violations, meta = new { violationCount = violations.Count } });
         });
 
-        var attestations = app.MapGroup("/api/v1/compliance/attestations").WithTags("Compliance");
+        var attestations = app.MapGroup("/api/v1/compliance/attestations").WithTags("Compliance").RequireAuthorization();
 
         attestations.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -240,7 +242,8 @@ public static class ComplianceEndpoints
         });
 
         attestations.MapPost("/{campaignId:guid}/decisions/{decisionId:long}/decide",
-            async (Guid campaignId, long decisionId, AttestationDecideRequest req, OrkunPamDbContext db) =>
+            async (Guid campaignId, long decisionId, AttestationDecideRequest req, OrkunPamDbContext db,
+                   HttpContext ctx, IAuditService audit) =>
         {
             var decision = await db.AttestationDecisions
                 .FirstOrDefaultAsync(d => d.Id == decisionId && d.CampaignId == campaignId);
@@ -258,15 +261,25 @@ public static class ComplianceEndpoints
             }
 
             await db.SaveChangesAsync();
+
+            var actorId  = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+            var actorName = ctx.User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            _ = audit.LogAsync("Compliance", "AttestationDecisionMade", Guid.TryParse(actorId, out var aid) ? aid : Guid.Empty,
+                actorName, ip, "AttestationDecision", decisionId.ToString(),
+                new { campaignId, decision = req.Decision, subjectUserId = decision.SubjectUserId,
+                      subjectUsername = decision.SubjectUsername, accountLocked = req.Decision == 2 });
+
             return Results.Ok(new { success = true, data = new { decisionId, decision.Decision, decision.DecisionAtUtc } });
         });
 
-        attestations.MapPost("/{id:guid}/complete", async (Guid id, OrkunPamDbContext db) =>
+        attestations.MapPost("/{id:guid}/complete", async (Guid id, OrkunPamDbContext db, HttpContext ctx, IAuditService audit) =>
         {
             var campaign = await db.AttestationCampaigns.FindAsync(id);
             if (campaign == null) return Results.NotFound(new { success = false, errors = new[] { "Campaign not found" } });
             if (campaign.Status != 1) return Results.BadRequest(new { success = false, errors = new[] { "Campaign is not Active" } });
 
+            var autoRevokedCount = 0;
             if (campaign.AutoRevokeOnMiss)
             {
                 var pendingDecisions = await db.AttestationDecisions
@@ -281,12 +294,20 @@ public static class ComplianceEndpoints
                     var user = await db.Users.FindAsync(d.SubjectUserId);
                     if (user != null)
                         user.Status = OrkunPAM.Domain.Enums.UserStatus.Locked;
+                    autoRevokedCount++;
                 }
             }
 
             campaign.Status = 2;
             campaign.CompletedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
+
+            var actorId  = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+            var actorName = ctx.User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            _ = audit.LogAsync("Compliance", "AttestationCampaignCompleted", Guid.TryParse(actorId, out var aid) ? aid : Guid.Empty,
+                actorName, ip, "AttestationCampaign", id.ToString(),
+                new { campaignName = campaign.Name, autoRevokedCount, autoRevokeOnMiss = campaign.AutoRevokeOnMiss });
 
             return Results.Ok(new { success = true, data = new { campaign.Id, campaign.Status, campaign.CompletedAtUtc } });
         });
@@ -314,7 +335,7 @@ public static class ComplianceEndpoints
                     generatedAt = DateTime.UtcNow
                 }
             });
-        }).WithTags("Compliance");
+        }).WithTags("Compliance").RequireAuthorization();
     }
 }
 
