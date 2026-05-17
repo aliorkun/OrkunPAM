@@ -131,6 +131,11 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Email OTP MFA (#178)
     public DbSet<EmailOtpToken> EmailOtpTokens => Set<EmailOtpToken>();
 
+    // Cloud PAM — AWS / Azure / GCP (#37)
+    public DbSet<CloudAccount> CloudAccounts => Set<CloudAccount>();
+    public DbSet<CloudResource> CloudResources => Set<CloudResource>();
+    public DbSet<CloudJitRequest> CloudJitRequests => Set<CloudJitRequest>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -437,6 +442,39 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(t => t.ExpiresAtUtc);
             e.Property(t => t.HashedCode).HasMaxLength(64);
             e.Property(t => t.RequestedFromIp).HasMaxLength(64);
+        });
+
+        // === Cloud PAM (#37) ===
+        modelBuilder.Entity<CloudAccount>(e =>
+        {
+            e.Property(a => a.Name).HasMaxLength(256);
+            e.Property(a => a.Provider).HasMaxLength(16);
+            e.Property(a => a.AccountIdentifier).HasMaxLength(256);
+            e.Property(a => a.Region).HasMaxLength(64);
+            e.HasIndex(a => a.Provider);
+            e.HasMany(a => a.Resources).WithOne(r => r.CloudAccount).HasForeignKey(r => r.CloudAccountId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<CloudResource>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(256);
+            e.Property(r => r.Provider).HasMaxLength(16);
+            e.Property(r => r.NativeId).HasMaxLength(1024);
+            e.Property(r => r.ResourceType).HasMaxLength(64);
+            e.Property(r => r.Region).HasMaxLength(64);
+            e.Property(r => r.Status).HasMaxLength(64);
+            e.Property(r => r.IpAddress).HasMaxLength(45);
+            e.HasIndex(r => new { r.Provider, r.ResourceType });
+            e.HasIndex(r => r.CloudAccountId);
+        });
+        modelBuilder.Entity<CloudJitRequest>(e =>
+        {
+            e.Property(j => j.RequestedByUsername).HasMaxLength(256);
+            e.Property(j => j.Permission).HasMaxLength(64);
+            e.Property(j => j.Status).HasMaxLength(32);
+            e.Property(j => j.TicketNumber).HasMaxLength(128);
+            e.HasIndex(j => j.Status);
+            e.HasIndex(j => j.RequestedAtUtc);
+            e.HasOne(j => j.CloudResource).WithMany(r => r.JitRequests).HasForeignKey(j => j.CloudResourceId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Seed built-in data
