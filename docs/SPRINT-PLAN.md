@@ -233,6 +233,29 @@
 
 ---
 
+## Sprint 14 - UX Polish: Credential Access Request Flow
+**Tarih:** 17 Mayıs 2026 (aktif)
+**Durum:** Tamamlandı ✅
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| — | Credential Access Request — Vault UI + API endpoint | UX-fix | ✅ Tamamlandı |
+
+**Detay:**
+- `POST /api/v1/vault/credentials/{id}/request-access` — yeni endpoint
+  - Duplicate pending request tespiti (409 yerine 200 + status:Pending)
+  - Already-approved tespiti (200 + status:Approved)
+  - AdminGroup sentinel GUID ile tüm adminlere görünür step oluşturur
+  - 48 saat TTL
+- `Vault.razor` — "📋 Request Access" butonu (RequiresApproval kredansiyellerde)
+  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uyarı
+  - Başarı/hata mesajı + mevcut pending request bilgisi
+- `PamApiService.cs` — `RequestCredentialAccessAsync` + `CredentialAccessRequestResultDto`
+
+**İlerleme:** 1/1 (%100) ✅
+
+---
+
 ## Sonraki Adım: v1.0.0 GA Tag
 **Kriter:** Sprint 6 tamamlandı → CI yeşil → `v1.0.0` tag atılacak
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
