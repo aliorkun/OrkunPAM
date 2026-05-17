@@ -226,10 +226,10 @@
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #190 | Session Watermarking — Oturum Kaydı Kullanıcı Filigranı | v2-SESSION | ✅ Tamamlandı |
-| #189 | Credential Discovery — AD Ayrıcalıklı Hesap Tarama | v2-VAULT | 🔄 In Progress |
-| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | 🔲 Planlandı |
+| #189 | Credential Discovery — AD Ayrıcalıklı Hesap Tarama | v2-VAULT | ✅ Tamamlandı |
+| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | 🔄 In Progress |
 
-**İlerleme:** 1/3 (%33) — #190 tamamlandı, #189 aktif
+**İlerleme:** 2/3 (%66) — #190 ve #189 tamamlandı, #191 aktif
 
 ---
 
