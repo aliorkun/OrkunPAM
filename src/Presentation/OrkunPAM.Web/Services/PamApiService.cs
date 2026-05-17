@@ -1662,6 +1662,39 @@ public sealed class PamApiService
         try { return (await client.PostAsync("/api/v1/compliance/attestations/" + id + "/complete", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
+
+    // ── Compliance Report Templates (#179) ────────────────────────────────────────────
+
+    public async Task<List<ComplianceTemplateDto>?> GetComplianceTemplatesAsync()
+    {
+        var result = await GetAsync<ListResult<ComplianceTemplateDto>>("/api/v1/compliance/report-templates");
+        return result?.Data;
+    }
+
+    public async Task<ComplianceControlsResultDto?> GetComplianceControlsAsync(
+        string framework, DateTime from, DateTime to)
+    {
+        var url = "/api/v1/compliance/report/" + framework
+            + "/controls?from=" + Uri.EscapeDataString(from.ToString("o"))
+            + "&to=" + Uri.EscapeDataString(to.ToString("o"));
+        var result = await GetAsync<SingleResult<ComplianceControlsResultDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<ComplianceReportResultDto?> GenerateComplianceReportAsync(
+        string framework, DateTime from, DateTime to)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/compliance/report/generate",
+                new { framework, from, to });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<ComplianceReportResultDto>>(JsonOpts);
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2259,3 +2292,53 @@ public record PkiUserCertDto(
     bool      RequirePkiOnly,
     bool      IsEnabled,
     DateTime? LastUsedAtUtc);
+
+// Compliance Report Templates (#179)
+public record ComplianceTemplateDto(
+    string                      Id,
+    string                      Name,
+    string                      Description,
+    string                      Version,
+    List<ComplianceControlInfoDto> Controls);
+
+public record ComplianceControlInfoDto(
+    string Code,
+    string Name,
+    string Reference);
+
+public record ComplianceControlsResultDto(
+    string                   Framework,
+    DateTime                 DateFrom,
+    DateTime                 DateTo,
+    int                      PassCount,
+    int                      PartialCount,
+    int                      FailCount,
+    double                   Score,
+    List<ComplianceControlDto> Controls);
+
+public record ComplianceControlDto(
+    string                          Code,
+    string                          Name,
+    string                          Reference,
+    string                          Status,
+    string                          Finding,
+    Dictionary<string, object>?     Evidence);
+
+public record ComplianceReportResultDto(
+    string                          ReportId,
+    string                          Framework,
+    string                          FrameworkName,
+    DateTime                        GeneratedAt,
+    CompliancePeriodDto             Period,
+    ComplianceSummaryDto            Summary,
+    List<ComplianceControlDto>      Controls);
+
+public record CompliancePeriodDto(DateTime From, DateTime To);
+
+public record ComplianceSummaryDto(
+    int    TotalControls,
+    int    Passed,
+    int    Partial,
+    int    Failed,
+    double Score,
+    string OverallStatus);
