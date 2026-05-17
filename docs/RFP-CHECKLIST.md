@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-16 (PM run #10)
+> Last updated: 2026-05-17 (PM run #11)
 
 ## Platform (44 items)
 
@@ -17,7 +17,7 @@
 | 7 | Solution shall support both CLI and web interfaces | PC | Blazor web UI (OrkunPAM.Web) + REST API (OrkunPAM.WebAPI) |
 | 8 | Solution shall support SAML authentication for secure portal access to PAM platform | PC | SAML 2.0 SP-initiated + ACS — SamlAuthEndpoints.cs; XML sig validation, ±5 min clock skew, auto-provision (#45) |
 | 9 | Solution shall support SAML provider configuration on a per-tenant basis, allowing separate identity provider settings f |  |  |
-| 10 | Solution shall support Public Key Infrastructure (PKI) Authentication for secure portal access using digital certificate |  |  |
+| 10 | Solution shall support Public Key Infrastructure (PKI) Authentication for secure portal access using digital certificate | PC | PkiEndpoints.cs — Trusted CA CRUD (AdminPolicy), user cert mapping CRUD, POST /api/v1/auth/pki/login; X.509 chain validation + expiry check; X-Client-Cert header or body; JWT with mfaVerified=true; Integrations.razor PKI tab (#115) |
 | 11 | Solution shall support Windows Authentication fo | PC | AuthEndpoints.cs — GET /api/v1/auth/windows; Negotiate/Kerberos SSO; trusted domain guard, auto-provision on first login, MFA bypass for Kerberos, audit via UserLoggedInEvent; Integrations.razor Windows Auth tab (#126) |
 | 12 | Solution shall have out of the box management capability for network devices and systems (Juniper, Cisco IOS, Cisco IOS- | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492) built-in server; Cisco/Juniper/Aruba CLI AAA via TCP :49 (#111) |
 | 13 | Solution shall support adapting to different brand/model devices and systems, which will be used in the future. |  |  |
@@ -37,7 +37,7 @@
 | 27 | Solution shall support business and operational model of managed service providers |  |  |
 | 28 | Solution shall support business and operational model of geographically distributed organizations |  |  |
 | 29 | Solution shall support end-to-end encryption. | PC | TLS 1.3 (all comms) + AES-256-GCM (vault) + column-level encryption (#3, #4) |
-| 30 | Solution shall support FIPS 140-2 encryption standard |  |  |
+| 30 | Solution shall support FIPS 140-2 encryption standard | PC | FipsUtils.cs + VaultEncryptionService.cs — OS FIPS registry + appsettings Security.FipsMode override; AesCng when FIPS active; startup compliance validator; admin FIPS status badge (Integrations.razor); TLS 1.3 enforced; PBKDF2-SHA256 for passwords (#180) |
 | 31 | Solution shall support hardware security module (HSM) for key storage |  |  |
 | 32 | Solution shall support AES encryption for password management. | PC | VaultEncryptionService.cs — AES-256-GCM, 3-tier key hierarchy (KEK/DEK/MEK) |
 | 33 | Solution shall support audit log management. | FC | AuditService.cs — immutable hash-chained audit log, all operations recorded |
@@ -45,7 +45,7 @@
 | 35 | Solution shall provide audit log with reporting capabilities. | PC | Reports.razor — audit log export CSV/JSON, filter/search, date range |
 | 36 | Solution shall support automated policy compliance checks. | PC | PolicyEndpoints.cs — policy compliance reporting; policy-compliance report (#120) |
 | 37 | Solution shall support integration with SIEM systems. | PC | SyslogForwarderService.cs — RFC 5424 Syslog + ArcSight CEF; UDP/TCP/TLS; auto-forward audit events (#122) |
-| 38 | Solution shall support integration with ticketing systems. |  |  |
+| 38 | Solution shall support integration with ticketing systems. | PC | IntegrationEndpoints.cs — ServiceNow/OneDesk/Jira/BMC/Generic ITSM config CRUD, toggle, test; HMAC-SHA256 inbound webhook; ticket state → ApprovalStatus.Approved/Denied; Integrations.razor ITSM tab (#114) |
 | 39 | Solution shall provide dashboards for operational visibility. | PC | Dashboard.razor — live stats, session activity, credential status |
 | 40 | Solution shall support role-based access control (RBAC). | FC | PamRole enum — GlobalAdmin, VaultAdmin, SessionAdmin, Auditor, PasswordViewer; enforced on all endpoints |
 | 41 | Solution shall support separation of duties. | PC | PasswordViewer SoD — GlobalAdmin/VaultAdmin cannot checkout without separate PasswordViewer role (#140) |
@@ -101,9 +101,9 @@
 | 42 | Solution shall support adaptive authentication |  |  |
 | 43 | Solution shall support passwordless authentication | PC | Fido2Endpoints.cs — FIDO2/WebAuthn passkey authentication; passwordless portal login with hardware security keys or platform authenticators; user self-enrollment UI (#158) |
 | 44 | Solution shall support biometric authentication |  |  |
-| 45 | Solution shall support hardware token support |  |  |
-| 46 | Solution shall support smart card authentication |  |  |
-| 47 | Solution shall support certificate-based authentication |  |  |
+| 45 | Solution shall support hardware token support | PC | Fido2Endpoints.cs — YubiKey (roaming authenticator) + Windows Hello (platform); FIDO2.NET library; hardware-bound credential; PkiEndpoints.cs — physical smart card via X.509 cert (#115, #158) |
+| 46 | Solution shall support smart card authentication | PC | PkiEndpoints.cs — POST /api/v1/auth/pki/login; X.509 cert from request body or X-Client-Cert header; TrustedCaCertificate chain validation; User.RequirePkiAuth flag; JWT issuance with mfaVerified=true (#115) |
+| 47 | Solution shall support certificate-based authentication | PC | PkiEndpoints.cs — TrustedCaCertificate + PkiUserCertificate entities; AdminPolicy CRUD; X.509 chain + expiry validation; rate-limited PKI login; Integrations.razor PKI tab (Trusted CAs + User Certificates sub-tabs) (#115) |
 | 48 | Solution shall support federated identity |  |  |
 
 ## Reporting (48 items)
@@ -121,8 +121,8 @@
 | 9 | Solution shall support report distribution | PC | ReportSchedulerService.cs — SMTP email distribution to configured recipients; HTML-safe email body (HTML-encoded, #176); run-now + scheduled delivery; audit logged (#159, #177) |
 | 10 | Solution shall support data retention policies | PC | RecordingRetentionService.cs — configurable retention, auto-purge old recordings |
 | 11 | Solution shall support audit log export | PC | AuditService.cs — CSV/JSON export from Reports.razor |
-| 12 | Solution shall support compliance frameworks (SOX, PCI, HIPAA) |  |  |
-| 13 | Solution shall support regulatory reporting |  |  |
+| 12 | Solution shall support compliance frameworks (SOX, PCI, HIPAA) | PC | ComplianceReportEndpoints.cs + ComplianceEndpoints.cs — SOX/PCI-DSS/ISO 27001 pre-built control sets; per-framework pass/fail/partial scoring; control-level evidence drill-down; Reports.razor Compliance tab with framework selector (#179) |
+| 13 | Solution shall support regulatory reporting | PC | ComplianceReportEndpoints.cs — POST /api/v1/compliance/report/generate per framework; HTML print-friendly output for auditors; scheduled delivery via ReportSchedulerService.cs; SOX/PCI-DSS/ISO 27001 templates (#179) |
 | 14 | Solution shall support risk reporting |  |  |
 | 15 | Solution shall support checkout/export history report | PC | Reports.razor — checkout-history report |
 | 16 | Solution shall support group membership report | PC | Reports.razor — group-membership report |
@@ -167,7 +167,7 @@
 | 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — WebAuthn credential registration & assertion; hardware security key (YubiKey/Touch ID) support; FIDO2.NET library; passwordless + MFA second factor; user self-enrollment UI (#158) |
 | 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
 | 4 | Solution shall support SMS-based OTP |  |  |
-| 5 | Solution shall support email-based OTP |  |  |
+| 5 | Solution shall support email-based OTP | PC | EmailOtpEndpoints.cs — CSPRNG 6-digit OTP; SHA-256 hashed storage; 10-min TTL; single-use; 5-fail lockout; rate-limit 3/15 min; user enumeration prevention; Login.razor Email OTP step; Policies.razor EmailOtpEnabled toggle; audit events (#178) |
 | 6 | Solution shall support push notifications |  |  |
 | 7 | Solution shall support hardware tokens (OATH) |  |  |
 | 8 | Solution shall support adaptive MFA |  |  |
@@ -289,7 +289,7 @@
 | 40 | Solution shall support API key management | PC | CredentialEndpoints.cs — API key type credential |
 | 41 | Solution shall support certificate management |  |  |
 | 42 | Solution shall support service account management | PC | CredentialEndpoints.cs — service account type credentials |
-| 43 | Solution shall support cloud credential management |  |  |
+| 43 | Solution shall support cloud credential management | PC | CloudEndpoints.cs + CloudPam.razor — AWS IAM/EC2/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS credential management; cloud account CRUD; resource sync; multi-cloud dashboard (#37) |
 | 44 | Solution shall support database credential management | PC | CredentialEndpoints.cs — DB credential type (SQL Server, MySQL, PostgreSQL) |
 | 45 | Solution shall support application credential management | PC | CredentialEndpoints.cs — API/app credential type |
 | 46 | Solution shall support network device credential management | PC | CredentialEndpoints.cs + TacacsProxyService.cs — network device credential type |
@@ -528,8 +528,8 @@
 | 6 | Solution shall support REST API integration | PC | OrkunPAM.WebAPI — full REST API with OpenAPI |
 | 7 | Solution shall support webhook integration | PC | WebhookService.cs — event-driven webhook delivery |
 | 8 | Solution shall support email integration | PC | SmtpEmailService.cs — SMTP notification |
-| 9 | Solution shall support ITSM integration |  |  |
-| 10 | Solution shall support ticketing system integration |  |  |
+| 9 | Solution shall support ITSM integration | PC | IntegrationEndpoints.cs — ServiceNow/OneDesk/Jira/BMC/Generic provider; config CRUD + toggle + test; HMAC-SHA256 inbound webhook; ticket-based session approval (ApprovalStatus.Approved/Denied); Integrations.razor ITSM tab (#114) |
+| 10 | Solution shall support ticketing system integration | PC | IntegrationEndpoints.cs — POST /api/v1/integrations/itsm/inbound-approve webhook; HMAC-SHA256 signature validation; ticket lookup → session approval auto-trigger; audit logged; inbound webhook URL shown in Integrations.razor (#114) |
 | 11 | Solution shall support CMDB integration |  |  |
 | 12 | Solution shall support monitoring system integration |  |  |
 | 13 | Solution shall support SOAR integration |  |  |
