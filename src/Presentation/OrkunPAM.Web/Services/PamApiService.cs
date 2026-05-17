@@ -1695,6 +1695,13 @@ public sealed class PamApiService
         }
         catch { return null; }
     }
+
+    // ── FIPS 140-2 Status (#180) ──────────────────────────────────────────────────
+    public async Task<FipsStatusDto?> GetFipsStatusAsync()
+    {
+        var result = await GetAsync<SingleResult<FipsStatusDto>>("/api/v1/system/encryption/fips-status");
+        return result?.Data;
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2342,3 +2349,11 @@ public record ComplianceSummaryDto(
     int    Failed,
     double Score,
     string OverallStatus);
+
+// FIPS 140-2 Status (#180)
+public record FipsStatusDto(
+    bool   FipsEnabled,
+    string Algorithm,
+    string KeyDerivation,
+    string Standard,
+    string ComplianceNote);
