@@ -73,11 +73,13 @@ public sealed class DiscoveryService : IDiscoveryService
 
                 var accounts = new List<DiscoveredAccountInfo>();
 
-                // Find privileged accounts: Domain Admins, Enterprise Admins, local admins, service accounts
+                // Find privileged accounts: all major privileged AD groups + service accounts
                 var filters = new[]
                 {
                     ("(&(objectClass=user)(memberOf=CN=Domain Admins,CN=Users," + baseDn + "))", "DomainAdmin"),
                     ("(&(objectClass=user)(memberOf=CN=Enterprise Admins,CN=Users," + baseDn + "))", "EnterpriseAdmin"),
+                    ("(&(objectClass=user)(memberOf=CN=Schema Admins,CN=Users," + baseDn + "))", "SchemaAdmin"),
+                    ("(&(objectClass=user)(memberOf=CN=Administrators,CN=Builtin," + baseDn + "))", "BuiltinAdmin"),
                     ("(&(objectClass=user)(servicePrincipalName=*))", "ServiceAccount"),
                     ("(&(objectClass=user)(adminCount=1))", "PrivilegedUser"),
                 };

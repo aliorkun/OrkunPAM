@@ -1,9 +1,12 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -42,10 +45,15 @@ public static class DiscoveryEndpoints
         });
 
         jobs.MapPost("/{id:guid}/run", async (Guid id, OrkunPamDbContext db,
-            OrkunPAM.Persistence.Services.IDiscoveryService discoveryService, ILogger<Program> logger) =>
+            IDiscoveryService discoveryService, IAuditService audit,
+            ILogger<Program> logger, HttpContext context) =>
         {
             var job = await db.DiscoveryJobs.FindAsync(id);
             if (job == null) return Results.NotFound(new { success = false, errors = new[] { "Job not found" } });
+
+            var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_STARTED", null, null, ip,
+                "DiscoveryJob", id.ToString(), new { job.Name, Type = job.DiscoveryType.ToString() });
 
             var scanResult = await discoveryService.RunScanAsync(job.DiscoveryType, job.TargetScopeJson);
 
@@ -65,6 +73,9 @@ public static class DiscoveryEndpoints
                 db.DiscoveredAccounts.AddRange(newAccounts);
 
             await db.SaveChangesAsync();
+
+            await audit.LogAsync("Discovery", "DISCOVERY_SCAN_COMPLETED", null, null, ip,
+                "DiscoveryJob", id.ToString(), new { job.Name, AccountsFound = newAccounts.Count, scanResult.Message });
 
             logger.LogInformation("Discovery job '{Name}' completed. Found {Count} accounts", job.Name, newAccounts.Count);
 
@@ -89,15 +100,79 @@ public static class DiscoveryEndpoints
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<TakeoverStatus>(status, true, out var ts))
                 query = query.Where(a => a.TakeoverStatus == ts);
 
-            var list = await query
+            var discovered = await query
                 .OrderByDescending(a => a.DiscoveredAtUtc)
-                .Select(a => new
-                {
-                    a.Id, a.DiscoveryJobId, a.DeviceId, a.AccountName, a.AccountType,
-                    a.DiscoveredAtUtc, Status = a.TakeoverStatus.ToString(), a.LinkedCredentialId
-                }).ToListAsync();
+                .ToListAsync();
+
+            // Vault deduplication: check which account names already exist in Credentials
+            var accountNames = discovered.Select(a => a.AccountName).Distinct().ToList();
+            var inVaultNames = await db.Credentials
+                .Where(c => c.Username != null && accountNames.Contains(c.Username))
+                .Select(c => c.Username!)
+                .ToHashSetAsync();
+
+            var list = discovered.Select(a => new
+            {
+                a.Id, a.DiscoveryJobId, a.DeviceId, a.AccountName, a.AccountType,
+                a.DiscoveredAtUtc, Status = a.TakeoverStatus.ToString(), a.LinkedCredentialId,
+                InVault = inVaultNames.Contains(a.AccountName)
+            });
 
             return Results.Ok(new { success = true, data = list });
+        });
+
+        // Bulk import: onboard multiple discovered accounts to vault in one call
+        accounts.MapPost("/bulk-import", async (BulkImportRequest req, OrkunPamDbContext db,
+            IAuditService audit, ILogger<Program> logger, HttpContext context) =>
+        {
+            if (req.AccountIds == null || req.AccountIds.Count == 0)
+                return Results.BadRequest(new { success = false, errors = new[] { "No accounts selected" } });
+
+            var folder = await db.VaultFolders.FindAsync(req.FolderId);
+            if (folder == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Folder not found" } });
+
+            var toImport = await db.DiscoveredAccounts
+                .Where(a => req.AccountIds.Contains(a.Id) && a.TakeoverStatus == TakeoverStatus.Pending)
+                .ToListAsync();
+
+            var imported = 0;
+            var skipped = 0;
+            foreach (var account in toImport)
+            {
+                var alreadyExists = await db.Credentials.AnyAsync(
+                    c => c.Username == account.AccountName && c.FolderId == req.FolderId);
+                if (alreadyExists) { skipped++; continue; }
+
+                var credential = new Credential
+                {
+                    FolderId = req.FolderId,
+                    Name = account.AccountName,
+                    CredentialType = CredentialType.UserPassword,
+                    Username = account.AccountName,
+                    DeviceId = account.DeviceId,
+                    IsDiscovered = true,
+                    IsTakenOver = true,
+                    Status = CredentialStatus.Active,
+                    KeyVersion = 1
+                };
+                db.Credentials.Add(credential);
+                account.TakeoverStatus = TakeoverStatus.TakenOver;
+                account.LinkedCredentialId = credential.Id;
+                imported++;
+            }
+
+            await db.SaveChangesAsync();
+
+            var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            await audit.LogAsync("Discovery", "DISCOVERY_BULK_IMPORTED", actorId != null ? Guid.Parse(actorId) : (Guid?)null, null, ip,
+                "Vault", req.FolderId.ToString(), new { Imported = imported, Skipped = skipped, FolderId = req.FolderId });
+
+            logger.LogInformation("Bulk import: {Imported} accounts imported to folder {FolderId}, {Skipped} skipped (duplicates)",
+                imported, req.FolderId, skipped);
+
+            return Results.Ok(new { success = true, data = new { imported, skipped, message = $"{imported} accounts imported to vault. {skipped} skipped (already exist)." } });
         });
 
         accounts.MapPost("/{id:guid}/takeover", async (Guid id, TakeoverRequest req,
@@ -257,5 +332,6 @@ public static class DiscoveryEndpoints
 
 public record CreateDiscoveryJobRequest(string Name, DiscoveryType DiscoveryType, string? TargetScope, string? Schedule, Guid? CreatedBy);
 public record TakeoverRequest(Guid FolderId);
+public record BulkImportRequest(List<Guid> AccountIds, Guid FolderId);
 public record CreateRotationPolicyRequest(string Name, int? IntervalDays, string? PasswordComplexityJson,
     RotationConnector ConnectorType, bool RotateOnCheckIn, int? NotifyBeforeDays, int? RetryCount, int? RetryIntervalMinutes);

@@ -1504,6 +1504,21 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<BulkImportResultDto?> BulkImportDiscoveredAccountsAsync(List<string> ids, Guid folderId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var accountIds = ids.Select(Guid.Parse).ToList();
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovered-accounts/bulk-import",
+                new { accountIds, folderId });
+            if (!resp.IsSuccessStatusCode) return null;
+            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BulkImportResultDto>>(JsonOpts);
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
     public async Task<List<OrphanedUserDto>?> GetOrphanedUsersAsync()
     {
         var client = await GetAuthClientAsync();
@@ -2160,7 +2175,8 @@ public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int Tam
 public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
 
 public record DiscoveryJobDto(Guid Id, string Name, string Type, string? Schedule, DateTime? LastRunAtUtc, bool IsEnabled);
-public record DiscoveredAccountDto(Guid Id, Guid DiscoveryJobId, Guid? DeviceId, string AccountName, string? AccountType, DateTime DiscoveredAtUtc, string Status, Guid? LinkedCredentialId);
+public record DiscoveredAccountDto(Guid Id, Guid DiscoveryJobId, Guid? DeviceId, string AccountName, string? AccountType, DateTime DiscoveredAtUtc, string Status, Guid? LinkedCredentialId, bool InVault = false);
+public record BulkImportResultDto(int Imported, int Skipped, string Message);
 public record DiscoveryScanResultDto(DateTime LastRunAtUtc, int AccountsFound, string Result, List<DiscoveredAccountInfoDto> Accounts);
 public record DiscoveredAccountInfoDto(string AccountName, string AccountType, string? HostName, string? Dn, bool IsEnabled, string Source);
 

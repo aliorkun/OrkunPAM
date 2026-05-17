@@ -25,26 +25,43 @@
 @if (_tab == "accounts")
 {
     <div class="pam-card">
-        <div class="pam-card-header">
+        <div class="pam-card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
             <span>Discovered Privileged Accounts</span>
-            <select class="pam-select pam-select-sm" @onchange="@(e => FilterAccountStatus(e.Value?.ToString()))">
-                <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="TakenOver">Taken Over</option>
-                <option value="Ignored">Ignored</option>
-            </select>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                @if (_selectedIds.Count > 0)
+                {
+                    <button class="pam-btn pam-btn-success pam-btn-sm" @onclick="ShowBulkImportDialog" disabled="@_bulkImporting">
+                        @(_bulkImporting ? "Importing..." : "Import Selected (" + _selectedIds.Count + ")")
+                    </button>
+                }
+                <select class="pam-select pam-select-sm" @onchange="@(e => FilterAccountStatus(e.Value?.ToString()))">
+                    <option value="">All Statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="TakenOver">Taken Over</option>
+                    <option value="Ignored">Ignored</option>
+                </select>
+            </div>
         </div>
         <div class="pam-card-body">
             @if (_loadingAccounts) { <div class="pam-loading-text">Loading accounts...</div> }
             else if (_accounts == null || _accounts.Count == 0) { <div class="pam-empty">No discovered accounts found. Run a scan job to discover privileged accounts.</div> }
             else
             {
+                var pending = _accounts.Where(a => a.Status == "Pending").ToList();
                 <table class="pam-table">
                     <thead>
                         <tr>
+                            <th style="width:36px;">
+                                @if (pending.Count > 0)
+                                {
+                                    <input type="checkbox" @onchange="ToggleSelectAll"
+                                           checked="@(_selectedIds.Count == pending.Count && pending.Count > 0)" />
+                                }
+                            </th>
                             <th>Status</th>
                             <th>Account Name</th>
                             <th>Type</th>
+                            <th>Vault</th>
                             <th>Discovered</th>
                             <th>Actions</th>
                         </tr>
@@ -53,9 +70,26 @@
                         @foreach (var a in _accounts)
                         {
                             <tr>
+                                <td>
+                                    @if (a.Status == "Pending")
+                                    {
+                                        <input type="checkbox" checked="@_selectedIds.Contains(a.Id.ToString())"
+                                               @onchange="@(e => ToggleSelect(a.Id.ToString(), (bool)(e.Value ?? false)))" />
+                                    }
+                                </td>
                                 <td><span class="pam-badge @AccountStatusClass(a.Status)">@a.Status</span></td>
                                 <td><code>@a.AccountName</code></td>
-                                <td>@a.AccountType</td>
+                                <td>@(a.AccountType ?? "—")</td>
+                                <td>
+                                    @if (a.InVault || a.Status == "TakenOver")
+                                    {
+                                        <span class="pam-status pam-status-active" style="font-size:0.78rem;">In Vault</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#888;font-size:0.78rem;">—</span>
+                                    }
+                                </td>
                                 <td>@a.DiscoveredAtUtc.ToString("MM/dd HH:mm")</td>
                                 <td>
                                     @if (a.Status == "Pending")
@@ -65,7 +99,7 @@
                                     }
                                     else if (a.Status == "TakenOver" && a.LinkedCredentialId.HasValue)
                                     {
-                                        <span class="pam-text-muted">In Vault</span>
+                                        <span class="pam-text-muted" style="font-size:0.8rem;">✓ Done</span>
                                     }
                                 </td>
                             </tr>
@@ -254,6 +288,42 @@
     </div>
 }
 
+@if (_showBulkImport)
+{
+    <div class="pam-modal-overlay" @onclick="CloseBulkImport">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <span>Bulk Import to Vault</span>
+                <button class="pam-modal-close" @onclick="CloseBulkImport">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Import <strong>@_selectedIds.Count</strong> selected accounts to vault.</p>
+                <p>Select a vault folder:</p>
+                <select class="pam-select" @bind="_selectedFolderIdStr">
+                    <option value="">— Select Folder —</option>
+                    @if (_folders != null)
+                    {
+                        @foreach (var f in _folders)
+                        {
+                            <option value="@f.Id">@f.Name</option>
+                        }
+                    }
+                </select>
+                <div class="pam-alert pam-alert-info" style="margin-top:0.75rem;font-size:0.85rem;">
+                    Accounts already in vault (same username) will be skipped. Set passwords via Vault → Rotation after import.
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-success" @onclick="ConfirmBulkImportAsync"
+                        disabled="@(string.IsNullOrEmpty(_selectedFolderIdStr) || _bulkImporting)">
+                    @(_bulkImporting ? "Importing..." : "Import " + _selectedIds.Count + " Accounts")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseBulkImport">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "accounts";
     private bool _loadingAccounts;
@@ -261,6 +331,7 @@
     private bool _running;
     private bool _creating;
     private bool _takingOver;
+    private bool _bulkImporting;
     private string? _error;
     private string? _success;
     private string? _runningJobId;
@@ -272,8 +343,12 @@
     private List<FolderDto>? _folders;
     private string? _accountStatusFilter;
 
+    // Bulk selection
+    private readonly HashSet<string> _selectedIds = new();
+
     // Takeover dialog
     private bool _showTakeover;
+    private bool _showBulkImport;
     private string? _takeoverAccountId;
     private string? _selectedFolderIdStr;
 
@@ -306,6 +381,7 @@
     private async Task FilterAccountStatus(string? status)
     {
         _accountStatusFilter = status;
+        _selectedIds.Clear();
         await LoadAccountsAsync();
     }
 
@@ -315,6 +391,48 @@
         _accounts = await Api.GetDiscoveredAccountsAsync(_accountStatusFilter);
         _pendingCount = _accounts?.Count(a => a.Status == "Pending") ?? 0;
         _loadingAccounts = false;
+    }
+
+    private void ToggleSelect(string id, bool selected)
+    {
+        if (selected) _selectedIds.Add(id);
+        else _selectedIds.Remove(id);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var pending = _accounts?.Where(a => a.Status == "Pending").ToList();
+        if (pending == null) return;
+        if ((bool)(e.Value ?? false))
+            foreach (var a in pending) _selectedIds.Add(a.Id.ToString());
+        else
+            _selectedIds.Clear();
+    }
+
+    private async Task ShowBulkImportDialog()
+    {
+        _selectedFolderIdStr = null;
+        _folders ??= await Api.GetFoldersAsync();
+        _showBulkImport = true;
+    }
+
+    private void CloseBulkImport() { _showBulkImport = false; }
+
+    private async Task ConfirmBulkImportAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedFolderIdStr) || !Guid.TryParse(_selectedFolderIdStr, out var folderId)) return;
+        _bulkImporting = true;
+        var result = await Api.BulkImportDiscoveredAccountsAsync(_selectedIds.ToList(), folderId);
+        _bulkImporting = false;
+        CloseBulkImport();
+        _selectedIds.Clear();
+        if (result != null)
+        {
+            _success = result.Message;
+            await LoadAccountsAsync();
+        }
+        else _error = "Bulk import failed.";
+        StateHasChanged();
     }
 
     private async Task LoadJobsAsync()
@@ -387,7 +505,7 @@
         _takeoverAccountId = id;
         _selectedFolderIdStr = null;
         _folders ??= await Api.GetFoldersAsync();
-        _showTakeover = true;
+        _showTakeover = true; _showBulkImport = false;
     }
 
     private void CloseTakeover() { _showTakeover = false; _takeoverAccountId = null; }
