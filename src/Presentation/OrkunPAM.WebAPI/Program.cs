@@ -395,6 +395,7 @@ try
     api.MapConnectionProfileEndpoints();
     api.MapFido2Endpoints();
     api.MapComplianceEndpoints();
+    api.MapComplianceReportEndpoints();
     api.MapAnalyticsEndpoints();
     api.MapIntegrationEndpoints();
     api.MapImportEndpoints();
