@@ -32,6 +32,11 @@ public class User : SoftDeletableEntity
     public bool IsOrphaned { get; set; }
     public DateTime? OrphanedDetectedAtUtc { get; set; }
 
+    // Vendor user fields (#186)
+    public UserType UserType { get; set; } = UserType.Regular;
+    public Guid? VendorSponsorUserId { get; set; }
+    public string? VendorDeviceIdsJson { get; set; }
+
     // PKI / Smart Card authentication (#115)
     public bool RequirePkiAuth { get; set; }
 

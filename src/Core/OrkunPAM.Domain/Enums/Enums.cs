@@ -2,6 +2,7 @@ namespace OrkunPAM.Domain.Enums;
 
 public enum AuthSource : byte { Local = 0, ActiveDirectory = 1, Saml = 2, Oidc = 3, Windows = 4 }
 public enum UserStatus : byte { Disabled = 0, Active = 1, Locked = 2, Expired = 3 }
+public enum UserType : byte { Regular = 0, Vendor = 1 }
 public enum MfaType : byte { Totp = 0, Sms = 1, Push = 2, Hardware = 3, EmailOtp = 4 }
 public enum GroupSource : byte { Local = 0, ActiveDirectory = 1, Saml = 2 }
 

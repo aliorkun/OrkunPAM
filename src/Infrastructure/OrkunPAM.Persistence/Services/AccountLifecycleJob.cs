@@ -90,6 +90,23 @@ public sealed class AccountLifecycleJob : BackgroundService
                         "<p>Please contact your administrator to renew access before expiry.</p>", _logger, ct);
                     warned++;
                 }
+
+                // 48-hour vendor expiry warning to sponsor (#186)
+                if (user.UserType == OrkunPAM.Domain.Enums.UserType.Vendor
+                    && user.VendorSponsorUserId.HasValue
+                    && exp <= now.AddHours(48) && exp > now)
+                {
+                    var sponsor = users.FirstOrDefault(u => u.Id == user.VendorSponsorUserId.Value);
+                    if (sponsor?.Email != null)
+                    {
+                        await SendEmailAsync(email, sponsor.Email,
+                            "OrkunPAM — Vendor Access Expiring in 48 Hours",
+                            $"<p>Vendor account <strong>{user.Username}</strong> ({user.DisplayName}) will expire on <strong>{exp:yyyy-MM-dd HH:mm}</strong> UTC (within 48 hours).</p>" +
+                            "<p>Log in to OrkunPAM and go to <strong>Workflow &rarr; Vendors</strong> to extend or revoke this access.</p>",
+                            _logger, ct);
+                        warned++;
+                    }
+                }
             }
 
             // --- Password age lockout ---
