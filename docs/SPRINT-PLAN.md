@@ -256,8 +256,37 @@
 
 ---
 
-## Sonraki Adım: v1.0.0 GA Tag
-**Kriter:** Sprint 6 tamamlandı → CI yeşil → `v1.0.0` tag atılacak
+## ~~Sprint 14 - UX Polish: Credential Access Request Flow~~ ✅ TAMAMLANDI (DUPLICATE — bkz. önceki Sprint 14 girişi)
+
+---
+
+## Sprint 15 - v2 Security + MFA + Integration RFP Gap ✅ TAMAMLANDI
+**Tarih:** 17 Mayıs 2026
+**Durum:** Tamamlandı — 3 HIGH security fix + Account Reconciliation + Push MFA + SOAR Integration
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #198 | [HIGH] Vault Permission Endpoint — AdminPolicy Eksik | security | ✅ Kapatıldı |
+| #199 | [HIGH] Credential Share Endpoint — CanShare Doğrulanmıyor | security | ✅ Kapatıldı |
+| #200 | [HIGH] Vault Folder Credentials Listing — IDOR | security | ✅ Kapatıldı |
+| #195 | Account Reconciliation — PAM vs AD/LDAP Drift Detection | v2-COMPLIANCE | ✅ Kapatıldı |
+| #196 | Push Notification MFA — Mobil Push Onay MFA | v2-MFA | ✅ Kapatıldı |
+| #197 | SOAR Integration — Splunk SOAR / Palo Alto XSOAR | v2-INTEGRATION | ✅ Kapatıldı |
+
+**İlerleme:** 6/6 (%100) ✅
+
+**Sprint 15 Tamamlanan Bileşenler:**
+- **#198 fix:** `/api/v1/vault/permissions` → `RequireAuthorization("AdminPolicy")` eklendi (privilege escalation önlendi)
+- **#199 fix:** `POST /vault/credentials/{id}/share` → `CanShare` yetkisi enforced (BFLA önlendi)
+- **#200 fix:** `GET /vault/folders/{id}/credentials` → folder-level IDOR koruması (CWE-639 kapatıldı)
+- **#195:** `GET/POST /api/v1/compliance/reconciliation/report|auto-remediate|history` + Compliance.razor Reconciliation sekmesi
+- **#196:** Push MFA endpoints (enroll/devices/initiate/status/respond) + PushDevices.razor + NavMenu linki
+- **#197:** SOAR endpoints (config CRUD + 5 inbound action API, HMAC-SHA256 verified) + Integrations.razor SOAR sekmesi
+
+---
+
+## Sonraki Adım
+**Backlog:** #35 ML Tabanlı Anomali Tespiti (v2-ANALYTICS) — AAPM kapsamında, CLAUDE.md'ye göre v2.0.0'a ertelendi.
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ---
