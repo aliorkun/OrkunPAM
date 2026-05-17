@@ -271,7 +271,6 @@ public static class ReportEndpoints
 
     private static async Task<object> GetFailedLoginReport(OrkunPamDbContext db, DateTime from, DateTime to)
     {
-        // AuditLogs-based brute force analysis (RFP Reporting #25)
         var failedEvents = await db.AuditLogs
             .Where(a => a.Outcome == AuditOutcome.Failure &&
                         a.Timestamp >= from && a.Timestamp <= to &&
@@ -634,8 +633,10 @@ public static class ReportEndpoints
     private static async Task<object> GetVendorAccessReport(OrkunPamDbContext db)
     {
         var now = DateTime.UtcNow;
-        var vendors = await db.Users
-            .Where(u => u.IsTemporary)
+
+        // Fetch vendor accounts (UserType.Vendor)
+        var vendorUsers = await db.Users
+            .Where(u => u.UserType == UserType.Vendor)
             .Select(u => new
             {
                 u.Id, u.Username, u.DisplayName, u.Email,
@@ -643,23 +644,58 @@ public static class ReportEndpoints
                 u.TemporaryExpiresUtc,
                 IsExpired = u.TemporaryExpiresUtc.HasValue && u.TemporaryExpiresUtc < now,
                 u.LastLoginAtUtc, u.MfaEnabled,
-                u.CreatedAtUtc
+                u.CreatedAtUtc, u.VendorSponsorUserId
             })
             .OrderBy(u => u.TemporaryExpiresUtc)
             .ToListAsync();
 
-        var active = vendors.Count(v => v.Status == UserStatus.Active.ToString() && !v.IsExpired);
-        var expired = vendors.Count(v => v.IsExpired);
-        var neverLoggedIn = vendors.Count(v => v.LastLoginAtUtc == null);
+        // Session counts per vendor
+        var vendorIds = vendorUsers.Select(v => v.Id).ToList();
+        var sessionCounts = await db.ProxySessions
+            .Where(s => vendorIds.Contains(s.UserId))
+            .GroupBy(s => s.UserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.UserId, x => x.Count);
+
+        // Sponsor names
+        var sponsorIds = vendorUsers.Where(v => v.VendorSponsorUserId.HasValue)
+            .Select(v => v.VendorSponsorUserId!.Value).Distinct().ToList();
+        var sponsorNames = await db.Users
+            .Where(u => sponsorIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Username);
+
+        // Token-based vendor access profiles (legacy)
+        var vendorProfiles = await db.VendorAccesses
+            .Select(v => new
+            {
+                v.Id, v.VendorName, v.Company, v.Email, Status = v.Status.ToString(),
+                v.StartAtUtc, v.EndAtUtc, v.CreatedByUsername, v.CreatedAtUtc, v.RevokedAtUtc
+            })
+            .OrderByDescending(v => v.CreatedAtUtc)
+            .ToListAsync();
+
+        var active = vendorUsers.Count(v => v.Status == UserStatus.Active.ToString() && !v.IsExpired);
+        var expired = vendorUsers.Count(v => v.IsExpired);
+        var neverLoggedIn = vendorUsers.Count(v => v.LastLoginAtUtc == null);
+
+        var vendors = vendorUsers.Select(v => new
+        {
+            v.Id, v.Username, v.DisplayName, v.Email, v.Status, v.TemporaryExpiresUtc,
+            v.IsExpired, v.LastLoginAtUtc, v.MfaEnabled, v.CreatedAtUtc,
+            sponsorUsername = v.VendorSponsorUserId.HasValue
+                ? sponsorNames.GetValueOrDefault(v.VendorSponsorUserId.Value) : null,
+            sessionCount = sessionCounts.GetValueOrDefault(v.Id, 0)
+        }).ToList();
 
         return new
         {
-            totalVendorAccounts = vendors.Count,
+            totalVendorAccounts = vendorUsers.Count,
             active,
             expired,
             neverLoggedIn,
-            mfaEnabled = vendors.Count(v => v.MfaEnabled),
-            vendors
+            mfaEnabled = vendorUsers.Count(v => v.MfaEnabled),
+            vendors,
+            vendorProfiles
         };
     }
 
