@@ -529,6 +529,81 @@ public static class SystemEndpoints
                 meta = new { page, pageSize, totalCount = totalApi } });
         });
 
+        // === HSM Status (#187) ===
+        var hsmGroup = app.MapGroup("/api/v1/system/hsm").WithTags("System").RequireAuthorization("AdminPolicy");
+
+        hsmGroup.MapGet("/status", async (IServiceProvider sp, IKeyStore keyStore, IConfiguration config) =>
+        {
+            var hsmMode = (config["Security:HsmMode"] ?? "none").ToLowerInvariant();
+            var mekLabel = config["Security:MekKeyLabel"] ?? "OrkunPAM-MEK";
+            var keyStatus = keyStore.GetKeyStatus();
+
+            if (hsmMode == "none")
+                return Results.Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        hsmMode,
+                        enabled = false,
+                        provider = "Software Key Store (InMemoryKeyStore)",
+                        available = true,
+                        keyVersion = keyStatus.Version,
+                        keyInitializedAt = keyStatus.InitializedAtUtc,
+                        rotationCount = keyStatus.RotationCount
+                    }
+                });
+
+            var hsm = sp.GetService<IHsmProvider>();
+            if (hsm == null)
+                return Results.Problem("HSM provider not registered for mode: " + hsmMode);
+
+            var status = await hsm.GetStatusAsync();
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    hsmMode,
+                    enabled = true,
+                    provider = status.Provider,
+                    mode = status.Mode,
+                    available = status.Available,
+                    slotInfo = status.SlotInfo,
+                    firmwareVersion = status.FirmwareVersion,
+                    mekKeyLabel = mekLabel,
+                    keyVersion = keyStatus.Version,
+                    keyInitializedAt = keyStatus.InitializedAtUtc,
+                    rotationCount = keyStatus.RotationCount,
+                    lastCheckedUtc = status.LastCheckedUtc
+                }
+            });
+        });
+
+        hsmGroup.MapPost("/rotate", async (IServiceProvider sp, IKeyStore keyStore, IConfiguration config,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var hsmMode = (config["Security:HsmMode"] ?? "none").ToLowerInvariant();
+            if (hsmMode == "none")
+                return Results.BadRequest(new { success = false, error = "HSM not enabled. Set Security:HsmMode in configuration." });
+
+            var actorIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var actorUsername = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "unknown";
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            Guid.TryParse(actorIdStr, out var actorId);
+
+            var result = keyStore.RotateMasterKey(string.Empty);
+            if (result.IsFailure)
+                return Results.Problem("HSM MEK rotation failed: " + result.Error.Message);
+
+            var hsm = sp.GetService<IHsmProvider>();
+            _ = audit.LogAsync("Security", "HsmKeyRotated", actorId, actorUsername, ip,
+                "HsmProvider", hsm?.ProviderName ?? hsmMode,
+                new { hsmMode, mekLabel = config["Security:MekKeyLabel"] ?? "OrkunPAM-MEK" });
+
+            return Results.Ok(new { success = true, message = "HSM MEK rotated. All DEKs re-wrapped with new key." });
+        });
+
         // === Windows / Kerberos Auth Settings (#126) ===
         var winAuthGroup = app.MapGroup("/api/v1/system/windows-auth").WithTags("System").RequireAuthorization("AdminPolicy");
 
