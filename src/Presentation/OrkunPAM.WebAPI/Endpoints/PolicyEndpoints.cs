@@ -242,6 +242,33 @@ public static class PolicyEndpoints
 
             return Results.Ok(new { success = true });
         });
+
+        // ── Watermark policy endpoints (#190) ───────────────────────────────────────
+        pwdGroup.MapGet("/watermark", async (OrkunPamDbContext db) =>
+        {
+            var p = await db.Policies.FirstOrDefaultAsync(
+                x => x.PolicyType == "Watermark" && x.Scope == PolicyScope.Global);
+            var settings = ReadPolicy<WatermarkPolicySettings>(p?.PolicyJson ?? "{}");
+            return Results.Ok(new { success = true, data = settings });
+        });
+
+        pwdGroup.MapPut("/watermark", async (
+            WatermarkPolicySettings req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            if (req.MarkerIntervalMin < 1 || req.MarkerIntervalMin > 120)
+                return Results.BadRequest(new { success = false, errors = new[] { "markerIntervalMin must be 1-120" } });
+            if (string.IsNullOrWhiteSpace(req.Template))
+                return Results.BadRequest(new { success = false, errors = new[] { "template is required" } });
+
+            await UpsertGlobalPolicyAsync(db, "Watermark", "Global Watermark Policy", req);
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Policy", "WATERMARK_POLICY_UPDATED", null, null, ip,
+                "Policy", "Watermark", new { settings = req });
+
+            return Results.Ok(new { success = true });
+        });
     }
 }
 
@@ -282,4 +309,14 @@ public record MfaPolicySettings
 {
     public bool MfaRequired     { get; init; }
     public bool EmailOtpEnabled { get; init; }
+}
+
+public record WatermarkPolicySettings
+{
+    public bool   Enabled           { get; init; } = false;
+    public string Template          { get; init; } = "{username} | {ip} | {device} | {utc}";
+    public int    MarkerIntervalMin { get; init; } = 15;
+    public bool   EnableSsh         { get; init; } = true;
+    public bool   EnableRdp         { get; init; } = true;
+    public bool   EnableVnc         { get; init; } = true;
 }

@@ -68,7 +68,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
                 CreatedAtUtc = fileInfo.CreationTimeUtc
             };
 
-            // For SSH recordings, try to parse the header for duration
+            // For SSH recordings, try to parse the header for duration and watermark
             if (format == RecordingFormat.AsciinemaV2)
             {
                 var recording = await ParseSshRecordingAsync(recordingPath);
@@ -77,6 +77,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
                     metadata.DurationSeconds = recording.Header.Duration;
                     metadata.TerminalWidth = recording.Header.Width;
                     metadata.TerminalHeight = recording.Header.Height;
+                    metadata.WatermarkTitle = recording.Header.Title;
                 }
             }
 
@@ -383,6 +384,7 @@ public class RecordingMetadata
     public double DurationSeconds { get; set; }
     public int? TerminalWidth { get; set; }
     public int? TerminalHeight { get; set; }
+    public string? WatermarkTitle { get; set; }
 }
 
 public enum RecordingFormat
@@ -441,4 +443,3 @@ public class RecordingIntegrityResult
     public string Message { get; set; } = "";
     public string? FileHash { get; set; }
 }
-
