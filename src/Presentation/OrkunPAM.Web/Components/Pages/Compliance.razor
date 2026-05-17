@@ -23,6 +23,7 @@
 <div class="pam-tabs">
     <button class="pam-tab @(_tab == "active" ? "active" : "")" @onclick="@(() => SetTab("active"))">Active</button>
     <button class="pam-tab @(_tab == "history" ? "active" : "")" @onclick="@(() => SetTab("history"))">History</button>
+    <button class="pam-tab @(_tab == "reconciliation" ? "active" : "")" @onclick="@(() => SetTab("reconciliation"))">Reconciliation</button>
 </div>
 
 @if (_loading)
@@ -86,6 +87,98 @@ else
             }
         </div>
     </div>
+}
+
+<!-- Reconciliation Tab -->
+@if (_tab == "reconciliation")
+{
+    <div class="pam-card" style="margin-bottom:1rem">
+        <div class="pam-card-body" style="display:flex;gap:1rem;align-items:center">
+            <button class="pam-btn pam-btn-secondary" @onclick="LoadReconciliation" disabled="@_reconLoading">
+                @(_reconLoading ? "Scanning..." : "Run Drift Scan")
+            </button>
+            @if (_reconDrifts != null && _reconDrifts.Count > 0)
+            {
+                <button class="pam-btn pam-btn-danger" @onclick="AutoRemediate" disabled="@_reconRemedating">
+                    @(_reconRemedating ? "Remediating..." : "Auto-Remediate All (" + _reconDrifts.Count + ")")
+                </button>
+            }
+            @if (_reconRunAt.HasValue)
+            {
+                <span class="pam-text-muted" style="font-size:0.85rem">
+                    Last scan: @_reconRunAt.Value.ToLocalTime().ToString("MM/dd HH:mm")
+                </span>
+            }
+        </div>
+    </div>
+
+    @if (_reconDrifts != null)
+    {
+        <div class="pam-card" style="margin-bottom:1rem">
+            <div class="pam-card-body">
+                <h4 style="margin-bottom:1rem">
+                    Drift Report
+                    <span class="pam-badge @(_reconDrifts.Count == 0 ? "pam-badge-green" : "pam-badge-red")" style="margin-left:0.5rem">
+                        @_reconDrifts.Count drift(s)
+                    </span>
+                </h4>
+                @if (_reconDrifts.Count == 0)
+                {
+                    <div class="pam-alert pam-alert-success">No access drift detected. All permissions are consistent.</div>
+                }
+                else
+                {
+                    <table class="pam-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>User Status</th>
+                                <th>Drift Type</th>
+                                <th>Folder</th>
+                                <th>Permission</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in _reconDrifts)
+                            {
+                                <tr>
+                                    <td>@d.Username</td>
+                                    <td>@((MarkupString)UserStatusBadge(d.UserStatus))</td>
+                                    <td>@((MarkupString)DriftTypeBadge(d.DriftType))</td>
+                                    <td>@d.FolderName</td>
+                                    <td>@d.PermissionLevel</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+
+    @if (_reconHistory != null && _reconHistory.Count > 0)
+    {
+        <div class="pam-card">
+            <div class="pam-card-body">
+                <h4 style="margin-bottom:1rem">Remediation History</h4>
+                <table class="pam-table">
+                    <thead>
+                        <tr><th>Date</th><th>By</th><th>Details</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in _reconHistory)
+                        {
+                            <tr>
+                                <td>@h.Timestamp.ToLocalTime().ToString("MM/dd/yyyy HH:mm")</td>
+                                <td>@(h.ActorUsername ?? "—")</td>
+                                <td style="font-size:0.8rem;color:#888">@(h.Details ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 }
 
 <!-- Create Modal -->
@@ -225,6 +318,13 @@ else
     private DateTime _createDeadline = DateTime.UtcNow.AddDays(30);
     private bool _createAutoRevoke;
 
+    // Reconciliation state
+    private List<ReconciliationDriftDto>? _reconDrifts;
+    private List<ReconciliationHistoryDto>? _reconHistory;
+    private bool _reconLoading;
+    private bool _reconRemedating;
+    private DateTime? _reconRunAt;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -239,11 +339,13 @@ else
         StateHasChanged();
     }
 
-    private void SetTab(string tab)
+    private async void SetTab(string tab)
     {
         _tab = tab;
         _error = null;
         _success = null;
+        if (tab == "reconciliation" && _reconDrifts == null)
+            await LoadReconciliation();
     }
 
     private async Task CreateCampaign()
@@ -304,6 +406,53 @@ else
             _error = "Failed to record decision.";
         }
     }
+
+    private async Task LoadReconciliation()
+    {
+        _reconLoading = true;
+        StateHasChanged();
+        _reconDrifts = await Api.GetReconciliationReportAsync();
+        _reconHistory = await Api.GetReconciliationHistoryAsync();
+        _reconRunAt = DateTime.UtcNow;
+        _reconLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task AutoRemediate()
+    {
+        _reconRemedating = true;
+        _error = null;
+        StateHasChanged();
+        var result = await Api.AutoRemediateReconciliationAsync();
+        _reconRemedating = false;
+        if (result != null)
+        {
+            _success = $"Auto-remediation complete: {result.RevokedPermissions} permission(s) revoked.";
+            await LoadReconciliation();
+        }
+        else
+        {
+            _error = "Auto-remediation failed.";
+            StateHasChanged();
+        }
+    }
+
+    private static string UserStatusBadge(string status) => status switch
+    {
+        "Active"   => "<span class=\"pam-badge pam-badge-green\">Active</span>",
+        "Locked"   => "<span class=\"pam-badge pam-badge-red\">Locked</span>",
+        "Disabled" => "<span class=\"pam-badge pam-badge-gray\">Disabled</span>",
+        "Expired"  => "<span class=\"pam-badge pam-badge-yellow\">Expired</span>",
+        _          => "<span class=\"pam-badge\">" + status + "</span>"
+    };
+
+    private static string DriftTypeBadge(string driftType) => driftType switch
+    {
+        "StaleAccess"        => "<span class=\"pam-badge pam-badge-red\">Stale Access</span>",
+        "OrphanedAssignment" => "<span class=\"pam-badge pam-badge-yellow\">Orphaned</span>",
+        "TemporaryExpired"   => "<span class=\"pam-badge pam-badge-blue\">Temp Expired</span>",
+        _                    => "<span class=\"pam-badge\">" + driftType + "</span>"
+    };
 
     private static string CampaignStatusBadge(byte status) => status switch
     {

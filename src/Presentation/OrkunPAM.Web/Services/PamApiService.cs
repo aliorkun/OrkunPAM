@@ -1964,6 +1964,32 @@ public sealed class PamApiService
         }
         catch { return false; }
     }
+
+    // ── Account Reconciliation (#195) ────────────────────────────────────────
+    public async Task<List<ReconciliationDriftDto>?> GetReconciliationReportAsync()
+    {
+        var result = await GetAsync<ListResult<ReconciliationDriftDto>>("/api/v1/compliance/reconciliation/report");
+        return result?.Data;
+    }
+
+    public async Task<AutoRemediateResultDto?> AutoRemediateReconciliationAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync("/api/v1/compliance/reconciliation/auto-remediate", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<AutoRemediateResultDto>>(JsonOpts);
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<ReconciliationHistoryDto>?> GetReconciliationHistoryAsync()
+    {
+        var result = await GetAsync<ListResult<ReconciliationHistoryDto>>("/api/v1/compliance/reconciliation/history");
+        return result?.Data;
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2740,4 +2766,26 @@ public record ManagedCertificateDto(
     DateTime  CreatedAtUtc,
     int       DaysUntilExpiry,
     bool      IsExpired);
+
+// Reconciliation DTOs (#195)
+public record ReconciliationDriftDto(
+    string   PermissionId,
+    string   UserId,
+    string   Username,
+    string   UserStatus,
+    bool     IsOrphaned,
+    string   FolderId,
+    string   FolderName,
+    string   PermissionLevel,
+    bool     CanShare,
+    string   DriftType,
+    DateTime DetectedAt);
+
+public record AutoRemediateResultDto(int RevokedPermissions, DateTime RemediatedAt);
+
+public record ReconciliationHistoryDto(
+    long     Id,
+    string?  ActorUsername,
+    DateTime Timestamp,
+    string?  Details);
 

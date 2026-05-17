@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Identity;
+using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 
@@ -310,6 +311,98 @@ public static class ComplianceEndpoints
                 new { campaignName = campaign.Name, autoRevokedCount, autoRevokeOnMiss = campaign.AutoRevokeOnMiss });
 
             return Results.Ok(new { success = true, data = new { campaign.Id, campaign.Status, campaign.CompletedAtUtc } });
+        });
+
+        // === Account Reconciliation (#195) ===
+        var recon = app.MapGroup("/api/v1/compliance/reconciliation")
+            .WithTags("Compliance").RequireAuthorization("AdminPolicy");
+
+        recon.MapGet("/report", async (OrkunPamDbContext db) =>
+        {
+            var now = DateTime.UtcNow;
+
+            var staleUsers = await db.Users
+                .Where(u => u.Status != UserStatus.Active || u.IsOrphaned ||
+                            (u.IsTemporary && u.TemporaryExpiresUtc.HasValue && u.TemporaryExpiresUtc < now))
+                .Select(u => new { u.Id, u.Username, u.Status, u.IsOrphaned, u.IsTemporary, u.TemporaryExpiresUtc })
+                .ToListAsync();
+
+            var staleUserIds = staleUsers.Select(u => u.Id).ToList();
+
+            var perms = await db.CredentialPermissions
+                .Where(p => p.PrincipalType == PrincipalType.User && staleUserIds.Contains(p.PrincipalId) && p.FolderId != null)
+                .Select(p => new
+                {
+                    PermId = p.Id,
+                    p.PrincipalId,
+                    p.PermissionLevel,
+                    p.CanShare,
+                    FolderId = p.FolderId,
+                    FolderName = p.Folder != null ? p.Folder.Name : "(no folder)"
+                })
+                .ToListAsync();
+
+            var drifts = perms.Select(x =>
+            {
+                var u = staleUsers.First(u => u.Id == x.PrincipalId);
+                var driftType = u.IsOrphaned ? "OrphanedAssignment" :
+                    (u.IsTemporary && u.TemporaryExpiresUtc.HasValue && u.TemporaryExpiresUtc < now) ? "TemporaryExpired" : "StaleAccess";
+                return new
+                {
+                    PermissionId = x.PermId.ToString(),
+                    UserId = u.Id.ToString(),
+                    u.Username,
+                    UserStatus = u.Status.ToString(),
+                    u.IsOrphaned,
+                    FolderId = x.FolderId.ToString(),
+                    x.FolderName,
+                    PermissionLevel = x.PermissionLevel.ToString(),
+                    x.CanShare,
+                    DriftType = driftType,
+                    DetectedAt = now
+                };
+            }).ToList();
+
+            return Results.Ok(new { success = true, data = drifts });
+        });
+
+        recon.MapPost("/auto-remediate", async (OrkunPamDbContext db, HttpContext ctx, IAuditService audit) =>
+        {
+            var now = DateTime.UtcNow;
+            var actorIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var actorName = ctx.User.FindFirstValue(ClaimTypes.Name) ?? "unknown";
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            Guid.TryParse(actorIdStr, out var actorId);
+
+            var staleUserIds = await db.Users
+                .Where(u => u.Status != UserStatus.Active || u.IsOrphaned ||
+                            (u.IsTemporary && u.TemporaryExpiresUtc.HasValue && u.TemporaryExpiresUtc < now))
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            var stalePerms = await db.CredentialPermissions
+                .Where(p => p.PrincipalType == PrincipalType.User && staleUserIds.Contains(p.PrincipalId))
+                .ToListAsync();
+
+            db.CredentialPermissions.RemoveRange(stalePerms);
+            await db.SaveChangesAsync();
+
+            _ = audit.LogAsync("Compliance", "ReconciliationAutoRemediate", actorId, actorName, ip,
+                "CredentialPermission", "bulk",
+                new { revokedCount = stalePerms.Count, staleUserCount = staleUserIds.Count });
+
+            return Results.Ok(new { success = true, data = new { revokedPermissions = stalePerms.Count, remediatedAt = now } });
+        });
+
+        recon.MapGet("/history", async (OrkunPamDbContext db) =>
+        {
+            var history = await db.AuditLogs
+                .Where(a => a.EventCategory == "Compliance" && a.EventType == "ReconciliationAutoRemediate")
+                .OrderByDescending(a => a.Timestamp)
+                .Take(20)
+                .Select(a => new { a.Id, a.ActorUsername, a.Timestamp, a.Details })
+                .ToListAsync();
+            return Results.Ok(new { success = true, data = history });
         });
 
         app.MapPost("/api/v1/compliance/evidence/export", async (EvidenceExportRequest req, OrkunPamDbContext db) =>
