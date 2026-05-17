@@ -221,15 +221,15 @@
 
 ## Sprint 13 - v2 RFP Gap: Session Watermarking + Credential Discovery + Certificate Lifecycle
 **Tarih:** 17-31 Mayıs 2026
-**Durum:** Aktif
+**Durum:** Tamamlandı ✅
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #190 | Session Watermarking — Oturum Kaydı Kullanıcı Filigranı | v2-SESSION | ✅ Tamamlandı |
 | #189 | Credential Discovery — AD Ayrıcalıklı Hesap Tarama | v2-VAULT | ✅ Tamamlandı |
-| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | 🔄 In Progress |
+| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | ✅ Tamamlandı |
 
-**İlerleme:** 2/3 (%66) — #190 ve #189 tamamlandı, #191 aktif
+**İlerleme:** 3/3 (%100) ✅ — Sprint 13 tamamlandı
 
 ---
 

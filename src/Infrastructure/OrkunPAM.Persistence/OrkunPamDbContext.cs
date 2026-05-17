@@ -136,6 +136,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CloudResource> CloudResources => Set<CloudResource>();
     public DbSet<CloudJitRequest> CloudJitRequests => Set<CloudJitRequest>();
 
+    // Certificate Lifecycle Management (#191)
+    public DbSet<ManagedCertificate> ManagedCertificates => Set<ManagedCertificate>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -475,6 +478,19 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(j => j.Status);
             e.HasIndex(j => j.RequestedAtUtc);
             e.HasOne(j => j.CloudResource).WithMany(r => r.JitRequests).HasForeignKey(j => j.CloudResourceId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // === Certificate Lifecycle Management (#191) ===
+        modelBuilder.Entity<ManagedCertificate>(e =>
+        {
+            e.HasIndex(c => c.Thumbprint).IsUnique();
+            e.HasIndex(c => c.NotAfter);
+            e.Property(c => c.SubjectCN).HasMaxLength(512);
+            e.Property(c => c.Thumbprint).HasMaxLength(128);
+            e.Property(c => c.SerialNumber).HasMaxLength(128);
+            e.Property(c => c.Issuer).HasMaxLength(1024);
+            e.Property(c => c.Source).HasMaxLength(32);
+            e.Property(c => c.KeyAlgorithm).HasMaxLength(32);
         });
 
         // Seed built-in data

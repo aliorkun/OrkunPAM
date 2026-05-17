@@ -124,6 +124,9 @@ try
     // === Scheduled Report Delivery (#159) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.ReportSchedulerService>();
 
+    // === Certificate Expiry Monitor (#191) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.CertificateExpiryMonitorJob>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -458,6 +461,7 @@ try
     api.MapPkiEndpoints();
     api.MapLaunchTokenEndpoints();
     api.MapCloudPamEndpoints();
+    api.MapCertificateEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

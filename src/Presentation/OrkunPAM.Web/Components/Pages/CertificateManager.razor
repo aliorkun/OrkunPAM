@@ -1,0 +1,301 @@
+@page "/certificates"
+@using OrkunPAM.Web.Services
+@inject PamApiService Api
+@inject IJSRuntime JS
+
+<div class="pam-page-header">
+    <h2>Certificate Lifecycle Manager</h2>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showExpiring = !_showExpiring)">
+            @(_showExpiring ? "All Certs" : "Expiring Only")
+        </button>
+        <button class="pam-btn pam-btn-primary" @onclick="@(() => _showImport = true)">+ Import PEM</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="pam-loading">Loading certificates...</div>
+}
+else
+{
+    <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <div class="pam-stat-card" style="flex:1;min-width:140px;">
+            <div class="pam-stat-number">@_certs.Count</div>
+            <div class="pam-stat-label">Total</div>
+        </div>
+        <div class="pam-stat-card" style="flex:1;min-width:140px;border-color:#dc3545;">
+            <div class="pam-stat-number" style="color:#dc3545;">@_certs.Count(c => c.IsExpired)</div>
+            <div class="pam-stat-label">Expired</div>
+        </div>
+        <div class="pam-stat-card" style="flex:1;min-width:140px;border-color:#fd7e14;">
+            <div class="pam-stat-number" style="color:#fd7e14;">@_certs.Count(c => !c.IsExpired && c.DaysUntilExpiry <= 30)</div>
+            <div class="pam-stat-label">Expiring &lt;30d</div>
+        </div>
+        <div class="pam-stat-card" style="flex:1;min-width:140px;border-color:#ffc107;">
+            <div class="pam-stat-number" style="color:#ffc107;">@_certs.Count(c => !c.IsExpired && c.DaysUntilExpiry > 30 && c.DaysUntilExpiry <= 90)</div>
+            <div class="pam-stat-label">Expiring 30-90d</div>
+        </div>
+        <div class="pam-stat-card" style="flex:1;min-width:140px;border-color:#28a745;">
+            <div class="pam-stat-number" style="color:#28a745;">@_certs.Count(c => !c.IsExpired && c.DaysUntilExpiry > 90)</div>
+            <div class="pam-stat-label">Valid &gt;90d</div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="pam-alert pam-alert-danger">@_error</div>
+    }
+
+    <div class="pam-table-wrapper">
+        <table class="pam-table">
+            <thead>
+                <tr>
+                    <th>Subject CN</th>
+                    <th>Issuer</th>
+                    <th>Not After</th>
+                    <th>Status</th>
+                    <th>Key</th>
+                    <th>Source</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var cert in DisplayCerts)
+                {
+                    <tr>
+                        <td>
+                            <div style="font-weight:600;">@cert.SubjectCN</div>
+                            @if (!string.IsNullOrEmpty(cert.SerialNumber))
+                            {
+                                <div style="font-size:0.78rem;color:#888;font-family:monospace;">SN: @cert.SerialNumber</div>
+                            }
+                        </td>
+                        <td style="font-size:0.85rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            @(cert.Issuer ?? "—")
+                        </td>
+                        <td>
+                            <div>@cert.NotAfter.ToString("yyyy-MM-dd")</div>
+                        </td>
+                        <td>
+                            @{
+                                var (badgeStyle, badgeText) = GetExpiryBadge(cert);
+                            }
+                            <span class="pam-badge" style="@badgeStyle">@badgeText</span>
+                        </td>
+                        <td style="font-size:0.85rem;">
+                            @(cert.KeyAlgorithm ?? "—") @(cert.KeySizeBits > 0 ? cert.KeySizeBits + " bit" : "")
+                        </td>
+                        <td>
+                            <span class="pam-badge">@cert.Source</span>
+                        </td>
+                        <td>
+                            <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                    @onclick="@(() => ViewDetails(cert))">Details</button>
+                            <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                    @onclick="@(() => ConfirmDelete(cert))">Delete</button>
+                        </td>
+                    </tr>
+                }
+                @if (!DisplayCerts.Any())
+                {
+                    <tr><td colspan="7" style="text-align:center;color:#888;padding:2rem;">No certificates found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_showImport)
+{
+    <div class="pam-modal-backdrop" @onclick="@(() => CloseImport())">
+        <div class="pam-modal" @onclick:stopPropagation="true" style="max-width:600px;">
+            <div class="pam-modal-header">
+                <h3>Import PEM Certificate</h3>
+                <button class="pam-modal-close" @onclick="@(() => CloseImport())">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-form-group">
+                    <label>PEM Certificate *</label>
+                    <textarea class="pam-input" rows="10" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                              @bind="_importPem" style="font-family:monospace;font-size:0.8rem;"></textarea>
+                </div>
+                <div class="pam-form-group">
+                    <label>Notes</label>
+                    <input class="pam-input" type="text" @bind="_importNotes" placeholder="Optional notes" />
+                </div>
+                <div class="pam-form-group">
+                    <label>Source</label>
+                    <select class="pam-input" @bind="_importSource">
+                        <option value="Manual">Manual</option>
+                        <option value="Discovered">Discovered</option>
+                        <option value="ACME">ACME</option>
+                    </select>
+                </div>
+                @if (!string.IsNullOrEmpty(_importError))
+                {
+                    <div class="pam-alert pam-alert-danger">@_importError</div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => CloseImport())">Cancel</button>
+                <button class="pam-btn pam-btn-primary" disabled="@_importing" @onclick="@(() => ImportAsync())">
+                    @(_importing ? "Importing..." : "Import")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_detailCert != null)
+{
+    <div class="pam-modal-backdrop" @onclick="@(() => _detailCert = null)">
+        <div class="pam-modal" @onclick:stopPropagation="true" style="max-width:560px;">
+            <div class="pam-modal-header">
+                <h3>Certificate Details</h3>
+                <button class="pam-modal-close" @onclick="@(() => _detailCert = null)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <table class="pam-table" style="font-size:0.88rem;">
+                    <tbody>
+                        <tr><td style="font-weight:600;width:140px;">Subject CN</td><td>@_detailCert.SubjectCN</td></tr>
+                        @if (!string.IsNullOrEmpty(_detailCert.SubjectAltNames))
+                        {
+                            <tr><td style="font-weight:600;">SANs</td><td style="word-break:break-all;">@_detailCert.SubjectAltNames</td></tr>
+                        }
+                        <tr><td style="font-weight:600;">Issuer</td><td style="word-break:break-all;">@(_detailCert.Issuer ?? "—")</td></tr>
+                        <tr><td style="font-weight:600;">Serial</td><td style="font-family:monospace;">@(_detailCert.SerialNumber ?? "—")</td></tr>
+                        <tr><td style="font-weight:600;">Thumbprint</td><td style="font-family:monospace;word-break:break-all;">@_detailCert.Thumbprint</td></tr>
+                        <tr><td style="font-weight:600;">Valid From</td><td>@_detailCert.NotBefore.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+                        <tr><td style="font-weight:600;">Valid Until</td><td>@_detailCert.NotAfter.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+                        <tr><td style="font-weight:600;">Key Algorithm</td><td>@(_detailCert.KeyAlgorithm ?? "—") @(_detailCert.KeySizeBits > 0 ? _detailCert.KeySizeBits + " bit" : "")</td></tr>
+                        @if (!string.IsNullOrEmpty(_detailCert.KeyUsage))
+                        {
+                            <tr><td style="font-weight:600;">Key Usage</td><td>@_detailCert.KeyUsage</td></tr>
+                        }
+                        <tr><td style="font-weight:600;">Source</td><td>@_detailCert.Source</td></tr>
+                        @if (!string.IsNullOrEmpty(_detailCert.Notes))
+                        {
+                            <tr><td style="font-weight:600;">Notes</td><td>@_detailCert.Notes</td></tr>
+                        }
+                        <tr><td style="font-weight:600;">Imported At</td><td>@_detailCert.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _detailCert = null)">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteCert != null)
+{
+    <div class="pam-modal-backdrop" @onclick="@(() => _deleteCert = null)">
+        <div class="pam-modal" @onclick:stopPropagation="true" style="max-width:400px;">
+            <div class="pam-modal-header">
+                <h3>Delete Certificate</h3>
+                <button class="pam-modal-close" @onclick="@(() => _deleteCert = null)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete certificate <strong>@_deleteCert.SubjectCN</strong>?</p>
+                <p style="color:#888;font-size:0.88rem;">Thumbprint: @_deleteCert.Thumbprint</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _deleteCert = null)">Cancel</button>
+                <button class="pam-btn pam-btn-danger" disabled="@_deleting" @onclick="@(() => DeleteAsync())">
+                    @(_deleting ? "Deleting..." : "Delete")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ManagedCertificateDto> _certs = [];
+    private bool _loading = true;
+    private bool _showExpiring;
+    private string? _error;
+
+    private bool _showImport;
+    private string _importPem = "";
+    private string _importNotes = "";
+    private string _importSource = "Manual";
+    private string? _importError;
+    private bool _importing;
+
+    private ManagedCertificateDto? _detailCert;
+    private ManagedCertificateDto? _deleteCert;
+    private bool _deleting;
+
+    private IEnumerable<ManagedCertificateDto> DisplayCerts =>
+        _showExpiring ? _certs.Where(c => c.DaysUntilExpiry <= 90) : _certs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _certs = await Api.GetCertificatesAsync() ?? [];
+        }
+        catch
+        {
+            _error = "Failed to load certificates.";
+        }
+        _loading = false;
+    }
+
+    private (string style, string text) GetExpiryBadge(ManagedCertificateDto cert)
+    {
+        if (cert.IsExpired)
+            return ("background:#dc3545;color:white;", $"Expired {Math.Abs(cert.DaysUntilExpiry)}d ago");
+        if (cert.DaysUntilExpiry <= 30)
+            return ("background:#fd7e14;color:white;", $"{cert.DaysUntilExpiry}d left");
+        if (cert.DaysUntilExpiry <= 90)
+            return ("background:#ffc107;color:#333;", $"{cert.DaysUntilExpiry}d left");
+        return ("background:#28a745;color:white;", $"{cert.DaysUntilExpiry}d left");
+    }
+
+    private void ViewDetails(ManagedCertificateDto cert) => _detailCert = cert;
+    private void ConfirmDelete(ManagedCertificateDto cert) => _deleteCert = cert;
+    private void CloseImport() { _showImport = false; _importPem = ""; _importNotes = ""; _importError = null; }
+
+    private async Task ImportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_importPem))
+        {
+            _importError = "PEM certificate is required.";
+            return;
+        }
+        _importing = true;
+        _importError = null;
+        var result = await Api.ImportCertificateAsync(_importPem, _importNotes, _importSource);
+        _importing = false;
+        if (result != null)
+        {
+            CloseImport();
+            await LoadAsync();
+        }
+        else
+        {
+            _importError = "Import failed. Check the PEM format and try again.";
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_deleteCert == null) return;
+        _deleting = true;
+        var ok = await Api.DeleteCertificateAsync(_deleteCert.Id);
+        _deleting = false;
+        _deleteCert = null;
+        if (ok) await LoadAsync();
+        else _error = "Failed to delete certificate.";
+    }
+}

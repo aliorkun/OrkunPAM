@@ -1920,6 +1920,50 @@ public sealed class PamApiService
         }
         catch { return false; }
     }
+
+    // === Certificate Lifecycle Management (#191) ===
+
+    public async Task<List<ManagedCertificateDto>?> GetCertificatesAsync(string? source = null)
+    {
+        var url = "/api/v1/certificates" + (source != null ? "?source=" + Uri.EscapeDataString(source) : "");
+        var result = await GetAsync<ListResult<ManagedCertificateDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<List<ManagedCertificateDto>?> GetExpiringCertificatesAsync(int days = 90)
+    {
+        var result = await GetAsync<ListResult<ManagedCertificateDto>>($"/api/v1/certificates/expiring?days={days}");
+        return result?.Data;
+    }
+
+    public async Task<ManagedCertificateDto?> ImportCertificateAsync(string pemCertificate, string? notes, string? source)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/certificates", new
+            {
+                pemCertificate,
+                notes = string.IsNullOrEmpty(notes) ? null : notes,
+                source = source ?? "Manual"
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ManagedCertificateDto>>();
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteCertificateAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/certificates/{id}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2676,3 +2720,24 @@ public record CloudDashboardDto(
     List<CloudJitDto>            RecentJit);
 
 public record CloudSyncResultDto(string AccountId, int NewResources, int TotalResources, DateTime? SyncedAt);
+
+public record ManagedCertificateDto(
+    string    Id,
+    string    SubjectCN,
+    string?   SubjectAltNames,
+    string?   Issuer,
+    string    Thumbprint,
+    string?   SerialNumber,
+    DateTime  NotBefore,
+    DateTime  NotAfter,
+    string?   KeyUsage,
+    string?   KeyAlgorithm,
+    int       KeySizeBits,
+    string?   DeviceId,
+    string?   FolderId,
+    string?   Notes,
+    string    Source,
+    DateTime  CreatedAtUtc,
+    int       DaysUntilExpiry,
+    bool      IsExpired);
+
