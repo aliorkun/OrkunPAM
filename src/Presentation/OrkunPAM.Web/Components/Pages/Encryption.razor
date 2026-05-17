@@ -29,6 +29,22 @@
                     <tr><td style="font-weight:600">Initialized At</td><td>@(_status.InitializedAtUtc.HasValue ? _status.InitializedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "—")</td></tr>
                     <tr><td style="font-weight:600">Rotation Count</td><td>@_status.RotationCount rotation(s)</td></tr>
                     <tr><td style="font-weight:600">DEK Cache TTL</td><td>@_status.DekCacheTtlMinutes minutes</td></tr>
+                    <tr><td style="font-weight:600">FIPS 140-2</td>
+                        <td>
+                            @if (_fips != null)
+                            {
+                                @if (_fips.FipsEnabled)
+                                {
+                                    <span class="pam-badge pam-badge-success">ENABLED</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-badge pam-badge-secondary">not enforced</span>
+                                }
+                                <span class="pam-text-muted" style="margin-left:0.5rem;font-size:0.8rem">@_fips.Algorithm &mdash; @_fips.Standard</span>
+                            }
+                            else { <span class="pam-text-muted">—</span> }
+                        </td></tr>
                 </tbody>
             </table>
         }
@@ -103,6 +119,7 @@
     private string? _error;
     private string? _success;
     private KeyStatusDto? _status;
+    private FipsStatusDto? _fips;
     private string? _newPassphrase;
     private string? _confirmPassphrase;
     private string? _backupPassphrase;
@@ -118,6 +135,7 @@
     {
         _loading = true; StateHasChanged();
         _status = await Api.GetEncryptionStatusAsync();
+        _fips   = await Api.GetFipsStatusAsync();
         _loading = false; StateHasChanged();
     }
 

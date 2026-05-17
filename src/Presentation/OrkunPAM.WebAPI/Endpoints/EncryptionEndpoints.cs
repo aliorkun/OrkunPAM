@@ -60,6 +60,24 @@ public static class EncryptionEndpoints
             });
         });
 
+        // GET /api/v1/system/encryption/fips-status (#180)
+        grp.MapGet("/fips-status", () =>
+        {
+            var enabled = FipsUtils.IsFipsEnabled();
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    FipsEnabled = enabled,
+                    Algorithm = "AES-256-GCM",
+                    KeyDerivation = "PBKDF2-SHA256 (600,000 iterations)",
+                    Standard = "FIPS 140-2 Level 1",
+                    ComplianceNote = FipsUtils.GetComplianceNote()
+                }
+            });
+        });
+
         // POST /api/v1/system/encryption/backup  → returns encrypted JSON file download
         grp.MapPost("/backup", async (ExportKeyBackupRequest req, IKeyStore keyStore,
             IAuditService audit, HttpContext ctx) =>
