@@ -42,7 +42,32 @@ try
     });
 
     // === Cryptography ===
-    builder.Services.AddSingleton<IKeyStore, InMemoryKeyStore>();
+    var hsmMode = (builder.Configuration["Security:HsmMode"] ?? "none").ToLowerInvariant();
+    var hsmEnabled = hsmMode is "softhsm" or "pkcs11" or "azure-keyvault" or "aws-kms";
+    switch (hsmMode)
+    {
+        case "softhsm":
+            builder.Services.AddSingleton<IHsmProvider, SoftHsmProvider>();
+            builder.Services.AddSingleton<IKeyStore, HsmKeyStore>();
+            break;
+        case "pkcs11":
+            builder.Services.AddSingleton<IHsmProvider, Pkcs11HsmProvider>();
+            builder.Services.AddSingleton<IKeyStore, HsmKeyStore>();
+            break;
+        case "azure-keyvault":
+            builder.Services.AddSingleton<IHsmProvider, AzureKeyVaultHsmProvider>();
+            builder.Services.AddSingleton<IKeyStore, HsmKeyStore>();
+            break;
+        case "aws-kms":
+            builder.Services.AddSingleton<IHsmProvider, AwsCloudHsmProvider>();
+            builder.Services.AddSingleton<IKeyStore, HsmKeyStore>();
+            break;
+        default:
+            if (hsmMode != "none")
+                Log.Warning("Unknown Security:HsmMode '{Mode}' — falling back to software key store", hsmMode);
+            builder.Services.AddSingleton<IKeyStore, InMemoryKeyStore>();
+            break;
+    }
     builder.Services.AddSingleton<IVaultEncryptionService, AesGcmEncryptionService>();
 
     // === Repository ===
@@ -117,7 +142,7 @@ try
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
-    // === gRPC Services (proxy⇔core internal communication) ===
+    // === gRPC Services (proxy↔core internal communication) ===
     builder.Services.AddGrpc(options =>
     {
         options.MaxReceiveMessageSize = 4 * 1024 * 1024; // 4 MB
@@ -297,22 +322,45 @@ try
         Log.Information("Database initialized");
     }
 
-    // === Initialize Key Store (fixes #2) ===
+    // === Initialize Key Store ===
     var keyStore = app.Services.GetRequiredService<IKeyStore>();
-    var passphrase = Environment.GetEnvironmentVariable("ORKUNPAM_VAULT_PASSPHRASE")
-        ?? builder.Configuration["Vault:MasterPassphrase"];
-    if (string.IsNullOrEmpty(passphrase))
+    if (!hsmEnabled)
     {
-        Log.Fatal("Vault passphrase not configured. Set ORKUNPAM_VAULT_PASSPHRASE env var or Vault:MasterPassphrase in config.");
-        return;
+        var passphrase = Environment.GetEnvironmentVariable("ORKUNPAM_VAULT_PASSPHRASE")
+            ?? builder.Configuration["Vault:MasterPassphrase"];
+        if (string.IsNullOrEmpty(passphrase))
+        {
+            Log.Fatal("Vault passphrase not configured. Set ORKUNPAM_VAULT_PASSPHRASE env var or Vault:MasterPassphrase in config.");
+            return;
+        }
+        var initResult = keyStore.Initialize(passphrase);
+        if (initResult.IsFailure)
+        {
+            Log.Fatal("Failed to initialize vault key store: {Error}", initResult.Error.Message);
+            return;
+        }
+        Log.Information("Vault encryption engine initialized (software key store)");
     }
-    var initResult = keyStore.Initialize(passphrase);
-    if (initResult.IsFailure)
+    else
     {
-        Log.Fatal("Failed to initialize vault key store: {Error}", initResult.Error.Message);
-        return;
+        // HSM mode — validate HSM availability before proceeding (fail-fast)
+        var hsm = app.Services.GetRequiredService<IHsmProvider>();
+        var hsmAvailable = await hsm.IsAvailableAsync();
+        if (!hsmAvailable)
+        {
+            Log.Fatal("HSM not reachable at startup. Mode: {Mode}, Provider: {Provider}. Check HSM configuration.",
+                hsmMode, hsm.ProviderName);
+            return;
+        }
+        var hsmInitResult = keyStore.Initialize(string.Empty); // passphrase ignored — MEK lives in HSM
+        if (hsmInitResult.IsFailure)
+        {
+            Log.Fatal("Failed to initialize HSM key store via {Provider}: {Error}",
+                hsm.ProviderName, hsmInitResult.Error.Message);
+            return;
+        }
+        Log.Information("Vault encryption engine initialized via HSM: {Provider}", hsm.ProviderName);
     }
-    Log.Information("Vault encryption engine initialized");
 
     // === Proxy Secret Validation (fixes #92) ===
     var proxySecret = builder.Configuration["ProxyService:Secret"] ?? "";
@@ -411,7 +459,7 @@ try
     api.MapLaunchTokenEndpoints();
     api.MapCloudPamEndpoints();
 
-    // === gRPC Endpoints (proxy⇔core internal, mTLS authenticated) ===
+    // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
     app.MapGrpcService<VaultGrpcService>().RequireAuthorization("GrpcProxy");
     app.MapGrpcService<AuditGrpcService>().RequireAuthorization("GrpcProxy");
