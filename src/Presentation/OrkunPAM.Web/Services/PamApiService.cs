@@ -1696,11 +1696,146 @@ public sealed class PamApiService
         catch { return null; }
     }
 
-    // ── FIPS 140-2 Status (#180) ──────────────────────────────────────────────────
+    // ── FIPS 140-2 Status (#180) ───────────────────────────────────────────────────
     public async Task<FipsStatusDto?> GetFipsStatusAsync()
     {
         var result = await GetAsync<SingleResult<FipsStatusDto>>("/api/v1/system/encryption/fips-status");
         return result?.Data;
+    }
+
+    // ── Cloud PAM (#37) ────────────────────────────────────────────────────────────────
+    public async Task<CloudDashboardDto?> GetCloudDashboardAsync()
+    {
+        var result = await GetAsync<SingleResult<CloudDashboardDto>>("/api/v1/cloud/dashboard");
+        return result?.Data;
+    }
+
+    public async Task<List<CloudAccountDto>?> GetCloudAccountsAsync()
+    {
+        var result = await GetAsync<ListResult<CloudAccountDto>>("/api/v1/cloud/accounts");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateCloudAccountAsync(string name, string provider, string accountIdentifier,
+        string? region, string? accessKeyId, string? secretKey)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/cloud/accounts", new
+            {
+                name, provider, accountIdentifier, region,
+                accessKeyId = string.IsNullOrEmpty(accessKeyId) ? null : accessKeyId,
+                secretKey = string.IsNullOrEmpty(secretKey) ? null : secretKey
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<CloudSyncResultDto?> SyncCloudAccountAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/cloud/accounts/{id}/sync", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CloudSyncResultDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> ToggleCloudAccountAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsync($"/api/v1/cloud/accounts/{id}/toggle", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCloudAccountAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/cloud/accounts/{id}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<CloudResourceDto>?> GetCloudResourcesAsync(string? provider = null, string? type = null)
+    {
+        var qs = new List<string>();
+        if (!string.IsNullOrEmpty(provider)) qs.Add("provider=" + Uri.EscapeDataString(provider));
+        if (!string.IsNullOrEmpty(type)) qs.Add("type=" + Uri.EscapeDataString(type));
+        var url = "/api/v1/cloud/resources" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
+        var result = await GetAsync<ListResult<CloudResourceDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<List<CloudJitDto>?> GetCloudJitRequestsAsync(string? status = null)
+    {
+        var url = "/api/v1/cloud/jit" + (status != null ? "?status=" + Uri.EscapeDataString(status) : "");
+        var result = await GetAsync<ListResult<CloudJitDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateCloudJitRequestAsync(string cloudResourceId, string permission,
+        string justification, int durationMinutes, string? ticketNumber)
+    {
+        if (!Guid.TryParse(cloudResourceId, out var rid)) return false;
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/cloud/jit", new
+            {
+                cloudResourceId = rid,
+                permission,
+                justification,
+                durationMinutes,
+                ticketNumber = string.IsNullOrEmpty(ticketNumber) ? null : ticketNumber
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ApproveCloudJitAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/approve", new { });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DenyCloudJitAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/deny", new { });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RevokeCloudJitAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/revoke", new { });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 }
 
@@ -2357,3 +2492,59 @@ public record FipsStatusDto(
     string KeyDerivation,
     string Standard,
     string ComplianceNote);
+
+// Cloud PAM (#37)
+public record CloudAccountDto(
+    string    Id,
+    string    Name,
+    string    Provider,
+    string    AccountIdentifier,
+    string?   Region,
+    bool      IsEnabled,
+    int       ResourceCount,
+    DateTime? LastSyncAtUtc,
+    string?   LastSyncError,
+    DateTime  CreatedAtUtc);
+
+public record CloudResourceDto(
+    string    Id,
+    string    Provider,
+    string    NativeId,
+    string    Name,
+    string    ResourceType,
+    string?   Region,
+    string?   Status,
+    string?   IpAddress,
+    bool      IsEnabled,
+    DateTime? LastSeenAtUtc,
+    string    CloudAccountId);
+
+public record CloudJitResourceDto(string Id, string Name, string Provider, string ResourceType, string? Region, string NativeId);
+
+public record CloudJitDto(
+    string              Id,
+    string              RequestedByUsername,
+    string              Permission,
+    string              Justification,
+    string              Status,
+    DateTime            RequestedAtUtc,
+    int                 DurationMinutes,
+    DateTime?           ExpiresAtUtc,
+    DateTime?           GrantedAtUtc,
+    string?             ApprovedByUsername,
+    DateTime?           RevokedAtUtc,
+    string?             RevokeReason,
+    string?             TicketNumber,
+    CloudJitResourceDto? Resource);
+
+public record CloudProviderSummaryDto(string Provider, int Accounts, int Resources, int ActiveJit);
+
+public record CloudDashboardDto(
+    int                          TotalAccounts,
+    int                          TotalResources,
+    int                          ActiveJitRequests,
+    int                          PendingJitRequests,
+    List<CloudProviderSummaryDto> ByProvider,
+    List<CloudJitDto>            RecentJit);
+
+public record CloudSyncResultDto(string AccountId, int NewResources, int TotalResources, DateTime? SyncedAt);
