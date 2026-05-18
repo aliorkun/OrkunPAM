@@ -159,6 +159,9 @@ try
     // === Memory Cache (used by RDP token store) ===
     builder.Services.AddMemoryCache();
 
+    // === Live Session Monitor — in-memory chunk store (#214) ===
+    builder.Services.AddSingleton<OrkunPAM.WebAPI.Services.SessionChunkStore>();
+
     // === gRPC Services (proxy↔core internal communication) ===
     builder.Services.AddGrpc(options =>
     {
@@ -484,6 +487,7 @@ try
     api.MapDeviceTrustEndpoints();
     api.MapAccessPatternEndpoints();
     api.MapTelnetEndpoints();
+    api.MapLiveSessionEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

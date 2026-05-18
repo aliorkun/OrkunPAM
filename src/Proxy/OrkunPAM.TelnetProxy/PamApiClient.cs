@@ -213,6 +213,28 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>
+    /// Fire-and-forget: push a terminal chunk to the WebAPI for admin live monitoring.
+    /// Never throws — silently swallowed to not impact session performance.
+    /// </summary>
+    internal void SendLiveChunk(string sessionId, string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var client = _factory.CreateClient("PamApi");
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"/api/v1/sessions/{sessionId}/live/chunk");
+                req.Content = JsonContent.Create(new { text });
+                req.Headers.Add("X-Proxy-Secret", _proxySecret);
+                await client.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch { /* best-effort */ }
+        });
+    }
+
     // Response DTOs
     private record LoginResponse(LoginData? Data);
     private record LoginData(string? Token, string? UserId);

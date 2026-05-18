@@ -1,0 +1,292 @@
+@page "/live-monitor/{SessionId}"
+@inject PamApiService Api
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<PageTitle>Live Monitor — OrkunPAM</PageTitle>
+
+<div class="pam-page-header" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="GoBack">&#x2190; Back</button>
+    <h2 class="pam-page-title" style="margin:0;">Live Monitor</h2>
+    @if (_status != null)
+    {
+        <span class="pam-badge" style="background:@RiskColor(_status.RiskScore)">
+            Risk: @_status.RiskScore.ToString("F1")
+        </span>
+        <span class="pam-status @StatusClass(_status.Status)">@_status.Status</span>
+        <span style="color:#aaa;font-size:0.85em;">
+            @_status.SessionType &bull; @_status.TargetIp &bull;
+            Started @_status.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss")
+        </span>
+        <span style="color:#6ee7b7;font-size:0.85em;">
+            @_status.ActiveObservers observer(s)
+        </span>
+    }
+    <div style="margin-left:auto;display:flex;gap:8px;">
+        @if (_polling)
+        {
+            <span style="color:#6ee7b7;font-size:0.85em;align-self:center;">&#x25CF; Live</span>
+        }
+        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                @onclick="@(() => _showTerminate = true)"
+                disabled="@(_status?.Status != "Active")">
+            Terminate
+        </button>
+    </div>
+</div>
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger" style="margin:8px 0;">@_error</div>
+}
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:12px;">
+
+    <!-- Terminal Output Panel -->
+    <div class="pam-card" style="background:#0d1117;">
+        <div class="pam-card-header" style="background:#161b22;border-bottom:1px solid #30363d;padding:8px 12px;font-size:0.85em;color:#8b949e;">
+            Terminal Output (target→client)
+        </div>
+        <div id="terminalOutput" style="font-family:monospace;font-size:13px;color:#c9d1d9;
+                 padding:12px;height:480px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;">
+            @if (_terminalOutput.Length == 0)
+            {
+                <span style="color:#555">Waiting for session output&#x2026;</span>
+            }
+            else
+            {
+                @((Microsoft.AspNetCore.Components.MarkupString)EscapeHtml(_terminalOutput))
+            }
+        </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+        <!-- Broadcast Message -->
+        <div class="pam-card">
+            <div class="pam-card-header" style="padding:8px 12px;font-weight:600;font-size:0.9em;">
+                Broadcast Message
+            </div>
+            <div class="pam-card-body" style="padding:12px;">
+                <textarea class="pam-input" rows="3" placeholder="Message to display in session&#x2026;"
+                          @bind="_broadcastMsg" style="width:100%;resize:vertical;"></textarea>
+                <button class="pam-btn pam-btn-warning pam-btn-sm" style="margin-top:8px;width:100%;"
+                        @onclick="BroadcastAsync"
+                        disabled="@(string.IsNullOrWhiteSpace(_broadcastMsg) || _status?.Status != "Active")">
+                    Send Message
+                </button>
+                @if (_msgSent)
+                {
+                    <div style="color:#6ee7b7;font-size:0.8em;margin-top:4px;">&#x2713; Message sent</div>
+                }
+            </div>
+        </div>
+
+        <!-- Observers -->
+        <div class="pam-card">
+            <div class="pam-card-header" style="padding:8px 12px;font-weight:600;font-size:0.9em;">
+                Active Observers
+            </div>
+            <div class="pam-card-body" style="padding:8px 12px;">
+                @if (_status?.Observers == null || _status.Observers.Count == 0)
+                {
+                    <div style="color:#555;font-size:0.85em;">Only you</div>
+                }
+                else
+                {
+                    @foreach (var o in _status.Observers)
+                    {
+                        <div style="font-size:0.85em;padding:2px 0;">
+                            &#x1F441; @(o.ObserverUsername ?? "Unknown")
+                            <span style="color:#888;font-size:0.8em;">@o.JoinedAtUtc.ToLocalTime().ToString("HH:mm")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Session Commands (last 10) -->
+        <div class="pam-card">
+            <div class="pam-card-header" style="padding:8px 12px;font-weight:600;font-size:0.9em;">
+                Recent Commands
+            </div>
+            <div class="pam-card-body" style="padding:0;">
+                @if (_commands == null || _commands.Count == 0)
+                {
+                    <div style="padding:8px 12px;color:#555;font-size:0.85em;">No commands yet</div>
+                }
+                else
+                {
+                    @foreach (var cmd in _commands)
+                    {
+                        <div style="padding:4px 12px;border-bottom:1px solid #222;font-size:0.82em;font-family:monospace;">
+                            @if (cmd.WasBlocked)
+                            {
+                                <span style="color:#f87171;">&#x26D4;</span>
+                            }
+                            else if (cmd.RiskScore > 50)
+                            {
+                                <span style="color:#fbbf24;">&#x26A0;</span>
+                            }
+                            else
+                            {
+                                <span style="color:#6ee7b7;">&#x25CF;</span>
+                            }
+                            <span style="color:#c9d1d9;margin-left:4px;">@cmd.Command</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Terminate Confirmation Modal -->
+@if (_showTerminate)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showTerminate = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h4>Terminate Session</h4>
+                <button class="pam-modal-close" @onclick="@(() => _showTerminate = false)">&#x2715;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Enter reason for terminating this session:</p>
+                <input class="pam-input" @bind="_terminateReason" placeholder="Reason (required)" style="width:100%;" />
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showTerminate = false)">Cancel</button>
+                <button class="pam-btn pam-btn-danger"
+                        @onclick="TerminateAsync"
+                        disabled="@(string.IsNullOrWhiteSpace(_terminateReason))">
+                    Terminate Session
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string SessionId { get; set; } = "";
+
+    private LiveSessionStatusDto? _status;
+    private string               _terminalOutput = "";
+    private int                  _streamOffset   = 0;
+    private List<CommandDto>?    _commands;
+    private string               _broadcastMsg   = "";
+    private string               _terminateReason = "";
+    private bool                 _showTerminate   = false;
+    private bool                 _msgSent         = false;
+    private bool                 _polling         = false;
+    private string?              _error;
+
+    private System.Threading.Timer? _pollTimer;
+
+    private record CommandDto(string Command, decimal RiskScore, bool WasBlocked);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Api.JoinLiveSessionAsync(SessionId);
+        await RefreshStatusAsync();
+        await RefreshStreamAsync();
+
+        _polling = true;
+        _pollTimer = new System.Threading.Timer(async _ =>
+        {
+            await RefreshStreamAsync();
+            await RefreshStatusAsync();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        _status = await Api.GetLiveSessionStatusAsync(SessionId);
+
+        // Fetch recent commands (last 10)
+        var cmds = await Api.GetSessionCommandsAsync(SessionId, page: 1, pageSize: 10);
+        if (cmds?.Data != null)
+            _commands = cmds.Data.Select(c => new CommandDto(c.Command ?? "", c.RiskScore, c.WasBlocked)).ToList();
+    }
+
+    private async Task RefreshStreamAsync()
+    {
+        var chunk = await Api.GetLiveStreamAsync(SessionId, _streamOffset);
+        if (chunk != null && !string.IsNullOrEmpty(chunk.Text))
+        {
+            _terminalOutput += chunk.Text;
+            _streamOffset = chunk.NewOffset;
+
+            // Keep buffer at 64 KB to avoid Blazor diffing huge strings
+            if (_terminalOutput.Length > 65536)
+                _terminalOutput = _terminalOutput[(_terminalOutput.Length - 65536)..];
+        }
+    }
+
+    private async Task BroadcastAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_broadcastMsg)) return;
+        var ok = await Api.BroadcastLiveMessageAsync(SessionId, _broadcastMsg);
+        if (ok)
+        {
+            _broadcastMsg = "";
+            _msgSent = true;
+            await Task.Delay(3000);
+            _msgSent = false;
+            StateHasChanged();
+        }
+        else
+        {
+            _error = "Failed to broadcast message.";
+        }
+    }
+
+    private async Task TerminateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_terminateReason)) return;
+        _showTerminate = false;
+        var ok = await Api.TerminateSessionAsync(SessionId, _terminateReason);
+        if (ok)
+        {
+            await RefreshStatusAsync();
+            _polling = false;
+        }
+        else
+        {
+            _error = "Failed to terminate session.";
+        }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/sessions");
+
+    private static string StatusClass(string s) => s switch
+    {
+        "Active"    => "pam-status-active",
+        "Completed" => "pam-status-done",
+        _           => "pam-status-error"
+    };
+
+    private static string RiskColor(decimal score) => score switch
+    {
+        >= 80 => "#ef4444",
+        >= 50 => "#f59e0b",
+        _     => "#22c55e"
+    };
+
+    private static string EscapeHtml(string text) =>
+        text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+    public async ValueTask DisposeAsync()
+    {
+        _polling = false;
+        if (_pollTimer != null)
+        {
+            await _pollTimer.DisposeAsync();
+            _pollTimer = null;
+        }
+        await Api.LeaveLiveSessionAsync(SessionId);
+    }
+
+}

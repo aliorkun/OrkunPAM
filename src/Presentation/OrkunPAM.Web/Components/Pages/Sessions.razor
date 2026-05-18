@@ -62,9 +62,13 @@
                             </td>
                             <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
                             <td>@Duration(s)</td>
-                            <td>
+                            <td style="display:flex;gap:4px;flex-wrap:wrap;">
                                 @if (s.Status == "Active")
                                 {
+                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                            @onclick="@(() => Nav.NavigateTo("/live-monitor/" + s.Id))">
+                                        &#x25CF; Live
+                                    </button>
                                     <button class="pam-btn pam-btn-warning pam-btn-sm"
                                             disabled="@(_shadowingId == s.Id)"
                                             @onclick="@(() => ShadowAsync(s.Id))">

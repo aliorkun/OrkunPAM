@@ -53,7 +53,7 @@ internal sealed class TelnetSession
 
     private async Task DoSessionAsync(NetworkStream stream, CancellationToken ct)
     {
-        // ── 1. Initial RFC 854 option negotiation ──────────────────────────
+        // ── 1. Initial RFC 854 option negotiation ───────────────────────────────────────
         await stream.WriteAsync(TelnetNegotiator.InitialNegotiation(), ct);
 
         if (_opts.SessionBannerEnabled)
@@ -64,7 +64,7 @@ internal sealed class TelnetSession
             await SendLineAsync(stream, "", ct);
         }
 
-        // ── 2. Read username: pamuser@target-host[:port] ───────────────────
+        // ── 2. Read username: pamuser@target-host[:port] ─────────────────────────────
         await stream.WriteAsync(Encoding.ASCII.GetBytes("Login: "), ct);
         var loginLine = await ReadLineAsync(stream, ct, echoChars: true);
         if (loginLine == null) return;
@@ -76,13 +76,13 @@ internal sealed class TelnetSession
             return;
         }
 
-        // ── 3. Read PAM password (suppress echo) ──────────────────────────
+        // ── 3. Read PAM password (suppress echo) ──────────────────────────────────
         await stream.WriteAsync(Encoding.ASCII.GetBytes("PAM Password: "), ct);
         var pamPassword = await ReadLineAsync(stream, ct, echoChars: false);
         if (pamPassword == null) return;
         await SendLineAsync(stream, "", ct); // newline after hidden input
 
-        // ── 4. Validate against PAM ─────────────────────────────────────
+        // ── 4. Validate against PAM ──────────────────────────────────────────────
         var (valid, userId) = await _api.ValidateUserAsync(pamUser, pamPassword, ct);
         // Zero-out password immediately
         if (pamPassword.Length > 0)
@@ -98,7 +98,7 @@ internal sealed class TelnetSession
         _log.LogInformation("Telnet PAM auth OK: {User} from {Ip} → {Host}:{Port}",
             pamUser, _clientIp, targetHost, targetPort);
 
-        // ── 5. Retrieve target credential ─────────────────────────────────
+        // ── 5. Retrieve target credential ─────────────────────────────────────────
         string credTargetIp, credUser, deviceId, credentialId;
         int credTargetPort;
         byte[] credPassword;
@@ -120,12 +120,12 @@ internal sealed class TelnetSession
             return;
         }
 
-        // ── 6. Register session ────────────────────────────────────────────
+        // ── 6. Register session ───────────────────────────────────────────────────
         var sessionId = await _api.StartSessionAsync(
             userId ?? Guid.Empty.ToString(), deviceId, credentialId,
             _clientIp, credTargetIp, credTargetPort, ct);
 
-        // ── 7. Connect to target ──────────────────────────────────────────
+        // ── 7. Connect to target ──────────────────────────────────────────────────
         using var targetClient = new TcpClient();
         targetClient.ReceiveTimeout = _opts.IdleTimeoutSeconds * 1000;
         targetClient.SendTimeout    = 30_000;
@@ -145,14 +145,14 @@ internal sealed class TelnetSession
 
         var targetStream = targetClient.GetStream();
 
-        // ── 8. Auto-inject credential via Telnet login sequence ───────────
+        // ── 8. Auto-inject credential via Telnet login sequence ────────────────────────────
         await AutoLoginAsync(targetStream, credUser, credPassword, ct);
         Array.Clear(credPassword, 0, credPassword.Length);
 
         // Restore client echo for interactive session
         await stream.WriteAsync(TelnetNegotiator.ResumeClientEcho(), ct);
 
-        // ── 9. Bidirectional relay with session recording ─────────────────
+        // ── 9. Bidirectional relay with session recording ─────────────────────────────────
         var startTime = DateTime.UtcNow;
         var recording = new MemoryStream();
 
@@ -160,13 +160,19 @@ internal sealed class TelnetSession
             TimeSpan.FromSeconds(_opts.IdleTimeoutSeconds));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, idleTimer.Token);
 
+        // Live chunk broadcast: target→client output → WebAPI (#214)
+        Action<string>? liveChunk = sessionId != null
+            ? text => _api.SendLiveChunk(sessionId, text)
+            : null;
+
         var clientToTarget = RelayAsync(stream, targetStream, recording, linked.Token,
             "client→target", refreshIdle: () => idleTimer.CancelAfter(
                 TimeSpan.FromSeconds(_opts.IdleTimeoutSeconds)));
 
         var targetToClient = RelayAsync(targetStream, stream, recording, linked.Token,
             "target→client", refreshIdle: () => idleTimer.CancelAfter(
-                TimeSpan.FromSeconds(_opts.IdleTimeoutSeconds)));
+                TimeSpan.FromSeconds(_opts.IdleTimeoutSeconds)),
+            liveChunk: liveChunk);
 
         // Also check for admin-initiated termination every 30 seconds
         var terminationChecker = sessionId != null
@@ -177,7 +183,7 @@ internal sealed class TelnetSession
         linked.Cancel();
         await Task.WhenAll(clientToTarget, targetToClient);
 
-        // ── 10. Session cleanup ───────────────────────────────────────────
+        // ── 10. Session cleanup ─────────────────────────────────────────────────────
         var duration = (int)(DateTime.UtcNow - startTime).TotalSeconds;
         _log.LogInformation("Telnet session {Id} ended: {User} → {Host} ({Dur}s, {Bytes} bytes recorded)",
             sessionId ?? "?", pamUser, targetHost, duration, recording.Length);
@@ -188,7 +194,8 @@ internal sealed class TelnetSession
 
     private static async Task RelayAsync(
         NetworkStream from, NetworkStream to, MemoryStream recording,
-        CancellationToken ct, string label, Action refreshIdle)
+        CancellationToken ct, string label, Action refreshIdle,
+        Action<string>? liveChunk = null)
     {
         var buf = new byte[4096];
         try
@@ -210,7 +217,11 @@ internal sealed class TelnetSession
                 // Strip IAC for clean recording
                 var stripped = TelnetNegotiator.StripIac(buf.AsSpan(0, read));
                 if (stripped.Length > 0)
+                {
                     await recording.WriteAsync(stripped, ct);
+                    // Broadcast to live monitor (#214)
+                    liveChunk?.Invoke(Encoding.UTF8.GetString(stripped));
+                }
             }
         }
         catch (OperationCanceledException) { }
