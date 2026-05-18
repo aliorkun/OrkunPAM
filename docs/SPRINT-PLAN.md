@@ -248,7 +248,7 @@
   - AdminGroup sentinel GUID ile tüm adminlere görünür step oluşturur
   - 48 saat TTL
 - `Vault.razor` — "📋 Request Access" butonu (RequiresApproval kredansiyellerde)
-  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uya rı
+  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uyarı
   - Başarı/hata mesajı + mevcut pending request bilgisi
 - `PamApiService.cs` — `RequestCredentialAccessAsync` + `CredentialAccessRequestResultDto`
 
@@ -337,7 +337,7 @@
 - `AdaptiveMfaPolicySettings` record (Enabled, Low/Medium/High/Block thresholds)
 - `PamApiService.cs`: `AdaptiveMfaPolicySettingsDto` + `GetAdaptiveMfaPolicyAsync` + `SaveAdaptiveMfaPolicyAsync` + `LoginData.RiskScore/RiskLevel`
 - `Policies.razor`: "Adaptive MFA" sekmesi + threshold form + save
-- `Login.razor`: Risk seviyesi uya rı banner (Medium/High için)
+- `Login.razor`: Risk seviyesi uyarı banner (Medium/High için)
 - RFP MFA #8 → PC, User Mgmt #41/#42 → PC
 
 **Sprint 17 Tamamlanan Bileşenler (#206 — Threat Intelligence Feed):**
@@ -354,20 +354,17 @@
 
 ---
 
-## Sprint 18 - v2 Access Control + Geolocation + Access Analytics
-**Tarih:** 18-25 Mayıs 2026 (aktif)
-**Durum:** Devam ediyor 🔄
+## ~~Sprint 18 - v2 Access Control + Geolocation + Access Analytics~~ ✅ TAMAMLANDI
+**Tarih:** 18-25 Mayıs 2026
+**Durum:** Tamamlandı — Device Trust, Geolocation Access, Access Pattern Analytics tamamlandı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | ✅ Tamamlandı |
 | #208 | Geolocation-based Access Control | v2-ACCESS | ✅ Tamamlandı |
-| #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | 🔲 Bekliyor |
+| #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | ✅ Tamamlandı |
 
-**Sprint 18 Hedefleri:**
-- User Mgmt #29 (geolocation access control), #32/#33 (device/context-aware) → PC
-- Reporting #33 (access pattern analytics), #38 (API usage reports), #46 (time-of-day) → PC
-- Zero Trust access control maturity: IP + device + geo + context combined
+**İlerleme:** 3/3 (%100) ✅ — Sprint 18 TAMAMLANDI
 
 **#207 Device Trust — Tamamlanan bileşenler (2026-05-18):**
 - `TrustedDevice` entity: DeviceFingerprint (SHA-256 of UA), UserId, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked, LastSeenAtUtc
@@ -396,12 +393,39 @@
 - `PamApiService.cs`: `GeolocationPolicySettingsDto` + `GetGeolocationPolicyAsync` + `SaveGeolocationPolicyAsync`
 - RFP User Mgmt #29 → PC
 
-**İlerleme:** 2/3 (%67) — #207 + #208 tamamlandı
+---
+
+## ~~Sprint 19 - v2 Telnet Proxy + RFP Gap Protocol Coverage~~ ✅ TAMAMLANDI
+**Tarih:** 18 Mayıs 2026
+**Durum:** Tamamlandı — Native C# Telnet Proxy (RFC 854)
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| — | Telnet Proxy — Native C# RFC 854 | v2-PROXY | ✅ Tamamlandı |
+
+**Sprint 19 Tamamlanan Bileşenler (2026-05-18):**
+- `OrkunPAM.TelnetProxy` Windows Service (TCP :2323) — Worker SDK, native C#, no open-source libs
+- `TelnetNegotiator.cs`: RFC 854 IAC option negotiation (WILL/WONT/DO/DONT); ECHO, SGA, LINEMODE
+- `TelnetSession.cs`: PAM banner → Login (pamuser@host[:port]) → password (echo suppressed) → PAM auth → credential lookup → connect → auto-login injection → bidirectional relay + recording → session upload
+- `TelnetProxyService.cs`: BackgroundService; per-IP rate limit (10 conn/60s); SemaphoreSlim session cap
+- `PamApiClient.cs`: proxy-service JWT auth → device lookup → Telnet/UserPassword credential → proxy-decrypt → session start/end lifecycle
+- `TelnetEndpoints.cs`: `GET /api/v1/telnet/sessions` (AdminPolicy), `DELETE /sessions/{id}` terminate, `POST /proxy/session-start`, `POST /proxy/session-end` (recording save), `GET /proxy/sessions/{id}/status` (X-Proxy-Secret)
+- `Array.Clear(credPassword)` immediately after credential injection (zero-memory policy)
+- WebAPI `Program.cs`: `api.MapTelnetEndpoints()` registered
+- `OrkunPAM.sln`: TelnetProxy project added under Proxy solution folder
+- RFP Remote Access #5 → PC
+
+**İlerleme:** 1/1 (%100) ✅
+
+---
+
+## Sprint 20 - Next (TBD)
+**Durum:** Bekliyor — Security/PM agent'ların yeni issue açmasını bekle
 
 ---
 
 ## Sonraki Adım
-**Sprint 18 aktif:** #207 Device Trust → #208 Geolocation Access → #209 Access Pattern Analytics
+**Sprint 19 tamamlandı.** Backlog boş — Security ve PM agent'ların issue açmasını bekle.
 **v2.0.0:** 30 Eylül 2026
 
 ---
@@ -428,6 +452,7 @@
 - **HTTP/HTTPS Proxy:** Native C# reverse proxy + CONNECT tunnel — açık kaynak yok
 - **TACACS+ Proxy:** Native C# (RFC 1492) — ağ cihazı AAA, Cisco/Juniper/Aruba
 - **RADIUS Proxy:** Native C# (RFC 2865/2866) — VPN/Wi-Fi/NAC, UDP :1812/:1813
+- **Telnet Proxy:** Native C# (RFC 854) — TCP :2323, credential injection, session recording
 - **Blazor UI:** Yönetim paneli, session başlatma, vault, raporlar
 - **AAPM + Threat Analytics:** v2.0.0'a ertelendi
 
