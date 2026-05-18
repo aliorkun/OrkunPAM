@@ -285,8 +285,30 @@
 
 ---
 
+## Sprint 16 - v2 Threat Analytics & SOC Dashboard (Aktif)
+**Tarih:** 18 Mayıs 2026 (aktif)
+**Durum:** Devam ediyor
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #35 | ML Tabanlı Anomali Tespiti ve Risk Skorlama | v2-ANALYTICS | 🔄 In Progress |
+
+**Sprint 16 — 2026-05-18 progress:**
+- `AnomalyDetectionService` (BackgroundService, 5 dk): off-hours, unusual IP, unusual device, frequency spike, high-risk command anomaly detection
+- `BehaviorBaselineService` (BackgroundService, daily): 30 günlük session history → TypicalHours, KnownIPs, KnownDevices baseline
+- `SocDashboardEndpoints`: `/api/v1/analytics/soc/dashboard|timeline|risk-map|alert-history`, `/api/v1/analytics/baselines/`
+- Alert rule toggle/delete endpoints
+- `ThreatAnalytics.razor`: SOC Dashboard Blazor sayfası (5 tab: Overview, Anomalies, Risk Map, Alert Rules, Baselines)
+- `PamApiService.cs`: 10 yeni analytics metot + DTO'lar
+- NavMenu: "Threat Analytics / SOC Dashboard" linki eklendi
+- Program.cs: AnomalyDetectionService + BehaviorBaselineService servis kaydı
+
+**İlerleme:** 1/1 core feature (%80 — alert rule actions + SIEM forwarding kalan)
+
+---
+
 ## Sonraki Adım
-**Backlog:** #35 ML Tabanlı Anomali Tespiti (v2-ANALYTICS) — AAPM kapsamında, CLAUDE.md'ye göre v2.0.0'a ertelendi.
+**Sprint 16 devam:** Alert rule actions (SIEM forward, email) implementasyonu
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ---

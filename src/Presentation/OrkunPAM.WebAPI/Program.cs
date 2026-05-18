@@ -127,6 +127,10 @@ try
     // === Certificate Expiry Monitor (#191) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.CertificateExpiryMonitorJob>();
 
+    // === Threat Analytics — Anomaly Detection + Behavior Baseline (#35) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AnomalyDetectionService>();
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BehaviorBaselineService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -464,6 +468,7 @@ try
     api.MapCertificateEndpoints();
     api.MapPushMfaEndpoints();
     api.MapSoarEndpoints();
+    api.MapSocDashboardEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

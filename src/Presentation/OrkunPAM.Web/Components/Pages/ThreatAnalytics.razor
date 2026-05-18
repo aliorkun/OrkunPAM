@@ -1,0 +1,513 @@
+@page "/threat-analytics"
+@inject PamApiService Api
+
+<PageTitle>SOC Dashboard — Threat Analytics</PageTitle>
+
+<div class="pam-page-header">
+    <h2>SOC Dashboard — Threat Analytics</h2>
+    <button class="pam-btn pam-btn-secondary" @onclick="@(() => LoadAsync())">Refresh</button>
+</div>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <!-- Tab Bar -->
+    <div class="pam-tabs" style="margin-bottom:1rem;">
+        <button class="pam-tab @(_tab == 0 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(0))">Overview</button>
+        <button class="pam-tab @(_tab == 1 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(1))">Anomalies</button>
+        <button class="pam-tab @(_tab == 2 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(2))">Risk Map</button>
+        <button class="pam-tab @(_tab == 3 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(3))">Alert Rules</button>
+        <button class="pam-tab @(_tab == 4 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(4))">Baselines</button>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    @if (_tab == 0 && _dashboard != null)
+    {
+        <div class="pam-card-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1.5rem;">
+            <div class="pam-stat-card">
+                <div class="pam-stat-value">@_dashboard.TotalAnomalies24h</div>
+                <div class="pam-stat-label">Anomalies (24h)</div>
+            </div>
+            <div class="pam-stat-card @(_dashboard.Unacknowledged > 0 ? &quot;pam-stat-warn&quot; : &quot;&quot;)">
+                <div class="pam-stat-value">@_dashboard.Unacknowledged</div>
+                <div class="pam-stat-label">Unacknowledged</div>
+            </div>
+            <div class="pam-stat-card @(_dashboard.CriticalUnacked > 0 ? &quot;pam-stat-danger&quot; : &quot;&quot;)">
+                <div class="pam-stat-value">@_dashboard.CriticalUnacked</div>
+                <div class="pam-stat-label">Critical Unacked</div>
+            </div>
+        </div>
+
+        <!-- Anomaly type breakdown -->
+        @if (_dashboard.TypeBreakdown?.Any() == true)
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <h4>Anomaly Types (24h)</h4>
+                <table class="pam-table">
+                    <thead><tr><th>Type</th><th>Count</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in _dashboard.TypeBreakdown)
+                        {
+                            <tr><td>@t.Type</td><td>@t.Count</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- Top risky users -->
+        @if (_dashboard.TopRiskyUsers?.Any() == true)
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <h4>Top Risky Users</h4>
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Anomalies</th>
+                            <th>Max Severity</th>
+                            <th>Risk Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in _dashboard.TopRiskyUsers)
+                        {
+                            <tr>
+                                <td style="font-size:0.85em;">@u.UserId</td>
+                                <td>@u.AnomalyCount</td>
+                                <td><span class="pam-badge @SeverityClass((int)u.MaxSeverity)">@SeverityLabel((int)u.MaxSeverity)</span></td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                                        <div style="width:100px;background:#eee;border-radius:4px;height:8px;">
+                                            <div style="@(&quot;width:&quot; + u.RiskScore + &quot;%;background:&quot; + RiskColor(u.RiskScore) + &quot;;height:8px;border-radius:4px;&quot;)"></div>
+                                        </div>
+                                        <span>@u.RiskScore</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <!-- Recent anomalies -->
+        @if (_dashboard.RecentAnomalies?.Any() == true)
+        {
+            <div class="pam-card">
+                <h4>Recent Anomalies</h4>
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>Details</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _dashboard.RecentAnomalies)
+                        {
+                            <tr style="@(a.IsAcknowledged ? &quot;opacity:0.5;&quot; : &quot;&quot;)">
+                                <td style="white-space:nowrap;">@a.DetectedAtUtc.ToString("MM-dd HH:mm")</td>
+                                <td>@a.AnomalyType</td>
+                                <td><span class="pam-badge @SeverityClass((int)a.Severity)">@SeverityLabel((int)a.Severity)</span></td>
+                                <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">@a.Details</td>
+                                <td>
+                                    @if (!a.IsAcknowledged)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-secondary"
+                                                @onclick="@(() => AckAsync(a.Id))">Ack</button>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#888;font-size:0.8em;">Acknowledged</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+
+    <!-- ANOMALIES TAB -->
+    @if (_tab == 1)
+    {
+        <div class="pam-toolbar" style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center;">
+            <select class="pam-input" style="width:200px;" @bind="_filterType">
+                <option value="">All Types</option>
+                <option value="OffHours">Off-Hours</option>
+                <option value="UnusualIP">Unusual IP</option>
+                <option value="UnusualDevice">Unusual Device</option>
+                <option value="FrequencySpike">Frequency Spike</option>
+                <option value="HighRiskCommand">High-Risk Command</option>
+            </select>
+            <button class="pam-btn pam-btn-primary" @onclick="@(() => LoadAnomaliesAsync())">Filter</button>
+        </div>
+
+        @if (_anomalies?.Any() == true)
+        {
+            <div class="pam-card">
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Time (UTC)</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>User ID</th>
+                            <th>Session</th>
+                            <th>Details</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _anomalies)
+                        {
+                            <tr style="@(a.IsAcknowledged ? &quot;opacity:0.55;&quot; : &quot;&quot;)">
+                                <td style="white-space:nowrap;">@a.DetectedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@a.AnomalyType</td>
+                                <td><span class="pam-badge @SeverityClass((int)a.Severity)">@SeverityLabel((int)a.Severity)</span></td>
+                                <td style="font-size:0.8em;">@a.UserId.ToString()[..8]...</td>
+                                <td style="font-size:0.8em;">@(a.SessionId.HasValue ? a.SessionId.Value.ToString()[..8] : "-")...</td>
+                                <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;">@a.Details</td>
+                                <td>@(a.IsAcknowledged ? "Acked" : "Open")</td>
+                                <td>
+                                    @if (!a.IsAcknowledged)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-secondary"
+                                                @onclick="@(() => AckAsync(a.Id))">Ack</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="pam-empty">No anomalies found.</div>
+        }
+    }
+
+    <!-- RISK MAP TAB -->
+    @if (_tab == 2)
+    {
+        @if (_riskMap?.Any() == true)
+        {
+            <div class="pam-card">
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Risk Score</th>
+                            <th>Total</th>
+                            <th>Off-Hours</th>
+                            <th>Unusual IP</th>
+                            <th>Unusual Dev</th>
+                            <th>Freq Spike</th>
+                            <th>High Risk Cmd</th>
+                            <th>Last Detected</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in _riskMap)
+                        {
+                            <tr>
+                                <td style="font-size:0.82em;">@u.UserId.ToString()[..12]...</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:0.4rem;">
+                                        <div style="width:80px;background:#eee;border-radius:4px;height:8px;">
+                                            <div style="@(&quot;width:&quot; + u.RiskScore + &quot;%;background:&quot; + RiskColor(u.RiskScore) + &quot;;height:8px;border-radius:4px;&quot;)"></div>
+                                        </div>
+                                        <strong>@u.RiskScore</strong>
+                                    </div>
+                                </td>
+                                <td>@u.AnomalyCount</td>
+                                <td>@u.OffHours</td>
+                                <td>@u.UnusualIp</td>
+                                <td>@u.UnusualDevice</td>
+                                <td>@u.FrequencySpike</td>
+                                <td>@u.HighRiskCommand</td>
+                                <td style="white-space:nowrap;">@u.LastDetected.ToString("MM-dd HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="pam-empty">No risk data. All users have clean profiles.</div>
+        }
+    }
+
+    <!-- ALERT RULES TAB -->
+    @if (_tab == 3)
+    {
+        <div style="margin-bottom:1rem;">
+            <button class="pam-btn pam-btn-primary" @onclick="@(() => ShowNewRuleForm())">+ New Alert Rule</button>
+        </div>
+
+        @if (_showRuleForm)
+        {
+            <div class="pam-card" style="margin-bottom:1rem;">
+                <h4>New Alert Rule</h4>
+                <div style="display:grid;gap:0.75rem;max-width:500px;">
+                    <div>
+                        <label class="pam-label">Name</label>
+                        <input class="pam-input" @bind="_newRuleName" placeholder="Rule name" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Anomaly Type Filter (leave blank for all)</label>
+                        <select class="pam-input" @bind="_newRuleType">
+                            <option value="">All types</option>
+                            <option value="OffHours">Off-Hours</option>
+                            <option value="UnusualIP">Unusual IP</option>
+                            <option value="UnusualDevice">Unusual Device</option>
+                            <option value="FrequencySpike">Frequency Spike</option>
+                            <option value="HighRiskCommand">High-Risk Command</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pam-label">Minimum Severity</label>
+                        <select class="pam-input" @bind="_newRuleMinSeverity">
+                            <option value="0">Low (0+)</option>
+                            <option value="1">Medium (1+)</option>
+                            <option value="2">High (2+)</option>
+                            <option value="3">Critical (3)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pam-label">Cooldown (minutes)</label>
+                        <input class="pam-input" type="number" @bind="_newRuleCooldown" />
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="pam-btn pam-btn-primary" @onclick="@(() => SaveRuleAsync())">Save</button>
+                        <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRuleForm = false)">Cancel</button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_ruleMsg))
+                    {
+                        <div class="pam-alert pam-alert-success">@_ruleMsg</div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_alertRules?.Any() == true)
+        {
+            <div class="pam-card">
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Condition</th>
+                            <th>Cooldown</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _alertRules)
+                        {
+                            <tr>
+                                <td>@r.Name</td>
+                                <td style="font-size:0.85em;max-width:200px;">@r.ConditionJson</td>
+                                <td>@r.CooldownMinutes min</td>
+                                <td>
+                                    <span class="pam-badge @(r.IsEnabled ? &quot;pam-badge-success&quot; : &quot;pam-badge-secondary&quot;)">
+                                        @(r.IsEnabled ? "Enabled" : "Disabled")
+                                    </span>
+                                </td>
+                                <td style="display:flex;gap:0.3rem;">
+                                    <button class="pam-btn pam-btn-xs pam-btn-secondary"
+                                            @onclick="@(() => ToggleRuleAsync(r.Id))">Toggle</button>
+                                    <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                            @onclick="@(() => DeleteRuleAsync(r.Id))">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="pam-empty">No alert rules configured.</div>
+        }
+    }
+
+    <!-- BASELINES TAB -->
+    @if (_tab == 4)
+    {
+        <div style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center;">
+            <span>User behavior baselines computed from last 30 days of session history.</span>
+        </div>
+
+        @if (_baselines?.Any() == true)
+        {
+            <div class="pam-card">
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Baseline Since</th>
+                            <th>Last Updated</th>
+                            <th>Typical Hours</th>
+                            <th>Known IPs</th>
+                            <th>Known Devices</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in _baselines)
+                        {
+                            <tr>
+                                <td style="font-size:0.82em;">@b.UserId.ToString()[..12]...</td>
+                                <td>@b.BaselineDate.ToString("yyyy-MM-dd")</td>
+                                <td>@b.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td style="font-size:0.82em;max-width:150px;overflow:hidden;text-overflow:ellipsis;">@b.TypicalHoursJson</td>
+                                <td>@CountItems(b.KnownIpsJson) IPs</td>
+                                <td>@CountItems(b.KnownDevicesJson) devices</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="pam-empty">No baselines yet. They are built daily from session history.</div>
+        }
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private int _tab;
+    private string _filterType = "";
+    private string _msg = "";
+
+    // Overview
+    private SocDashboardDto? _dashboard;
+
+    // Anomalies tab
+    private List<AnomalyDto>? _anomalies;
+
+    // Risk map tab
+    private List<RiskMapDto>? _riskMap;
+
+    // Alert rules tab
+    private List<AlertRuleDto>? _alertRules;
+    private bool _showRuleForm;
+    private string _newRuleName = "";
+    private string _newRuleType = "";
+    private int _newRuleMinSeverity;
+    private int _newRuleCooldown = 15;
+    private string _ruleMsg = "";
+
+    // Baselines tab
+    private List<BehaviorBaselineDto>? _baselines;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _dashboard = await Api.GetSocDashboardAsync();
+        await LoadTabDataAsync();
+
+        _loading = false;
+    }
+
+    private async Task SetTab(int t)
+    {
+        _tab = t;
+        await LoadTabDataAsync();
+    }
+
+    private async Task LoadTabDataAsync()
+    {
+        switch (_tab)
+        {
+            case 1: await LoadAnomaliesAsync(); break;
+            case 2: _riskMap  = await Api.GetSocRiskMapAsync(); break;
+            case 3: _alertRules = await Api.GetAlertRulesAsync(); break;
+            case 4: _baselines = await Api.GetBehaviorBaselinesAsync(); break;
+        }
+    }
+
+    private async Task LoadAnomaliesAsync()
+    {
+        _anomalies = await Api.GetAnomaliesAsync(null, string.IsNullOrEmpty(_filterType) ? null : _filterType);
+        StateHasChanged();
+    }
+
+    private async Task AckAsync(long id)
+    {
+        await Api.AcknowledgeAnomalyAsync(id);
+        await LoadAsync();
+    }
+
+    private void ShowNewRuleForm()
+    {
+        _showRuleForm = true;
+        _newRuleName = "";
+        _newRuleType = "";
+        _newRuleMinSeverity = 0;
+        _newRuleCooldown = 15;
+        _ruleMsg = "";
+    }
+
+    private async Task SaveRuleAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newRuleName)) return;
+
+        var conditionJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            AnomalyType = string.IsNullOrEmpty(_newRuleType) ? null : _newRuleType,
+            MinSeverity = _newRuleMinSeverity
+        });
+
+        var ok = await Api.CreateAlertRuleAsync(_newRuleName, conditionJson, "{}", _newRuleCooldown);
+        if (ok)
+        {
+            _ruleMsg = "Rule created.";
+            _showRuleForm = false;
+            _alertRules = await Api.GetAlertRulesAsync();
+        }
+    }
+
+    private async Task DeleteRuleAsync(string id)
+    {
+        if (!Guid.TryParse(id, out var guid)) return;
+        await Api.DeleteAlertRuleAsync(guid);
+        _alertRules = await Api.GetAlertRulesAsync();
+    }
+
+    private async Task ToggleRuleAsync(string id)
+    {
+        if (!Guid.TryParse(id, out var guid)) return;
+        await Api.ToggleAlertRuleAsync(guid);
+        _alertRules = await Api.GetAlertRulesAsync();
+    }
+
+    private static string SeverityLabel(int s) => s switch { 0 => "Low", 1 => "Medium", 2 => "High", 3 => "Critical", _ => "?" };
+    private static string SeverityClass(int s) => s switch { 0 => "pam-badge-secondary", 1 => "pam-badge-warning", 2 => "pam-badge-danger", 3 => "pam-badge-danger", _ => "" };
+    private static string RiskColor(decimal score) => score >= 75 ? "#dc3545" : score >= 40 ? "#fd7e14" : "#28a745";
+
+    private static int CountItems(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return 0;
+        try { return System.Text.Json.JsonDocument.Parse(json).RootElement.GetArrayLength(); }
+        catch { return 0; }
+    }
+}
