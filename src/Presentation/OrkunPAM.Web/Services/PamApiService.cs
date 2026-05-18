@@ -2389,6 +2389,73 @@ public sealed class PamApiService
         var result = await GetAsync<SingleResult<ApiUsageAnomaliesDto>>("/api/v1/reports/api-usage/anomalies?days=" + days);
         return result?.Data;
     }
+
+    // ── Live Session Monitor (#214) ──────────────────────────────────────────
+
+    public async Task<List<LiveSessionDto>?> GetLiveSessionsAsync()
+    {
+        var result = await GetAsync<ListResult<LiveSessionDto>>("/api/v1/sessions/live/");
+        return result?.Data;
+    }
+
+    public async Task<LiveSessionStatusDto?> GetLiveSessionStatusAsync(string sessionId)
+    {
+        var result = await GetAsync<SingleResult<LiveSessionStatusDto>>("/api/v1/sessions/live/" + sessionId + "/status");
+        return result?.Data;
+    }
+
+    public async Task<LiveStreamChunkDto?> GetLiveStreamAsync(string sessionId, int offset)
+    {
+        var result = await GetAsync<SingleResult<LiveStreamChunkDto>>("/api/v1/sessions/live/" + sessionId + "/stream?offset=" + offset);
+        return result?.Data;
+    }
+
+    public async Task<bool> JoinLiveSessionAsync(string sessionId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/sessions/live/" + sessionId + "/join", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> LeaveLiveSessionAsync(string sessionId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsync("/api/v1/sessions/live/" + sessionId + "/leave", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> BroadcastLiveMessageAsync(string sessionId, string message)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/live/" + sessionId + "/message",
+                new { message });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> TerminateSessionAsync(string sessionId, string reason)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/" + sessionId + "/terminate",
+                new { reason });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3428,3 +3495,33 @@ public record ApiUsageAnomaliesDto(
     List<ApiUsageHighDenialDto>?     HighDenialRateClients,
     List<ApiUsageRateLimitDto>?      RateLimitedClients);
 
+
+// Live Session Monitor DTOs (#214)
+public record LiveSessionDto(
+    string    Id,
+    string    UserId,
+    string    DeviceId,
+    string    Type,
+    DateTime  StartedAtUtc,
+    int       DurationMinutes,
+    string?   ClientIpAddress,
+    string?   TargetIpAddress,
+    int?      TargetPort,
+    decimal   RiskScore,
+    string?   Reason,
+    string?   TicketNumber,
+    int       ObserverCount);
+
+public record LiveSessionStatusDto(
+    string    SessionId,
+    string    Status,
+    string    SessionType,
+    DateTime  StartedAtUtc,
+    string?   TargetIp,
+    decimal   RiskScore,
+    int       ActiveObservers,
+    List<LiveObserverDto>? Observers);
+
+public record LiveObserverDto(string? ObserverUsername, DateTime JoinedAtUtc);
+
+public record LiveStreamChunkDto(string Text, int NewOffset);
