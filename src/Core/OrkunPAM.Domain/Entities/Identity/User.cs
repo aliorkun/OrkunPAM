@@ -40,6 +40,9 @@ public class User : SoftDeletableEntity
     // PKI / Smart Card authentication (#115)
     public bool RequirePkiAuth { get; set; }
 
+    // Portal profile — controls which UI sections the user can access
+    public PortalProfile PortalProfile { get; set; } = PortalProfile.StandardUser;
+
     // MFA Enrollment Token (admin-generated, one-time use, 24h TTL)
     public Guid? MfaEnrollmentToken { get; set; }
     public DateTime? MfaEnrollmentTokenExpiry { get; set; }

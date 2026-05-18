@@ -103,7 +103,7 @@ public static class CertificateEndpoints
             if (!string.IsNullOrEmpty(req.PemCertificate))
             {
                 var encResult = vault.EncryptString(req.PemCertificate);
-                if (encResult.IsSuccess) pemEnc = encResult.Value;
+                if (encResult.IsSuccess) pemEnc = Convert.ToBase64String(encResult.Value);
             }
 
             var subjectCn = cert.GetNameInfo(X509NameType.SimpleName, false);

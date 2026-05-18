@@ -13,7 +13,9 @@ public interface IAuthenticationService
     Task<Result<User>> CreateLocalUserAsync(string username, string password, string? displayName, string? email, CancellationToken ct = default);
 }
 
-public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName, bool MfaRequired, string? MfaType, bool MfaEnrollmentRequired, bool MustChangePassword, bool PasswordExpired);
+public record AuthResult(TokenPair Tokens, Guid UserId, string Username, string? DisplayName,
+    bool MfaRequired, string? MfaType, bool MfaEnrollmentRequired, bool MustChangePassword, bool PasswordExpired,
+    string PortalProfile);
 
 public sealed class AuthenticationService : IAuthenticationService
 {
@@ -179,7 +181,8 @@ public sealed class AuthenticationService : IAuthenticationService
 
         string? mfaTypeName = mfaRequired ? user.MfaType.ToString() : null;
         return Result<AuthResult>.Success(new AuthResult(
-            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mfaTypeName, mfaEnrollmentRequired, mustChangePassword, passwordExpired));
+            tokenResult.Value, user.Id, user.Username, user.DisplayName, mfaRequired, mfaTypeName, mfaEnrollmentRequired, mustChangePassword, passwordExpired,
+            user.PortalProfile.ToString()));
     }
 
     public async Task<Result<User>> CreateLocalUserAsync(string username, string password,

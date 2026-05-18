@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Application.Contracts;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Persistence.Services;
 
@@ -57,7 +58,7 @@ public sealed class CertificateExpiryMonitorJob : BackgroundService
         }
 
         var adminEmails = await db.Users
-            .Where(u => u.IsActive && u.Email != null && u.Roles.Any(r => r.Role.Name == "Admin"))
+            .Where(u => u.Status == OrkunPAM.Domain.Enums.UserStatus.Active && u.Email != null && u.UserRoles.Any(r => r.Role.Name == "GlobalAdmin"))
             .Select(u => u.Email!)
             .ToListAsync(ct);
 

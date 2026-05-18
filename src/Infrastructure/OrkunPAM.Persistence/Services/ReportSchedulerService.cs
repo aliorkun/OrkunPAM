@@ -132,7 +132,7 @@ public sealed class ReportSchedulerService : BackgroundService
                     sb.AppendLine(string.Join(",",
                         Csv(r.CredentialId.ToString()), Csv(r.UserId.ToString()),
                         Csv(r.CheckedOutAtUtc.ToString("O")), Csv(r.CheckedInAtUtc?.ToString("O")),
-                        Csv(dur), Csv(r.Reason), Csv(r.TicketNumber), Csv(r.ApprovedBy),
+                        Csv(dur), Csv(r.Reason), Csv(r.TicketNumber), Csv(r.ApprovedBy?.ToString()),
                         r.WasAutoCheckedIn ? "Yes" : "No"));
                 }
                 break;

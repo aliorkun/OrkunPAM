@@ -95,7 +95,7 @@ public static class ExecutiveDashboardEndpoints
             var deviceIds    = topDeviceIds.Select(x => x.DeviceId).ToList();
             var deviceLookup = await db.Devices
                 .Where(d => deviceIds.Contains(d.Id))
-                .Select(d => new { d.Id, d.Name, d.IpAddress })
+                .Select(d => new { d.Id, Name = d.Hostname, d.IpAddress })
                 .ToListAsync();
             var topDevices = topDeviceIds.Select(x =>
             {

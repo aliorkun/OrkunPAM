@@ -6,6 +6,7 @@ using OrkunPAM.Domain.Entities.Security;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -261,7 +262,7 @@ public static class VendorAccessEndpoints
 
             var devices = await db.Devices
                 .Where(d => deviceIds.Contains(d.Id))
-                .Select(d => new { d.Id, d.Hostname, d.Fqdn, d.IpAddress, d.Protocol, d.ConnectionPort })
+                .Select(d => new { d.Id, d.Hostname, d.Fqdn, d.IpAddress, Protocol = d.ConnectionProtocol, d.ConnectionPort })
                 .ToListAsync();
 
             return Results.Ok(new

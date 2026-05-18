@@ -57,8 +57,7 @@ public static class WebRdpEndpoints
             var device = await db.Devices.FindAsync(deviceId);
             if (device == null) { ctx.Response.StatusCode = 404; return; }
 
-            if (!string.Equals(device.Protocol, "rdp", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(device.Protocol, "Rdp", StringComparison.OrdinalIgnoreCase))
+            if (device.ConnectionProtocol != ConnectionProtocol.Rdp)
             {
                 ctx.Response.StatusCode = 400;
                 await ctx.Response.WriteAsync("Device protocol is not RDP");

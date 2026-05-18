@@ -84,6 +84,7 @@ public static class AuthEndpoints
                     mfaEnrollmentRequired = data.MfaEnrollmentRequired,
                     mustChangePassword = data.MustChangePassword,
                     passwordExpired = data.PasswordExpired,
+                    portalProfile = data.PortalProfile,
                     riskScore,
                     riskLevel
                 }
@@ -525,7 +526,8 @@ public static class AuthEndpoints
             var otpDtData = new AuthResult(tokenResult.Value, user.Id, user.Username, user.DisplayName,
                 MfaRequired: false, MfaType: null, MfaEnrollmentRequired: false,
                 MustChangePassword: user.MustChangePassword,
-                PasswordExpired: user.PasswordExpiresAt.HasValue && user.PasswordExpiresAt < DateTime.UtcNow);
+                PasswordExpired: user.PasswordExpiresAt.HasValue && user.PasswordExpiresAt < DateTime.UtcNow,
+                PortalProfile: "StandardUser");
             if (await DeviceTrustHelper.ApplyDeviceTrustAsync(db, otpDtData, user.Id, otpFingerprint, otpUserAgent, ip) == null)
                 return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
 
@@ -794,7 +796,8 @@ public static class AuthEndpoints
             var winFingerprint = DeviceTrustHelper.ComputeFingerprint(winUserAgent, ctx);
             var winDtData = new AuthResult(tokenResult.Value, user.Id, user.Username, user.DisplayName,
                 MfaRequired: false, MfaType: null, MfaEnrollmentRequired: false,
-                MustChangePassword: false, PasswordExpired: false);
+                MustChangePassword: false, PasswordExpired: false,
+                PortalProfile: "StandardUser");
             if (await DeviceTrustHelper.ApplyDeviceTrustAsync(db, winDtData, user.Id, winFingerprint, winUserAgent, ip) == null)
                 return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
 

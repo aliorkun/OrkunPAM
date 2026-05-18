@@ -60,7 +60,7 @@
 | #36 | MSI Installer | MVP-UX | ✅ Kapatıldı |
 
 **İlerleme:** 9/9 tamamlandı (%100) ✅
-**Tag:** `v1.0.0-rc1` (atılacak)
+**Tag:** `v1.0.0-rc1` ✅
 
 ---
 
@@ -79,7 +79,7 @@
 | #80 | SSH Key Yönetimi | MVP-VAULT | ✅ Kapatıldı |
 
 **İlerleme:** 7/7 tamamlandı (%100) ✅
-**Tag:** `v1.0.0-rc2` (atılacak)
+**Tag:** `v1.0.0-rc2`
 
 ---
 
@@ -96,7 +96,7 @@
 | - | Dokümantasyon (docs/perf-baseline.md) | Docs | ✅ Tamamlandı |
 
 **İlerleme:** 5/5 tamamlandı (%100) ✅
-**Tag:** `v1.0.0` (atılacak)
+**Tag:** `v1.0.0` ✅ (18 Mayıs 2026 atıldı)
 
 **E2E Test Detayları:**
 - `OrkunPAM.E2ETests` projesi oluşturuldu (tests/ altında)
@@ -203,82 +203,82 @@
 - `CloudJitRequest` entity: Permission, Justification, Status lifecycle, ExpiresAtUtc, CloudGrantReference
 - DbContext: CloudAccounts, CloudResources, CloudJitRequests DbSets + model config + FK ilişkileri
 - Migration: `20260517_AddCloudPam.cs` — 3 tablo, index'ler
-- API: `GET /api/v1/cloud/dashboard` — multi-cloud özet (hesap, kaynak, JIT sayıları, son istekler)
+- API: `GET /api/v1/cloud/dashboard` — multi-cloud ozet (hesap, kaynak, JIT sayilari, son istekler)
 - API: `GET/POST /api/v1/cloud/accounts` — cloud hesap CRUD
-- API: `PUT /api/v1/cloud/accounts/{id}/toggle` — etkinleştir/devre dışı
+- API: `PUT /api/v1/cloud/accounts/{id}/toggle` — etkinlestir/devre disi
 - API: `DELETE /api/v1/cloud/accounts/{id}` — sil
-- API: `POST /api/v1/cloud/accounts/{id}/sync` — kaynak keşfi (AWS EC2/IAM/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS simüle)
+- API: `POST /api/v1/cloud/accounts/{id}/sync` — kaynak kesfsi (AWS EC2/IAM/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS simule)
 - API: `GET /api/v1/cloud/resources?provider=&type=` — filtrelenebilir kaynak listesi
-- API: `PUT /api/v1/cloud/resources/{id}/toggle` — kaynak etkinleştir/devre dışı
-- API: `GET/POST /api/v1/cloud/jit` — JIT istek oluşturma
-- API: `PUT /api/v1/cloud/jit/{id}/approve|deny|revoke` — JIT yaşlam döngüsü
+- API: `PUT /api/v1/cloud/resources/{id}/toggle` — kaynak etkinlestir/devre disi
+- API: `GET/POST /api/v1/cloud/jit` — JIT istek olusturma
+- API: `PUT /api/v1/cloud/jit/{id}/approve|deny|revoke` — JIT yaslam dongusu
 - Audit: CloudAccountCreated/Deleted/Synced, CloudJitRequested/Approved/Denied/Revoked
-- `CloudPam.razor`: 4 tab UI — Dashboard (provider kartları, son JIT), Accounts (CRUD + sync), Resources (filtreli tablo + JIT başlat), JIT (istek formu + onay/reddet/iptal)
-- `PamApiService.cs`: GetCloudDashboardAsync, GetCloudAccountsAsync, CreateCloudAccountAsync, SyncCloudAccountAsync, ToggleCloudAccountAsync, DeleteCloudAccountAsync, GetCloudResourcesAsync, GetCloudJitRequestsAsync, CreateCloudJitRequestAsync, ApproveCloudJitAsync, DenyCloudJitAsync, RevokeCloudJitAsync + tüm DTO'lar
+- `CloudPam.razor`: 4 tab UI — Dashboard (provider kartlari, son JIT), Accounts (CRUD + sync), Resources (filtreli tablo + JIT baslat), JIT (istek formu + onay/reddet/iptal)
+- `PamApiService.cs`: GetCloudDashboardAsync, GetCloudAccountsAsync, CreateCloudAccountAsync, SyncCloudAccountAsync, ToggleCloudAccountAsync, DeleteCloudAccountAsync, GetCloudResourcesAsync, GetCloudJitRequestsAsync, CreateCloudJitRequestAsync, ApproveCloudJitAsync, DenyCloudJitAsync, RevokeCloudJitAsync + tum DTO'lar
 - NavMenu.razor: "Cloud" section + Cloud PAM linki eklendi
 
 ---
 
 ## Sprint 13 - v2 RFP Gap: Session Watermarking + Credential Discovery + Certificate Lifecycle
-**Tarih:** 17-31 Mayıs 2026
-**Durum:** Tamamlandı ✅
+**Tarih:** 17-31 Mayis 2026
+**Durum:** Tamamlandi ✅
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #190 | Session Watermarking — Oturum Kaydı Kullanıcı Filigranı | v2-SESSION | ✅ Tamamlandı |
-| #189 | Credential Discovery — AD Ayrıcalıklı Hesap Tarama | v2-VAULT | ✅ Tamamlandı |
-| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | ✅ Tamamlandı |
+| #190 | Session Watermarking — Oturum Kaydi Kullanici Filigrani | v2-SESSION | ✅ Tamamlandi |
+| #189 | Credential Discovery — AD Ayricalikli Hesap Tarama | v2-VAULT | ✅ Tamamlandi |
+| #191 | Certificate Lifecycle Management — X.509 Sertifika Envanter | v2-VAULT | ✅ Tamamlandi |
 
-**İlerleme:** 3/3 (%100) ✅ — Sprint 13 tamamlandı
+**Ilerleme:** 3/3 (%100) ✅ — Sprint 13 tamamlandi
 
 ---
 
 ## Sprint 14 - UX Polish: Credential Access Request Flow
-**Tarih:** 17 Mayıs 2026 (aktif)
-**Durum:** Tamamlandı ✅
+**Tarih:** 17 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| — | Credential Access Request — Vault UI + API endpoint | UX-fix | ✅ Tamamlandı |
+| — | Credential Access Request — Vault UI + API endpoint | UX-fix | ✅ Tamamlandi |
 
 **Detay:**
 - `POST /api/v1/vault/credentials/{id}/request-access` — yeni endpoint
   - Duplicate pending request tespiti (409 yerine 200 + status:Pending)
   - Already-approved tespiti (200 + status:Approved)
-  - AdminGroup sentinel GUID ile tüm adminlere görünür step oluşturur
+  - AdminGroup sentinel GUID ile tum adminlere gorunur step olusturur
   - 48 saat TTL
-- `Vault.razor` — "📋 Request Access" butonu (RequiresApproval kredansiyellerde)
-  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uyarı
-  - Başarı/hata mesajı + mevcut pending request bilgisi
+- `Vault.razor` — "Request Access" butonu (RequiresApproval kredansiyellerde)
+  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uyari
+  - Basari/hata mesaji + mevcut pending request bilgisi
 - `PamApiService.cs` — `RequestCredentialAccessAsync` + `CredentialAccessRequestResultDto`
 
-**İlerleme:** 1/1 (%100) ✅
+**Ilerleme:** 1/1 (%100) ✅
 
 ---
 
-## ~~Sprint 14 - UX Polish: Credential Access Request Flow~~ ✅ TAMAMLANDI (DUPLICATE — bkz. önceki Sprint 14 girişi)
+## ~~Sprint 14 - UX Polish: Credential Access Request Flow~~ ✅ TAMAMLANDI (DUPLICATE — bkz. onceki Sprint 14 girisi)
 
 ---
 
 ## Sprint 15 - v2 Security + MFA + Integration RFP Gap ✅ TAMAMLANDI
-**Tarih:** 17 Mayıs 2026
-**Durum:** Tamamlandı — 3 HIGH security fix + Account Reconciliation + Push MFA + SOAR Integration
+**Tarih:** 17 Mayis 2026
+**Durum:** Tamamlandi — 3 HIGH security fix + Account Reconciliation + Push MFA + SOAR Integration
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #198 | [HIGH] Vault Permission Endpoint — AdminPolicy Eksik | security | ✅ Kapatıldı |
-| #199 | [HIGH] Credential Share Endpoint — CanShare Doğrulanmıyor | security | ✅ Kapatıldı |
-| #200 | [HIGH] Vault Folder Credentials Listing — IDOR | security | ✅ Kapatıldı |
-| #195 | Account Reconciliation — PAM vs AD/LDAP Drift Detection | v2-COMPLIANCE | ✅ Kapatıldı |
-| #196 | Push Notification MFA — Mobil Push Onay MFA | v2-MFA | ✅ Kapatıldı |
-| #197 | SOAR Integration — Splunk SOAR / Palo Alto XSOAR | v2-INTEGRATION | ✅ Kapatıldı |
+| #198 | [HIGH] Vault Permission Endpoint — AdminPolicy Eksik | security | ✅ Kapatildi |
+| #199 | [HIGH] Credential Share Endpoint — CanShare Dogrulanmiyor | security | ✅ Kapatildi |
+| #200 | [HIGH] Vault Folder Credentials Listing — IDOR | security | ✅ Kapatildi |
+| #195 | Account Reconciliation — PAM vs AD/LDAP Drift Detection | v2-COMPLIANCE | ✅ Kapatildi |
+| #196 | Push Notification MFA — Mobil Push Onay MFA | v2-MFA | ✅ Kapatildi |
+| #197 | SOAR Integration — Splunk SOAR / Palo Alto XSOAR | v2-INTEGRATION | ✅ Kapatildi |
 
-**İlerleme:** 6/6 (%100) ✅
+**Ilerleme:** 6/6 (%100) ✅
 
-**Sprint 15 Tamamlanan Bileşenler:**
-- **#198 fix:** `/api/v1/vault/permissions` → `RequireAuthorization("AdminPolicy")` eklendi (privilege escalation önlendi)
-- **#199 fix:** `POST /vault/credentials/{id}/share` → `CanShare` yetkisi enforced (BFLA önlendi)
-- **#200 fix:** `GET /vault/folders/{id}/credentials` → folder-level IDOR koruması (CWE-639 kapatıldı)
+**Sprint 15 Tamamlanan Bilesenler:**
+- **#198 fix:** `/api/v1/vault/permissions` → `RequireAuthorization("AdminPolicy")` eklendi (privilege escalation onlendi)
+- **#199 fix:** `POST /vault/credentials/{id}/share` → `CanShare` yetkisi enforced (BFLA onlendi)
+- **#200 fix:** `GET /vault/folders/{id}/credentials` → folder-level IDOR korumasi (CWE-639 kapatildi)
 - **#195:** `GET/POST /api/v1/compliance/reconciliation/report|auto-remediate|history` + Compliance.razor Reconciliation sekmesi
 - **#196:** Push MFA endpoints (enroll/devices/initiate/status/respond) + PushDevices.razor + NavMenu linki
 - **#197:** SOAR endpoints (config CRUD + 5 inbound action API, HMAC-SHA256 verified) + Integrations.razor SOAR sekmesi
@@ -286,50 +286,50 @@
 ---
 
 ## ~~Sprint 16 - v2 Threat Analytics & SOC Dashboard~~ ✅ TAMAMLANDI
-**Tarih:** 18 Mayıs 2026
-**Durum:** Tamamlandı — ML anomali tespiti + BFLA fix + DoS fix + baseline şifreleme + alert actions
+**Tarih:** 18 Mayis 2026
+**Durum:** Tamamlandi — ML anomali tespiti + BFLA fix + DoS fix + baseline sifreleme + alert actions
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #35 | ML Tabanlı Anomali Tespiti ve Risk Skorlama | v2-ANALYTICS | ✅ Tamamlandı |
+| #35 | ML Tabanli Anomali Tespiti ve Risk Skorlama | v2-ANALYTICS | ✅ Tamamlandi |
 | #202 | [HIGH] SOC/Analytics API BFLA | security | ✅ Fix'lendi |
 | #203 | [MEDIUM] /soc/timeline DoS Riski | security | ✅ Fix'lendi |
 | #204 | [MEDIUM] Baseline Plaintext Storage | security | ✅ Fix'lendi |
 
 **Sprint 16 — 2026-05-18 progress:**
 - `AnomalyDetectionService` (BackgroundService, 5 dk): off-hours, unusual IP, unusual device, frequency spike, high-risk command anomaly detection
-- `BehaviorBaselineService` (BackgroundService, daily): 30 günlük session history → TypicalHours, KnownIPs, KnownDevices baseline
+- `BehaviorBaselineService` (BackgroundService, daily): 30 gunluk session history → TypicalHours, KnownIPs, KnownDevices baseline
 - `SocDashboardEndpoints`: `/api/v1/analytics/soc/dashboard|timeline|risk-map|alert-history`, `/api/v1/analytics/baselines/`
 - Alert rule toggle/delete endpoints
-- `ThreatAnalytics.razor`: SOC Dashboard Blazor sayfası (5 tab: Overview, Anomalies, Risk Map, Alert Rules, Baselines)
+- `ThreatAnalytics.razor`: SOC Dashboard Blazor sayfasi (5 tab: Overview, Anomalies, Risk Map, Alert Rules, Baselines)
 - `PamApiService.cs`: 10 yeni analytics metot + DTO'lar
 - NavMenu: "Threat Analytics / SOC Dashboard" linki eklendi
-- Program.cs: AnomalyDetectionService + BehaviorBaselineService servis kaydı
+- Program.cs: AnomalyDetectionService + BehaviorBaselineService servis kaydi
 
 **Sprint 16 — 2026-05-18 tamamlama (run 2):**
-- **#202 fix [HIGH]:** `SocDashboardEndpoints` + `AnalyticsEndpoints` tüm MapGroup'larına + standalone endpoint'lere `RequireAuthorization("AdminPolicy")` eklendi (BFLA önlendi)
-- **#203 fix [MEDIUM]:** `/soc/timeline` `hours` parametresi 1-168 arası clamp + `.Take(10_000)` DoS önleme
-- **#204 fix [MEDIUM]:** `BehaviorBaselineService` → `KnownIpsJson`/`KnownDevicesJson` AES-256-GCM şifreli (Base64) saklanıyor; `AnomalyDetectionService` decrypt ederek kullanıyor; vault başlatılmadıysa graceful fallback
-- **#35 tamamlama:** `FireAlertRulesAsync` → `AlertRuleAction` (SendSiem/SendEmail/EmailTo) parse ediliyor; SIEM: enabled SiemTarget'lara CEF UDP syslog gönderiliyor; Email: `IEmailService.SendAsync` tetikleniyor; `ActionsTaken` alanı gerçek action listesiyle dolduruluyor
-- **UI:** `ThreatAnalytics.razor` alert rule formuna "Forward to SIEM" checkbox + "Send Email" checkbox + recipient email alanı eklendi
+- **#202 fix [HIGH]:** `SocDashboardEndpoints` + `AnalyticsEndpoints` tum MapGroup'larina + standalone endpoint'lere `RequireAuthorization("AdminPolicy")` eklendi (BFLA onlendi)
+- **#203 fix [MEDIUM]:** `/soc/timeline` `hours` parametresi 1-168 arasi clamp + `.Take(10_000)` DoS onleme
+- **#204 fix [MEDIUM]:** `BehaviorBaselineService` → `KnownIpsJson`/`KnownDevicesJson` AES-256-GCM sifreli (Base64) saklaniyor; `AnomalyDetectionService` decrypt ederek kullaniyor; vault baslatilmadiysa graceful fallback
+- **#35 tamamlama:** `FireAlertRulesAsync` → `AlertRuleAction` (SendSiem/SendEmail/EmailTo) parse ediliyor; SIEM: enabled SiemTarget'lara CEF UDP syslog gonderiliyor; Email: `IEmailService.SendAsync` tetikleniyor; `ActionsTaken` alani gercek action listesiyle dolduruluyor
+- **UI:** `ThreatAnalytics.razor` alert rule formuna "Forward to SIEM" checkbox + "Send Email" checkbox + recipient email alani eklendi
 
-**İlerleme:** 1/1 core feature (%100 — Sprint 16 TAMAMLANDI) ✅
+**Ilerleme:** 1/1 core feature (%100 — Sprint 16 TAMAMLANDI) ✅
 
 ---
 
 ## ~~Sprint 17 - v2 Auth: Adaptive MFA + Threat Intelligence + Device Trust~~ ✅ TAMAMLANDI
-**Tarih:** 18 Mayıs 2026
-**Durum:** Tamamlandı — Adaptive MFA + Threat Intelligence Feed tamamlandı; Device Trust Sprint 18'e taşındı
+**Tarih:** 18 Mayis 2026
+**Durum:** Tamamlandi — Adaptive MFA + Threat Intelligence Feed tamamlandi; Device Trust Sprint 18'e tasindi
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #205 | Adaptive MFA — Anomali Skoruna Göre Step-Up Kimlik Doğrulama | v2-SECURITY | ✅ Tamamlandı |
-| #206 | Threat Intelligence Feed — IOC/IP Reputation Entegrasyonu | v2-ANALYTICS | ✅ Tamamlandı |
-| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔄 Sprint 18'e taşındı |
+| #205 | Adaptive MFA — Anomali Skoruna Gore Step-Up Kimlik Dogrulama | v2-SECURITY | ✅ Tamamlandi |
+| #206 | Threat Intelligence Feed — IOC/IP Reputation Entegrasyonu | v2-ANALYTICS | ✅ Tamamlandi |
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | Sprint 18'e tasindi |
 
-**Sprint 17 Tamamlanan Bileşenler (#205 — Adaptive MFA):**
+**Sprint 17 Tamamlanan Bilesenler (#205 — Adaptive MFA):**
 - `AdaptiveMfaHelper` static class: `LoadPolicyAsync` + `CalculateLoginRiskAsync` (IP/hours/frequency risk factors)
-- `BehaviorBaselineService.DecryptOrDeserialize` → public static (baseline erişimi için)
+- `BehaviorBaselineService.DecryptOrDeserialize` → public static (baseline erisimi icin)
 - Login endpoint: risk score calculation → riskScore + riskLevel response fields
 - Risk "Critical" → 403 login block; Risk "High" → MFA forced (EmailOtp veya Totp)
 - `GET /api/v1/auth/risk-score` endpoint
@@ -337,36 +337,36 @@
 - `AdaptiveMfaPolicySettings` record (Enabled, Low/Medium/High/Block thresholds)
 - `PamApiService.cs`: `AdaptiveMfaPolicySettingsDto` + `GetAdaptiveMfaPolicyAsync` + `SaveAdaptiveMfaPolicyAsync` + `LoginData.RiskScore/RiskLevel`
 - `Policies.razor`: "Adaptive MFA" sekmesi + threshold form + save
-- `Login.razor`: Risk seviyesi uyarı banner (Medium/High için)
+- `Login.razor`: Risk seviyesi uyari banner (Medium/High icin)
 - RFP MFA #8 → PC, User Mgmt #41/#42 → PC
 
-**Sprint 17 Tamamlanan Bileşenler (#206 — Threat Intelligence Feed):**
+**Sprint 17 Tamamlanan Bilesenler (#206 — Threat Intelligence Feed):**
 - `ThreatFeedService.cs` (BackgroundService, saatlik): AbuseIPDB/Emerging Threats/AlienVault OTX feed entegrasyonu
 - `ThreatIndicator` entity: IndicatorType (IP/Domain/Hash), Value, Severity, Source, ExpiresAtUtc
-- `ThreatFeedConfig` entity: feed URL, API key (AES-256-GCM şifreli), refresh interval, enabled flag
-- `AnomalyDetectionService` enrichment: session başlatmada IOC lookup → KnownMaliciousIP +80 risk skoru
+- `ThreatFeedConfig` entity: feed URL, API key (AES-256-GCM sifreli), refresh interval, enabled flag
+- `AnomalyDetectionService` enrichment: session baslatmada IOC lookup → KnownMaliciousIP +80 risk skoru
 - API: `GET /api/v1/analytics/threat-feed/indicators|configs|reports` + `POST /refresh`
-- `ThreatAnalytics.razor` Threat Intelligence sekmesi: IOC tablosu, feed config yönetimi, 24h hit listesi
-- Süresi dolmuş IOC'lerin otomatik temizliği
+- `ThreatAnalytics.razor` Threat Intelligence sekmesi: IOC tablosu, feed config yonetimi, 24h hit listesi
+- Suresi dolmus IOC'lerin otomatik temizligi
 - RFP User Mgmt #40 → PC, Reporting #32 → PC
 
-**İlerleme:** 2/2 tamamlandı (%100 — Sprint 17 core items) ✅
+**Ilerleme:** 2/2 tamamlandi (%100 — Sprint 17 core items) ✅
 
 ---
 
 ## ~~Sprint 18 - v2 Access Control + Geolocation + Access Analytics~~ ✅ TAMAMLANDI
-**Tarih:** 18-25 Mayıs 2026
-**Durum:** Tamamlandı — Device Trust, Geolocation Access, Access Pattern Analytics tamamlandı
+**Tarih:** 18-25 Mayis 2026
+**Durum:** Tamamlandi — Device Trust, Geolocation Access, Access Pattern Analytics tamamlandi
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | ✅ Tamamlandı |
-| #208 | Geolocation-based Access Control | v2-ACCESS | ✅ Tamamlandı |
-| #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | ✅ Tamamlandı |
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | ✅ Tamamlandi |
+| #208 | Geolocation-based Access Control | v2-ACCESS | ✅ Tamamlandi |
+| #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | ✅ Tamamlandi |
 
-**İlerleme:** 3/3 (%100) ✅ — Sprint 18 TAMAMLANDI
+**Ilerleme:** 3/3 (%100) ✅ — Sprint 18 TAMAMLANDI
 
-**#207 Device Trust — Tamamlanan bileşenler (2026-05-18):**
+**#207 Device Trust — Tamamlanan bilesenler (2026-05-18):**
 - `TrustedDevice` entity: DeviceFingerprint (SHA-256 of UA), UserId, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked, LastSeenAtUtc
 - DbContext: TrustedDevices DbSet + model config + unique index (UserId, DeviceFingerprint)
 - `DeviceTrustPolicySettings`: Enabled, RequireTrustedDevice, UnknownDeviceAction (Allow/StepUpAuth/Block), MaxTrustAgeDays, AutoRegisterOnLogin
@@ -384,7 +384,7 @@
 - `PamApiService.cs`: DeviceTrustPolicySettingsDto, TrustedDeviceDto + 7 API methods
 - RFP User Mgmt #32 → PC, #33 → PC
 
-**#208 Geolocation Access — Tamamlanan bileşenler (2026-05-18):**
+**#208 Geolocation Access — Tamamlanan bilesenler (2026-05-18):**
 - `GeolocationPolicySettings`: Enabled, AllowedCountryCodes[], BlockedCountryCodes[], ViolationAction (Block/StepUpAuth), UnknownLocationAction (Allow/StepUpAuth/Block), AllowPrivateIps
 - `GET/PUT /api/v1/policy/geo-access` (AdminPolicy)
 - `GeoLocationHelper`: ip-api.com lookup (3s timeout, graceful fallback), RFC 1918 private IP detection, country allow/block list enforcement
@@ -396,14 +396,14 @@
 ---
 
 ## ~~Sprint 19 - v2 Telnet Proxy + RFP Gap Protocol Coverage~~ ✅ TAMAMLANDI
-**Tarih:** 18 Mayıs 2026
-**Durum:** Tamamlandı — Native C# Telnet Proxy (RFC 854)
+**Tarih:** 18 Mayis 2026
+**Durum:** Tamamlandi — Native C# Telnet Proxy (RFC 854)
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| — | Telnet Proxy — Native C# RFC 854 | v2-PROXY | ✅ Tamamlandı |
+| — | Telnet Proxy — Native C# RFC 854 | v2-PROXY | ✅ Tamamlandi |
 
-**Sprint 19 Tamamlanan Bileşenler (2026-05-18):**
+**Sprint 19 Tamamlanan Bilesenler (2026-05-18):**
 - `OrkunPAM.TelnetProxy` Windows Service (TCP :2323) — Worker SDK, native C#, no open-source libs
 - `TelnetNegotiator.cs`: RFC 854 IAC option negotiation (WILL/WONT/DO/DONT); ECHO, SGA, LINEMODE
 - `TelnetSession.cs`: PAM banner → Login (pamuser@host[:port]) → password (echo suppressed) → PAM auth → credential lookup → connect → auto-login injection → bidirectional relay + recording → session upload
@@ -415,32 +415,33 @@
 - `OrkunPAM.sln`: TelnetProxy project added under Proxy solution folder
 - RFP Remote Access #5 → PC
 
-**İlerleme:** 1/1 (%100) ✅
+**Ilerleme:** 1/1 (%100) ✅
 
 ---
 
 ## Sprint 20 - v2 Session Monitor + SMS MFA + Session Tagging
-**Tarih:** 18-25 Mayıs 2026
-**Durum:** Aktif 🔄 — PM run #16 tarafından planlandı
+**Tarih:** 18-25 Mayis 2026
+**Durum:** Aktif -- PM run #16 tarafindan planlandi
 
-| Issue | Başlık | Tip | Durum |
+| Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #214 | Session Live Monitoring — Canlı Oturum İzleme ve Admin Müdahale | v2-SESSION | 🔲 Bekliyor |
-| #215 | SMS OTP — Kısa Mesaj Tabanlı MFA | v2-MFA | 🔲 Bekliyor |
-| #216 | Session Tagging & Annotation — Oturum Etiketleme | v2-SESSION | 🔲 Bekliyor |
+| #214 | Session Live Monitoring — Canli Oturum Izleme ve Admin Mudahale | v2-SESSION | Bekliyor |
+| #215 | SMS OTP — Kisa Mesaj Tabanli MFA | v2-MFA | Bekliyor |
+| #216 | Session Tagging & Annotation — Oturum Etiketleme | v2-SESSION | Bekliyor |
 
 **Sprint 20 Hedefleri:**
 - #214: LiveMonitorHub (SignalR), LiveSessionEndpoints, LiveMonitor.razor; SSH/Telnet terminal stream → RFP Remote Access #31 + #40 PC
-- #215: ISmsGatewayService (Twilio/AwsSns/Netgsm/Custom), SmsOtpEndpoints, Login.razor SMS adımı → RFP MFA #4 PC
+- #215: ISmsGatewayService (Twilio/AwsSns/Netgsm/Custom), SmsOtpEndpoints, Login.razor SMS adimi → RFP MFA #4 PC
 - #216: SessionTag + SessionAnnotation entity, SessionTagEndpoints, Sessions.razor tag UI → RFP Remote Access #48 PC
 
-**İlerleme:** 0/3 (%0)
+**Ilerleme:** 0/3 (%0)
 
 ---
 
-## Sonraki Adım
-**Sprint 20 aktif.** Developer #214 → #215 → #216 sırasıyla implement eder.
-**v2.0.0:** 30 Eylül 2026
+## Sonraki Adim
+**Sprint 20 aktif.** Developer #214 → #215 → #216 sirasiyla implement eder.
+**v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
+**v2.0.0:** 30 Eylul 2026
 
 ---
 
@@ -453,9 +454,9 @@
 
 ## Milestone Hedefleri
 - **v0.4.0-rdp:** Sprint 3 çıkışı (13 Mayıs 2026) ← Tamamlandı
-- **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ← Tamamlandı
-- **v1.0.0-rc2:** Sprint 5 çıkışı (13 Mayıs 2026) ← Tamamlandı
-- **v1.0.0:** Sprint 6 çıkışı (14 Mayıs 2026) ← Tamamlandı
+- **v1.0.0-rc1:** Sprint 4 çıkışı (13 Mayıs 2026) ✅ Tag atıldı
+- **v1.0.0-rc2:** Sprint 5 çıkışı (13 Mayıs 2026) ✅ Tamamlandı
+- **v1.0.0:** Sprint 6 çıkışı (14 Mayıs 2026) ✅ **GA Tag atıldı (18 Mayıs 2026)**
 - **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ## Mimari Kararlar

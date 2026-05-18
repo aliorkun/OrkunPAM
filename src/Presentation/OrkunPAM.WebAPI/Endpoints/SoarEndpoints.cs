@@ -203,10 +203,10 @@ public static class SoarEndpoints
             var session = await db.ProxySessions
                 .Select(s => new
                 {
-                    s.Id, s.Protocol, s.UserId, s.DeviceId,
+                    s.Id, Protocol = s.SessionType.ToString(), s.UserId, s.DeviceId,
                     s.StartedAtUtc, s.EndedAtUtc,
                     Status = s.Status.ToString(),
-                    s.DurationSeconds, s.ClientIp
+                    s.DurationSeconds, ClientIp = s.ClientIpAddress
                 })
                 .FirstOrDefaultAsync(s => s.Id == sessionId);
 

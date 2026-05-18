@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Aapm;
+using OrkunPAM.Domain.Entities.Access;
 using OrkunPAM.Domain.Entities.Analytics;
 using OrkunPAM.Domain.Entities.Compliance;
 using OrkunPAM.Domain.Entities.Crypto;
@@ -145,6 +146,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 
     // Device Trust (#207)
     public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
+
+    // Access Assignment (PAM authorization matrix)
+    public DbSet<AccessAssignment> AccessAssignments => Set<AccessAssignment>();
 
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
@@ -522,6 +526,14 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(t => t.DeviceFingerprint).HasMaxLength(64);
             e.Property(t => t.DeviceName).HasMaxLength(256);
             e.Property(t => t.UserAgent).HasMaxLength(1024);
+        });
+
+        // === Access Assignment ===
+        modelBuilder.Entity<AccessAssignment>(e =>
+        {
+            e.HasIndex(a => new { a.PrincipalType, a.PrincipalId });
+            e.HasIndex(a => new { a.TargetType, a.TargetId });
+            e.HasIndex(a => a.CredentialId);
         });
 
         // Seed built-in data

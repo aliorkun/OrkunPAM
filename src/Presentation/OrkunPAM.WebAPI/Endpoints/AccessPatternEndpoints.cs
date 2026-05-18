@@ -185,7 +185,7 @@ public static class AccessPatternEndpoints
                 .Select(a => new
                 {
                     a.AnomalyType,
-                    a.RiskScore,
+                    RiskScore = (int)a.Severity,
                     a.DetectedAtUtc,
                     a.IsAcknowledged
                 }).ToListAsync();

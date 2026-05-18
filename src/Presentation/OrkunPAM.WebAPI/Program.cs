@@ -461,6 +461,8 @@ try
     api.MapJitEndpoints();
     api.MapEncryptionEndpoints();
     api.MapBackupEndpoints();
+    api.MapAccessAssignmentEndpoints();
+    api.MapSetupEndpoints();
     api.MapSystemEndpoints();
     api.MapVendorAccessEndpoints();
     api.MapVendorEndpoints();

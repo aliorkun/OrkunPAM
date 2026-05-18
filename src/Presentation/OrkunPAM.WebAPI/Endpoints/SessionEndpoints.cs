@@ -490,6 +490,17 @@ public static class SessionEndpoints
         }
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+
+        // Check PAM access assignment: does this user have permission to connect to this device with this credential?
+        if (!isAdmin && !await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+        {
+            logger.LogWarning("Session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                userId, req.DeviceId, req.CredentialId);
+            return Results.Json(
+                new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
+                statusCode: 403);
+        }
+
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
 
@@ -598,6 +609,17 @@ public static class SessionEndpoints
             return Results.NotFound(new { success = false, errors = new[] { $"Credential not found: {req.CredentialId}" } });
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+
+        // Check PAM access assignment
+        if (!isAdmin && !await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+        {
+            logger.LogWarning("RDP session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                userId, req.DeviceId, req.CredentialId);
+            return Results.Json(
+                new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
+                statusCode: 403);
+        }
+
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
 

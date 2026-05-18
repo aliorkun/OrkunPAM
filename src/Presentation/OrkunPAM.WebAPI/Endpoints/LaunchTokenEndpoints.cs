@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Enums;
-using OrkunPAM.Infrastructure.Cryptography;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Persistence;
 
 namespace OrkunPAM.WebAPI.Endpoints;

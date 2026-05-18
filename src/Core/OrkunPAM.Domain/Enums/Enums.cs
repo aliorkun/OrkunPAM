@@ -50,6 +50,19 @@ public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
 
 public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2, Revoked = 3 }
 
+// Portal access profile — controls which UI sections/features are available
+public enum PortalProfile : byte
+{
+    FullAdmin = 0,        // Full portal: admin panels, vault, sessions, reports, system
+    StandardUser = 1,     // Vault + Sessions + Self-service (no admin panels)
+    ConnectionOnly = 2,   // Can only see assigned devices and start sessions
+    VaultOnly = 3,        // Can only access vault (view/checkout credentials)
+    Auditor = 4           // Read-only: audit logs, reports, session recordings
+}
+
+// Access assignment scope — whether assignment targets a single device or a device group
+public enum AccessTargetType : byte { Device = 0, DeviceGroup = 1 }
+
 public enum JitAccessStatus : byte { Pending = 0, Approved = 1, Active = 2, Expired = 3, Revoked = 4, Denied = 5 }
 
 public enum VendorAccessStatus : byte { Pending = 0, Active = 1, Expired = 2, Revoked = 3 }

@@ -112,10 +112,10 @@ public static class DiscoveryEndpoints
 
             // Vault deduplication: check which account names already exist in Credentials
             var accountNames = discovered.Select(a => a.AccountName).Distinct().ToList();
-            var inVaultNames = await db.Credentials
+            var inVaultNames = (await db.Credentials
                 .Where(c => c.Username != null && accountNames.Contains(c.Username))
                 .Select(c => c.Username!)
-                .ToHashSetAsync();
+                .ToListAsync()).ToHashSet();
 
             var list = discovered.Select(a => new
             {
