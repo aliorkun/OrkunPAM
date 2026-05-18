@@ -103,6 +103,9 @@ try
     // === Email / SMTP (#54) ===
     builder.Services.AddScoped<IEmailService, OrkunPAM.Persistence.Services.SmtpEmailService>();
 
+    // === SMS Gateway (#215) ===
+    builder.Services.AddScoped<ISmsGatewayService, OrkunPAM.Persistence.Services.SmsGatewayService>();
+
     // === JIT Expiry Background Service (#38) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.JitExpiryService>();
 
@@ -488,6 +491,7 @@ try
     api.MapAccessPatternEndpoints();
     api.MapTelnetEndpoints();
     api.MapLiveSessionEndpoints();
+    api.MapSmsOtpEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
