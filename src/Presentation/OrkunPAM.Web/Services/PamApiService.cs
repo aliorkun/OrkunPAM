@@ -1549,6 +1549,93 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // === Threat Analytics / SOC Dashboard (#35) ===
+
+    public async Task<SocDashboardDto?> GetSocDashboardAsync()
+    {
+        var result = await GetAsync<SingleResult<SocDashboardDto>>("/api/v1/analytics/soc/dashboard");
+        return result?.Data;
+    }
+
+    public async Task<List<RiskMapDto>?> GetSocRiskMapAsync()
+    {
+        var result = await GetAsync<ListResult<RiskMapDto>>("/api/v1/analytics/soc/risk-map");
+        return result?.Data;
+    }
+
+    public async Task<List<TimelinePointDto>?> GetSocTimelineAsync(int hours = 24)
+    {
+        var result = await GetAsync<ListResult<TimelinePointDto>>("/api/v1/analytics/soc/timeline?hours=" + hours);
+        return result?.Data;
+    }
+
+    public async Task<List<AnomalyDto>?> GetAnomaliesAsync(Guid? userId = null, string? type = null, int page = 1, int pageSize = 50)
+    {
+        var url = "/api/v1/analytics/anomalies/?page=" + page + "&pageSize=" + pageSize;
+        if (userId.HasValue) url += "&userId=" + userId.Value;
+        if (!string.IsNullOrEmpty(type)) url += "&type=" + Uri.EscapeDataString(type);
+        var result = await GetAsync<PagedResult<AnomalyDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<bool> AcknowledgeAnomalyAsync(long id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync("/api/v1/analytics/anomalies/" + id + "/acknowledge",
+                JsonContent.Create(new { UserId = Guid.Empty }));
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<AlertRuleDto>?> GetAlertRulesAsync()
+    {
+        var result = await GetAsync<ListResult<AlertRuleDto>>("/api/v1/analytics/alerts/rules");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateAlertRuleAsync(string name, string conditionJson, string actionJson, int cooldownMinutes)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/analytics/alerts/rules",
+                new { name, conditionJson, actionJson, cooldownMinutes });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteAlertRuleAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync("/api/v1/analytics/alerts/rules/" + id);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleAlertRuleAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsync("/api/v1/analytics/alerts/rules/" + id + "/toggle", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<BehaviorBaselineDto>?> GetBehaviorBaselinesAsync()
+    {
+        var result = await GetAsync<ListResult<BehaviorBaselineDto>>("/api/v1/analytics/baselines/");
+        return result?.Data;
+    }
+
     private async Task<HttpClient> GetAuthClientAsync()
     {
         var client = _factory.CreateClient("PamApi");
@@ -2898,4 +2985,61 @@ public record ReconciliationHistoryDto(
     string?  ActorUsername,
     DateTime Timestamp,
     string?  Details);
+
+// Threat Analytics / SOC Dashboard DTOs (#35)
+public record SocDashboardDto(
+    int TotalAnomalies24h,
+    int Unacknowledged,
+    int CriticalUnacked,
+    List<AnomalyTypeCountDto>? TypeBreakdown,
+    List<UserRiskDto>? TopRiskyUsers,
+    List<AnomalyDto>? RecentAnomalies);
+
+public record AnomalyTypeCountDto(string Type, int Count);
+
+public record UserRiskDto(
+    Guid    UserId,
+    int     AnomalyCount,
+    byte    MaxSeverity,
+    decimal RiskScore);
+
+public record AnomalyDto(
+    long      Id,
+    Guid      UserId,
+    Guid?     SessionId,
+    string    AnomalyType,
+    byte      Severity,
+    string?   Details,
+    DateTime  DetectedAtUtc,
+    bool      IsAcknowledged);
+
+public record RiskMapDto(
+    Guid     UserId,
+    int      AnomalyCount,
+    int      OffHours,
+    int      UnusualIp,
+    int      UnusualDevice,
+    int      FrequencySpike,
+    int      HighRiskCommand,
+    byte     MaxSeverity,
+    decimal  RiskScore,
+    DateTime LastDetected);
+
+public record TimelinePointDto(DateTime Hour, int Count, byte MaxSeverity);
+
+public record BehaviorBaselineDto(
+    Guid     UserId,
+    DateTime BaselineDate,
+    DateTime UpdatedAtUtc,
+    string?  TypicalHoursJson,
+    string?  KnownIpsJson,
+    string?  KnownDevicesJson);
+
+public record AlertRuleDto(
+    string  Id,
+    string  Name,
+    string  ConditionJson,
+    string  ActionJson,
+    int     CooldownMinutes,
+    bool    IsEnabled);
 
