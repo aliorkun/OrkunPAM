@@ -139,6 +139,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Certificate Lifecycle Management (#191)
     public DbSet<ManagedCertificate> ManagedCertificates => Set<ManagedCertificate>();
 
+    // Threat Intelligence (#206)
+    public DbSet<ThreatIndicator>  ThreatIndicators  => Set<ThreatIndicator>();
+    public DbSet<ThreatFeedConfig> ThreatFeedConfigs => Set<ThreatFeedConfig>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -491,6 +495,22 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(c => c.Issuer).HasMaxLength(1024);
             e.Property(c => c.Source).HasMaxLength(32);
             e.Property(c => c.KeyAlgorithm).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<ThreatIndicator>(e =>
+        {
+            e.HasIndex(t => new { t.IndicatorType, t.Value }).IsUnique();
+            e.HasIndex(t => t.ExpiresAtUtc);
+            e.Property(t => t.IndicatorType).HasMaxLength(16);
+            e.Property(t => t.Value).HasMaxLength(512);
+            e.Property(t => t.Source).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<ThreatFeedConfig>(e =>
+        {
+            e.Property(t => t.Name).HasMaxLength(256);
+            e.Property(t => t.FeedUrl).HasMaxLength(1024);
+            e.Property(t => t.FeedType).HasMaxLength(32);
         });
 
         // Seed built-in data

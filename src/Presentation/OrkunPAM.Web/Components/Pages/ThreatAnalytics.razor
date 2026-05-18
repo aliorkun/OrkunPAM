@@ -21,6 +21,7 @@ else
         <button class="pam-tab @(_tab == 2 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(2))">Risk Map</button>
         <button class="pam-tab @(_tab == 3 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(3))">Alert Rules</button>
         <button class="pam-tab @(_tab == 4 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(4))">Baselines</button>
+        <button class="@("pam-tab " + (_tab == 5 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(5))">Threat Intel</button>
     </div>
 
     <!-- OVERVIEW TAB -->
@@ -401,6 +402,170 @@ else
             <div class="pam-empty">No baselines yet. They are built daily from session history.</div>
         }
     }
+
+    <!-- THREAT INTELLIGENCE TAB -->
+    @if (_tab == 5)
+    {
+        @if (_tiReport != null)
+        {
+            <div class="pam-card-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:1.5rem;">
+                <div class="pam-stat-card">
+                    <div class="pam-stat-value">@_tiReport.TotalActive</div>
+                    <div class="pam-stat-label">Active IOCs</div>
+                </div>
+                <div class="pam-stat-card @(_tiReport.Hits24h.Count > 0 ? "pam-stat-warn" : "")">
+                    <div class="pam-stat-value">@_tiReport.Hits24h.Count</div>
+                    <div class="pam-stat-label">Hits (24h)</div>
+                </div>
+                <div class="pam-stat-card">
+                    <div class="pam-stat-value">@(_tiFeeds?.Count ?? 0)</div>
+                    <div class="pam-stat-label">Feed Sources</div>
+                </div>
+            </div>
+
+            @if (_tiReport.BySource?.Count > 0)
+            {
+                <div class="pam-card" style="margin-bottom:1rem;">
+                    <h4>IOC Sources</h4>
+                    <table class="pam-table">
+                        <thead><tr><th>Source</th><th>Indicators</th></tr></thead>
+                        <tbody>
+                            @foreach (var s in _tiReport.BySource)
+                            {
+                                <tr><td>@s.Source</td><td>@s.Count</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (_tiReport.Hits24h?.Count > 0)
+            {
+                <div class="pam-card" style="margin-bottom:1rem;">
+                    <h4>Recent IOC Hits (24h)</h4>
+                    <table class="pam-table">
+                        <thead><tr><th>Time</th><th>Details</th><th>User</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in _tiReport.Hits24h)
+                            {
+                                <tr>
+                                    <td style="white-space:nowrap;">@h.DetectedAtUtc.ToString("MM-dd HH:mm")</td>
+                                    <td>@h.Details</td>
+                                    <td style="font-size:0.8em;">@h.UserId.ToString()[..8]...</td>
+                                    <td>@(h.IsAcknowledged ? "Acked" : "Open")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+
+        <!-- Feed Configurations -->
+        <div class="pam-card" style="margin-bottom:1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                <h4 style="margin:0">Feed Configurations</h4>
+                <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="@(() => { _showFeedForm = true; _feedMsg = ""; })">+ Add Feed</button>
+            </div>
+            @if (!string.IsNullOrEmpty(_feedMsg))
+            {
+                <div class="pam-alert pam-alert-success">@_feedMsg</div>
+            }
+            @if (_tiFeeds?.Any() == true)
+            {
+                <table class="pam-table">
+                    <thead><tr><th>Name</th><th>Type</th><th>Enabled</th><th>Last Refresh</th><th>IOCs</th><th>Error</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _tiFeeds)
+                        {
+                            <tr>
+                                <td>@f.Name</td>
+                                <td>@f.FeedType</td>
+                                <td>
+                                    <button class="@("pam-btn pam-btn-xs " + (f.IsEnabled ? "pam-btn-success" : "pam-btn-secondary"))"
+                                            @onclick="@(() => ToggleFeedAsync(f.Id))">
+                                        @(f.IsEnabled ? "On" : "Off")
+                                    </button>
+                                </td>
+                                <td style="font-size:0.85em;">@(f.LastRefreshedAtUtc.HasValue ? f.LastRefreshedAtUtc.Value.ToString("MM-dd HH:mm") : "Never")</td>
+                                <td>@(f.LastIndicatorCount?.ToString() ?? "-")</td>
+                                <td style="color:#dc3545;font-size:0.8em;max-width:200px;overflow:hidden;text-overflow:ellipsis;">@f.LastError</td>
+                                <td>
+                                    <button class="pam-btn pam-btn-xs pam-btn-danger" @onclick="@(() => DeleteFeedAsync(f.Id))">Del</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="pam-empty">No feeds configured. Add an EmergingThreats or AbuseIPDB feed to start collecting IOCs.</div>
+            }
+        </div>
+
+        @if (_showFeedForm)
+        {
+            <div class="pam-card">
+                <h4>Add Threat Feed</h4>
+                <div class="pam-form-group">
+                    <label class="pam-label">Name</label>
+                    <input class="pam-input" @bind="_feedName" placeholder="Emerging Threats IPs" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Feed Type</label>
+                    <select class="pam-input" @bind="_feedType">
+                        <option value="EmergingThreats">EmergingThreats (public, no key)</option>
+                        <option value="AbuseIPDB">AbuseIPDB (API key required)</option>
+                        <option value="Custom">Custom (plain-text IP list)</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Feed URL</label>
+                    <input class="pam-input" @bind="_feedUrl"
+                           placeholder="https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">API Key (optional)</label>
+                    <input class="pam-input" type="password" @bind="_feedApiKey" placeholder="Leave blank if not required" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Refresh Interval (minutes)</label>
+                    <input class="pam-input" type="number" @bind="_feedInterval" min="15" max="1440" />
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveFeedAsync">Save Feed</button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showFeedForm = false)">Cancel</button>
+                </div>
+            </div>
+        }
+
+        <!-- IOC List -->
+        @if (_tiIndicators?.Any() == true)
+        {
+            <div class="pam-card" style="margin-top:1rem;">
+                <h4>Active Indicators</h4>
+                <table class="pam-table">
+                    <thead><tr><th>Type</th><th>Value</th><th>Severity</th><th>Source</th><th>Expires</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _tiIndicators)
+                        {
+                            <tr>
+                                <td>@i.IndicatorType</td>
+                                <td style="font-family:monospace;font-size:0.9em;">@i.Value</td>
+                                <td><span class="@("pam-badge " + SeverityClass((int)i.Severity))">@SeverityLabel((int)i.Severity)</span></td>
+                                <td>@i.Source</td>
+                                <td style="font-size:0.85em;">@(i.ExpiresAtUtc.HasValue ? i.ExpiresAtUtc.Value.ToString("MM-dd") : "Never")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div style="margin-top:0.5rem;">
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ForceRefreshAsync">Force Refresh All Feeds</button>
+        </div>
+    }
 }
 
 @code {
@@ -433,6 +598,18 @@ else
     // Baselines tab
     private List<BehaviorBaselineDto>? _baselines;
 
+    // Threat Intelligence tab (#206)
+    private ThreatIntelReportDto?         _tiReport;
+    private List<ThreatFeedConfigDto>?    _tiFeeds;
+    private List<ThreatIndicatorDto>?     _tiIndicators;
+    private bool   _showFeedForm;
+    private string _feedName     = "";
+    private string _feedType     = "EmergingThreats";
+    private string _feedUrl      = "";
+    private string _feedApiKey   = "";
+    private int    _feedInterval = 60;
+    private string _feedMsg      = "";
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
@@ -457,10 +634,53 @@ else
         switch (_tab)
         {
             case 1: await LoadAnomaliesAsync(); break;
-            case 2: _riskMap  = await Api.GetSocRiskMapAsync(); break;
+            case 2: _riskMap    = await Api.GetSocRiskMapAsync(); break;
             case 3: _alertRules = await Api.GetAlertRulesAsync(); break;
-            case 4: _baselines = await Api.GetBehaviorBaselinesAsync(); break;
+            case 4: _baselines  = await Api.GetBehaviorBaselinesAsync(); break;
+            case 5: await LoadThreatIntelAsync(); break;
         }
+    }
+
+    private async Task LoadThreatIntelAsync()
+    {
+        _tiReport     = await Api.GetThreatFeedReportAsync();
+        _tiFeeds      = await Api.GetThreatFeedConfigsAsync();
+        _tiIndicators = await Api.GetThreatIndicatorsAsync(pageSize: 100);
+        StateHasChanged();
+    }
+
+    private async Task SaveFeedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_feedName) || string.IsNullOrWhiteSpace(_feedUrl)) return;
+        var ok = await Api.CreateThreatFeedConfigAsync(
+            _feedName, _feedUrl, _feedType, _feedApiKey, _feedInterval, true);
+        if (ok)
+        {
+            _feedMsg = "Feed added.";
+            _showFeedForm = false;
+            _feedName = _feedUrl = _feedApiKey = "";
+            _feedInterval = 60;
+            await LoadThreatIntelAsync();
+        }
+    }
+
+    private async Task ToggleFeedAsync(string id)
+    {
+        await Api.ToggleThreatFeedConfigAsync(id);
+        await LoadThreatIntelAsync();
+    }
+
+    private async Task DeleteFeedAsync(string id)
+    {
+        await Api.DeleteThreatFeedConfigAsync(id);
+        await LoadThreatIntelAsync();
+    }
+
+    private async Task ForceRefreshAsync()
+    {
+        await Api.ForceRefreshThreatFeedsAsync();
+        _feedMsg = "Refresh queued. Feeds update in the next cycle (up to 60s).";
+        StateHasChanged();
     }
 
     private async Task LoadAnomaliesAsync()

@@ -79,6 +79,20 @@ public sealed class AnomalyDetectionService : BackgroundService
             .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.UserId, x => x.Count, ct);
 
+        // Bulk-load IOC matches for session IPs (#206 Threat Intelligence Feed)
+        var sessionIps = sessions
+            .Where(s => !string.IsNullOrEmpty(s.ClientIpAddress))
+            .Select(s => s.ClientIpAddress!)
+            .Distinct()
+            .ToList();
+        var iocByIp = sessionIps.Count > 0
+            ? await db.ThreatIndicators
+                .Where(t => t.IndicatorType == "IP"
+                         && sessionIps.Contains(t.Value)
+                         && (t.ExpiresAtUtc == null || t.ExpiresAtUtc > now))
+                .ToDictionaryAsync(t => t.Value, ct)
+            : new Dictionary<string, ThreatIndicator>();
+
         var anomaliesToAdd = new List<Anomaly>();
 
         foreach (var session in sessions)
@@ -134,6 +148,15 @@ public sealed class AnomalyDetectionService : BackgroundService
                 anomaliesToAdd.Add(MakeAnomaly(session.UserId, session.Id, "FrequencySpike", 2,
                     $"{hourCount} sessions in the last hour (threshold: 5)"));
                 sessionRisk += 50;
+            }
+
+            // IOC check — Threat Intelligence Feed (#206)
+            if (!string.IsNullOrEmpty(session.ClientIpAddress) &&
+                iocByIp.TryGetValue(session.ClientIpAddress, out var ioc))
+            {
+                anomaliesToAdd.Add(MakeAnomaly(session.UserId, session.Id, "KnownMaliciousIP", 3,
+                    $"Source IP {session.ClientIpAddress} matched threat feed: {ioc.Source}"));
+                sessionRisk += 80;
             }
 
             session.RiskScore = Math.Min(100, sessionRisk);

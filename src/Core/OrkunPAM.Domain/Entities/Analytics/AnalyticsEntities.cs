@@ -53,3 +53,32 @@ public class AlertHistory
     public Guid? AcknowledgedBy { get; set; }
     public DateTime? AcknowledgedAtUtc { get; set; }
 }
+
+// Threat Intelligence Feed (#206)
+public class ThreatIndicator
+{
+    public long   Id            { get; set; }
+    public string IndicatorType { get; set; } = "IP"; // IP | Domain | Hash
+    public string Value         { get; set; } = string.Empty;
+    public byte   Severity      { get; set; } = 2; // 0=Low 1=Med 2=High 3=Critical
+    public string Source        { get; set; } = string.Empty;
+    public string? Description  { get; set; }
+    public DateTime? ExpiresAtUtc  { get; set; }
+    public DateTime CreatedAtUtc   { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc   { get; set; } = DateTime.UtcNow;
+}
+
+public class ThreatFeedConfig
+{
+    public Guid    Id                     { get; set; } = Guid.NewGuid();
+    public string  Name                   { get; set; } = string.Empty;
+    public string  FeedUrl                { get; set; } = string.Empty;
+    public string? ApiKeyEnc              { get; set; } // AES-256-GCM encrypted
+    public int     RefreshIntervalMinutes { get; set; } = 60;
+    public bool    IsEnabled              { get; set; } = true;
+    public string  FeedType              { get; set; } = "Custom"; // EmergingThreats | AbuseIPDB | Custom
+    public DateTime? LastRefreshedAtUtc  { get; set; }
+    public int?    LastIndicatorCount    { get; set; }
+    public string? LastError            { get; set; }
+    public DateTime CreatedAtUtc        { get; set; } = DateTime.UtcNow;
+}

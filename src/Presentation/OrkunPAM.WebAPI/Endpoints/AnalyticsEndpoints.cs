@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Analytics;
 using OrkunPAM.Persistence;
 
@@ -122,6 +123,159 @@ public static class AnalyticsEndpoints
             return Results.Ok(new { success = true, data = userRisks });
         }).WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
+        // === Threat Intelligence Feed (#206) ===
+        var tf = app.MapGroup("/api/v1/analytics/threat-feed").WithTags("Analytics").RequireAuthorization("AdminPolicy");
+
+        tf.MapGet("/indicators", async (OrkunPamDbContext db,
+            string? type, string? source, int page = 1, int pageSize = 50) =>
+        {
+            var query = db.ThreatIndicators.AsQueryable();
+            if (!string.IsNullOrEmpty(type))   query = query.Where(t => t.IndicatorType == type);
+            if (!string.IsNullOrEmpty(source)) query = query.Where(t => t.Source == source);
+
+            var total = await query.CountAsync();
+            var list  = await query
+                .OrderByDescending(t => t.Severity)
+                .ThenByDescending(t => t.UpdatedAtUtc)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(t => new
+                {
+                    t.Id, t.IndicatorType, t.Value, t.Severity,
+                    t.Source, t.Description, t.ExpiresAtUtc, t.UpdatedAtUtc
+                }).ToListAsync();
+
+            return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
+        });
+
+        tf.MapGet("/configs", async (OrkunPamDbContext db) =>
+        {
+            var list = await db.ThreatFeedConfigs
+                .OrderBy(c => c.Name)
+                .Select(c => new
+                {
+                    c.Id, c.Name, c.FeedUrl, c.FeedType, c.RefreshIntervalMinutes,
+                    c.IsEnabled, c.LastRefreshedAtUtc, c.LastIndicatorCount, c.LastError, c.CreatedAtUtc
+                }).ToListAsync();
+            return Results.Ok(new { success = true, data = list });
+        });
+
+        tf.MapPost("/configs", async (ThreatFeedConfigRequest req, OrkunPamDbContext db,
+            IVaultEncryptionService? vault) =>
+        {
+            string? encKey = null;
+            if (!string.IsNullOrEmpty(req.ApiKey) && vault != null)
+            {
+                var result = vault.EncryptString(req.ApiKey);
+                if (result.IsSuccess)
+                    encKey = Convert.ToBase64String(result.Value);
+            }
+
+            var cfg = new ThreatFeedConfig
+            {
+                Name                   = req.Name,
+                FeedUrl                = req.FeedUrl,
+                FeedType               = req.FeedType,
+                ApiKeyEnc              = encKey,
+                RefreshIntervalMinutes = req.RefreshIntervalMinutes,
+                IsEnabled              = req.IsEnabled,
+                CreatedAtUtc           = DateTime.UtcNow
+            };
+            db.ThreatFeedConfigs.Add(cfg);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/v1/analytics/threat-feed/configs/{cfg.Id}",
+                new { success = true, data = new { cfg.Id } });
+        });
+
+        tf.MapPut("/configs/{id:guid}", async (Guid id, ThreatFeedConfigRequest req,
+            OrkunPamDbContext db, IVaultEncryptionService? vault) =>
+        {
+            var cfg = await db.ThreatFeedConfigs.FindAsync(id);
+            if (cfg == null) return Results.NotFound(new { success = false });
+
+            cfg.Name                   = req.Name;
+            cfg.FeedUrl                = req.FeedUrl;
+            cfg.FeedType               = req.FeedType;
+            cfg.RefreshIntervalMinutes = req.RefreshIntervalMinutes;
+            cfg.IsEnabled              = req.IsEnabled;
+
+            if (!string.IsNullOrEmpty(req.ApiKey) && vault != null)
+            {
+                var result = vault.EncryptString(req.ApiKey);
+                if (result.IsSuccess) cfg.ApiKeyEnc = Convert.ToBase64String(result.Value);
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        });
+
+        tf.MapDelete("/configs/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var cfg = await db.ThreatFeedConfigs.FindAsync(id);
+            if (cfg == null) return Results.NotFound(new { success = false });
+            db.ThreatFeedConfigs.Remove(cfg);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        });
+
+        tf.MapPost("/configs/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
+        {
+            var cfg = await db.ThreatFeedConfigs.FindAsync(id);
+            if (cfg == null) return Results.NotFound(new { success = false });
+            cfg.IsEnabled = !cfg.IsEnabled;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, data = new { cfg.IsEnabled } });
+        });
+
+        tf.MapPost("/refresh", async (OrkunPamDbContext db) =>
+        {
+            // Force reset last-refresh times so ThreatFeedService picks them up next cycle
+            var configs = await db.ThreatFeedConfigs.Where(c => c.IsEnabled).ToListAsync();
+            foreach (var c in configs) c.LastRefreshedAtUtc = null;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, message = "Refresh queued for next cycle (up to 60s)" });
+        });
+
+        tf.MapGet("/reports", async (OrkunPamDbContext db) =>
+        {
+            var now = DateTime.UtcNow;
+            var since = now.AddHours(-24);
+
+            var totalActive = await db.ThreatIndicators
+                .CountAsync(t => t.ExpiresAtUtc == null || t.ExpiresAtUtc > now);
+
+            var bySeverity = await db.ThreatIndicators
+                .Where(t => t.ExpiresAtUtc == null || t.ExpiresAtUtc > now)
+                .GroupBy(t => t.Severity)
+                .Select(g => new { Severity = (int)g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var bySource = await db.ThreatIndicators
+                .Where(t => t.ExpiresAtUtc == null || t.ExpiresAtUtc > now)
+                .GroupBy(t => t.Source)
+                .Select(g => new { Source = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var hits24h = await db.Anomalies
+                .Where(a => a.AnomalyType == "KnownMaliciousIP" && a.DetectedAtUtc >= since)
+                .OrderByDescending(a => a.DetectedAtUtc)
+                .Take(50)
+                .Select(a => new { a.Id, a.UserId, a.SessionId, a.Details, a.DetectedAtUtc, a.IsAcknowledged })
+                .ToListAsync();
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    TotalActive   = totalActive,
+                    BySeverity    = bySeverity,
+                    BySource      = bySource,
+                    Hits24h       = hits24h,
+                    GeneratedAtUtc = now
+                }
+            });
+        });
+
         var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         siem.MapGet("/", async (OrkunPamDbContext db) =>
@@ -163,3 +317,10 @@ public record CreateRiskRuleRequest(string Pattern, decimal RiskScore, string? C
 public record AcknowledgeRequest(Guid UserId);
 public record CreateAlertRuleRequest(string Name, string ConditionJson, string ActionJson, int? CooldownMinutes);
 public record SiemConfigRequest(bool Enabled, string Protocol, string Host, int? Port, string Transport);
+public record ThreatFeedConfigRequest(
+    string Name,
+    string FeedUrl,
+    string FeedType,
+    string? ApiKey,
+    int    RefreshIntervalMinutes,
+    bool   IsEnabled);

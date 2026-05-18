@@ -1636,6 +1636,64 @@ public sealed class PamApiService
         return result?.Data;
     }
 
+    // === Threat Intelligence Feed (#206) ===
+    public async Task<List<ThreatIndicatorDto>?> GetThreatIndicatorsAsync(
+        string? type = null, string? source = null, int page = 1, int pageSize = 50)
+    {
+        var url = $"/api/v1/analytics/threat-feed/indicators?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(type))   url += "&type="   + Uri.EscapeDataString(type);
+        if (!string.IsNullOrEmpty(source)) url += "&source=" + Uri.EscapeDataString(source);
+        var result = await GetAsync<PagedResult<ThreatIndicatorDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<List<ThreatFeedConfigDto>?> GetThreatFeedConfigsAsync()
+    {
+        var result = await GetAsync<ListResult<ThreatFeedConfigDto>>("/api/v1/analytics/threat-feed/configs");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateThreatFeedConfigAsync(
+        string name, string feedUrl, string feedType, string? apiKey,
+        int refreshIntervalMinutes, bool isEnabled)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/analytics/threat-feed/configs",
+                new { name, feedUrl, feedType, apiKey, refreshIntervalMinutes, isEnabled });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleThreatFeedConfigAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/analytics/threat-feed/configs/{id}/toggle", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteThreatFeedConfigAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/analytics/threat-feed/configs/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> ForceRefreshThreatFeedsAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/analytics/threat-feed/refresh", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<ThreatIntelReportDto?> GetThreatFeedReportAsync()
+    {
+        var result = await GetAsync<SingleResult<ThreatIntelReportDto>>("/api/v1/analytics/threat-feed/reports");
+        return result?.Data;
+    }
+
     private async Task<HttpClient> GetAuthClientAsync()
     {
         var client = _factory.CreateClient("PamApi");
@@ -3066,4 +3124,45 @@ public record AlertRuleDto(
     string  ActionJson,
     int     CooldownMinutes,
     bool    IsEnabled);
+
+// Threat Intelligence Feed DTOs (#206)
+public record ThreatIndicatorDto(
+    long      Id,
+    string    IndicatorType,
+    string    Value,
+    int       Severity,
+    string    Source,
+    string?   Description,
+    DateTime? ExpiresAtUtc,
+    DateTime  UpdatedAtUtc);
+
+public record ThreatFeedConfigDto(
+    string    Id,
+    string    Name,
+    string    FeedUrl,
+    string    FeedType,
+    int       RefreshIntervalMinutes,
+    bool      IsEnabled,
+    DateTime? LastRefreshedAtUtc,
+    int?      LastIndicatorCount,
+    string?   LastError,
+    DateTime  CreatedAtUtc);
+
+public record ThreatIocHitDto(
+    long      Id,
+    Guid      UserId,
+    Guid?     SessionId,
+    string?   Details,
+    DateTime  DetectedAtUtc,
+    bool      IsAcknowledged);
+
+public record ThreatIocSourceDto(string Source, int Count);
+public record ThreatIocSeverityDto(int Severity, int Count);
+
+public record ThreatIntelReportDto(
+    int                         TotalActive,
+    List<ThreatIocSeverityDto>? BySeverity,
+    List<ThreatIocSourceDto>?   BySource,
+    List<ThreatIocHitDto>?      Hits24h,
+    DateTime                    GeneratedAtUtc);
 

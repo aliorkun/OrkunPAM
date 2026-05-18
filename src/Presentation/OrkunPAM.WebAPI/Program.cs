@@ -131,6 +131,9 @@ try
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AnomalyDetectionService>();
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.BehaviorBaselineService>();
 
+    // === Threat Intelligence Feed (#206) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.ThreatFeedService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
