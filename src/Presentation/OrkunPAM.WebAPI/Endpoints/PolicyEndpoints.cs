@@ -270,6 +270,31 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
+        // ── Device Trust policy endpoints (#207) ───────────────────────────────────────────
+        pwdGroup.MapGet("/device-trust", async (OrkunPamDbContext db) =>
+        {
+            var p = await db.Policies.FirstOrDefaultAsync(
+                x => x.PolicyType == "DeviceTrust" && x.Scope == PolicyScope.Global);
+            var settings = ReadPolicy<DeviceTrustPolicySettings>(p?.PolicyJson ?? "{}");
+            return Results.Ok(new { success = true, data = settings });
+        });
+
+        pwdGroup.MapPut("/device-trust", async (
+            DeviceTrustPolicySettings req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            if (!new[] { "Allow", "StepUpAuth", "Block" }.Contains(req.UnknownDeviceAction))
+                return Results.BadRequest(new { success = false, errors = new[] { "unknownDeviceAction must be Allow, StepUpAuth, or Block" } });
+
+            await UpsertGlobalPolicyAsync(db, "DeviceTrust", "Global Device Trust Policy", req);
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Policy", "DEVICE_TRUST_POLICY_UPDATED", null, null, ip,
+                "Policy", "DeviceTrust", new { settings = req });
+
+            return Results.Ok(new { success = true });
+        });
+
         // ── Adaptive MFA policy endpoints (#205) ────────────────────────────────────────────
         pwdGroup.MapGet("/adaptive-mfa", async (OrkunPamDbContext db) =>
         {
@@ -346,6 +371,16 @@ public record WatermarkPolicySettings
     public bool   EnableSsh         { get; init; } = true;
     public bool   EnableRdp         { get; init; } = true;
     public bool   EnableVnc         { get; init; } = true;
+}
+
+// Device Trust policy settings (#207)
+public record DeviceTrustPolicySettings
+{
+    public bool   Enabled               { get; init; } = false;
+    public bool   RequireTrustedDevice  { get; init; } = false;
+    public string UnknownDeviceAction   { get; init; } = "Allow"; // Allow | StepUpAuth | Block
+    public int    MaxTrustAgeDays       { get; init; } = 90;
+    public bool   AutoRegisterOnLogin   { get; init; } = true;
 }
 
 // Adaptive MFA policy settings (#205)

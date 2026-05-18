@@ -1,0 +1,166 @@
+@page "/my-devices"
+@rendermode InteractiveServer
+@inject PamApiService Api
+
+<PageTitle>My Devices — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">My Trusted Devices</h2>
+    <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">&#8635; Refresh</button>
+</div>
+
+@if (_error != null) { <div class="pam-alert pam-alert-danger">@_error</div> }
+@if (_success != null) { <div class="pam-alert pam-alert-success">@_success</div> }
+
+<div class="pam-alert pam-alert-info" style="font-size:0.85rem;margin-bottom:1.5rem">
+    These are the devices recognized by OrkunPAM for your account. Revoking a device will require re-verification on next login from that device.
+</div>
+
+@if (_loading)
+{
+    <div class="pam-loading-text">Loading...</div>
+}
+else if (_devices == null || _devices.Count == 0)
+{
+    <div class="pam-empty-state">No trusted devices found.</div>
+}
+else
+{
+    <div class="pam-table-container">
+        <table class="pam-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Trust Level</th>
+                    <th>Registered</th>
+                    <th>Last Seen</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in _devices)
+                {
+                    <tr class="@(d.IsRevoked ? "pam-row-muted" : "")">
+                        <td>
+                            <div><strong>@(string.IsNullOrEmpty(d.DeviceName) ? "(Unnamed)" : d.DeviceName)</strong></div>
+                            <div class="pam-hint" style="font-size:0.78rem">@TruncateUa(d.UserAgent)</div>
+                        </td>
+                        <td>
+                            <span class="pam-badge @TrustLevelBadge(d.TrustLevel)">@d.TrustLevel</span>
+                        </td>
+                        <td>@d.RegisteredAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@d.LastSeenAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            @if (d.IsRevoked)
+                            { <span class="pam-badge pam-badge-danger">Revoked</span> }
+                            else
+                            { <span class="pam-badge pam-badge-success">Active</span> }
+                        </td>
+                        <td>
+                            @if (!d.IsRevoked)
+                            {
+                                <button class="pam-btn pam-btn-sm pam-btn-secondary"
+                                        @onclick="@(() => OpenRename(d))">Rename</button>
+                                <button class="pam-btn pam-btn-sm pam-btn-danger"
+                                        @onclick="@(() => RevokeAsync(d.Id))">Revoke</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_renameDevice != null)
+{
+    <div class="pam-modal-overlay" @onclick="CloseRename">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Rename Device</h3>
+                <button class="pam-close-btn" @onclick="CloseRename">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-form-group">
+                    <label class="pam-label">Device Name</label>
+                    <input class="pam-input w-100-input" @bind="_renameName" placeholder="e.g. Work Laptop" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseRename">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SaveRenameAsync" disabled="@_renameSaving">
+                    @if (_renameSaving) { <span class="pam-spinner-sm"></span> } Save
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TrustedDeviceDto>? _devices;
+    private bool    _loading = false;
+    private string? _error;
+    private string? _success;
+
+    private TrustedDeviceDto? _renameDevice;
+    private string  _renameName  = "";
+    private bool    _renameSaving = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        _devices = await Api.GetMyTrustedDevicesAsync();
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        _error = null; _success = null;
+        var ok = await Api.RevokeMyTrustedDeviceAsync(id);
+        if (ok) { _success = "Device revoked."; await LoadAsync(); }
+        else _error = "Failed to revoke device.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _success = null; StateHasChanged(); }
+    }
+
+    private void OpenRename(TrustedDeviceDto d)
+    {
+        _renameDevice = d;
+        _renameName = d.DeviceName ?? "";
+        StateHasChanged();
+    }
+
+    private void CloseRename() { _renameDevice = null; StateHasChanged(); }
+
+    private async Task SaveRenameAsync()
+    {
+        if (_renameDevice == null) return;
+        _renameSaving = true; StateHasChanged();
+        var ok = await Api.RenameMyTrustedDeviceAsync(_renameDevice.Id, _renameName);
+        _renameSaving = false;
+        if (ok) { CloseRename(); await LoadAsync(); _success = "Device renamed."; }
+        else _error = "Failed to rename device.";
+        StateHasChanged();
+    }
+
+    private static string TruncateUa(string? ua)
+    {
+        if (string.IsNullOrEmpty(ua)) return "";
+        return ua.Length > 60 ? ua[..60] + "…" : ua;
+    }
+
+    private static string TrustLevelBadge(string level) => level switch
+    {
+        "AdminApproved" => "pam-badge-success",
+        "ManagedDevice" => "pam-badge-success",
+        "UserRegistered" => "pam-badge-info",
+        _ => "pam-badge-warning"
+    };
+}

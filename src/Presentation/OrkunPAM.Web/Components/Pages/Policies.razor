@@ -20,6 +20,7 @@
     <button class="pam-tab @(_tab=="mfa"?"pam-tab-active":"")"        @onclick="@(() => SwitchTab("mfa"))">MFA Policy</button>
     <button class="pam-tab @(_tab=="watermark"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("watermark"))">Watermark</button>
     <button class="pam-tab @(_tab=="adaptive-mfa"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("adaptive-mfa"))">Adaptive MFA</button>
+    <button class="pam-tab @(_tab=="device-trust"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("device-trust"))">Device Trust</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -426,6 +427,86 @@
     </div>
 }
 
+@if (_tab == "device-trust")
+{
+    <div class="pam-card" style="max-width:560px">
+        <div class="pam-card-header"><strong>Device Trust — Context-Aware Access Control</strong></div>
+        <div class="pam-card-body">
+            @if (_dtLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:0.85rem;margin-bottom:1rem">
+                    Device Trust verifies that users are logging in from recognized devices. Unknown devices can be
+                    allowed, required to complete step-up MFA, or blocked entirely. Manage individual devices at
+                    <a href="/my-devices" style="color:var(--pam-accent)">My Devices</a>.
+                </div>
+
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_dtEnabled" />
+                        <strong>Enable Device Trust</strong>
+                    </label>
+                </div>
+
+                @if (_dtEnabled)
+                {
+                    <hr style="margin:1rem 0" />
+
+                    <div class="pam-form-group">
+                        <label class="pam-checkbox-label">
+                            <input type="checkbox" @bind="_dtRequireTrusted" />
+                            <strong>Require Admin-Approved Device</strong>
+                        </label>
+                        <span class="pam-hint">Only AdminApproved/ManagedDevice level devices pass without step-up.</span>
+                    </div>
+
+                    <div class="pam-form-group">
+                        <label class="pam-label">Unknown Device Action</label>
+                        <select class="pam-input" style="width:100%" @bind="_dtUnknownAction">
+                            <option value="Allow">Allow — register device silently</option>
+                            <option value="StepUpAuth">Step-Up Auth — force MFA</option>
+                            <option value="Block">Block — deny login</option>
+                        </select>
+                        <span class="pam-hint">Applied when a device is not in the trusted list or trust level is Unknown.</span>
+                    </div>
+
+                    <div class="pam-form-row">
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Max Trust Age (days)</label>
+                            <input type="number" class="pam-input" style="width:100%" min="0" max="3650" @bind="_dtMaxTrustDays" />
+                            <span class="pam-hint">0 = no expiry. After this, device re-registers as Unknown.</span>
+                        </div>
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-checkbox-label" style="margin-top:1.75rem">
+                                <input type="checkbox" @bind="_dtAutoRegister" />
+                                Auto-register on login
+                            </label>
+                            <span class="pam-hint">New devices are automatically added as UserRegistered.</span>
+                        </div>
+                    </div>
+
+                    <div class="pam-alert" style="background:#161b22;border:1px solid #30363d;font-size:0.82rem;margin-top:.5rem">
+                        <strong>Trust Levels:</strong>
+                        Unknown — new/expired &bull;
+                        UserRegistered — auto-enrolled &bull;
+                        AdminApproved — manually approved &bull;
+                        ManagedDevice — corporate-managed
+                    </div>
+                }
+
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveDeviceTrustPolicyAsync" disabled="@_dtSaving">
+                        @if (_dtSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -579,6 +660,15 @@
     private int  _amfaHigh    = 75;
     private int  _amfaBlock   = 90;
 
+    // Device Trust policy (#207)
+    private bool   _dtLoading        = false;
+    private bool   _dtSaving         = false;
+    private bool   _dtEnabled        = false;
+    private bool   _dtRequireTrusted = false;
+    private string _dtUnknownAction  = "Allow";
+    private int    _dtMaxTrustDays   = 90;
+    private bool   _dtAutoRegister   = true;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -597,6 +687,7 @@
             case "mfa":       await LoadMfaPolicyAsync();         break;
             case "watermark":    await LoadWatermarkPolicyAsync();        break;
             case "adaptive-mfa": await LoadAdaptiveMfaPolicyAsync();     break;
+            case "device-trust": await LoadDeviceTrustPolicyAsync();     break;
         }
     }
 
@@ -806,6 +897,33 @@
         _amfaSaving = false;
         _successMsg = ok ? "Adaptive MFA policy saved." : null;
         if (!ok) _error = "Failed to save adaptive MFA policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadDeviceTrustPolicyAsync()
+    {
+        _dtLoading = true; StateHasChanged();
+        var s = await Api.GetDeviceTrustPolicyAsync();
+        if (s != null)
+        {
+            _dtEnabled        = s.Enabled;
+            _dtRequireTrusted = s.RequireTrustedDevice;
+            _dtUnknownAction  = s.UnknownDeviceAction;
+            _dtMaxTrustDays   = s.MaxTrustAgeDays;
+            _dtAutoRegister   = s.AutoRegisterOnLogin;
+        }
+        _dtLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveDeviceTrustPolicyAsync()
+    {
+        _dtSaving = true; StateHasChanged();
+        var ok = await Api.SaveDeviceTrustPolicyAsync(new DeviceTrustPolicySettingsDto(
+            _dtEnabled, _dtRequireTrusted, _dtUnknownAction, _dtMaxTrustDays, _dtAutoRegister));
+        _dtSaving = false;
+        _successMsg = ok ? "Device Trust policy saved." : null;
+        if (!ok) _error = "Failed to save device trust policy.";
         StateHasChanged();
         if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }

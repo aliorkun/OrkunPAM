@@ -1784,6 +1784,64 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Device Trust Policy (#207)
+    public async Task<DeviceTrustPolicySettingsDto?> GetDeviceTrustPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<DeviceTrustPolicySettingsDto>>("/api/v1/policy/device-trust");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveDeviceTrustPolicyAsync(DeviceTrustPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync("/api/v1/policy/device-trust", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<List<TrustedDeviceDto>?> GetMyTrustedDevicesAsync()
+    {
+        var result = await GetAsync<ListResult<TrustedDeviceDto>>("/api/v1/my/trusted-devices");
+        return result?.Data;
+    }
+
+    public async Task<bool> RevokeMyTrustedDeviceAsync(Guid id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/my/trusted-devices/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> RenameMyTrustedDeviceAsync(Guid id, string deviceName)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync($"/api/v1/my/trusted-devices/{id}/rename", new { deviceName })).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<PagedResult<TrustedDeviceDto>?> GetAdminTrustedDevicesAsync(
+        Guid? userId = null, string? trustLevel = null, bool? revoked = null, int page = 1, int pageSize = 50)
+    {
+        var url = $"/api/v1/admin/trusted-devices?page={page}&pageSize={pageSize}";
+        if (userId.HasValue) url += $"&userId={userId}";
+        if (!string.IsNullOrEmpty(trustLevel)) url += $"&trustLevel={trustLevel}";
+        if (revoked.HasValue) url += $"&revoked={revoked}";
+        return await GetAsync<PagedResult<TrustedDeviceDto>>(url);
+    }
+
+    public async Task<bool> SetDeviceTrustLevelAsync(Guid id, string trustLevel)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync($"/api/v1/admin/trusted-devices/{id}/trust", new { trustLevel })).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> AdminRevokeDeviceAsync(Guid id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/admin/trusted-devices/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     // Watermark Policy (#190)
     public async Task<WatermarkPolicySettingsDto?> GetWatermarkPolicyAsync()
     {
@@ -2581,6 +2639,23 @@ public record AdaptiveMfaPolicySettingsDto(
     int  MediumRiskThreshold,
     int  HighRiskThreshold,
     int  BlockThreshold);
+
+// Device Trust Policy DTO (#207)
+public record DeviceTrustPolicySettingsDto(
+    bool   Enabled,
+    bool   RequireTrustedDevice,
+    string UnknownDeviceAction,
+    int    MaxTrustAgeDays,
+    bool   AutoRegisterOnLogin);
+
+public record TrustedDeviceDto(
+    Guid      Id,
+    string?   DeviceName,
+    string    TrustLevel,
+    bool      IsRevoked,
+    string?   UserAgent,
+    DateTime  RegisteredAtUtc,
+    DateTime  LastSeenAtUtc);
 
 // Watermark Policy DTO (#190)
 public record WatermarkPolicySettingsDto(

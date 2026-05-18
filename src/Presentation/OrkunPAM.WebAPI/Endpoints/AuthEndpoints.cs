@@ -54,6 +54,14 @@ public static class AuthEndpoints
                 }
             }
 
+            // Device Trust check (#207)
+            var userAgent = ctx.Request.Headers.UserAgent.ToString();
+            var deviceFingerprint = DeviceTrustHelper.ComputeFingerprint(userAgent);
+            var trustedData = await DeviceTrustHelper.ApplyDeviceTrustAsync(db, data, data.UserId, deviceFingerprint, userAgent, ip);
+            if (trustedData == null)
+                return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
+            data = trustedData;
+
             return Results.Ok(new
             {
                 success = true,
@@ -809,6 +817,88 @@ public record EmailOtpVerifyRequest(string Username, string Code);
 /// <summary>
 /// Adaptive MFA helper: loads policy from DB and calculates real-time login risk score.
 /// </summary>
+/// <summary>Device Trust helpers for login-time fingerprint evaluation (#207)</summary>
+internal static class DeviceTrustHelper
+{
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    internal static string ComputeFingerprint(string userAgent)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(userAgent.ToLowerInvariant()));
+        return Convert.ToHexString(hash)[..32].ToLowerInvariant();
+    }
+
+    internal static async Task<DeviceTrustPolicySettings> LoadPolicyAsync(OrkunPamDbContext db)
+    {
+        var p = await db.Policies.FirstOrDefaultAsync(
+            x => x.PolicyType == "DeviceTrust" && x.Scope == PolicyScope.Global);
+        if (p?.PolicyJson == null) return new();
+        try { return JsonSerializer.Deserialize<DeviceTrustPolicySettings>(p.PolicyJson, JsonOpts) ?? new(); }
+        catch { return new(); }
+    }
+
+    internal static async Task<AuthResult?> ApplyDeviceTrustAsync(
+        OrkunPamDbContext db, AuthResult data, Guid userId, string fingerprint, string userAgent, string ip)
+    {
+        var policy = await LoadPolicyAsync(db);
+        if (!policy.Enabled) return data;
+
+        var device = await db.TrustedDevices
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.DeviceFingerprint == fingerprint && !d.IsRevoked);
+
+        if (device != null)
+        {
+            device.LastSeenAtUtc = DateTime.UtcNow;
+
+            if (policy.MaxTrustAgeDays > 0 &&
+                (DateTime.UtcNow - device.RegisteredAtUtc).TotalDays > policy.MaxTrustAgeDays)
+                device.TrustLevel = TrustLevel.Unknown;
+
+            await db.SaveChangesAsync();
+
+            if (device.TrustLevel == TrustLevel.Unknown && policy.RequireTrustedDevice)
+                return ApplyUnknownDeviceAction(policy, data);
+
+            return data;
+        }
+
+        // New device
+        if (policy.AutoRegisterOnLogin)
+        {
+            db.TrustedDevices.Add(new TrustedDevice
+            {
+                DeviceFingerprint = fingerprint,
+                UserId = userId,
+                TrustLevel = TrustLevel.UserRegistered,
+                UserAgent = userAgent
+            });
+            await db.SaveChangesAsync();
+        }
+
+        if (policy.RequireTrustedDevice)
+            return ApplyUnknownDeviceAction(policy, data);
+
+        return data;
+    }
+
+    private static AuthResult? ApplyUnknownDeviceAction(DeviceTrustPolicySettings policy, AuthResult data)
+    {
+        return policy.UnknownDeviceAction switch
+        {
+            "Block" => null,
+            "StepUpAuth" => ForceStepUp(data),
+            _ => data
+        };
+    }
+
+    private static AuthResult ForceStepUp(AuthResult data)
+    {
+        if (data.MfaRequired || data.MfaEnrollmentRequired) return data;
+        var forcedType = data.MfaType ?? "EmailOtp";
+        return data with { MfaRequired = true, MfaType = forcedType };
+    }
+}
+
 internal static class AdaptiveMfaHelper
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };

@@ -360,7 +360,7 @@
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔲 Bekliyor |
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | ✅ Tamamlandı |
 | #208 | Geolocation-based Access Control | v2-ACCESS | 🔲 Bekliyor |
 | #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | 🔲 Bekliyor |
 
@@ -369,7 +369,25 @@
 - Reporting #33 (access pattern analytics), #38 (API usage reports), #46 (time-of-day) → PC
 - Zero Trust access control maturity: IP + device + geo + context combined
 
-**İlerleme:** 0/3 (%0) — Sprint 18 başladı
+**#207 Device Trust — Tamamlanan bileşenler (2026-05-18):**
+- `TrustedDevice` entity: DeviceFingerprint (SHA-256 of UA), UserId, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked, LastSeenAtUtc
+- DbContext: TrustedDevices DbSet + model config + unique index (UserId, DeviceFingerprint)
+- `DeviceTrustPolicySettings`: Enabled, RequireTrustedDevice, UnknownDeviceAction (Allow/StepUpAuth/Block), MaxTrustAgeDays, AutoRegisterOnLogin
+- `GET/PUT /api/v1/policy/device-trust` — policy CRUD (AdminPolicy)
+- `GET /api/v1/my/trusted-devices` — user's own devices
+- `PUT /api/v1/my/trusted-devices/{id}/rename` — rename own device
+- `DELETE /api/v1/my/trusted-devices/{id}` — revoke own device
+- `GET /api/v1/admin/trusted-devices` — all devices with filters (AdminPolicy)
+- `PUT /api/v1/admin/trusted-devices/{id}/trust` — admin set trust level (AdminPolicy)
+- `DELETE /api/v1/admin/trusted-devices/{id}` — admin revoke (AdminPolicy)
+- Login flow: UA fingerprint → TrustedDevice lookup → policy enforcement (Block/StepUpAuth/Allow)
+- `Policies.razor`: "Device Trust" tab with policy form
+- `MyDevices.razor`: user self-service device management (list, rename, revoke)
+- NavMenu: "My Devices" link under Security section
+- `PamApiService.cs`: DeviceTrustPolicySettingsDto, TrustedDeviceDto + 7 API methods
+- RFP User Mgmt #32 → PC, #33 → PC
+
+**İlerleme:** 1/3 (%33) — #207 tamamlandı
 
 ---
 

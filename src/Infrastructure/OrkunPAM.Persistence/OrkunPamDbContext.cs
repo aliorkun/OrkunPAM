@@ -143,6 +143,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ThreatIndicator>  ThreatIndicators  => Set<ThreatIndicator>();
     public DbSet<ThreatFeedConfig> ThreatFeedConfigs => Set<ThreatFeedConfig>();
 
+    // Device Trust (#207)
+    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -511,6 +514,14 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(t => t.Name).HasMaxLength(256);
             e.Property(t => t.FeedUrl).HasMaxLength(1024);
             e.Property(t => t.FeedType).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<TrustedDevice>(e =>
+        {
+            e.HasIndex(t => new { t.UserId, t.DeviceFingerprint }).IsUnique();
+            e.Property(t => t.DeviceFingerprint).HasMaxLength(64);
+            e.Property(t => t.DeviceName).HasMaxLength(256);
+            e.Property(t => t.UserAgent).HasMaxLength(1024);
         });
 
         // Seed built-in data
