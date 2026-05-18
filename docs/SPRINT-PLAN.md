@@ -419,13 +419,27 @@
 
 ---
 
-## Sprint 20 - Next (TBD)
-**Durum:** Bekliyor — Security/PM agent'ların yeni issue açmasını bekle
+## Sprint 20 - v2 Session Monitor + SMS MFA + Session Tagging
+**Tarih:** 18-25 Mayıs 2026
+**Durum:** Aktif 🔄 — PM run #16 tarafından planlandı
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #214 | Session Live Monitoring — Canlı Oturum İzleme ve Admin Müdahale | v2-SESSION | 🔲 Bekliyor |
+| #215 | SMS OTP — Kısa Mesaj Tabanlı MFA | v2-MFA | 🔲 Bekliyor |
+| #216 | Session Tagging & Annotation — Oturum Etiketleme | v2-SESSION | 🔲 Bekliyor |
+
+**Sprint 20 Hedefleri:**
+- #214: LiveMonitorHub (SignalR), LiveSessionEndpoints, LiveMonitor.razor; SSH/Telnet terminal stream → RFP Remote Access #31 + #40 PC
+- #215: ISmsGatewayService (Twilio/AwsSns/Netgsm/Custom), SmsOtpEndpoints, Login.razor SMS adımı → RFP MFA #4 PC
+- #216: SessionTag + SessionAnnotation entity, SessionTagEndpoints, Sessions.razor tag UI → RFP Remote Access #48 PC
+
+**İlerleme:** 0/3 (%0)
 
 ---
 
 ## Sonraki Adım
-**Sprint 19 tamamlandı.** Backlog boş — Security ve PM agent'ların issue açmasını bekle.
+**Sprint 20 aktif.** Developer #214 → #215 → #216 sırasıyla implement eder.
 **v2.0.0:** 30 Eylül 2026
 
 ---

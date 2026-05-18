@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-18 (Developer run — Sprint 18 items marked PC; Telnet proxy Sprint 19 added)
+> Last updated: 2026-05-18 (PM run #16 — Sprint 19 complete; Sprint 20 planned: #214 Session Live Monitor, #215 SMS OTP MFA, #216 Session Tagging)
 
 ## Platform (44 items)
 
