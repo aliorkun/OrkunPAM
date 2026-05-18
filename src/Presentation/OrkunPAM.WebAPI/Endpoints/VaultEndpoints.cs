@@ -199,6 +199,48 @@ public static class VaultEndpoints
             });
         });
 
+        // === Update Credential ===
+        creds.MapPut("/{id:guid}", async (Guid id, UpdateCredentialRequest req,
+            OrkunPamDbContext db, IVaultEncryptionService vault) =>
+        {
+            var cred = await db.Credentials.FindAsync(id);
+            if (cred == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Credential not found" } });
+
+            if (req.Name != null) cred.Name = req.Name;
+            if (req.Description != null) cred.Description = req.Description;
+            if (req.Username != null) cred.Username = req.Username;
+            if (req.Tags != null) cred.Tags = req.Tags;
+            if (req.DeviceId.HasValue) cred.DeviceId = req.DeviceId;
+            if (req.MaxCheckoutMinutes.HasValue) cred.MaxCheckoutMinutes = req.MaxCheckoutMinutes.Value;
+            if (req.RequiresApproval.HasValue) cred.RequiresApproval = req.RequiresApproval.Value;
+
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                var encResult = vault.EncryptString(req.Password);
+                if (encResult.IsFailure)
+                    return Results.BadRequest(new { success = false, errors = new[] { $"Encryption failed: {encResult.Error.Message}" } });
+
+                // Save old password to history
+                if (cred.PasswordEnc != null)
+                {
+                    db.PasswordHistories.Add(new PasswordHistory
+                    {
+                        CredentialId = cred.Id,
+                        PasswordEnc = cred.PasswordEnc,
+                        ChangedAtUtc = DateTime.UtcNow,
+                        ChangeReason = PasswordChangeReason.Manual
+                    });
+                }
+
+                cred.PasswordEnc = encResult.Value;
+                cred.Version++;
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true, data = new { cred.Id, cred.Name, cred.Username, cred.Version } });
+        });
+
         // === Check-Out (retrieve password) ===
         creds.MapPost("/{id:guid}/checkout", async (Guid id, CheckoutRequest req,
             OrkunPamDbContext db, IVaultEncryptionService vault, ILogger<Program> logger, HttpContext context) =>
@@ -747,6 +789,9 @@ public record CreateCredentialRequest(
     Guid FolderId, string Name, string? Description, CredentialType Type,
     string? Username, string? Password, string? PrivateKey, Guid? DeviceId, string? Tags,
     int? MaxCheckoutMinutes, bool RequiresApproval);
+public record UpdateCredentialRequest(
+    string? Name, string? Description, string? Username, string? Password,
+    string? Tags, Guid? DeviceId, int? MaxCheckoutMinutes, bool? RequiresApproval);
 public record CheckoutRequest(string? Reason, string? TicketNumber, int? DurationMinutes);
 public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
