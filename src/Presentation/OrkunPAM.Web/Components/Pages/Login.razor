@@ -15,6 +15,12 @@
         {
             <div class="pam-alert pam-alert-danger">@_error</div>
         }
+        @if (_riskLevel == "High" || _riskLevel == "Medium")
+        {
+            <div class="pam-alert pam-alert-warning" style="font-size:0.85rem">
+                &#9888; Unusual login pattern detected (risk: @_riskLevel). Additional verification required.
+            </div>
+        }
 
         @if (!_mfaStep)
         {
@@ -124,6 +130,7 @@
     private string _mfaType     = "";
     private string _mfaCode     = "";
     private bool   _emailOtpSent;
+    private string _riskLevel   = "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -143,6 +150,8 @@
         if (result?.Success == true && result.Data != null)
         {
             var d = result.Data;
+            _riskLevel = d.RiskLevel ?? "";
+
             if (d.MfaEnrollmentRequired)
             {
                 _error = "MFA enrollment is required by your organization's policy. Contact your administrator for an MFA setup link.";
@@ -242,7 +251,7 @@
             await HandleEmailOtpAsync();
     }
 
-    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; }
+    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; _riskLevel = ""; }
 
     private sealed class LoginModel
     {

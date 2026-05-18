@@ -243,7 +243,7 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // ── Watermark policy endpoints (#190) ───────────────────────────────────────
+        // ── Watermark policy endpoints (#190) ───────────────────────────────────────────
         pwdGroup.MapGet("/watermark", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -266,6 +266,33 @@ public static class PolicyEndpoints
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "WATERMARK_POLICY_UPDATED", null, null, ip,
                 "Policy", "Watermark", new { settings = req });
+
+            return Results.Ok(new { success = true });
+        });
+
+        // ── Adaptive MFA policy endpoints (#205) ────────────────────────────────────────────
+        pwdGroup.MapGet("/adaptive-mfa", async (OrkunPamDbContext db) =>
+        {
+            var p = await db.Policies.FirstOrDefaultAsync(
+                x => x.PolicyType == "AdaptiveMFA" && x.Scope == PolicyScope.Global);
+            var settings = ReadPolicy<AdaptiveMfaPolicySettings>(p?.PolicyJson ?? "{}");
+            return Results.Ok(new { success = true, data = settings });
+        });
+
+        pwdGroup.MapPut("/adaptive-mfa", async (
+            AdaptiveMfaPolicySettings req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            if (req.LowRiskThreshold < 0 || req.LowRiskThreshold >= req.MediumRiskThreshold ||
+                req.MediumRiskThreshold >= req.HighRiskThreshold ||
+                req.HighRiskThreshold >= req.BlockThreshold)
+                return Results.BadRequest(new { success = false, errors = new[] { "Thresholds must be strictly increasing: Low < Medium < High < Block" } });
+
+            await UpsertGlobalPolicyAsync(db, "AdaptiveMFA", "Global Adaptive MFA Policy", req);
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Policy", "ADAPTIVE_MFA_POLICY_UPDATED", null, null, ip,
+                "Policy", "AdaptiveMFA", new { settings = req });
 
             return Results.Ok(new { success = true });
         });
@@ -319,4 +346,14 @@ public record WatermarkPolicySettings
     public bool   EnableSsh         { get; init; } = true;
     public bool   EnableRdp         { get; init; } = true;
     public bool   EnableVnc         { get; init; } = true;
+}
+
+// Adaptive MFA policy settings (#205)
+public record AdaptiveMfaPolicySettings
+{
+    public bool Enabled              { get; init; } = false;
+    public int  LowRiskThreshold    { get; init; } = 25;
+    public int  MediumRiskThreshold { get; init; } = 50;
+    public int  HighRiskThreshold   { get; init; } = 75;
+    public int  BlockThreshold      { get; init; } = 90;
 }

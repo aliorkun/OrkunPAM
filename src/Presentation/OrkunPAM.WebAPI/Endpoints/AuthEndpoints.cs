@@ -10,6 +10,7 @@ using OrkunPAM.Persistence.Services;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.SharedKernel;
+using OrkunPAM.Domain.Entities.Analytics;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -19,7 +20,7 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth").AllowAnonymous();
 
-        group.MapPost("/login", async (LoginRequest req, IAuthenticationService auth, HttpContext ctx) =>
+        group.MapPost("/login", async (LoginRequest req, IAuthenticationService auth, OrkunPamDbContext db, IVaultEncryptionService? vault, HttpContext ctx) =>
         {
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var result = await auth.LoginLocalAsync(req.Username, req.Password, ip);
@@ -28,6 +29,31 @@ public static class AuthEndpoints
                 return Results.Json(new { success = false, errors = new[] { result.Error.Message } }, statusCode: 401);
 
             var data = result.Value;
+
+            // Adaptive MFA risk evaluation (#205)
+            decimal riskScore = 0;
+            string riskLevel = "Low";
+            var adaptivePolicy = await AdaptiveMfaHelper.LoadPolicyAsync(db);
+            if (adaptivePolicy.Enabled)
+            {
+                riskScore = await AdaptiveMfaHelper.CalculateLoginRiskAsync(db, vault, data.UserId, ip);
+                riskLevel = riskScore >= adaptivePolicy.BlockThreshold      ? "Critical"
+                          : riskScore >= adaptivePolicy.HighRiskThreshold   ? "High"
+                          : riskScore >= adaptivePolicy.MediumRiskThreshold ? "Medium"
+                          : "Low";
+
+                if (riskLevel == "Critical")
+                    return Results.Json(new { success = false, errors = new[] { "Login blocked due to anomalous activity. Contact your administrator." } }, statusCode: 403);
+
+                // Force MFA for High-risk logins that don't already require MFA
+                if (riskLevel == "High" && !data.MfaRequired && !data.MfaEnrollmentRequired)
+                {
+                    var userCheck = await db.Users.FindAsync(data.UserId);
+                    var forcedType = userCheck?.MfaEnabled == true ? (data.MfaType ?? "Totp") : "EmailOtp";
+                    data = data with { MfaRequired = true, MfaType = forcedType };
+                }
+            }
+
             return Results.Ok(new
             {
                 success = true,
@@ -43,10 +69,30 @@ public static class AuthEndpoints
                     mfaType = data.MfaType,
                     mfaEnrollmentRequired = data.MfaEnrollmentRequired,
                     mustChangePassword = data.MustChangePassword,
-                    passwordExpired = data.PasswordExpired
+                    passwordExpired = data.PasswordExpired,
+                    riskScore,
+                    riskLevel
                 }
             });
         }).RequireRateLimiting("auth");
+
+        // GET /api/v1/auth/risk-score — real-time risk score for the authenticated user (#205)
+        app.MapGet("/api/v1/auth/risk-score", async (OrkunPamDbContext db, IVaultEncryptionService? vault, HttpContext ctx) =>
+        {
+            var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var score = await AdaptiveMfaHelper.CalculateLoginRiskAsync(db, vault, userId, ip);
+            var policy = await AdaptiveMfaHelper.LoadPolicyAsync(db);
+            var level = score >= policy.BlockThreshold      ? "Critical"
+                      : score >= policy.HighRiskThreshold   ? "High"
+                      : score >= policy.MediumRiskThreshold ? "Medium"
+                      : "Low";
+
+            return Results.Ok(new { success = true, data = new { riskScore = score, riskLevel = level } });
+        }).RequireAuthorization().WithTags("Auth");
 
         group.MapPost("/register", async (RegisterRequest req, IAuthenticationService auth) =>
         {
@@ -759,6 +805,56 @@ public record ForgotPasswordRequest(string Username, string Email);
 public record ResetPasswordRequest(string Token, string NewPassword);
 public record EmailOtpRequestRequest(string Username, string Password);
 public record EmailOtpVerifyRequest(string Username, string Code);
+
+/// <summary>
+/// Adaptive MFA helper: loads policy from DB and calculates real-time login risk score.
+/// </summary>
+internal static class AdaptiveMfaHelper
+{
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    internal static async Task<AdaptiveMfaPolicySettings> LoadPolicyAsync(OrkunPamDbContext db)
+    {
+        var p = await db.Policies.FirstOrDefaultAsync(
+            x => x.PolicyType == "AdaptiveMFA" && x.Scope == PolicyScope.Global);
+        if (p?.PolicyJson == null) return new();
+        try { return JsonSerializer.Deserialize<AdaptiveMfaPolicySettings>(p.PolicyJson, JsonOpts) ?? new(); }
+        catch { return new(); }
+    }
+
+    internal static async Task<decimal> CalculateLoginRiskAsync(
+        OrkunPamDbContext db, IVaultEncryptionService? vault, Guid userId, string loginIp)
+    {
+        decimal risk = 0;
+
+        var baseline = await db.UserBehaviorBaselines.FirstOrDefaultAsync(b => b.UserId == userId);
+        if (baseline != null)
+        {
+            if (baseline.KnownIpsJson != null)
+            {
+                var raw = BehaviorBaselineService.DecryptOrDeserialize(vault, baseline.KnownIpsJson);
+                var knownIps = raw != null ? JsonSerializer.Deserialize<List<string>>(raw) ?? [] : [];
+                if (knownIps.Count > 0 && !knownIps.Contains(loginIp))
+                    risk += 30;
+            }
+
+            if (baseline.TypicalHoursJson != null)
+            {
+                var hours = JsonSerializer.Deserialize<List<int>>(baseline.TypicalHoursJson) ?? [];
+                if (hours.Count > 0 && !hours.Contains(DateTime.UtcNow.Hour))
+                    risk += 20;
+            }
+        }
+
+        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+        var recentSessions = await db.ProxySessions
+            .CountAsync(s => s.UserId == userId && s.StartedAtUtc > oneHourAgo);
+        if (recentSessions > 5)
+            risk += 25;
+
+        return Math.Min(100, risk);
+    }
+}
 
 /// <summary>
 /// Helper for generating, hashing, and validating MFA recovery codes.

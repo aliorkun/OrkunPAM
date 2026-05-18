@@ -135,7 +135,7 @@ public sealed class BehaviorBaselineService : BackgroundService
         return Convert.ToBase64String(result.Value);
     }
 
-    internal static string? DecryptOrDeserialize(IVaultEncryptionService? vault, string? stored)
+    public static string? DecryptOrDeserialize(IVaultEncryptionService? vault, string? stored)
     {
         if (string.IsNullOrEmpty(stored)) return stored;
         if (vault == null || stored.TrimStart().StartsWith('[') || stored.TrimStart().StartsWith('{'))
