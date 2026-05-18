@@ -1712,6 +1712,20 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Adaptive MFA Policy (#205)
+    public async Task<AdaptiveMfaPolicySettingsDto?> GetAdaptiveMfaPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<AdaptiveMfaPolicySettingsDto>>("/api/v1/policy/adaptive-mfa");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveAdaptiveMfaPolicyAsync(AdaptiveMfaPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync("/api/v1/policy/adaptive-mfa", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     // Watermark Policy (#190)
     public async Task<WatermarkPolicySettingsDto?> GetWatermarkPolicyAsync()
     {
@@ -2192,7 +2206,9 @@ public record LoginData(
     string?  MfaType,
     bool     MfaEnrollmentRequired,
     bool     MustChangePassword,
-    bool     PasswordExpired);
+    bool     PasswordExpired,
+    decimal  RiskScore  = 0,
+    string?  RiskLevel  = null);
 
 public record PagedResult<T>(bool Success, List<T>? Data, PageMeta? Meta);
 public record PagedResultMeta(bool Success, PageMeta? Meta);
@@ -2499,6 +2515,14 @@ public record TacacsCommandPolicyDto(
 
 // MFA Policy DTO
 public record MfaPolicySettingsDto(bool MfaRequired, bool EmailOtpEnabled = false);
+
+// Adaptive MFA Policy DTO (#205)
+public record AdaptiveMfaPolicySettingsDto(
+    bool Enabled,
+    int  LowRiskThreshold,
+    int  MediumRiskThreshold,
+    int  HighRiskThreshold,
+    int  BlockThreshold);
 
 // Watermark Policy DTO (#190)
 public record WatermarkPolicySettingsDto(
