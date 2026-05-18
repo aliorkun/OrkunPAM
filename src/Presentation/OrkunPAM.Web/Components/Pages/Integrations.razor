@@ -20,6 +20,8 @@
             @onclick="@(() => SetTab("pki"))">&#x1F4DC; PKI / Smart Card</button>
     <button class="pam-btn @(_tab == "soar" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("soar"))">&#x26A1; SOAR</button>
+    <button class="pam-btn @(_tab == "sms" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("sms"))">&#x1F4F1; SMS Gateway</button>
 </div>
 
 @if (_tab == "ldap")
@@ -569,9 +571,113 @@
     </div>
 }
 
+@if (_tab == "sms")
+{
+    @if (_smsError != null) { <div class="pam-alert pam-alert-danger">@_smsError</div> }
+    @if (_smsMsg != null)   { <div class="pam-alert pam-alert-success">@_smsMsg</div> }
+
+    <div class="pam-card">
+        <div class="pam-card-header"><strong>SMS Gateway Configuration</strong></div>
+        <div class="pam-card-body">
+            @if (_smsLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-form-group">
+                    <label class="pam-label">Provider</label>
+                    <select class="pam-select" @bind="_smsProvider" style="max-width:300px">
+                        <option value="">— Select Provider —</option>
+                        <option value="twilio">Twilio</option>
+                        <option value="netgsm">NetGSM (Turkey)</option>
+                        <option value="webhook">Custom Webhook</option>
+                    </select>
+                </div>
+
+                @if (_smsProvider == "twilio")
+                {
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:600px;margin-top:8px">
+                        <div>
+                            <label class="pam-label">Account SID</label>
+                            <input class="pam-input" @bind="_smsAccountSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+                        </div>
+                        <div>
+                            <label class="pam-label">Auth Token</label>
+                            <input class="pam-input" type="password" @bind="_smsAuthToken"
+                                   placeholder="@(_smsAuthTokenSet ? "(set — leave blank to keep)" : "Auth token")" />
+                        </div>
+                        <div>
+                            <label class="pam-label">From Number</label>
+                            <input class="pam-input" @bind="_smsFromNumber" placeholder="+15005550006" />
+                        </div>
+                    </div>
+                }
+                else if (_smsProvider == "netgsm")
+                {
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:600px;margin-top:8px">
+                        <div>
+                            <label class="pam-label">Username</label>
+                            <input class="pam-input" @bind="_smsNetgsmUser" placeholder="NetGSM username" />
+                        </div>
+                        <div>
+                            <label class="pam-label">Password</label>
+                            <input class="pam-input" type="password" @bind="_smsNetgsmPassword"
+                                   placeholder="@(_smsNetgsmPasswordSet ? "(set — leave blank to keep)" : "NetGSM password")" />
+                        </div>
+                        <div>
+                            <label class="pam-label">Originator (Header)</label>
+                            <input class="pam-input" @bind="_smsNetgsmOriginator" placeholder="OrkunPAM" />
+                        </div>
+                    </div>
+                }
+                else if (_smsProvider == "webhook")
+                {
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:600px;margin-top:8px">
+                        <div style="grid-column:1/-1">
+                            <label class="pam-label">Webhook URL</label>
+                            <input class="pam-input" @bind="_smsWebhookUrl" placeholder="https://your-sms-provider.com/send" />
+                            <span class="pam-hint">POST JSON: { "to": "+1...", "message": "..." }</span>
+                        </div>
+                        <div>
+                            <label class="pam-label">Signing Secret (optional)</label>
+                            <input class="pam-input" type="password" @bind="_smsWebhookSecret"
+                                   placeholder="@(_smsWebhookSecretSet ? "(set — leave blank to keep)" : "Optional HMAC secret")" />
+                            <span class="pam-hint">Sent as X-OrkunPAM-Secret header</span>
+                        </div>
+                    </div>
+                }
+
+                <button class="pam-btn pam-btn-primary" style="margin-top:1rem"
+                        @onclick="SaveSmsConfigAsync" disabled="@(_smsSaving || string.IsNullOrEmpty(_smsProvider))">
+                    @(_smsSaving ? "Saving..." : "Save SMS Gateway")
+                </button>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // SMS Gateway state (#215)
+    private bool    _smsLoading            = false;
+    private bool    _smsSaving             = false;
+    private string? _smsError;
+    private string? _smsMsg;
+    private string  _smsProvider           = "";
+    private string  _smsAccountSid         = "";
+    private string  _smsAuthToken          = "";
+    private bool    _smsAuthTokenSet       = false;
+    private string  _smsFromNumber         = "";
+    private string  _smsWebhookUrl         = "";
+    private string  _smsWebhookSecret      = "";
+    private bool    _smsWebhookSecretSet   = false;
+    private string  _smsNetgsmUser         = "";
+    private string  _smsNetgsmPassword     = "";
+    private bool    _smsNetgsmPasswordSet  = false;
+    private string  _smsNetgsmOriginator   = "";
 
     // SOAR state (#197)
     private List<SoarConfigDto>? _soarConfigs;
@@ -675,9 +781,11 @@
             await LoadPkiAsync();
         if (tab == "soar" && _soarConfigs == null)
             await LoadSoarAsync();
+        if (tab == "sms")
+            await LoadSmsConfigAsync();
     }
 
-    // ── ITSM ────────────────────────────────────────────────────────────────────────────
+    // ── ITSM ────────────────────────────────────────────────────────────────────────────────
     private async Task LoadItsmAsync()
     {
         _itsmLoading = true; _itsmError = null; StateHasChanged();
@@ -737,7 +845,7 @@
         else { _itsmError = "Failed to delete."; StateHasChanged(); }
     }
 
-    // ── PKI ─────────────────────────────────────────────────────────────────────────────
+    // ── PKI ─────────────────────────────────────────────────────────────────────────────────
     private async Task LoadPkiAsync()
     {
         _pkiLoading = true; _pkiUserLoading = true; _pkiError = null; StateHasChanged();
@@ -966,5 +1074,45 @@
         var ok = await Api.DeleteSoarConfigAsync(id);
         if (ok) { _soarMsg = "SOAR provider removed."; await LoadSoarAsync(); }
         else { _soarError = "Failed to delete."; StateHasChanged(); }
+    }
+
+    // ── SMS Gateway (#215) ────────────────────────────────────────────────────────────────────
+    private async Task LoadSmsConfigAsync()
+    {
+        _smsLoading = true; _smsError = null; StateHasChanged();
+        var cfg = await Api.GetSmsGatewayConfigAsync();
+        if (cfg != null)
+        {
+            _smsProvider          = cfg.Provider ?? "";
+            _smsAccountSid        = cfg.AccountSid ?? "";
+            _smsFromNumber        = cfg.FromNumber ?? "";
+            _smsWebhookUrl        = cfg.WebhookUrl ?? "";
+            _smsNetgsmUser        = cfg.NetgsmUser ?? "";
+            _smsNetgsmOriginator  = cfg.NetgsmOriginator ?? "";
+            _smsAuthTokenSet      = cfg.AuthTokenSet;
+            _smsWebhookSecretSet  = cfg.WebhookSecretSet;
+            _smsNetgsmPasswordSet = cfg.NetgsmPasswordSet;
+        }
+        _smsLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveSmsConfigAsync()
+    {
+        _smsSaving = true; _smsError = null; _smsMsg = null; StateHasChanged();
+        var ok = await Api.SaveSmsGatewayConfigAsync(new SmsGatewayConfigDto(
+            _smsProvider, _smsAccountSid, _smsAuthToken, _smsFromNumber,
+            _smsWebhookUrl, _smsWebhookSecret, _smsNetgsmUser, _smsNetgsmPassword, _smsNetgsmOriginator));
+        _smsSaving = false;
+        if (ok)
+        {
+            _smsMsg = "SMS gateway configuration saved.";
+            _smsAuthToken = _smsWebhookSecret = _smsNetgsmPassword = "";
+            await LoadSmsConfigAsync();
+        }
+        else
+        {
+            _smsError = "Failed to save SMS gateway configuration.";
+            StateHasChanged();
+        }
     }
 }
