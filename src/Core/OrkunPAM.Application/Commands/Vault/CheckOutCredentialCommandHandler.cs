@@ -72,7 +72,8 @@ public sealed class CheckOutCredentialCommandHandler : IRequestHandler<CheckOutC
 
         if (credential.RequiresApproval)
         {
-            // TODO: integrate with ApprovalWorkflow - for now, block
+            // Approval check is enforced at the endpoint layer (VaultEndpoints.cs /checkout)
+            // which queries ApprovalRequests directly. This handler path blocks as a safe fallback.
             return Result<CheckOutResult>.Failure(Error.Forbidden("This credential requires approval before checkout."));
         }
 

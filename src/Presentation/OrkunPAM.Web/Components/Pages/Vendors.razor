@@ -15,20 +15,20 @@
 
 <!-- Mode tabs -->
 <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--pam-border);padding-bottom:8px">
-    <button class="pam-btn @(_mode == \"users\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-            @onclick="@(() => SetMode(\"users\"))">Vendor Users</button>
-    <button class="pam-btn @(_mode == \"profiles\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-            @onclick="@(() => SetMode(\"profiles\"))">Access Profiles (Token)</button>
+    <button class="pam-btn @(_mode == "users" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetMode("users"))">Vendor Users</button>
+    <button class="pam-btn @(_mode == "profiles" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetMode("profiles"))">Access Profiles (Token)</button>
 </div>
 
 @if (_mode == "users")
 {
     <!-- Vendor Users mode (UserType.Vendor PAM accounts) -->
     <div style="display:flex;gap:4px;margin-bottom:16px">
-        <button class="pam-btn @(_tab == \"list\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-                @onclick="@(() => SetTab(\"list\"))">Active Vendors</button>
-        <button class="pam-btn @(_tab == \"onboard\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-                @onclick="@(() => SetTab(\"onboard\"))">+ Onboard Vendor</button>
+        <button class="pam-btn @(_tab == "list" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => SetTab("list"))">Active Vendors</button>
+        <button class="pam-btn @(_tab == "onboard" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => SetTab("onboard"))">+ Onboard Vendor</button>
     </div>
 
     @if (_tab == "onboard")
@@ -74,7 +74,7 @@
                     <button class="pam-btn pam-btn-primary" @onclick="OnboardAsync" disabled="@_vSaving">
                         @(_vSaving ? "Creating..." : "Onboard & Send Invite")
                     </button>
-                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab(\"list\"))">Cancel</button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab("list"))">Cancel</button>
                 </div>
             </div>
         </div>
@@ -88,7 +88,7 @@
                     <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
                     @foreach (var s in new[] { "All", "Active", "Locked" })
                     {
-                        <button class="pam-btn pam-btn-sm @(_vStatusFilter == s ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                        <button class="pam-btn pam-btn-sm @(_vStatusFilter == s ? "pam-btn-primary" : "pam-btn-secondary")"
                                 @onclick="@(() => FilterVendors(s))">@s</button>
                     }
                     <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadVendorUsersAsync">&#x21BB; Refresh</button>
@@ -196,10 +196,10 @@
 {
     <!-- Token-based Vendor Access Profiles (legacy/simple) -->
     <div style="display:flex;gap:4px;margin-bottom:16px">
-        <button class="pam-btn @(_tab == \"list\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-                @onclick="@(() => SetTab(\"list\"))">Active Profiles</button>
-        <button class="pam-btn @(_tab == \"create\" ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
-                @onclick="@(() => SetTab(\"create\"))">+ Create Profile</button>
+        <button class="pam-btn @(_tab == "list" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => SetTab("list"))">Active Profiles</button>
+        <button class="pam-btn @(_tab == "create" ? "pam-btn-primary" : "pam-btn-secondary")"
+                @onclick="@(() => SetTab("create"))">+ Create Profile</button>
     </div>
 
     @if (_tab == "create")
@@ -268,7 +268,7 @@
                     <button class="pam-btn pam-btn-primary" @onclick="CreateAsync" disabled="@_saving">
                         @(_saving ? "Creating..." : "Create & Send Invite")
                     </button>
-                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab(\"list\"))">Cancel</button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => SetTab("list"))">Cancel</button>
                 </div>
             </div>
         </div>
@@ -282,7 +282,7 @@
                     <span style="font-size:0.85em;color:var(--pam-muted)">Filter:</span>
                     @foreach (var s in new[] { "All", "Active", "Expired", "Revoked" })
                     {
-                        <button class="pam-btn pam-btn-sm @(_statusFilter == s ? \"pam-btn-primary\" : \"pam-btn-secondary\")"
+                        <button class="pam-btn pam-btn-sm @(_statusFilter == s ? "pam-btn-primary" : "pam-btn-secondary")"
                                 @onclick="@(() => FilterStatus(s))">@s</button>
                     }
                     <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadAsync">&#x21BB; Refresh</button>
