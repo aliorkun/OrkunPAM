@@ -1,11 +1,16 @@
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Analytics;
+using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.System;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Persistence.Services;
 
@@ -41,7 +46,9 @@ public sealed class AnomalyDetectionService : BackgroundService
     private async Task RunDetectionCycleAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OrkunPamDbContext>();
+        var db         = scope.ServiceProvider.GetRequiredService<OrkunPamDbContext>();
+        var vault      = scope.ServiceProvider.GetService<IVaultEncryptionService>();
+        var email      = scope.ServiceProvider.GetService<IEmailService>();
 
         var lastScanCfg = await db.SystemConfigs.FindAsync([LastScanKey], ct);
         var lastScan = lastScanCfg != null && DateTime.TryParse(lastScanCfg.Value, out var dt)
@@ -91,10 +98,13 @@ public sealed class AnomalyDetectionService : BackgroundService
                 }
             }
 
-            // Unusual source IP
+            // Unusual source IP — decrypt baseline if needed
             if (baseline?.KnownIpsJson != null && session.ClientIpAddress != null)
             {
-                var knownIps = JsonSerializer.Deserialize<List<string>>(baseline.KnownIpsJson) ?? [];
+                var decryptedIps = BehaviorBaselineService.DecryptOrDeserialize(vault, baseline.KnownIpsJson);
+                var knownIps = decryptedIps != null
+                    ? JsonSerializer.Deserialize<List<string>>(decryptedIps) ?? []
+                    : [];
                 if (knownIps.Count > 0 && !knownIps.Contains(session.ClientIpAddress))
                 {
                     anomaliesToAdd.Add(MakeAnomaly(session.UserId, session.Id, "UnusualIP", 2,
@@ -103,10 +113,13 @@ public sealed class AnomalyDetectionService : BackgroundService
                 }
             }
 
-            // Unusual device
+            // Unusual device — decrypt baseline if needed
             if (baseline?.KnownDevicesJson != null)
             {
-                var knownDevices = JsonSerializer.Deserialize<List<string>>(baseline.KnownDevicesJson) ?? [];
+                var decryptedDevices = BehaviorBaselineService.DecryptOrDeserialize(vault, baseline.KnownDevicesJson);
+                var knownDevices = decryptedDevices != null
+                    ? JsonSerializer.Deserialize<List<string>>(decryptedDevices) ?? []
+                    : [];
                 if (knownDevices.Count > 0 && !knownDevices.Contains(session.DeviceId.ToString()))
                 {
                     anomaliesToAdd.Add(MakeAnomaly(session.UserId, session.Id, "UnusualDevice", 1,
@@ -147,7 +160,7 @@ public sealed class AnomalyDetectionService : BackgroundService
         if (anomaliesToAdd.Count > 0)
         {
             db.Anomalies.AddRange(anomaliesToAdd);
-            await FireAlertRulesAsync(db, anomaliesToAdd, alertRules, ct);
+            await FireAlertRulesAsync(db, anomaliesToAdd, alertRules, email, ct);
             _logger.LogInformation("Anomaly detection: {Count} anomalies in this cycle", anomaliesToAdd.Count);
         }
 
@@ -157,8 +170,9 @@ public sealed class AnomalyDetectionService : BackgroundService
     private static Anomaly MakeAnomaly(Guid userId, Guid sessionId, string type, byte severity, string details)
         => new() { UserId = userId, SessionId = sessionId, AnomalyType = type, Severity = severity, Details = details };
 
-    private static async Task FireAlertRulesAsync(
-        OrkunPamDbContext db, List<Anomaly> newAnomalies, List<AlertRule> rules, CancellationToken ct)
+    private async Task FireAlertRulesAsync(
+        OrkunPamDbContext db, List<Anomaly> newAnomalies, List<AlertRule> rules,
+        IEmailService? emailService, CancellationToken ct)
     {
         if (rules.Count == 0) return;
         var now = DateTime.UtcNow;
@@ -184,14 +198,98 @@ public sealed class AnomalyDetectionService : BackgroundService
             if (lastFired.HasValue && (now - lastFired.Value).TotalMinutes < rule.CooldownMinutes)
                 continue;
 
+            var action = TryParseAction(rule.ActionJson);
+            var actionsTaken = new List<string>();
+
+            // SIEM forwarding
+            if (action.SendSiem)
+            {
+                try
+                {
+                    await SendAlertToSiemAsync(db, rule, matching, ct);
+                    actionsTaken.Add("siem");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Alert SIEM forward failed for rule {RuleId}", rule.Id);
+                }
+            }
+
+            // Email notification
+            if (action.SendEmail && !string.IsNullOrWhiteSpace(action.EmailTo) && emailService != null)
+            {
+                try
+                {
+                    var subject = $"[PAM ALERT] {rule.Name} triggered ({matching.Count} anomal{(matching.Count == 1 ? "y" : "ies")})";
+                    var body    = BuildAlertEmailBody(rule, matching);
+                    await emailService.SendAsync(action.EmailTo, subject, body, ct);
+                    actionsTaken.Add("email:" + action.EmailTo);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Alert email failed for rule {RuleId}", rule.Id);
+                }
+            }
+
             db.AlertHistories.Add(new AlertHistory
             {
-                AlertRuleId = rule.Id,
-                Details = $"Rule '{rule.Name}' triggered: {matching.Count} matching anomal{(matching.Count == 1 ? "y" : "ies")}",
-                ActionsTaken = rule.ActionJson
+                AlertRuleId  = rule.Id,
+                Details      = $"Rule '{rule.Name}' triggered: {matching.Count} matching anomal{(matching.Count == 1 ? "y" : "ies")}",
+                ActionsTaken = actionsTaken.Count > 0 ? string.Join(", ", actionsTaken) : "none"
             });
         }
     }
+
+    private static AlertRuleAction TryParseAction(string json)
+    {
+        try { return JsonSerializer.Deserialize<AlertRuleAction>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task SendAlertToSiemAsync(
+        OrkunPamDbContext db, AlertRule rule, List<Anomaly> matching, CancellationToken ct)
+    {
+        var targets = await db.SiemTargets.Where(t => t.IsEnabled).ToListAsync(ct);
+        if (targets.Count == 0) return;
+
+        var hostname = Environment.MachineName;
+        var ts       = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        var pri      = (16 * 8) + 4; // facility:local0, severity:warning
+        var msg      = $"<{pri}>1 {ts} {hostname} OrkunPAM - ALERT001 - "
+                     + $"CEF:0|OrkunPAM|PAM|1.0|ALERT001|PAM Alert Rule Triggered|7|"
+                     + $"ruleName={EscapeCef(rule.Name)} "
+                     + $"anomalyCount={matching.Count} "
+                     + $"types={EscapeCef(string.Join(",", matching.Select(a => a.AnomalyType).Distinct()))} "
+                     + $"maxSeverity={matching.Max(a => a.Severity)}";
+        var bytes = Encoding.UTF8.GetBytes(msg + "\n");
+
+        foreach (var target in targets)
+        {
+            try
+            {
+                using var udp = new UdpClient();
+                await udp.SendAsync(bytes, bytes.Length, target.Host, target.Port);
+            }
+            catch { /* individual target failure is non-fatal */ }
+        }
+    }
+
+    private static string BuildAlertEmailBody(AlertRule rule, List<Anomaly> matching)
+    {
+        var rows = string.Join("", matching.Take(20).Select(a =>
+            $"<tr><td>{a.UserId}</td><td>{a.AnomalyType}</td><td>{a.Severity}</td><td>{a.Details}</td></tr>"));
+        return $"""
+            <html><body>
+            <h2>PAM Alert: {System.Net.WebUtility.HtmlEncode(rule.Name)}</h2>
+            <p><b>{matching.Count}</b> anomal{(matching.Count == 1 ? "y" : "ies")} matched rule conditions at {DateTime.UtcNow:u}.</p>
+            <table border="1" cellpadding="4"><thead><tr><th>UserId</th><th>Type</th><th>Severity</th><th>Details</th></tr></thead>
+            <tbody>{rows}</tbody></table>
+            </body></html>
+            """;
+    }
+
+    private static string EscapeCef(string v) =>
+        v.Replace("\\", "\\\\").Replace("|", "\\|").Replace("=", "\\=").Replace("\n", "\\n");
 
     private static async Task PersistLastScan(OrkunPamDbContext db, SystemConfig? cfg, DateTime now, CancellationToken ct)
     {
@@ -207,3 +305,8 @@ public sealed class AnomalyDetectionService : BackgroundService
 }
 
 internal sealed record AlertRuleCondition(string? AnomalyType = null, byte MinSeverity = 0);
+
+internal sealed record AlertRuleAction(
+    bool SendSiem    = false,
+    bool SendEmail   = false,
+    string? EmailTo  = null);

@@ -7,7 +7,7 @@ public static class SocDashboardEndpoints
 {
     public static void MapSocDashboardEndpoints(this IEndpointRouteBuilder app)
     {
-        var soc = app.MapGroup("/api/v1/analytics/soc").WithTags("Analytics");
+        var soc = app.MapGroup("/api/v1/analytics/soc").WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         // SOC overview dashboard
         soc.MapGet("/dashboard", async (OrkunPamDbContext db) =>
@@ -67,11 +67,15 @@ public static class SocDashboardEndpoints
         // Hourly anomaly timeline (client-side grouping)
         soc.MapGet("/timeline", async (OrkunPamDbContext db, int hours = 24) =>
         {
+            if (hours < 1 || hours > 168)
+                return Results.BadRequest(new { success = false, errors = new[] { "hours must be between 1 and 168" } });
+
             var since = DateTime.UtcNow.AddHours(-hours);
 
             var raw = await db.Anomalies
                 .Where(a => a.DetectedAtUtc >= since)
                 .Select(a => new { a.DetectedAtUtc, a.Severity })
+                .Take(10_000)
                 .ToListAsync();
 
             var timeline = raw
@@ -126,7 +130,7 @@ public static class SocDashboardEndpoints
         });
 
         // === Behavior Baselines ===
-        var baselines = app.MapGroup("/api/v1/analytics/baselines").WithTags("Analytics");
+        var baselines = app.MapGroup("/api/v1/analytics/baselines").WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         baselines.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -159,7 +163,7 @@ public static class SocDashboardEndpoints
             db.AlertRules.Remove(rule);
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
-        }).WithTags("Analytics");
+        }).WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         // Alert rule toggle enabled/disabled
         app.MapPut("/api/v1/analytics/alerts/rules/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
@@ -169,6 +173,6 @@ public static class SocDashboardEndpoints
             rule.IsEnabled = !rule.IsEnabled;
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, data = new { rule.IsEnabled } });
-        }).WithTags("Analytics");
+        }).WithTags("Analytics").RequireAuthorization("AdminPolicy");
     }
 }

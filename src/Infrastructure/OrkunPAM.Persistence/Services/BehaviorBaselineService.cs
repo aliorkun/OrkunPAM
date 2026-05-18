@@ -1,8 +1,10 @@
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OrkunPAM.Cryptography;
 using OrkunPAM.Domain.Entities.Analytics;
 
 namespace OrkunPAM.Persistence.Services;
@@ -39,6 +41,7 @@ public sealed class BehaviorBaselineService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OrkunPamDbContext>();
+        var vault = scope.ServiceProvider.GetService<IVaultEncryptionService>();
 
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
@@ -87,11 +90,14 @@ public sealed class BehaviorBaselineService : BackgroundService
                 .Select(g => g.Key)
                 .ToList();
 
+            var ipsJson     = EncryptOrSerialize(vault, knownIps);
+            var devicesJson = EncryptOrSerialize(vault, knownDevices);
+
             if (existing.TryGetValue(userGroup.Key, out var baseline))
             {
                 baseline.TypicalHoursJson  = JsonSerializer.Serialize(typicalHours);
-                baseline.KnownIpsJson      = JsonSerializer.Serialize(knownIps);
-                baseline.KnownDevicesJson  = JsonSerializer.Serialize(knownDevices);
+                baseline.KnownIpsJson      = ipsJson;
+                baseline.KnownDevicesJson  = devicesJson;
                 baseline.UpdatedAtUtc      = DateTime.UtcNow;
             }
             else
@@ -100,8 +106,8 @@ public sealed class BehaviorBaselineService : BackgroundService
                 {
                     UserId            = userGroup.Key,
                     TypicalHoursJson  = JsonSerializer.Serialize(typicalHours),
-                    KnownIpsJson      = JsonSerializer.Serialize(knownIps),
-                    KnownDevicesJson  = JsonSerializer.Serialize(knownDevices),
+                    KnownIpsJson      = ipsJson,
+                    KnownDevicesJson  = devicesJson,
                     BaselineDate      = cutoff,
                     UpdatedAtUtc      = DateTime.UtcNow
                 });
@@ -112,5 +118,37 @@ public sealed class BehaviorBaselineService : BackgroundService
 
         await db.SaveChangesAsync(ct);
         _logger.LogInformation("Behavior baselines updated for {Count} users", updated);
+    }
+
+    // Encrypts the serialized list using AES-256-GCM (Base64 output).
+    // Falls back to plaintext JSON if vault is unavailable (e.g., not yet initialized).
+    private string EncryptOrSerialize<T>(IVaultEncryptionService? vault, List<T> items)
+    {
+        var json = JsonSerializer.Serialize(items);
+        if (vault == null) return json;
+        var result = vault.EncryptString(json, "BaselineData");
+        if (result.IsFailure)
+        {
+            _logger.LogWarning("Baseline encryption failed, storing plaintext: {Error}", result.Error);
+            return json;
+        }
+        return Convert.ToBase64String(result.Value);
+    }
+
+    internal static string? DecryptOrDeserialize(IVaultEncryptionService? vault, string? stored)
+    {
+        if (string.IsNullOrEmpty(stored)) return stored;
+        if (vault == null || stored.TrimStart().StartsWith('[') || stored.TrimStart().StartsWith('{'))
+            return stored;
+        try
+        {
+            var bytes = Convert.FromBase64String(stored);
+            var result = vault.DecryptString(bytes);
+            return result.IsSuccess ? result.Value : stored;
+        }
+        catch
+        {
+            return stored;
+        }
     }
 }

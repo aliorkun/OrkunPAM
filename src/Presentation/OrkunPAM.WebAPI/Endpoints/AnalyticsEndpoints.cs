@@ -8,7 +8,7 @@ public static class AnalyticsEndpoints
 {
     public static void MapAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
-        var uba = app.MapGroup("/api/v1/analytics/uba").WithTags("Analytics");
+        var uba = app.MapGroup("/api/v1/analytics/uba").WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         uba.MapGet("/rules", async (OrkunPamDbContext db) =>
         {
@@ -32,7 +32,7 @@ public static class AnalyticsEndpoints
             return Results.Created($"/api/v1/analytics/uba/rules/{rule.Id}", new { success = true, data = new { rule.Id } });
         });
 
-        var anomalies = app.MapGroup("/api/v1/analytics/anomalies").WithTags("Analytics");
+        var anomalies = app.MapGroup("/api/v1/analytics/anomalies").WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         anomalies.MapGet("/", async (OrkunPamDbContext db, Guid? userId, string? type, int page = 1, int pageSize = 50) =>
         {
@@ -65,7 +65,7 @@ public static class AnalyticsEndpoints
             return Results.Ok(new { success = true });
         });
 
-        var alerts = app.MapGroup("/api/v1/analytics/alerts").WithTags("Analytics");
+        var alerts = app.MapGroup("/api/v1/analytics/alerts").WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
         alerts.MapGet("/rules", async (OrkunPamDbContext db) =>
         {
@@ -120,9 +120,9 @@ public static class AnalyticsEndpoints
                 .ToListAsync();
 
             return Results.Ok(new { success = true, data = userRisks });
-        }).WithTags("Analytics");
+        }).WithTags("Analytics").RequireAuthorization("AdminPolicy");
 
-        var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations");
+        var siem = app.MapGroup("/api/v1/integrations/siem").WithTags("Integrations").RequireAuthorization("AdminPolicy");
 
         siem.MapGet("/", async (OrkunPamDbContext db) =>
         {
