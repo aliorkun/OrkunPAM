@@ -45,3 +45,9 @@ public interface IEmailService
     Task<bool> SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default);
     Task<bool> TestConnectionAsync(CancellationToken ct = default);
 }
+
+public interface ISmsGatewayService
+{
+    Task<bool> SendAsync(string toPhoneNumber, string message, CancellationToken ct = default);
+    Task<bool> TestConnectionAsync(CancellationToken ct = default);
+}

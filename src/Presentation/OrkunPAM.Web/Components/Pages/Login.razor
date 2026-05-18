@@ -90,6 +90,50 @@
                 </button>
             </div>
         }
+        else if (_mfaType == "Sms")
+        {
+            <div class="pam-mfa-step">
+                <div class="pam-mfa-icon">📱</div>
+                <p class="pam-login-sub">
+                    @if (!_smsOtpSent)
+                    {
+                        <span>Click below to receive a one-time code via SMS to your registered phone number.</span>
+                    }
+                    else
+                    {
+                        <span>A 6-digit code has been sent to your phone. Enter it below (valid for 10 minutes).</span>
+                    }
+                </p>
+                @if (!_smsOtpSent)
+                {
+                    <button class="pam-btn pam-btn-primary w-100" @onclick="SendSmsOtpAsync"
+                            disabled="@_loading">
+                        @if (_loading) { <span class="pam-spinner-sm"></span> } Send Code to My Phone
+                    </button>
+                }
+                else
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Verification Code</label>
+                        <input class="pam-input pam-mfa-input" type="text" inputmode="numeric"
+                               maxlength="6" placeholder="000000" @bind="_mfaCode" @bind:event="oninput"
+                               @onkeyup="OnSmsOtpKeyUp" disabled="@_loading" autocomplete="one-time-code" />
+                    </div>
+                    <button class="pam-btn pam-btn-primary w-100" @onclick="HandleSmsOtpAsync"
+                            disabled="@(_loading || _mfaCode.Length != 6)">
+                        @if (_loading) { <span class="pam-spinner-sm"></span> } Verify
+                    </button>
+                    <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
+                            @onclick="SendSmsOtpAsync" disabled="@_loading">
+                        Resend Code
+                    </button>
+                }
+                <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
+                        @onclick="ResetToLogin" disabled="@_loading">
+                    ← Back to Sign In
+                </button>
+            </div>
+        }
         else
         {
             <div class="pam-mfa-step">
@@ -125,12 +169,13 @@
 @code {
     private readonly LoginModel _model = new();
     private bool   _loading;
-    private string _error       = "";
+    private string _error        = "";
     private bool   _mfaStep;
-    private string _mfaType     = "";
-    private string _mfaCode     = "";
+    private string _mfaType      = "";
+    private string _mfaCode      = "";
     private bool   _emailOtpSent;
-    private string _riskLevel   = "";
+    private bool   _smsOtpSent;
+    private string _riskLevel    = "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -251,7 +296,46 @@
             await HandleEmailOtpAsync();
     }
 
-    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; _riskLevel = ""; }
+    private async Task SendSmsOtpAsync()
+    {
+        _loading = true;
+        _error   = "";
+        StateHasChanged();
+
+        await Api.RequestSmsOtpAsync(_model.Username, _model.Password);
+        _smsOtpSent = true;
+        _mfaCode    = "";
+        _loading    = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleSmsOtpAsync()
+    {
+        if (_mfaCode.Length != 6) return;
+        _loading = true;
+        _error   = "";
+        StateHasChanged();
+
+        var result = await Api.VerifySmsOtpAsync(_model.Username, _mfaCode);
+        if (result?.Success == true && result.Data != null)
+        {
+            await CompleteLoginAsync(result.Data);
+        }
+        else
+        {
+            _error   = "Invalid or expired code. Please try again.";
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSmsOtpKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _mfaCode.Length == 6)
+            await HandleSmsOtpAsync();
+    }
+
+    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; _smsOtpSent = false; _riskLevel = ""; }
 
     private sealed class LoginModel
     {
