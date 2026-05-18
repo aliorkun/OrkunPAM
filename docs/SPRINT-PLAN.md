@@ -248,7 +248,7 @@
   - AdminGroup sentinel GUID ile tüm adminlere görünür step oluşturur
   - 48 saat TTL
 - `Vault.razor` — "📋 Request Access" butonu (RequiresApproval kredansiyellerde)
-  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uyarı
+  - Modal: Reason (zorunlu) + Ticket Number + bilgilendirici uya rı
   - Başarı/hata mesajı + mevcut pending request bilgisi
 - `PamApiService.cs` — `RequestCredentialAccessAsync` + `CredentialAccessRequestResultDto`
 
@@ -317,17 +317,17 @@
 
 ---
 
-## Sprint 17 - v2 Auth: Adaptive MFA + Threat Intelligence + Device Trust
-**Tarih:** 18 Mayıs 2026 (aktif)
-**Durum:** Devam ediyor 🔄
+## ~~Sprint 17 - v2 Auth: Adaptive MFA + Threat Intelligence + Device Trust~~ ✅ TAMAMLANDI
+**Tarih:** 18 Mayıs 2026
+**Durum:** Tamamlandı — Adaptive MFA + Threat Intelligence Feed tamamlandı; Device Trust Sprint 18'e taşındı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #205 | Adaptive MFA — Anomali Skoruna Göre Step-Up Kimlik Doğrulama | v2-SECURITY | ✅ Tamamlandı |
-| #206 | Threat Intelligence Feed — IOC/IP Reputation Entegrasyonu | v2-ANALYTICS | 🔲 Bekliyor |
-| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔲 Bekliyor |
+| #206 | Threat Intelligence Feed — IOC/IP Reputation Entegrasyonu | v2-ANALYTICS | ✅ Tamamlandı |
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔄 Sprint 18'e taşındı |
 
-**Sprint 17 Tamamlanan Bileşenler (#205):**
+**Sprint 17 Tamamlanan Bileşenler (#205 — Adaptive MFA):**
 - `AdaptiveMfaHelper` static class: `LoadPolicyAsync` + `CalculateLoginRiskAsync` (IP/hours/frequency risk factors)
 - `BehaviorBaselineService.DecryptOrDeserialize` → public static (baseline erişimi için)
 - Login endpoint: risk score calculation → riskScore + riskLevel response fields
@@ -337,15 +337,45 @@
 - `AdaptiveMfaPolicySettings` record (Enabled, Low/Medium/High/Block thresholds)
 - `PamApiService.cs`: `AdaptiveMfaPolicySettingsDto` + `GetAdaptiveMfaPolicyAsync` + `SaveAdaptiveMfaPolicyAsync` + `LoginData.RiskScore/RiskLevel`
 - `Policies.razor`: "Adaptive MFA" sekmesi + threshold form + save
-- `Login.razor`: Risk seviyesi uyarı banner (Medium/High için)
+- `Login.razor`: Risk seviyesi uya rı banner (Medium/High için)
+- RFP MFA #8 → PC, User Mgmt #41/#42 → PC
 
-**İlerleme:** 1/3 (%33) — #205 tamamlandı, #206 ve #207 bekliyor
+**Sprint 17 Tamamlanan Bileşenler (#206 — Threat Intelligence Feed):**
+- `ThreatFeedService.cs` (BackgroundService, saatlik): AbuseIPDB/Emerging Threats/AlienVault OTX feed entegrasyonu
+- `ThreatIndicator` entity: IndicatorType (IP/Domain/Hash), Value, Severity, Source, ExpiresAtUtc
+- `ThreatFeedConfig` entity: feed URL, API key (AES-256-GCM şifreli), refresh interval, enabled flag
+- `AnomalyDetectionService` enrichment: session başlatmada IOC lookup → KnownMaliciousIP +80 risk skoru
+- API: `GET /api/v1/analytics/threat-feed/indicators|configs|reports` + `POST /refresh`
+- `ThreatAnalytics.razor` Threat Intelligence sekmesi: IOC tablosu, feed config yönetimi, 24h hit listesi
+- Süresi dolmuş IOC'lerin otomatik temizliği
+- RFP User Mgmt #40 → PC, Reporting #32 → PC
+
+**İlerleme:** 2/2 tamamlandı (%100 — Sprint 17 core items) ✅
+
+---
+
+## Sprint 18 - v2 Access Control + Geolocation + Access Analytics
+**Tarih:** 18-25 Mayıs 2026 (aktif)
+**Durum:** Devam ediyor 🔄
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔲 Bekliyor |
+| #208 | Geolocation-based Access Control | v2-ACCESS | 🔲 Bekliyor |
+| #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | 🔲 Bekliyor |
+
+**Sprint 18 Hedefleri:**
+- User Mgmt #29 (geolocation access control), #32/#33 (device/context-aware) → PC
+- Reporting #33 (access pattern analytics), #38 (API usage reports), #46 (time-of-day) → PC
+- Zero Trust access control maturity: IP + device + geo + context combined
+
+**İlerleme:** 0/3 (%0) — Sprint 18 başladı
 
 ---
 
 ## Sonraki Adım
-**Sprint 17 devam:** #206 Threat Intel Feed → #207 Device Trust
-**v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
+**Sprint 18 aktif:** #207 Device Trust → #208 Geolocation Access → #209 Access Pattern Analytics
+**v2.0.0:** 30 Eylül 2026
 
 ---
 
