@@ -289,6 +289,21 @@ else
                         <label class="pam-label">Cooldown (minutes)</label>
                         <input class="pam-input" type="number" @bind="_newRuleCooldown" />
                     </div>
+                    <div>
+                        <label class="pam-label">Actions</label>
+                        <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;">
+                                <input type="checkbox" @bind="_newRuleSendSiem" /> Forward to SIEM
+                            </label>
+                            <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;">
+                                <input type="checkbox" @bind="_newRuleSendEmail" /> Send Email
+                            </label>
+                        </div>
+                        @if (_newRuleSendEmail)
+                        {
+                            <input class="pam-input" style="margin-top:0.5rem;" @bind="_newRuleEmailTo" placeholder="Recipient email address" />
+                        }
+                    </div>
                     <div style="display:flex;gap:0.5rem;">
                         <button class="pam-btn pam-btn-primary" @onclick="@(() => SaveRuleAsync())">Save</button>
                         <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRuleForm = false)">Cancel</button>
@@ -410,6 +425,9 @@ else
     private string _newRuleType = "";
     private int _newRuleMinSeverity;
     private int _newRuleCooldown = 15;
+    private bool _newRuleSendSiem;
+    private bool _newRuleSendEmail;
+    private string _newRuleEmailTo = "";
     private string _ruleMsg = "";
 
     // Baselines tab
@@ -464,6 +482,9 @@ else
         _newRuleType = "";
         _newRuleMinSeverity = 0;
         _newRuleCooldown = 15;
+        _newRuleSendSiem = false;
+        _newRuleSendEmail = false;
+        _newRuleEmailTo = "";
         _ruleMsg = "";
     }
 
@@ -477,7 +498,13 @@ else
             MinSeverity = _newRuleMinSeverity
         });
 
-        var ok = await Api.CreateAlertRuleAsync(_newRuleName, conditionJson, "{}", _newRuleCooldown);
+        var actionJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SendSiem  = _newRuleSendSiem,
+            SendEmail = _newRuleSendEmail,
+            EmailTo   = _newRuleSendEmail ? _newRuleEmailTo : null
+        });
+        var ok = await Api.CreateAlertRuleAsync(_newRuleName, conditionJson, actionJson, _newRuleCooldown);
         if (ok)
         {
             _ruleMsg = "Rule created.";

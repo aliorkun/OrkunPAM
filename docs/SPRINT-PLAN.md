@@ -285,13 +285,16 @@
 
 ---
 
-## Sprint 16 - v2 Threat Analytics & SOC Dashboard (Aktif)
-**Tarih:** 18 Mayıs 2026 (aktif)
-**Durum:** Devam ediyor
+## ~~Sprint 16 - v2 Threat Analytics & SOC Dashboard~~ ✅ TAMAMLANDI
+**Tarih:** 18 Mayıs 2026
+**Durum:** Tamamlandı — ML anomali tespiti + BFLA fix + DoS fix + baseline şifreleme + alert actions
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
-| #35 | ML Tabanlı Anomali Tespiti ve Risk Skorlama | v2-ANALYTICS | 🔄 In Progress |
+| #35 | ML Tabanlı Anomali Tespiti ve Risk Skorlama | v2-ANALYTICS | ✅ Tamamlandı |
+| #202 | [HIGH] SOC/Analytics API BFLA | security | ✅ Fix'lendi |
+| #203 | [MEDIUM] /soc/timeline DoS Riski | security | ✅ Fix'lendi |
+| #204 | [MEDIUM] Baseline Plaintext Storage | security | ✅ Fix'lendi |
 
 **Sprint 16 — 2026-05-18 progress:**
 - `AnomalyDetectionService` (BackgroundService, 5 dk): off-hours, unusual IP, unusual device, frequency spike, high-risk command anomaly detection
@@ -303,12 +306,19 @@
 - NavMenu: "Threat Analytics / SOC Dashboard" linki eklendi
 - Program.cs: AnomalyDetectionService + BehaviorBaselineService servis kaydı
 
-**İlerleme:** 1/1 core feature (%80 — alert rule actions + SIEM forwarding kalan)
+**Sprint 16 — 2026-05-18 tamamlama (run 2):**
+- **#202 fix [HIGH]:** `SocDashboardEndpoints` + `AnalyticsEndpoints` tüm MapGroup'larına + standalone endpoint'lere `RequireAuthorization("AdminPolicy")` eklendi (BFLA önlendi)
+- **#203 fix [MEDIUM]:** `/soc/timeline` `hours` parametresi 1-168 arası clamp + `.Take(10_000)` DoS önleme
+- **#204 fix [MEDIUM]:** `BehaviorBaselineService` → `KnownIpsJson`/`KnownDevicesJson` AES-256-GCM şifreli (Base64) saklanıyor; `AnomalyDetectionService` decrypt ederek kullanıyor; vault başlatılmadıysa graceful fallback
+- **#35 tamamlama:** `FireAlertRulesAsync` → `AlertRuleAction` (SendSiem/SendEmail/EmailTo) parse ediliyor; SIEM: enabled SiemTarget'lara CEF UDP syslog gönderiliyor; Email: `IEmailService.SendAsync` tetikleniyor; `ActionsTaken` alanı gerçek action listesiyle dolduruluyor
+- **UI:** `ThreatAnalytics.razor` alert rule formuna "Forward to SIEM" checkbox + "Send Email" checkbox + recipient email alanı eklendi
+
+**İlerleme:** 1/1 core feature (%100 — Sprint 16 TAMAMLANDI) ✅
 
 ---
 
 ## Sonraki Adım
-**Sprint 16 devam:** Alert rule actions (SIEM forward, email) implementasyonu
+**Sprint 17:** Device Trust + Adaptive MFA + Threat Intelligence Feed (#207, #205, #206)
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ---
