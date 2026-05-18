@@ -56,7 +56,7 @@ public static class AuthEndpoints
 
             // Device Trust check (#207)
             var userAgent = ctx.Request.Headers.UserAgent.ToString();
-            var deviceFingerprint = DeviceTrustHelper.ComputeFingerprint(userAgent);
+            var deviceFingerprint = DeviceTrustHelper.ComputeFingerprint(userAgent, ctx);
             var trustedData = await DeviceTrustHelper.ApplyDeviceTrustAsync(db, data, data.UserId, deviceFingerprint, userAgent, ip);
             if (trustedData == null)
                 return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
@@ -519,6 +519,16 @@ public static class AuthEndpoints
             if (tokenResult.IsFailure)
                 return Results.Problem("Failed to generate tokens");
 
+            // Device Trust check — #211: Email OTP flow must also enforce device trust policy
+            var otpUserAgent = ctx.Request.Headers.UserAgent.ToString();
+            var otpFingerprint = DeviceTrustHelper.ComputeFingerprint(otpUserAgent, ctx);
+            var otpDtData = new AuthResult(tokenResult.Value, user.Id, user.Username, user.DisplayName,
+                MfaRequired: false, MfaType: null, MfaEnrollmentRequired: false,
+                MustChangePassword: user.MustChangePassword,
+                PasswordExpired: user.PasswordExpiresAt.HasValue && user.PasswordExpiresAt < DateTime.UtcNow);
+            if (await DeviceTrustHelper.ApplyDeviceTrustAsync(db, otpDtData, user.Id, otpFingerprint, otpUserAgent, ip) == null)
+                return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
+
             await audit.LogAsync("Auth", "EMAIL_OTP_VERIFY_SUCCESS", user.Id, null, ip,
                 "User", user.Id.ToString(), new { username = user.Username });
             logger.LogInformation("User '{Username}' authenticated via Email OTP (IP: {Ip})", user.Username, ip);
@@ -778,6 +788,16 @@ public static class AuthEndpoints
                 return Results.Problem("Failed to generate tokens");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // Device Trust check — #211: Windows/Kerberos auth must also enforce device trust policy
+            var winUserAgent = ctx.Request.Headers.UserAgent.ToString();
+            var winFingerprint = DeviceTrustHelper.ComputeFingerprint(winUserAgent, ctx);
+            var winDtData = new AuthResult(tokenResult.Value, user.Id, user.Username, user.DisplayName,
+                MfaRequired: false, MfaType: null, MfaEnrollmentRequired: false,
+                MustChangePassword: false, PasswordExpired: false);
+            if (await DeviceTrustHelper.ApplyDeviceTrustAsync(db, winDtData, user.Id, winFingerprint, winUserAgent, ip) == null)
+                return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
+
             await eventBus.PublishAsync(new UserLoggedInEvent
             {
                 ActorUserId = user.Id,
@@ -828,9 +848,23 @@ internal static class DeviceTrustHelper
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
-    internal static string ComputeFingerprint(string userAgent)
+    internal static string ComputeFingerprint(string userAgent, HttpContext? ctx = null)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(userAgent.ToLowerInvariant()));
+        string raw;
+        if (ctx != null)
+        {
+            var acceptLang = ctx.Request.Headers["Accept-Language"].ToString();
+            var acceptEnc  = ctx.Request.Headers["Accept-Encoding"].ToString();
+            var ip         = ctx.Connection.RemoteIpAddress?.ToString() ?? "";
+            // Subnet-level (last octet stripped) to tolerate NAT/proxy IP variation
+            var ipSubnet   = ip.Contains('.') ? string.Join('.', ip.Split('.')[..3]) : ip;
+            raw = $"{userAgent.ToLowerInvariant()}|{acceptLang}|{acceptEnc}|{ipSubnet}";
+        }
+        else
+        {
+            raw = userAgent.ToLowerInvariant();
+        }
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return Convert.ToHexString(hash)[..32].ToLowerInvariant();
     }
 

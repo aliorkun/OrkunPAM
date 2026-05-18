@@ -117,7 +117,8 @@ public static class DeviceTrustEndpoints
             await db.SaveChangesAsync();
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            await audit.LogAsync("DeviceTrust", "DEVICE_TRUST_UPDATED", null, null, ip,
+            Guid? actorId = Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsed) ? parsed : null;
+            await audit.LogAsync("DeviceTrust", "DEVICE_TRUST_UPDATED", actorId, null, ip,
                 "TrustedDevice", id.ToString(), new { deviceId = id, from = oldLevel.ToString(), to = newLevel.ToString() });
 
             return Results.Ok(new { success = true });
@@ -133,7 +134,8 @@ public static class DeviceTrustEndpoints
             await db.SaveChangesAsync();
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            await audit.LogAsync("DeviceTrust", "DEVICE_REVOKED_BY_ADMIN", null, null, ip,
+            Guid? actorId = Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedAdmin) ? parsedAdmin : null;
+            await audit.LogAsync("DeviceTrust", "DEVICE_REVOKED_BY_ADMIN", actorId, null, ip,
                 "TrustedDevice", id.ToString(), new { deviceId = id, userId = device.UserId });
 
             return Results.Ok(new { success = true });
