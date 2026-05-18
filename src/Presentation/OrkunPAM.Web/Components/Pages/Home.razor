@@ -1,12 +1,11 @@
 @page "/"
 @inject PamApiService Api
 @inject NavigationManager Nav
-@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>@L["dash_title"] — OrkunPAM</PageTitle>
+<PageTitle>Dashboard — OrkunPAM</PageTitle>
 
 <div class="pam-page-header">
-    <h2 class="pam-page-title">@L["dash_title"]</h2>
+    <h2 class="pam-page-title">Dashboard</h2>
     <span class="pam-page-sub">@DateTime.Now.ToString("dddd, MMMM d yyyy")</span>
 </div>
 
@@ -16,35 +15,35 @@
         <div class="pam-stat-icon">▶</div>
         <div class="pam-stat-body">
             <div class="pam-stat-value">@(_activeSessions?.ToString() ?? "—")</div>
-            <div class="pam-stat-label">@L["dash_active_sessions"]</div>
+            <div class="pam-stat-label">Active Sessions</div>
         </div>
     </div>
     <div class="pam-stat-card pam-stat-green">
         <div class="pam-stat-icon">👤</div>
         <div class="pam-stat-body">
             <div class="pam-stat-value">@(_totalUsers?.ToString() ?? "—")</div>
-            <div class="pam-stat-label">@L["dash_total_users"]</div>
+            <div class="pam-stat-label">Total Users</div>
         </div>
     </div>
     <div class="pam-stat-card pam-stat-purple">
         <div class="pam-stat-icon">🖵</div>
         <div class="pam-stat-body">
             <div class="pam-stat-value">@(_totalDevices?.ToString() ?? "—")</div>
-            <div class="pam-stat-label">@L["dash_managed_devices"]</div>
+            <div class="pam-stat-label">Managed Devices</div>
         </div>
     </div>
     <div class="pam-stat-card pam-stat-orange">
         <div class="pam-stat-icon">🔑</div>
         <div class="pam-stat-body">
             <div class="pam-stat-value">@(_totalCredentials?.ToString() ?? "—")</div>
-            <div class="pam-stat-label">@L["dash_vault_credentials"]</div>
+            <div class="pam-stat-label">Vault Credentials</div>
         </div>
     </div>
     <div class="pam-stat-card pam-stat-red">
         <div class="pam-stat-icon">⏳</div>
         <div class="pam-stat-body">
             <div class="pam-stat-value">@(_pendingApprovals?.ToString() ?? "—")</div>
-            <div class="pam-stat-label">@L["dash_pending_approvals"]</div>
+            <div class="pam-stat-label">Pending Approvals</div>
         </div>
     </div>
 </div>
@@ -53,27 +52,27 @@
     <!-- Recent Sessions -->
     <div class="pam-card pam-card-lg">
         <div class="pam-card-header">
-            <h3 class="pam-card-title">@L["dash_recent_sessions"]</h3>
-            <a href="/sessions" class="pam-link">@L["dash_view_all"]</a>
+            <h3 class="pam-card-title">Recent Sessions</h3>
+            <a href="/sessions" class="pam-link">View All</a>
         </div>
         <div class="pam-card-body">
             @if (_sessions == null)
             {
-                <div class="pam-loading-text">@L["dash_loading"]</div>
+                <div class="pam-loading-text">Loading...</div>
             }
             else if (_sessions.Count == 0)
             {
-                <div class="pam-empty">@L["dash_no_sessions"]</div>
+                <div class="pam-empty">No sessions yet</div>
             }
             else
             {
                 <table class="pam-table">
                     <thead>
                         <tr>
-                            <th>@L["dash_col_type"]</th>
-                            <th>@L["dash_col_target"]</th>
-                            <th>@L["dash_col_status"]</th>
-                            <th>@L["dash_col_started"]</th>
+                            <th>Type</th>
+                            <th>Target</th>
+                            <th>Status</th>
+                            <th>Started</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -97,37 +96,37 @@
     <!-- Quick Actions -->
     <div class="pam-card pam-card-sm">
         <div class="pam-card-header">
-            <h3 class="pam-card-title">@L["dash_quick_actions"]</h3>
+            <h3 class="pam-card-title">Quick Actions</h3>
         </div>
         <div class="pam-card-body">
             <a href="/connect" class="pam-action-btn pam-action-ssh">
-                <span>⌨</span> @L["dash_start_ssh"]
+                <span>⌨</span> Start SSH Session
             </a>
             <a href="/devices" class="pam-action-btn pam-action-device">
-                <span>🖵</span> @L["dash_add_device"]
+                <span>🖵</span> Add Device
             </a>
             <a href="/users" class="pam-action-btn pam-action-user">
-                <span>👤</span> @L["dash_manage_users"]
+                <span>👤</span> Manage Users
             </a>
             <a href="/vault" class="pam-action-btn pam-action-vault">
-                <span>🔑</span> @L["dash_open_vault"]
+                <span>🔑</span> Open Vault
             </a>
         </div>
         <div class="pam-card-header mt-3">
-            <h3 class="pam-card-title">@L["dash_system_status"]</h3>
+            <h3 class="pam-card-title">System Status</h3>
         </div>
         <div class="pam-card-body">
             <div class="pam-status-row">
-                <span>@L["dash_ssh_proxy"]</span>
-                <span class="pam-status pam-status-active">@L["dash_online"]</span>
+                <span>SSH Proxy</span>
+                <span class="pam-status pam-status-active">Online</span>
             </div>
             <div class="pam-status-row">
-                <span>@L["dash_vault_engine"]</span>
-                <span class="pam-status pam-status-active">@L["dash_online"]</span>
+                <span>Vault Engine</span>
+                <span class="pam-status pam-status-active">Online</span>
             </div>
             <div class="pam-status-row">
-                <span>@L["dash_audit_log"]</span>
-                <span class="pam-status pam-status-active">@L["dash_online"]</span>
+                <span>Audit Log</span>
+                <span class="pam-status pam-status-active">Online</span>
             </div>
         </div>
     </div>

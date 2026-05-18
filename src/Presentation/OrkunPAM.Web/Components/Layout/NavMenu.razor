@@ -1,8 +1,6 @@
 @inject AuthStateService Auth
 @inject NavigationManager Nav
 @inject PamApiService Api
-@inject IStringLocalizer<SharedResource> L
-@inject CultureService CultureSvc
 
 <div class="pam-sidebar">
     <div class="pam-brand">
@@ -21,66 +19,58 @@
         </div>
     }
 
-    <!-- Language switcher -->
-    <div class="pam-lang-switcher">
-        <button class="@("pam-lang-btn " + (_currentCulture.StartsWith("en") ? "pam-lang-active" : ""))"
-                @onclick="@(() => CultureSvc.SetCulture("en-US"))">EN</button>
-        <button class="@("pam-lang-btn " + (_currentCulture.StartsWith("tr") ? "pam-lang-active" : ""))"
-                @onclick="@(() => CultureSvc.SetCulture("tr-TR"))">TR</button>
-    </div>
-
     <nav class="pam-nav">
-        <div class="pam-nav-section">@L["nav_section_overview"]</div>
+        <div class="pam-nav-section">Overview</div>
         <NavLink class="pam-nav-link" href="/" Match="NavLinkMatch.All">
-            <span class="pam-nav-icon">&#x229E;</span> @L["nav_dashboard"]
+            <span class="pam-nav-icon">&#x229E;</span> Dashboard
         </NavLink>
         <NavLink class="pam-nav-link" href="/portal">
-            <span class="pam-nav-icon">&#x1F9D1;</span> @L["nav_my_portal"]
+            <span class="pam-nav-icon">&#x1F9D1;</span> My Portal
         </NavLink>
         <NavLink class="pam-nav-link" href="/sessions">
-            <span class="pam-nav-icon">&#x25B6;</span> @L["nav_active_sessions"]
+            <span class="pam-nav-icon">&#x25B6;</span> Active Sessions
         </NavLink>
         <NavLink class="pam-nav-link" href="/session-playback">
-            <span class="pam-nav-icon">&#x23EF;</span> @L["nav_session_playback"]
+            <span class="pam-nav-icon">&#x23EF;</span> Session Playback
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_access"]</div>
+        <div class="pam-nav-section">Access</div>
         <NavLink class="pam-nav-link" href="/vault">
-            <span class="pam-nav-icon">&#x1F511;</span> @L["nav_vault"]
+            <span class="pam-nav-icon">&#x1F511;</span> Vault
         </NavLink>
         <NavLink class="pam-nav-link" href="/devices">
-            <span class="pam-nav-icon">&#x1F5B5;</span> @L["nav_devices"]
+            <span class="pam-nav-icon">&#x1F5B5;</span> Devices
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_identity"]</div>
+        <div class="pam-nav-section">Identity</div>
         <NavLink class="pam-nav-link" href="/users">
-            <span class="pam-nav-icon">&#x1F464;</span> @L["nav_users"]
+            <span class="pam-nav-icon">&#x1F464;</span> Users
         </NavLink>
         <NavLink class="pam-nav-link" href="/policies">
-            <span class="pam-nav-icon">&#x1F4CB;</span> @L["nav_policies"]
+            <span class="pam-nav-icon">&#x1F4CB;</span> Policies
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_workflow"]</div>
+        <div class="pam-nav-section">Workflow</div>
         <NavLink class="pam-nav-link" href="/approvals">
-            <span class="pam-nav-icon">&#x2705;</span> @L["nav_approvals"]
+            <span class="pam-nav-icon">&#x2705;</span> Approvals
             @if (_pendingCount > 0)
             {
-                <span class="@("pam-nav-badge " + (_pendingCount > 0 ? "pam-nav-badge-red" : ""))">@_pendingCount</span>
+                <span class="pam-nav-badge pam-nav-badge-red">@_pendingCount</span>
             }
         </NavLink>
         <NavLink class="pam-nav-link" href="/break-glass">
-            <span class="pam-nav-icon">&#x1F6A8;</span> @L["nav_break_glass"]
+            <span class="pam-nav-icon">&#x1F6A8;</span> Break Glass
         </NavLink>
         <NavLink class="pam-nav-link" href="/jit">
-            <span class="pam-nav-icon">&#x23F1;</span> @L["nav_jit_access"]
+            <span class="pam-nav-icon">&#x23F1;</span> JIT Access
         </NavLink>
         <NavLink class="pam-nav-link" href="/vendors">
-            <span class="pam-nav-icon">&#x1F3ED;</span> @L["nav_vendor_access"]
+            <span class="pam-nav-icon">&#x1F3ED;</span> Vendor Access
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_reporting"]</div>
+        <div class="pam-nav-section">Reporting</div>
         <NavLink class="pam-nav-link" href="/reports">
-            <span class="pam-nav-icon">&#x1F4CA;</span> @L["nav_reports"]
+            <span class="pam-nav-icon">&#x1F4CA;</span> Reports
         </NavLink>
         @if (_user?.Roles.Contains("GlobalAdmin") == true || _user?.Roles.Contains("Auditor") == true)
         {
@@ -89,20 +79,20 @@
             </NavLink>
         }
         <NavLink class="pam-nav-link" href="/compliance">
-            <span class="pam-nav-icon">&#x2714;</span> @L["nav_certifications"]
+            <span class="pam-nav-icon">&#x2714;</span> Compliance
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_terminal"]</div>
+        <div class="pam-nav-section">Terminal</div>
         <NavLink class="pam-nav-link" href="/connect">
-            <span class="pam-nav-icon">&#x2328;</span> @L["nav_ssh_rdp"]
+            <span class="pam-nav-icon">&#x2328;</span> SSH / RDP
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_network"]</div>
+        <div class="pam-nav-section">Network</div>
         <NavLink class="pam-nav-link" href="/network-access">
-            <span class="pam-nav-icon">&#x2B21;</span> @L["nav_tacacs_radius"]
+            <span class="pam-nav-icon">&#x2B21;</span> TACACS+ / RADIUS
         </NavLink>
         <NavLink class="pam-nav-link" href="/rdp-management">
-            <span class="pam-nav-icon">&#x1F5A5;</span> @L["nav_rdp_management"]
+            <span class="pam-nav-icon">&#x1F5A5;</span> RDP Management
         </NavLink>
 
         <div class="pam-nav-section">Cloud</div>
@@ -129,27 +119,27 @@
             <span class="pam-nav-icon">&#x1F4BB;</span> My Devices
         </NavLink>
 
-        <div class="pam-nav-section">@L["nav_section_system"]</div>
+        <div class="pam-nav-section">System</div>
         <NavLink class="pam-nav-link" href="/system-health">
-            <span class="pam-nav-icon">&#x2764;</span> @L["nav_system_health"]
+            <span class="pam-nav-icon">&#x2764;</span> System Health
         </NavLink>
         <NavLink class="pam-nav-link" href="/system-logs">
             <span class="pam-nav-icon">&#x1F4DC;</span> System Logs
         </NavLink>
         <NavLink class="pam-nav-link" href="/discovery">
-            <span class="pam-nav-icon">&#x1F50D;</span> @L["nav_discovery"]
+            <span class="pam-nav-icon">&#x1F50D;</span> Discovery
         </NavLink>
         <NavLink class="pam-nav-link" href="/integrations">
-            <span class="pam-nav-icon">&#x1F517;</span> @L["nav_integrations"]
+            <span class="pam-nav-icon">&#x1F517;</span> Integrations
         </NavLink>
         <NavLink class="pam-nav-link" href="/encryption">
-            <span class="pam-nav-icon">&#x1F512;</span> @L["nav_encryption"]
+            <span class="pam-nav-icon">&#x1F512;</span> Encryption
         </NavLink>
     </nav>
 
     <div class="pam-sidebar-footer">
         <button class="pam-logout-btn" @onclick="LogoutAsync">
-            <span>&#x21A9;</span> @L["nav_sign_out"]
+            <span>&#x21A9;</span> Sign Out
         </button>
     </div>
 </div>
@@ -157,14 +147,12 @@
 @code {
     private AuthUser? _user;
     private int _pendingCount;
-    private string _currentCulture = "en-US";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         _user = await Auth.GetUserAsync();
         _pendingCount = await Api.GetPendingApprovalCountAsync();
-        _currentCulture = CultureSvc.CurrentCulture;
         StateHasChanged();
     }
 
