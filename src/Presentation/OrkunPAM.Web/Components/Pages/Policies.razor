@@ -285,6 +285,13 @@
                     </label>
                     <span class="pam-hint">When enabled, users can choose Email OTP (one-time code sent via email) as their MFA method instead of an authenticator app.</span>
                 </div>
+                <div class="pam-form-group" style="margin-top:.75rem">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_smsOtpEnabled" />
+                        <strong>Allow SMS OTP as MFA method</strong>
+                    </label>
+                    <span class="pam-hint">When enabled, users can receive a one-time code via SMS as their MFA method. Requires SMS gateway configuration under Integrations.</span>
+                </div>
                 <div style="margin-top:1rem">
                     <button class="pam-btn pam-btn-primary" @onclick="SaveMfaPolicyAsync" disabled="@_mfaSaving">
                         @if (_mfaSaving) { <span class="pam-spinner-sm"></span> } Save
@@ -725,6 +732,7 @@
     private bool _mfaSaving       = false;
     private bool _mfaRequired     = false;
     private bool _emailOtpEnabled = false;
+    private bool _smsOtpEnabled   = false;
 
     // Watermark policy (#190)
     private bool   _wmLoading          = false;
@@ -927,14 +935,14 @@
     {
         _mfaLoading = true; StateHasChanged();
         var s = await Api.GetMfaPolicyAsync();
-        if (s != null) { _mfaRequired = s.MfaRequired; _emailOtpEnabled = s.EmailOtpEnabled; }
+        if (s != null) { _mfaRequired = s.MfaRequired; _emailOtpEnabled = s.EmailOtpEnabled; _smsOtpEnabled = s.SmsOtpEnabled; }
         _mfaLoading = false; StateHasChanged();
     }
 
     private async Task SaveMfaPolicyAsync()
     {
         _mfaSaving = true; StateHasChanged();
-        var ok = await Api.SaveMfaPolicyAsync(new MfaPolicySettingsDto(_mfaRequired, _emailOtpEnabled));
+        var ok = await Api.SaveMfaPolicyAsync(new MfaPolicySettingsDto(_mfaRequired, _emailOtpEnabled, _smsOtpEnabled));
         _mfaSaving = false;
         _successMsg = ok ? "MFA policy saved." : null;
         if (!ok) _error = "Failed to save MFA policy.";
