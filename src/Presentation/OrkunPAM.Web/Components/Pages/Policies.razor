@@ -21,6 +21,7 @@
     <button class="pam-tab @(_tab=="watermark"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("watermark"))">Watermark</button>
     <button class="pam-tab @(_tab=="adaptive-mfa"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("adaptive-mfa"))">Adaptive MFA</button>
     <button class="pam-tab @(_tab=="device-trust"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("device-trust"))">Device Trust</button>
+    <button class="pam-tab @(_tab=="geo-access"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("geo-access"))">Geo Access</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -507,6 +508,90 @@
     </div>
 }
 
+@if (_tab == "geo-access")
+{
+    <div class="pam-card" style="max-width:640px">
+        <div class="pam-card-header"><strong>Geolocation-Based Access Control</strong></div>
+        <div class="pam-card-body">
+            @if (_geoLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:0.85rem;margin-bottom:1rem">
+                    Restrict logins based on the user's IP geolocation country. Country codes use ISO 3166-1 alpha-2
+                    format (e.g. TR, US, DE). Private/internal IPs can be excluded from geo checking.
+                </div>
+
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_geoEnabled" />
+                        <strong>Enable Geolocation Access Control</strong>
+                    </label>
+                </div>
+
+                @if (_geoEnabled)
+                {
+                    <hr style="margin:1rem 0" />
+
+                    <div class="pam-form-group">
+                        <label class="pam-label">Allowed Country Codes</label>
+                        <input class="pam-input" style="width:100%;font-family:monospace"
+                               @bind="_geoAllowed" placeholder="TR,US,DE,GB (empty = all allowed)" />
+                        <span class="pam-hint">Comma-separated ISO 3166-1 alpha-2 codes. If non-empty, only these countries can log in.</span>
+                    </div>
+
+                    <div class="pam-form-group">
+                        <label class="pam-label">Blocked Country Codes</label>
+                        <input class="pam-input" style="width:100%;font-family:monospace"
+                               @bind="_geoBlocked" placeholder="KP,IR,RU (explicit deny)" />
+                        <span class="pam-hint">Logins from these countries are always blocked, regardless of the allow list.</span>
+                    </div>
+
+                    <div class="pam-form-row">
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Violation Action</label>
+                            <select class="pam-input" style="width:100%" @bind="_geoViolationAction">
+                                <option value="Block">Block — deny login</option>
+                                <option value="StepUpAuth">Step-Up Auth — force MFA</option>
+                            </select>
+                            <span class="pam-hint">Applied when country is blocked or not in allow list.</span>
+                        </div>
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Unknown Location Action</label>
+                            <select class="pam-input" style="width:100%" @bind="_geoUnknownAction">
+                                <option value="Allow">Allow</option>
+                                <option value="StepUpAuth">Step-Up Auth</option>
+                                <option value="Block">Block</option>
+                            </select>
+                            <span class="pam-hint">Applied when geolocation lookup fails or returns no country.</span>
+                        </div>
+                    </div>
+
+                    <div class="pam-form-group">
+                        <label class="pam-checkbox-label">
+                            <input type="checkbox" @bind="_geoAllowPrivate" />
+                            Allow private/internal IP addresses (RFC 1918)
+                        </label>
+                        <span class="pam-hint">Recommended: enabled. Internal network logins bypass geo checking.</span>
+                    </div>
+
+                    <div class="pam-alert" style="background:#161b22;border:1px solid #30363d;font-size:0.82rem;margin-top:.5rem">
+                        <strong>Geolocation source:</strong> ip-api.com (free, no API key required). Private IPs (10.x, 172.16-31.x, 192.168.x) are always detected as internal.
+                    </div>
+                }
+
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveGeolocationPolicyAsync" disabled="@_geoSaving">
+                        @if (_geoSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -660,6 +745,16 @@
     private int  _amfaHigh    = 75;
     private int  _amfaBlock   = 90;
 
+    // Geolocation Access policy (#208)
+    private bool   _geoLoading          = false;
+    private bool   _geoSaving           = false;
+    private bool   _geoEnabled          = false;
+    private string _geoAllowed          = "";
+    private string _geoBlocked          = "";
+    private string _geoViolationAction  = "Block";
+    private string _geoUnknownAction    = "Allow";
+    private bool   _geoAllowPrivate     = true;
+
     // Device Trust policy (#207)
     private bool   _dtLoading        = false;
     private bool   _dtSaving         = false;
@@ -688,6 +783,7 @@
             case "watermark":    await LoadWatermarkPolicyAsync();        break;
             case "adaptive-mfa": await LoadAdaptiveMfaPolicyAsync();     break;
             case "device-trust": await LoadDeviceTrustPolicyAsync();     break;
+            case "geo-access":   await LoadGeolocationPolicyAsync();     break;
         }
     }
 
@@ -924,6 +1020,38 @@
         _dtSaving = false;
         _successMsg = ok ? "Device Trust policy saved." : null;
         if (!ok) _error = "Failed to save device trust policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadGeolocationPolicyAsync()
+    {
+        _geoLoading = true; StateHasChanged();
+        var s = await Api.GetGeolocationPolicyAsync();
+        if (s != null)
+        {
+            _geoEnabled         = s.Enabled;
+            _geoAllowed         = string.Join(",", s.AllowedCountryCodes);
+            _geoBlocked         = string.Join(",", s.BlockedCountryCodes);
+            _geoViolationAction = s.ViolationAction;
+            _geoUnknownAction   = s.UnknownLocationAction;
+            _geoAllowPrivate    = s.AllowPrivateIps;
+        }
+        _geoLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveGeolocationPolicyAsync()
+    {
+        _geoSaving = true; StateHasChanged();
+        var allowed = _geoAllowed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                  .Select(c => c.ToUpperInvariant()).ToArray();
+        var blocked = _geoBlocked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                  .Select(c => c.ToUpperInvariant()).ToArray();
+        var ok = await Api.SaveGeolocationPolicyAsync(new GeolocationPolicySettingsDto(
+            _geoEnabled, allowed, blocked, _geoViolationAction, _geoUnknownAction, _geoAllowPrivate));
+        _geoSaving = false;
+        _successMsg = ok ? "Geolocation policy saved." : null;
+        if (!ok) _error = "Failed to save geolocation policy.";
         StateHasChanged();
         if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }

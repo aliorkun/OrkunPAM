@@ -295,6 +295,34 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
+        // ── Geolocation Access policy endpoints (#208) ─────────────────────────────────────
+        pwdGroup.MapGet("/geo-access", async (OrkunPamDbContext db) =>
+        {
+            var p = await db.Policies.FirstOrDefaultAsync(
+                x => x.PolicyType == "GeoAccess" && x.Scope == PolicyScope.Global);
+            var settings = ReadPolicy<GeolocationPolicySettings>(p?.PolicyJson ?? "{}");
+            return Results.Ok(new { success = true, data = settings });
+        });
+
+        pwdGroup.MapPut("/geo-access", async (
+            GeolocationPolicySettings req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var validActions = new[] { "Allow", "StepUpAuth", "Block" };
+            if (!validActions.Contains(req.ViolationAction))
+                return Results.BadRequest(new { success = false, errors = new[] { "violationAction must be Allow, StepUpAuth, or Block" } });
+            if (!validActions.Contains(req.UnknownLocationAction))
+                return Results.BadRequest(new { success = false, errors = new[] { "unknownLocationAction must be Allow, StepUpAuth, or Block" } });
+
+            await UpsertGlobalPolicyAsync(db, "GeoAccess", "Global Geolocation Access Policy", req);
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Policy", "GEO_ACCESS_POLICY_UPDATED", null, null, ip,
+                "Policy", "GeoAccess", new { settings = req });
+
+            return Results.Ok(new { success = true });
+        });
+
         // ── Adaptive MFA policy endpoints (#205) ────────────────────────────────────────────
         pwdGroup.MapGet("/adaptive-mfa", async (OrkunPamDbContext db) =>
         {
@@ -381,6 +409,17 @@ public record DeviceTrustPolicySettings
     public string UnknownDeviceAction   { get; init; } = "Allow"; // Allow | StepUpAuth | Block
     public int    MaxTrustAgeDays       { get; init; } = 90;
     public bool   AutoRegisterOnLogin   { get; init; } = true;
+}
+
+// Geolocation Access policy settings (#208)
+public record GeolocationPolicySettings
+{
+    public bool     Enabled               { get; init; } = false;
+    public string[] AllowedCountryCodes   { get; init; } = [];  // empty = all allowed
+    public string[] BlockedCountryCodes   { get; init; } = [];  // explicit deny list
+    public string   ViolationAction       { get; init; } = "Block";  // Block | StepUpAuth
+    public string   UnknownLocationAction { get; init; } = "Allow";  // Allow | StepUpAuth | Block
+    public bool     AllowPrivateIps       { get; init; } = true;
 }
 
 // Adaptive MFA policy settings (#205)

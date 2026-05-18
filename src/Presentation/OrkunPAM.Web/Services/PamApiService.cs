@@ -1784,6 +1784,20 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Geolocation Access Policy (#208)
+    public async Task<GeolocationPolicySettingsDto?> GetGeolocationPolicyAsync()
+    {
+        var result = await GetAsync<PolicySettingResult<GeolocationPolicySettingsDto>>("/api/v1/policy/geo-access");
+        return result?.Data;
+    }
+
+    public async Task<bool> SaveGeolocationPolicyAsync(GeolocationPolicySettingsDto s)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync("/api/v1/policy/geo-access", s)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     // Device Trust Policy (#207)
     public async Task<DeviceTrustPolicySettingsDto?> GetDeviceTrustPolicyAsync()
     {
@@ -2639,6 +2653,15 @@ public record AdaptiveMfaPolicySettingsDto(
     int  MediumRiskThreshold,
     int  HighRiskThreshold,
     int  BlockThreshold);
+
+// Geolocation Access Policy DTO (#208)
+public record GeolocationPolicySettingsDto(
+    bool     Enabled,
+    string[] AllowedCountryCodes,
+    string[] BlockedCountryCodes,
+    string   ViolationAction,
+    string   UnknownLocationAction,
+    bool     AllowPrivateIps);
 
 // Device Trust Policy DTO (#207)
 public record DeviceTrustPolicySettingsDto(

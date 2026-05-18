@@ -361,7 +361,7 @@
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|-------|
 | #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | ✅ Tamamlandı |
-| #208 | Geolocation-based Access Control | v2-ACCESS | 🔲 Bekliyor |
+| #208 | Geolocation-based Access Control | v2-ACCESS | ✅ Tamamlandı |
 | #209 | Access Pattern Analytics & API Usage Reporting | v2-REPORTING | 🔲 Bekliyor |
 
 **Sprint 18 Hedefleri:**
@@ -387,7 +387,16 @@
 - `PamApiService.cs`: DeviceTrustPolicySettingsDto, TrustedDeviceDto + 7 API methods
 - RFP User Mgmt #32 → PC, #33 → PC
 
-**İlerleme:** 1/3 (%33) — #207 tamamlandı
+**#208 Geolocation Access — Tamamlanan bileşenler (2026-05-18):**
+- `GeolocationPolicySettings`: Enabled, AllowedCountryCodes[], BlockedCountryCodes[], ViolationAction (Block/StepUpAuth), UnknownLocationAction (Allow/StepUpAuth/Block), AllowPrivateIps
+- `GET/PUT /api/v1/policy/geo-access` (AdminPolicy)
+- `GeoLocationHelper`: ip-api.com lookup (3s timeout, graceful fallback), RFC 1918 private IP detection, country allow/block list enforcement
+- Login flow: geo check after Device Trust (Block → 403, StepUpAuth → force MFA, Allow → proceed)
+- `Policies.razor`: "Geo Access" tab — allowed/blocked country code inputs, violation/unknown action dropdowns, private IP toggle
+- `PamApiService.cs`: `GeolocationPolicySettingsDto` + `GetGeolocationPolicyAsync` + `SaveGeolocationPolicyAsync`
+- RFP User Mgmt #29 → PC
+
+**İlerleme:** 2/3 (%67) — #207 + #208 tamamlandı
 
 ---
 

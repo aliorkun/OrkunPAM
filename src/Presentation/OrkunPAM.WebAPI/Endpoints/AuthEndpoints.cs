@@ -62,6 +62,12 @@ public static class AuthEndpoints
                 return Results.Json(new { success = false, errors = new[] { "Login blocked: unrecognized device. Contact your administrator." } }, statusCode: 403);
             data = trustedData;
 
+            // Geolocation check (#208)
+            var geoData = await GeoLocationHelper.ApplyGeoAccessAsync(db, data, ip);
+            if (geoData == null)
+                return Results.Json(new { success = false, errors = new[] { "Login blocked: access from your location is not permitted." } }, statusCode: 403);
+            data = geoData;
+
             return Results.Ok(new
             {
                 success = true,
@@ -896,6 +902,92 @@ internal static class DeviceTrustHelper
         if (data.MfaRequired || data.MfaEnrollmentRequired) return data;
         var forcedType = data.MfaType ?? "EmailOtp";
         return data with { MfaRequired = true, MfaType = forcedType };
+    }
+}
+
+/// <summary>Geolocation-based access control helpers for login-time enforcement (#208)</summary>
+internal static class GeoLocationHelper
+{
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+    private static readonly HttpClient GeoClient = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+    private record IpApiResult(string? Status, string? CountryCode);
+
+    internal static async Task<string?> LookupCountryCodeAsync(string ip)
+    {
+        if (string.IsNullOrEmpty(ip) || ip == "unknown") return null;
+        if (!System.Net.IPAddress.TryParse(ip, out var addr)) return null;
+
+        // Loopback / link-local — treat as internal, no geo lookup
+        if (System.Net.IPAddress.IsLoopback(addr)) return null;
+        if (addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 &&
+            addr.IsIPv6LinkLocal) return null;
+
+        if (addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var b = addr.GetAddressBytes();
+            if (b[0] == 10 ||
+                (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+                (b[0] == 192 && b[1] == 168) ||
+                (b[0] == 169 && b[1] == 254))
+                return null; // RFC 1918 private / APIPA
+        }
+
+        try
+        {
+            var json = await GeoClient.GetStringAsync(
+                $"http://ip-api.com/json/{Uri.EscapeDataString(ip)}?fields=status,countryCode");
+            var r = JsonSerializer.Deserialize<IpApiResult>(json, JsonOpts);
+            return r?.Status == "success" ? r.CountryCode : null;
+        }
+        catch { return null; }
+    }
+
+    internal static async Task<GeolocationPolicySettings> LoadPolicyAsync(OrkunPamDbContext db)
+    {
+        var p = await db.Policies.FirstOrDefaultAsync(
+            x => x.PolicyType == "GeoAccess" && x.Scope == PolicyScope.Global);
+        if (p?.PolicyJson == null) return new();
+        try { return JsonSerializer.Deserialize<GeolocationPolicySettings>(p.PolicyJson, JsonOpts) ?? new(); }
+        catch { return new(); }
+    }
+
+    internal static async Task<AuthResult?> ApplyGeoAccessAsync(
+        OrkunPamDbContext db, AuthResult data, string ip)
+    {
+        var policy = await LoadPolicyAsync(db);
+        if (!policy.Enabled) return data;
+
+        var countryCode = await LookupCountryCodeAsync(ip);
+
+        // Private / internal IP
+        if (countryCode == null)
+            return policy.AllowPrivateIps ? data : ApplyAction(policy.UnknownLocationAction, data);
+
+        // Explicit block list takes highest priority
+        if (policy.BlockedCountryCodes.Length > 0 &&
+            policy.BlockedCountryCodes.Contains(countryCode, StringComparer.OrdinalIgnoreCase))
+            return ApplyAction(policy.ViolationAction, data);
+
+        // Allow list — if non-empty, country must be in it
+        if (policy.AllowedCountryCodes.Length > 0 &&
+            !policy.AllowedCountryCodes.Contains(countryCode, StringComparer.OrdinalIgnoreCase))
+            return ApplyAction(policy.ViolationAction, data);
+
+        return data;
+    }
+
+    private static AuthResult? ApplyAction(string action, AuthResult data) => action switch
+    {
+        "Block"      => null,
+        "StepUpAuth" => ForceStepUp(data),
+        _            => data
+    };
+
+    private static AuthResult ForceStepUp(AuthResult data)
+    {
+        if (data.MfaRequired || data.MfaEnrollmentRequired) return data;
+        return data with { MfaRequired = true, MfaType = data.MfaType ?? "EmailOtp" };
     }
 }
 
