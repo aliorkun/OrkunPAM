@@ -473,6 +473,7 @@ try
     api.MapSoarEndpoints();
     api.MapSocDashboardEndpoints();
     api.MapDeviceTrustEndpoints();
+    api.MapAccessPatternEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
