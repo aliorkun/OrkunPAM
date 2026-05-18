@@ -2,12 +2,12 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-18 (PM run #14)
+> Last updated: 2026-05-18 (PM run #15)
 
 ## Platform (44 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall support appliance base installation | PC | WiX v4 MSI + PowerShell Install.ps1 + OrkunPAM.Installer CLI — component selection, DB init, cert gen, service registration; single-package Windows Server deployment (#36) |
 | 2 | Solution shall support Vmware and Hyper-V based installation |  |  |
 | 3 | Solution shall be deployable On‑Premise and provided as a cloud  offering. | PC | MSI installer (WiX v4) + PowerShell Install.ps1 — single-package Windows Server on-prem deployment (#36); Cloud PAM module — AWS/Azure/GCP cloud resource privileged access, JIT cloud credentials, multi-cloud dashboard (CloudPam.razor + CloudEndpoints.cs, #37) |
@@ -56,7 +56,7 @@
 ## User Management (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall support local user accounts | FC | UserEndpoints.cs — CRUD, PBKDF2-SHA512 hashed passwords, roles |
 | 2 | Solution shall support Active Directory integration | PC | LdapPamSyncService.cs — scheduled AD sync + AD group → PAM group membership sync; uSNChanged delta sync; multi-domain Global Catalog (port 3268) support; bulk user/group reconciliation (#141) |
 | 3 | Solution shall support LDAP integration | PC | AdSyncService.cs — LDAP (port 389/636) bind + search |
@@ -96,9 +96,9 @@
 | 37 | Solution shall support privileged access analytics | PC | AnomalyDetectionService.cs + SocDashboardEndpoints.cs — GET /soc/dashboard: 24h anomaly summary, type breakdown, top risky users; GET /soc/risk-map: per-user risk breakdown; ThreatAnalytics.razor Overview + Risk Map tabs (#35) |
 | 38 | Solution shall support user behavior baseline | PC | BehaviorBaselineService.cs — daily background rebuild; TypicalHours/KnownIPs/KnownDevices per user; GET /api/v1/analytics/baselines/{userId}; POST /api/v1/analytics/baselines/rebuild; ThreatAnalytics.razor Baselines tab (#35) |
 | 39 | Solution shall support insider threat detection | PC | AnomalyDetectionService.cs — anomaly types: OffHours, UnusualIP, UnusualDevice, FrequencySpike, HighRiskCommand; AlertRule cooldown-gated alerts; alert history; SOC Dashboard anomaly feed; ThreatAnalytics.razor Anomalies tab (#35) |
-| 40 | Solution shall support external threat indicators |  |  |
-| 41 | Solution shall support risk-based authentication |  |  |
-| 42 | Solution shall support adaptive authentication |  |  |
+| 40 | Solution shall support external threat indicators | PC | ThreatFeedService.cs (BackgroundService, saatlik) — AbuseIPDB/Emerging Threats/AlienVault OTX feed entegrasyonu; ThreatIndicator entity (IP/Domain/Hash, Severity, Source, ExpiresAtUtc); AnomalyDetectionService session başlatmada IOC lookup (KnownMaliciousIP +80 risk skoru); feed config CRUD AdminPolicy; ThreatAnalytics.razor Threat Intelligence sekmesi; feed API key AES-256-GCM şifreli; otomatik süresi dolmuş IOC temizliği (#206) |
+| 41 | Solution shall support risk-based authentication | PC | AdaptiveMfaHelper.cs — login risk skoru hesaplama (IP baseline, off-hours, frequency faktörleri); risk seviyesine göre MFA zorlama: Low (<25) atlama, Medium (25-50) TOTP, High (50-75) Push MFA, Critical (>90) blok; GET /api/v1/auth/risk-score; Login.razor risk banner; Policies.razor Adaptive MFA sekmesi (#205) |
+| 42 | Solution shall support adaptive authentication | PC | AdaptiveMfaHelper.cs — risk skoruna göre dinamik MFA yöntemi seçimi (0-100 skor); AnomalyDetectionService entegrasyonu; GET/PUT /api/v1/policy/adaptive-mfa yapılandırılabilir eşikler; session başlatmada anlık risk kontrol; mid-session step-up auth (#205) |
 | 43 | Solution shall support passwordless authentication | PC | Fido2Endpoints.cs — FIDO2/WebAuthn passkey authentication; passwordless portal login with hardware security keys or platform authenticators; user self-enrollment UI (#158) |
 | 44 | Solution shall support biometric authentication |  |  |
 | 45 | Solution shall support hardware token support | PC | Fido2Endpoints.cs — YubiKey (roaming authenticator) + Windows Hello (platform); FIDO2.NET library; hardware-bound credential; PkiEndpoints.cs — physical smart card via X.509 cert (#115, #158) |
@@ -109,7 +109,7 @@
 ## Reporting (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall provide pre-built compliance reports | PC | Reports.razor — 9 pre-built reports: credential-expiry, group-membership, policy-compliance, checkout-history, break-glass, jit-access, privileged-inventory, vendor-access, compliance-summary (#120) |
 | 2 | Solution shall support custom report creation | PC | CustomReportEndpoints.cs + CustomReportDefinition entity — ad-hoc query builder: data source (AuditLogs/Sessions/Credentials/Users), date range, per-source filters, column selection, preview table, save/run/delete, CSV export; Reports.razor Custom tab (#169) |
 | 3 | Solution shall support scheduled report delivery | PC | ReportScheduleEndpoints.cs + ReportSchedulerService.cs — cron-based schedule (daily/weekly/monthly), SMTP email delivery, RBAC-enforced (AdminPolicy); Reports.razor Scheduled Delivery tab (#159) |
@@ -141,7 +141,7 @@
 | 29 | Solution shall support session recording playback report | PC | SessionPlayback.razor — search + replay with timestamp seek (#34) |
 | 30 | Solution shall support anomaly detection reports | PC | SocDashboardEndpoints.cs — GET /soc/timeline?hours=N: hourly anomaly count timeline; GET /soc/alert-history: paginated alert trigger log; GET /api/v1/analytics/anomalies: filterable anomaly list; ThreatAnalytics.razor Overview + Anomalies tabs; Ack button for SOC analysts (#35) |
 | 31 | Solution shall support SIEM integration reports | PC | SyslogForwarderService.cs — all events forwarded to SIEM in Syslog/CEF |
-| 32 | Solution shall support threat intelligence reports |  |  |
+| 32 | Solution shall support threat intelligence reports | PC | ThreatFeedService.cs + GET /api/v1/analytics/threat-feed/reports — IOC kaynak dağılımı, hit sayıları, top-5 IOC, aktif feed durumu; ThreatAnalytics.razor Threat Intelligence sekmesi: IOC tablosu, feed konfigürasyonu, son 24h hit listesi; CSV/JSON export; POST /api/v1/analytics/threat-feed/refresh manuel güncelleme (#206) |
 | 33 | Solution shall support access pattern analytics |  |  |
 | 34 | Solution shall support privilege escalation tracking | PC | AuditService.cs — role assignment/escalation events logged |
 | 35 | Solution shall support account lifecycle reports | PC | ReportEndpoints.cs — account lifecycle & privilege change history: user/role/password/lock events from AuditLogs, summary counters, per-user event timeline; RFP Reporting #35 (#173) |
@@ -162,7 +162,7 @@
 ## MFA Manager (24 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enroll/verify; RFC 6238 compliant |
 | 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — WebAuthn credential registration & assertion; hardware security key (YubiKey/Touch ID) support; FIDO2.NET library; passwordless + MFA second factor; user self-enrollment UI (#158) |
 | 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
@@ -170,7 +170,7 @@
 | 5 | Solution shall support email-based OTP | PC | EmailOtpEndpoints.cs — CSPRNG 6-digit OTP; SHA-256 hashed storage; 10-min TTL; single-use; 5-fail lockout; rate-limit 3/15 min; user enumeration prevention; Login.razor Email OTP step; Policies.razor EmailOtpEnabled toggle; audit events (#178) |
 | 6 | Solution shall support push notifications | PC | PushMfaEndpoints.cs — device enrollment (POST /auth/push/enroll), challenge creation (POST /auth/push/challenge), mobile app polling (GET /auth/push/challenge/{id}/status), approve/deny (PUT /{id}/approve|deny); 5-min TTL, 1 pending challenge/user; Microsoft Authenticator / Duo-style flow; Login.razor Push step; audit logged (#196) |
 | 7 | Solution shall support hardware tokens (OATH) |  |  |
-| 8 | Solution shall support adaptive MFA |  |  |
+| 8 | Solution shall support adaptive MFA | PC | AdaptiveMfaHelper.cs — risk skoruna göre adaptif MFA seçimi: 0-25 bypass, 25-50 TOTP zorunlu, 50-75 Push MFA zorunlu, >75 çift faktör, >90 blok; yapılandırılabilir eşikler (AdminPolicy); Login.razor adaptif MFA akışı; Policies.razor Adaptive MFA sekmesi; AnomalyDetectionService ile entegre (#205) |
 | 9 | Solution shall support MFA bypass policies | PC | windows.auth.mfa_bypass config — Kerberos-authenticated users skip TOTP; configurable per-domain; Integrations.razor Windows Auth tab MFA bypass toggle (#126) |
 | 10 | Solution shall support MFA enrollment self-service | PC | QrCodeEndpoints.cs — TOTP self-enrollment via QR code |
 | 11 | Solution shall support MFA audit logging | FC | AuditService.cs — MFA verify/fail events logged |
@@ -191,7 +191,7 @@
 ## Remote Access (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall support SSH remote access | FC | SshProxyService.cs — native C# SSH (RFC 4253) proxy on port 2222 |
 | 2 | Solution shall support RDP remote access | PC | RdpProxyService.cs — TCP 3389 relay, TPKT/X.224, credential injection |
 | 3 | Solution shall support VNC remote access | PC | VncProxyService.cs — RFB protocol relay (#23) |
@@ -246,7 +246,7 @@
 ## Password Vault (48 items)
 
 | # | Requirement | Status | Notes |
-|---|-------------|--------|---------|
+|---|-------------|--------|------|
 | 1 | Solution shall support credential storage | FC | CredentialEndpoints.cs + VaultEncryptionService.cs — AES-256-GCM encrypted credential store |
 | 2 | Solution shall support credential retrieval | FC | CredentialEndpoints.cs — RBAC-enforced checkout flow |
 | 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job |
@@ -297,4 +297,3 @@
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
-
