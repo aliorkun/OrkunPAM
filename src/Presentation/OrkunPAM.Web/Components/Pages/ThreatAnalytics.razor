@@ -16,11 +16,11 @@ else
 {
     <!-- Tab Bar -->
     <div class="pam-tabs" style="margin-bottom:1rem;">
-        <button class="pam-tab @(_tab == 0 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(0))">Overview</button>
-        <button class="pam-tab @(_tab == 1 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(1))">Anomalies</button>
-        <button class="pam-tab @(_tab == 2 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(2))">Risk Map</button>
-        <button class="pam-tab @(_tab == 3 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(3))">Alert Rules</button>
-        <button class="pam-tab @(_tab == 4 ? &quot;pam-tab-active&quot; : &quot;&quot;)" @onclick="@(() => SetTab(4))">Baselines</button>
+        <button class="@("pam-tab " + (_tab == 0 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(0))">Overview</button>
+        <button class="@("pam-tab " + (_tab == 1 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(1))">Anomalies</button>
+        <button class="@("pam-tab " + (_tab == 2 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(2))">Risk Map</button>
+        <button class="@("pam-tab " + (_tab == 3 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(3))">Alert Rules</button>
+        <button class="@("pam-tab " + (_tab == 4 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(4))">Baselines</button>
         <button class="@("pam-tab " + (_tab == 5 ? "pam-tab-active" : ""))" @onclick="@(() => SetTab(5))">Threat Intel</button>
     </div>
 
@@ -32,11 +32,11 @@ else
                 <div class="pam-stat-value">@_dashboard.TotalAnomalies24h</div>
                 <div class="pam-stat-label">Anomalies (24h)</div>
             </div>
-            <div class="pam-stat-card @(_dashboard.Unacknowledged > 0 ? &quot;pam-stat-warn&quot; : &quot;&quot;)">
+            <div class="@("pam-stat-card " + (_dashboard.Unacknowledged > 0 ? "pam-stat-warn" : ""))">
                 <div class="pam-stat-value">@_dashboard.Unacknowledged</div>
                 <div class="pam-stat-label">Unacknowledged</div>
             </div>
-            <div class="pam-stat-card @(_dashboard.CriticalUnacked > 0 ? &quot;pam-stat-danger&quot; : &quot;&quot;)">
+            <div class="@("pam-stat-card " + (_dashboard.CriticalUnacked > 0 ? "pam-stat-danger" : ""))">
                 <div class="pam-stat-value">@_dashboard.CriticalUnacked</div>
                 <div class="pam-stat-label">Critical Unacked</div>
             </div>
@@ -83,7 +83,7 @@ else
                                 <td>
                                     <div style="display:flex;align-items:center;gap:0.5rem;">
                                         <div style="width:100px;background:#eee;border-radius:4px;height:8px;">
-                                            <div style="@(&quot;width:&quot; + u.RiskScore + &quot;%;background:&quot; + RiskColor(u.RiskScore) + &quot;;height:8px;border-radius:4px;&quot;)"></div>
+                                            <div style="@("width:" + u.RiskScore + "%;background:" + RiskColor(u.RiskScore) + ";height:8px;border-radius:4px;")"></div>
                                         </div>
                                         <span>@u.RiskScore</span>
                                     </div>
@@ -113,7 +113,7 @@ else
                     <tbody>
                         @foreach (var a in _dashboard.RecentAnomalies)
                         {
-                            <tr style="@(a.IsAcknowledged ? &quot;opacity:0.5;&quot; : &quot;&quot;)">
+                            <tr style="@(a.IsAcknowledged ? "opacity:0.5;" : "")">
                                 <td style="white-space:nowrap;">@a.DetectedAtUtc.ToString("MM-dd HH:mm")</td>
                                 <td>@a.AnomalyType</td>
                                 <td><span class="pam-badge @SeverityClass((int)a.Severity)">@SeverityLabel((int)a.Severity)</span></td>
@@ -171,7 +171,7 @@ else
                     <tbody>
                         @foreach (var a in _anomalies)
                         {
-                            <tr style="@(a.IsAcknowledged ? &quot;opacity:0.55;&quot; : &quot;&quot;)">
+                            <tr style="@(a.IsAcknowledged ? "opacity:0.55;" : "")">
                                 <td style="white-space:nowrap;">@a.DetectedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                                 <td>@a.AnomalyType</td>
                                 <td><span class="pam-badge @SeverityClass((int)a.Severity)">@SeverityLabel((int)a.Severity)</span></td>
@@ -226,7 +226,7 @@ else
                                 <td>
                                     <div style="display:flex;align-items:center;gap:0.4rem;">
                                         <div style="width:80px;background:#eee;border-radius:4px;height:8px;">
-                                            <div style="@(&quot;width:&quot; + u.RiskScore + &quot;%;background:&quot; + RiskColor(u.RiskScore) + &quot;;height:8px;border-radius:4px;&quot;)"></div>
+                                            <div style="@("width:" + u.RiskScore + "%;background:" + RiskColor(u.RiskScore) + ";height:8px;border-radius:4px;")"></div>
                                         </div>
                                         <strong>@u.RiskScore</strong>
                                     </div>
@@ -338,7 +338,7 @@ else
                                 <td style="font-size:0.85em;max-width:200px;">@r.ConditionJson</td>
                                 <td>@r.CooldownMinutes min</td>
                                 <td>
-                                    <span class="pam-badge @(r.IsEnabled ? &quot;pam-badge-success&quot; : &quot;pam-badge-secondary&quot;)">
+                                    <span class="@("pam-badge " + (r.IsEnabled ? "pam-badge-success" : "pam-badge-secondary"))">
                                         @(r.IsEnabled ? "Enabled" : "Disabled")
                                     </span>
                                 </td>

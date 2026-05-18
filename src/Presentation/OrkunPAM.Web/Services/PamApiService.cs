@@ -309,6 +309,25 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<CredentialAccessRequestResult?> RequestCredentialAccessAsync(
+        string credentialId, string reason, string? ticketId = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync(
+                "/api/v1/vault/credentials/access-request",
+                new { credentialId, reason, ticketId });
+            if (!resp.IsSuccessStatusCode)
+                return new CredentialAccessRequestResult(false, null, "Request failed: " + resp.StatusCode);
+            return await resp.Content.ReadFromJsonAsync<CredentialAccessRequestResult>(JsonOpts);
+        }
+        catch (Exception ex)
+        {
+            return new CredentialAccessRequestResult(false, null, ex.Message);
+        }
+    }
+
     public async Task<SimpleResult<PolicyDto>?> GetPoliciesAsync(string? type = null)
     {
         var url = "/api/v1/policies";
@@ -478,9 +497,20 @@ public sealed class PamApiService
 
     public async Task<object?> Fido2RegisterBeginAsync()
     {
-        var result = await GetAsync<SingleResult<System.Text.Json.JsonElement>>("/api/v1/auth/fido2/register/begin");
-        if (result == null || !result.Success) return null;
-        return result.Data;
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.GetAsync("/api/v1/auth/fido2/register/begin");
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = await resp.Content.ReadFromJsonAsync<JsonDocument>(JsonOpts);
+            if (json == null) return null;
+            var root = json.RootElement;
+            if (root.TryGetProperty("success", out var s) && s.GetBoolean() &&
+                root.TryGetProperty("data", out var data))
+                return data.Clone();
+            return null;
+        }
+        catch { return null; }
     }
 
     public async Task<bool> Fido2RegisterCompleteAsync(string credentialJson, string? friendlyName)
@@ -2463,6 +2493,8 @@ public record CheckoutResultDto(
     string?   Password,
     string?   PrivateKey,
     DateTime? ExpiresAt);
+
+public record CredentialAccessRequestResult(bool Success, string? Status, string? Message);
 
 public record PolicyDto(
     string  Id,

@@ -23,10 +23,10 @@
 
     <!-- Language switcher -->
     <div class="pam-lang-switcher">
-        <button class="pam-lang-btn @(_currentCulture.StartsWith(&quot;en&quot;) ? &quot;pam-lang-active&quot; : &quot;&quot;)"
-                @onclick="@(() => CultureSvc.SetCulture(&quot;en-US&quot;))">EN</button>
-        <button class="pam-lang-btn @(_currentCulture.StartsWith(&quot;tr&quot;) ? &quot;pam-lang-active&quot; : &quot;&quot;)"
-                @onclick="@(() => CultureSvc.SetCulture(&quot;tr-TR&quot;))">TR</button>
+        <button class="@("pam-lang-btn " + (_currentCulture.StartsWith("en") ? "pam-lang-active" : ""))"
+                @onclick="@(() => CultureSvc.SetCulture("en-US"))">EN</button>
+        <button class="@("pam-lang-btn " + (_currentCulture.StartsWith("tr") ? "pam-lang-active" : ""))"
+                @onclick="@(() => CultureSvc.SetCulture("tr-TR"))">TR</button>
     </div>
 
     <nav class="pam-nav">
@@ -65,7 +65,7 @@
             <span class="pam-nav-icon">&#x2705;</span> @L["nav_approvals"]
             @if (_pendingCount > 0)
             {
-                <span class="pam-nav-badge @(_pendingCount > 0 ? &quot;pam-nav-badge-red&quot; : &quot;&quot;)">@_pendingCount</span>
+                <span class="@("pam-nav-badge " + (_pendingCount > 0 ? "pam-nav-badge-red" : ""))">@_pendingCount</span>
             }
         </NavLink>
         <NavLink class="pam-nav-link" href="/break-glass">

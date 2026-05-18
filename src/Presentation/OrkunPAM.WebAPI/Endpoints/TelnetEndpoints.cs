@@ -52,8 +52,8 @@ public static class TelnetEndpoints
             });
         });
 
-        // DELETE /api/v1/telnet/sessions/{id} — admin terminate
-        telnet.MapDelete("/sessions/{id:guid}", async (
+        // POST /api/v1/telnet/sessions/{id}/terminate — admin terminate
+        telnet.MapPost("/sessions/{id:guid}/terminate", async (
             Guid id, TerminateReasonRequest? req, OrkunPamDbContext db, HttpContext context) =>
         {
             var session = await db.ProxySessions.FindAsync(id);

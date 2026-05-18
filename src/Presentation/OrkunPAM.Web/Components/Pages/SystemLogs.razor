@@ -199,15 +199,29 @@ else
         _ = LoadAsync();
     }
 
+    private static string CsvEscape(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Replace("\"", "'");
+    }
+
     private async Task ExportCsvAsync()
     {
         if (_entries == null || _entries.Count == 0) return;
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Timestamp,Level,Source,Message,Username,IpAddress,Details");
+        var q = '"';
         foreach (var e in _entries)
-            sb.AppendLine($"\"{e.Timestamp}\",\"{e.Level}\",\"{e.Source}\"," +
-                          $"\"{e.Message?.Replace("\"", "'")}\",\"{e.Username}\",\"{e.IpAddress}\"," +
-                          $"\"{e.Details?.Replace("\"", "'")}\"");
+        {
+            sb.Append(q).Append(e.Timestamp).Append(q).Append(',');
+            sb.Append(q).Append(e.Level).Append(q).Append(',');
+            sb.Append(q).Append(e.Source).Append(q).Append(',');
+            sb.Append(q).Append(CsvEscape(e.Message)).Append(q).Append(',');
+            sb.Append(q).Append(e.Username).Append(q).Append(',');
+            sb.Append(q).Append(e.IpAddress).Append(q).Append(',');
+            sb.Append(q).Append(CsvEscape(e.Details)).Append(q);
+            sb.AppendLine();
+        }
         var fname = $"systemlogs-{_activeTab}-{DateTime.UtcNow:yyyyMMddHHmm}.csv";
         await JS.InvokeVoidAsync("downloadCsvFile", fname, sb.ToString());
     }
