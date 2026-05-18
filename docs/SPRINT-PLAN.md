@@ -425,16 +425,16 @@
 
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
-| #214 | Session Live Monitoring — Canli Oturum Izleme ve Admin Mudahale | v2-SESSION | Bekliyor |
+| #214 | Session Live Monitoring — Canli Oturum Izleme ve Admin Mudahale | v2-SESSION | ✅ Tamamlandi |
 | #215 | SMS OTP — Kisa Mesaj Tabanli MFA | v2-MFA | Bekliyor |
 | #216 | Session Tagging & Annotation — Oturum Etiketleme | v2-SESSION | Bekliyor |
 
 **Sprint 20 Hedefleri:**
-- #214: LiveMonitorHub (SignalR), LiveSessionEndpoints, LiveMonitor.razor; SSH/Telnet terminal stream → RFP Remote Access #31 + #40 PC
+- #214: SessionChunkStore (ring buffer), LiveSessionEndpoints (7 endpoint), LiveMonitor.razor (polling 2s), SSH/Telnet proxy live chunk push → RFP Remote Access #31 + #40 PC ✅
 - #215: ISmsGatewayService (Twilio/AwsSns/Netgsm/Custom), SmsOtpEndpoints, Login.razor SMS adimi → RFP MFA #4 PC
 - #216: SessionTag + SessionAnnotation entity, SessionTagEndpoints, Sessions.razor tag UI → RFP Remote Access #48 PC
 
-**Ilerleme:** 0/3 (%0)
+**Ilerleme:** 1/3 (%33)
 
 ---
 
