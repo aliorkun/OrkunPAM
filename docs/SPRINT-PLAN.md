@@ -211,7 +211,7 @@
 - API: `GET /api/v1/cloud/resources?provider=&type=` — filtrelenebilir kaynak listesi
 - API: `PUT /api/v1/cloud/resources/{id}/toggle` — kaynak etkinleştir/devre dışı
 - API: `GET/POST /api/v1/cloud/jit` — JIT istek oluşturma
-- API: `PUT /api/v1/cloud/jit/{id}/approve|deny|revoke` — JIT yaşam döngüsü
+- API: `PUT /api/v1/cloud/jit/{id}/approve|deny|revoke` — JIT yaşlam döngüsü
 - Audit: CloudAccountCreated/Deleted/Synced, CloudJitRequested/Approved/Denied/Revoked
 - `CloudPam.razor`: 4 tab UI — Dashboard (provider kartları, son JIT), Accounts (CRUD + sync), Resources (filtreli tablo + JIT başlat), JIT (istek formu + onay/reddet/iptal)
 - `PamApiService.cs`: GetCloudDashboardAsync, GetCloudAccountsAsync, CreateCloudAccountAsync, SyncCloudAccountAsync, ToggleCloudAccountAsync, DeleteCloudAccountAsync, GetCloudResourcesAsync, GetCloudJitRequestsAsync, CreateCloudJitRequestAsync, ApproveCloudJitAsync, DenyCloudJitAsync, RevokeCloudJitAsync + tüm DTO'lar
@@ -317,8 +317,34 @@
 
 ---
 
+## Sprint 17 - v2 Auth: Adaptive MFA + Threat Intelligence + Device Trust
+**Tarih:** 18 Mayıs 2026 (aktif)
+**Durum:** Devam ediyor 🔄
+
+| Issue | Başlık | Tip | Durum |
+|-------|--------|-----|-------|
+| #205 | Adaptive MFA — Anomali Skoruna Göre Step-Up Kimlik Doğrulama | v2-SECURITY | ✅ Tamamlandı |
+| #206 | Threat Intelligence Feed — IOC/IP Reputation Entegrasyonu | v2-ANALYTICS | 🔲 Bekliyor |
+| #207 | Device Trust ve Context-Aware Access Control | v2-ACCESS | 🔲 Bekliyor |
+
+**Sprint 17 Tamamlanan Bileşenler (#205):**
+- `AdaptiveMfaHelper` static class: `LoadPolicyAsync` + `CalculateLoginRiskAsync` (IP/hours/frequency risk factors)
+- `BehaviorBaselineService.DecryptOrDeserialize` → public static (baseline erişimi için)
+- Login endpoint: risk score calculation → riskScore + riskLevel response fields
+- Risk "Critical" → 403 login block; Risk "High" → MFA forced (EmailOtp veya Totp)
+- `GET /api/v1/auth/risk-score` endpoint
+- `GET/PUT /api/v1/policy/adaptive-mfa` policy endpoints
+- `AdaptiveMfaPolicySettings` record (Enabled, Low/Medium/High/Block thresholds)
+- `PamApiService.cs`: `AdaptiveMfaPolicySettingsDto` + `GetAdaptiveMfaPolicyAsync` + `SaveAdaptiveMfaPolicyAsync` + `LoginData.RiskScore/RiskLevel`
+- `Policies.razor`: "Adaptive MFA" sekmesi + threshold form + save
+- `Login.razor`: Risk seviyesi uyarı banner (Medium/High için)
+
+**İlerleme:** 1/3 (%33) — #205 tamamlandı, #206 ve #207 bekliyor
+
+---
+
 ## Sonraki Adım
-**Sprint 17:** Device Trust + Adaptive MFA + Threat Intelligence Feed (#207, #205, #206)
+**Sprint 17 devam:** #206 Threat Intel Feed → #207 Device Trust
 **v2.0.0:** AAPM + Threat Analytics (30 Eylül 2026)
 
 ---

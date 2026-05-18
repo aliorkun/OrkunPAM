@@ -18,7 +18,8 @@
     <button class="pam-tab @(_tab=="lockout"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("lockout"))">Account Lockout</button>
     <button class="pam-tab @(_tab=="session"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("session"))">Session Policy</button>
     <button class="pam-tab @(_tab=="mfa"?"pam-tab-active":"")"        @onclick="@(() => SwitchTab("mfa"))">MFA Policy</button>
-    <button class="pam-tab @(_tab=="watermark"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("watermark"))">Watermark</button>
+    <button class="pam-tab @(_tab=="watermark"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("watermark"))">Watermark</button>
+    <button class="pam-tab @(_tab=="adaptive-mfa"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("adaptive-mfa"))">Adaptive MFA</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -354,6 +355,77 @@
     </div>
 }
 
+@if (_tab == "adaptive-mfa")
+{
+    <div class="pam-card" style="max-width:560px">
+        <div class="pam-card-header"><strong>Adaptive MFA — Risk-Based Step-Up Authentication</strong></div>
+        <div class="pam-card-body">
+            @if (_amfaLoading)
+            {
+                <div class="pam-loading-text">Loading...</div>
+            }
+            else
+            {
+                <div class="pam-alert pam-alert-info" style="font-size:0.85rem;margin-bottom:1rem">
+                    When enabled, the login risk score (calculated from known IPs, typical hours, and session frequency)
+                    determines how much MFA is required. High-risk logins are forced through MFA even if MFA is not enabled for the user.
+                </div>
+
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_amfaEnabled" />
+                        <strong>Enable Adaptive MFA</strong>
+                    </label>
+                </div>
+
+                @if (_amfaEnabled)
+                {
+                    <hr style="margin:1rem 0" />
+                    <div style="font-weight:600;margin-bottom:.75rem">Risk Score Thresholds (0–100)</div>
+
+                    <div class="pam-form-row">
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Low → Medium threshold</label>
+                            <input type="number" class="pam-input" style="width:100%" min="1" max="89" @bind="_amfaLow" />
+                            <span class="pam-hint">Below this: normal login</span>
+                        </div>
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Medium → High threshold</label>
+                            <input type="number" class="pam-input" style="width:100%" min="2" max="89" @bind="_amfaMedium" />
+                            <span class="pam-hint">TOTP required</span>
+                        </div>
+                    </div>
+                    <div class="pam-form-row">
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">High threshold (force MFA)</label>
+                            <input type="number" class="pam-input" style="width:100%" min="3" max="99" @bind="_amfaHigh" />
+                            <span class="pam-hint">MFA forced even if not enrolled</span>
+                        </div>
+                        <div class="pam-form-group" style="flex:1">
+                            <label class="pam-label">Block threshold</label>
+                            <input type="number" class="pam-input" style="width:100%" min="10" max="100" @bind="_amfaBlock" />
+                            <span class="pam-hint">Login denied completely</span>
+                        </div>
+                    </div>
+
+                    <div class="pam-alert" style="background:#161b22;border:1px solid #30363d;font-size:0.82rem;margin-top:.5rem">
+                        <strong>Risk factors:</strong>
+                        Unknown IP address (+30 pts) &bull;
+                        Off-hours login (+20 pts) &bull;
+                        Frequency spike &gt;5 sessions/hr (+25 pts)
+                    </div>
+                }
+
+                <div style="margin-top:1rem">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveAdaptiveMfaPolicyAsync" disabled="@_amfaSaving">
+                        @if (_amfaSaving) { <span class="pam-spinner-sm"></span> } Save
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -498,6 +570,15 @@
     private bool   _wmEnableRdp        = true;
     private bool   _wmEnableVnc        = true;
 
+    // Adaptive MFA policy (#205)
+    private bool _amfaLoading = false;
+    private bool _amfaSaving  = false;
+    private bool _amfaEnabled = false;
+    private int  _amfaLow     = 25;
+    private int  _amfaMedium  = 50;
+    private int  _amfaHigh    = 75;
+    private int  _amfaBlock   = 90;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -514,7 +595,8 @@
             case "lockout":   await LoadLockoutPolicyAsync();     break;
             case "session":   await LoadSessionPolicyAsync();     break;
             case "mfa":       await LoadMfaPolicyAsync();         break;
-            case "watermark": await LoadWatermarkPolicyAsync();   break;
+            case "watermark":    await LoadWatermarkPolicyAsync();        break;
+            case "adaptive-mfa": await LoadAdaptiveMfaPolicyAsync();     break;
         }
     }
 
@@ -697,6 +779,33 @@
         _wmSaving = false;
         _successMsg = ok ? "Watermark policy saved." : null;
         if (!ok) _error = "Failed to save watermark policy.";
+        StateHasChanged();
+        if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
+    }
+
+    private async Task LoadAdaptiveMfaPolicyAsync()
+    {
+        _amfaLoading = true; StateHasChanged();
+        var s = await Api.GetAdaptiveMfaPolicyAsync();
+        if (s != null)
+        {
+            _amfaEnabled = s.Enabled;
+            _amfaLow     = s.LowRiskThreshold;
+            _amfaMedium  = s.MediumRiskThreshold;
+            _amfaHigh    = s.HighRiskThreshold;
+            _amfaBlock   = s.BlockThreshold;
+        }
+        _amfaLoading = false; StateHasChanged();
+    }
+
+    private async Task SaveAdaptiveMfaPolicyAsync()
+    {
+        _amfaSaving = true; StateHasChanged();
+        var ok = await Api.SaveAdaptiveMfaPolicyAsync(new AdaptiveMfaPolicySettingsDto(
+            _amfaEnabled, _amfaLow, _amfaMedium, _amfaHigh, _amfaBlock));
+        _amfaSaving = false;
+        _successMsg = ok ? "Adaptive MFA policy saved." : null;
+        if (!ok) _error = "Failed to save adaptive MFA policy.";
         StateHasChanged();
         if (ok) { await Task.Delay(3000); _successMsg = null; StateHasChanged(); }
     }
