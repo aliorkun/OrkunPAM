@@ -136,6 +136,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // SMS OTP MFA (#215)
     public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
 
+    // Session Tagging & Annotation (#216)
+    public DbSet<SessionAnnotation> SessionAnnotations => Set<SessionAnnotation>();
+
     // Cloud PAM — AWS / Azure / GCP (#37)
     public DbSet<CloudAccount> CloudAccounts => Set<CloudAccount>();
     public DbSet<CloudResource> CloudResources => Set<CloudResource>();
@@ -469,6 +472,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(t => t.ExpiresAtUtc);
             e.Property(t => t.HashedCode).HasMaxLength(64);
             e.Property(t => t.RequestedFromIp).HasMaxLength(64);
+        });
+
+        // === Session Tagging & Annotation (#216) ===
+        modelBuilder.Entity<SessionAnnotation>(e =>
+        {
+            e.HasIndex(a => a.SessionId);
+            e.HasIndex(a => a.CreatedAtUtc);
+            e.Property(a => a.AuthorUsername).HasMaxLength(256);
+            e.Property(a => a.Note).HasMaxLength(4000);
         });
 
         // === Cloud PAM (#37) ===

@@ -46,6 +46,7 @@
                         <th>Status</th>
                         <th>Started</th>
                         <th>Duration</th>
+                        <th>Tags</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -62,7 +63,22 @@
                             </td>
                             <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
                             <td>@Duration(s)</td>
+                            <td style="max-width:160px">
+                                @if (!string.IsNullOrEmpty(s.Tags))
+                                {
+                                    @foreach (var tag in s.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                                    {
+                                        <span class="pam-badge pam-badge-secondary" style="margin:1px;font-size:0.72em">@tag</span>
+                                    }
+                                }
+                                <button class="pam-btn-icon" title="Edit tags"
+                                        @onclick="@(() => OpenTagModal(s))">&#x1F3F7;</button>
+                            </td>
                             <td style="display:flex;gap:4px;flex-wrap:wrap;">
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                        @onclick="@(() => OpenAnnotationsPanel(s.Id))">
+                                    &#x1F4DD; Notes
+                                </button>
                                 @if (s.Status == "Active")
                                 {
                                     <button class="pam-btn pam-btn-primary pam-btn-sm"
@@ -74,10 +90,6 @@
                                             @onclick="@(() => ShadowAsync(s.Id))">
                                         @(_shadowingId == s.Id ? "&#x2026;" : "Shadow")
                                     </button>
-                                }
-                                else
-                                {
-                                    <span style="color:#ccc">&#x2014;</span>
                                 }
                             </td>
                         </tr>
@@ -99,6 +111,80 @@
     </div>
 </div>
 
+@* Tag edit modal *@
+@if (_tagSession != null)
+{
+    <div class="pam-modal-overlay" @onclick="CloseTagModal">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Edit Session Tags</h3>
+                <button class="pam-close-btn" @onclick="CloseTagModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <label class="pam-label">Tags (comma-separated)</label>
+                <input class="pam-input" style="width:100%" @bind="_tagInput"
+                       placeholder="e.g. production, critical, change-123" />
+                <div style="font-size:0.8em;color:#888;margin-top:4px">
+                    Comma-separated keywords. Used for filtering and reporting.
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseTagModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SaveTagsAsync" disabled="@_tagSaving">
+                    @if (_tagSaving) { <span class="pam-spinner-sm"></span> } Save
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Annotations panel *@
+@if (_annotSessionId != null)
+{
+    <div class="pam-modal-overlay" @onclick="CloseAnnotationsPanel">
+        <div class="pam-modal" style="max-width:640px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Session Notes</h3>
+                <button class="pam-close-btn" @onclick="CloseAnnotationsPanel">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_annotLoading)
+                {
+                    <div class="pam-loading-text">Loading notes&#x2026;</div>
+                }
+                else if (_annotations == null || _annotations.Count == 0)
+                {
+                    <div class="pam-empty" style="padding:.5rem 0">No notes yet.</div>
+                }
+                else
+                {
+                    @foreach (var a in _annotations)
+                    {
+                        <div style="border:1px solid #30363d;border-radius:6px;padding:.75rem;margin-bottom:.5rem">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem">
+                                <strong style="font-size:0.85em">@(a.AuthorUsername ?? "Unknown")</strong>
+                                <span style="font-size:0.75em;color:#888">@a.CreatedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</span>
+                            </div>
+                            <div style="white-space:pre-wrap;font-size:0.9em">@a.Note</div>
+                        </div>
+                    }
+                }
+
+                <div style="margin-top:1rem">
+                    <label class="pam-label">Add Note</label>
+                    <textarea class="pam-input" rows="3" style="width:100%" @bind="_newAnnotation"
+                              placeholder="Enter note&#x2026;"></textarea>
+                    @if (_annotError != null) { <div class="pam-alert pam-alert-danger" style="margin-top:4px">@_annotError</div> }
+                    <button class="pam-btn pam-btn-primary" style="margin-top:.5rem"
+                            @onclick="AddAnnotationAsync" disabled="@_annotSaving">
+                        @if (_annotSaving) { <span class="pam-spinner-sm"></span> } Add Note
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<SessionDto>? _sessions;
     private PageMeta?         _meta;
@@ -108,6 +194,19 @@
     private int               _page         = 1;
     private const int         _pageSize     = 20;
     private string?           _shadowingId;
+
+    // Tags
+    private SessionDto? _tagSession;
+    private string      _tagInput   = "";
+    private bool        _tagSaving  = false;
+
+    // Annotations
+    private string?                    _annotSessionId;
+    private List<SessionAnnotationDto>? _annotations;
+    private bool                       _annotLoading = false;
+    private string                     _newAnnotation = "";
+    private bool                       _annotSaving   = false;
+    private string?                    _annotError;
 
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
@@ -166,5 +265,54 @@
         if (csv == null) { _error = "Export failed."; StateHasChanged(); return; }
         await JS.InvokeVoidAsync("downloadCsvFile",
             "sessions-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", csv);
+    }
+
+    // ── Tags ─────────────────────────────────────────────────────────────────
+    private void OpenTagModal(SessionDto s)
+    {
+        _tagSession = s;
+        _tagInput   = s.Tags ?? "";
+        StateHasChanged();
+    }
+    private void CloseTagModal() { _tagSession = null; StateHasChanged(); }
+
+    private async Task SaveTagsAsync()
+    {
+        if (_tagSession == null) return;
+        _tagSaving = true; StateHasChanged();
+        var ok = await Api.UpdateSessionTagsAsync(_tagSession.Id, _tagInput.Trim());
+        _tagSaving = false;
+        if (ok) { CloseTagModal(); await LoadAsync(); }
+        else { _error = "Failed to save tags."; StateHasChanged(); }
+    }
+
+    // ── Annotations ──────────────────────────────────────────────────────────
+    private async Task OpenAnnotationsPanel(string sessionId)
+    {
+        _annotSessionId = sessionId;
+        _newAnnotation  = "";
+        _annotError     = null;
+        _annotations    = null;
+        StateHasChanged();
+        _annotLoading = true; StateHasChanged();
+        _annotations  = await Api.GetSessionAnnotationsAsync(sessionId);
+        _annotLoading = false; StateHasChanged();
+    }
+    private void CloseAnnotationsPanel() { _annotSessionId = null; _annotations = null; StateHasChanged(); }
+
+    private async Task AddAnnotationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newAnnotation))
+        { _annotError = "Note cannot be empty."; StateHasChanged(); return; }
+        _annotSaving = true; _annotError = null; StateHasChanged();
+        var result = await Api.AddSessionAnnotationAsync(_annotSessionId!, _newAnnotation.Trim());
+        _annotSaving = false;
+        if (result != null)
+        {
+            _newAnnotation = "";
+            _annotations   = await Api.GetSessionAnnotationsAsync(_annotSessionId!);
+        }
+        else { _annotError = "Failed to add note."; }
+        StateHasChanged();
     }
 }
