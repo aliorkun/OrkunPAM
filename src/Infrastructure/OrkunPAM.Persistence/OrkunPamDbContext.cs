@@ -133,7 +133,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Email OTP MFA (#178)
     public DbSet<EmailOtpToken> EmailOtpTokens => Set<EmailOtpToken>();
 
-    // Cloud PAM -- AWS / Azure / GCP (#37)
+    // SMS OTP MFA (#215)
+    public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
+
+    // Cloud PAM — AWS / Azure / GCP (#37)
     public DbSet<CloudAccount> CloudAccounts => Set<CloudAccount>();
     public DbSet<CloudResource> CloudResources => Set<CloudResource>();
     public DbSet<CloudJitRequest> CloudJitRequests => Set<CloudJitRequest>();
@@ -452,6 +455,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 
         // === Email OTP MFA (#178) ===
         modelBuilder.Entity<EmailOtpToken>(e =>
+        {
+            e.HasIndex(t => t.UserId);
+            e.HasIndex(t => t.ExpiresAtUtc);
+            e.Property(t => t.HashedCode).HasMaxLength(64);
+            e.Property(t => t.RequestedFromIp).HasMaxLength(64);
+        });
+
+        // === SMS OTP MFA (#215) ===
+        modelBuilder.Entity<SmsOtpToken>(e =>
         {
             e.HasIndex(t => t.UserId);
             e.HasIndex(t => t.ExpiresAtUtc);
