@@ -54,7 +54,7 @@ internal sealed class PamApiClient
     /// <summary>
     /// Look up a device by hostname/IP and return the SSH credential for it.
     /// Also returns the stored SSH host key fingerprint (null = first connection, TOFU applies) and deviceId.
-    /// Throws InvalidOperationException on any failure — caller must close session (fail-closed).
+    /// Throws InvalidOperationException on any failure -- caller must close session (fail-closed).
     /// </summary>
     internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
@@ -76,7 +76,7 @@ internal sealed class PamApiClient
 
             if (jwt == null)
             {
-                _log.LogError("Proxy service account login failed — aborting session for {Host}", targetHost);
+                _log.LogError("Proxy service account login failed -- aborting session for {Host}", targetHost);
                 throw new InvalidOperationException("Proxy service account authentication failed");
             }
 
@@ -111,7 +111,7 @@ internal sealed class PamApiClient
             if (cred == null)
                 throw new InvalidOperationException($"No SSH credential found for device '{device.Id}'");
 
-            // Decrypt via dedicated proxy endpoint — also sends X-Proxy-Secret for defense-in-depth
+            // Decrypt via dedicated proxy endpoint -- also sends X-Proxy-Secret for defense-in-depth
             using var decryptReq = new HttpRequestMessage(HttpMethod.Post,
                 "/api/v1/vault/credentials/proxy-decrypt");
             decryptReq.Content = JsonContent.Create(new { credentialId = cred.Id, purpose = "SshProxy" });
@@ -172,7 +172,7 @@ internal sealed class PamApiClient
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Failed to fetch session policy — using defaults (30 min idle)");
+            _log.LogWarning(ex, "Failed to fetch session policy -- using defaults (30 min idle)");
         }
         return (30, 3);
     }
@@ -203,14 +203,14 @@ internal sealed class PamApiClient
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "Failed to fetch full session policy — command filtering disabled");
+            _log.LogWarning(ex, "Failed to fetch full session policy -- command filtering disabled");
         }
         return null;
     }
 
     /// <summary>
     /// Store SSH host key fingerprint for a device (TOFU: first successful connection).
-    /// Best-effort — never throws, logs on failure.
+    /// Best-effort -- never throws, logs on failure.
     /// </summary>
     internal async Task StoreSshFingerprintAsync(string deviceId, string fingerprint, CancellationToken ct)
     {
@@ -233,6 +233,28 @@ internal sealed class PamApiClient
         {
             _log.LogWarning(ex, "StoreSshFingerprint: unexpected error for device {DeviceId}", deviceId);
         }
+    }
+
+    /// <summary>
+    /// Fire-and-forget: send a live terminal chunk to the WebAPI for admin live monitoring.
+    /// Never throws -- any failure is silently swallowed to not impact session performance.
+    /// </summary>
+    internal void SendLiveChunk(string sessionId, string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var client = _factory.CreateClient("PamApi");
+                using var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"/api/v1/sessions/{sessionId}/live/chunk");
+                req.Content = JsonContent.Create(new { text });
+                req.Headers.Add("X-Proxy-Secret", _proxySecret);
+                await client.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch { /* best-effort: silently ignore */ }
+        });
     }
 
     // Response DTOs

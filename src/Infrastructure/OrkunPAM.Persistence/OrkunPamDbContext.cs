@@ -53,6 +53,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
+    public DbSet<SessionObserverLog> SessionObserverLogs => Set<SessionObserverLog>();
 
     // Analytics
     public DbSet<CommandRiskRule> CommandRiskRules => Set<CommandRiskRule>();
@@ -132,7 +133,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Email OTP MFA (#178)
     public DbSet<EmailOtpToken> EmailOtpTokens => Set<EmailOtpToken>();
 
-    // Cloud PAM — AWS / Azure / GCP (#37)
+    // Cloud PAM -- AWS / Azure / GCP (#37)
     public DbSet<CloudAccount> CloudAccounts => Set<CloudAccount>();
     public DbSet<CloudResource> CloudResources => Set<CloudResource>();
     public DbSet<CloudJitRequest> CloudJitRequests => Set<CloudJitRequest>();
@@ -534,6 +535,14 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(a => new { a.PrincipalType, a.PrincipalId });
             e.HasIndex(a => new { a.TargetType, a.TargetId });
             e.HasIndex(a => a.CredentialId);
+        });
+
+        // === Session Observer Log (#214) ===
+        modelBuilder.Entity<SessionObserverLog>(e =>
+        {
+            e.HasIndex(o => o.SessionId);
+            e.HasIndex(o => o.ObserverUserId);
+            e.Property(o => o.ObserverUsername).HasMaxLength(256);
         });
 
         // Seed built-in data
