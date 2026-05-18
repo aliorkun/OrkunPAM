@@ -18,7 +18,6 @@ public static class PolicyEndpoints
         catch { return new T(); }
     }
 
-    // Upsert the single global policy record for a given type
     private static async Task UpsertGlobalPolicyAsync(
         OrkunPamDbContext db, string policyType, string name, object settings)
     {
@@ -134,10 +133,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true, data = policies });
         });
 
-        // -----------------------------------------------------------------------
-        // Dedicated password policy endpoints (RFP Security #2-6, #10, #11)
-        // -----------------------------------------------------------------------
-
         var pwdGroup = app.MapGroup("/api/v1/policy").WithTags("Policy Settings").RequireAuthorization("AdminPolicy");
 
         pwdGroup.MapGet("/password", async (OrkunPamDbContext db) =>
@@ -200,9 +195,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true, data = settings });
         });
 
-        // -----------------------------------------------------------------------
-        // MFA policy endpoints
-        // -----------------------------------------------------------------------
         pwdGroup.MapGet("/mfa", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -233,7 +225,6 @@ public static class PolicyEndpoints
 
             await UpsertGlobalPolicyAsync(db, "Session", "Global Session Policy", req);
 
-            // Invalidate cached concurrent limit so proxies and new sessions pick up the update within 5 min
             cache.Remove("policy:session:global:concurrent");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -243,7 +234,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // ── Watermark policy endpoints (#190) ───────────────────────────────────────────
         pwdGroup.MapGet("/watermark", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -270,7 +260,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // ── Device Trust policy endpoints (#207) ───────────────────────────────────────────
         pwdGroup.MapGet("/device-trust", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -295,7 +284,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // ── Geolocation Access policy endpoints (#208) ─────────────────────────────────────
         pwdGroup.MapGet("/geo-access", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -323,7 +311,6 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        // ── Adaptive MFA policy endpoints (#205) ────────────────────────────────────────────
         pwdGroup.MapGet("/adaptive-mfa", async (OrkunPamDbContext db) =>
         {
             var p = await db.Policies.FirstOrDefaultAsync(
@@ -389,6 +376,7 @@ public record MfaPolicySettings
 {
     public bool MfaRequired     { get; init; }
     public bool EmailOtpEnabled { get; init; }
+    public bool SmsOtpEnabled   { get; init; }
 }
 
 public record WatermarkPolicySettings
@@ -401,28 +389,25 @@ public record WatermarkPolicySettings
     public bool   EnableVnc         { get; init; } = true;
 }
 
-// Device Trust policy settings (#207)
 public record DeviceTrustPolicySettings
 {
     public bool   Enabled               { get; init; } = false;
     public bool   RequireTrustedDevice  { get; init; } = false;
-    public string UnknownDeviceAction   { get; init; } = "Allow"; // Allow | StepUpAuth | Block
+    public string UnknownDeviceAction   { get; init; } = "Allow";
     public int    MaxTrustAgeDays       { get; init; } = 90;
     public bool   AutoRegisterOnLogin   { get; init; } = true;
 }
 
-// Geolocation Access policy settings (#208)
 public record GeolocationPolicySettings
 {
     public bool     Enabled               { get; init; } = false;
     public string[] AllowedCountryCodes   { get; init; } = [];  // empty = all allowed
     public string[] BlockedCountryCodes   { get; init; } = [];  // explicit deny list
-    public string   ViolationAction       { get; init; } = "Block";  // Block | StepUpAuth
-    public string   UnknownLocationAction { get; init; } = "Allow";  // Allow | StepUpAuth | Block
+    public string   ViolationAction       { get; init; } = "Block";
+    public string   UnknownLocationAction { get; init; } = "Allow";
     public bool     AllowPrivateIps       { get; init; } = true;
 }
 
-// Adaptive MFA policy settings (#205)
 public record AdaptiveMfaPolicySettings
 {
     public bool Enabled              { get; init; } = false;
