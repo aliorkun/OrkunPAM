@@ -90,21 +90,58 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 
 **Döngü sürekli tekrar eder. Her agent GitHub'ı tek kaynak olarak kullanır.**
 
-### Mevcut Durum (2026-05-14)
-- **v1.0.0-rc1 TAG ATILDI** — MVP tamamlandı
-- MVP milestone'ları (v0.2.0, v0.3.0, v1.0.0-rc1) hepsi kapalı
-- Artık **v2.0.0 feature'ları** aktif geliştirme hedefi
-- Security fix'ler hâlâ en yüksek öncelik
+### ⚠️ MEVCUT DURUM (2026-05-18) — REFACTORING MODU AKTİF
 
-### Developer Kuralları
-- `gh issue list --label security` → Security agent bulgularını takip et
-- `gh issue list --label product` → PM taleplerini takip et
-- `severity:critical` ve `severity:high` issue'lar her şeyden önce fix'lenir
-- **MVP TAMAMLANDI** — `priority:v2` issue'lara geçildi
-- v2 öncelik sırası: #125 Session Monitoring → #126 Windows/Kerberos Auth → #127 Vendor Access → #110 RDP Full → #116 HTML5 RDP
-- Her fix commit'inde ilgili issue numarasını referansla
-- Proxy katmanında açık kaynak kütüphane KULLANMA - native C# implementasyon
-- Security agent'ın açtığı ticket'larda belirtilen dosya:satır bilgisini dikkate al
+**YENİ FEATURE YAZMA! REFACTORING SPRINT'İ DEVAM EDİYOR.**
+
+Mevcut kod yapısı gerçek bir PAM ürünü değil. Agent'lar 30+ sprint boyunca birbirinden bağımsız, anlamsız feature'lar üretmiş. Sonuç:
+- 30+ menü butonu var, çoğu çalışmıyor veya anlamsız
+- Gerçek PAM erişim kontrolü yok (kim nereye nasıl bağlanacak)
+- Proxy'ler çalışmıyor
+- Build hataları sürekli çıkıyor
+- DB yapısı düz, realm/access control modeli yok
+
+### Referans: Kron PAM Veri Modeli (10.1.1.23)
+
+Kron PAM'ın çekirdek yapısı:
+
+```
+User → User Group → Device Realm ← Device Group ← Device
+                         ↓
+                    Policy Key
+                         ↓
+                  Session + Credential
+```
+
+**Temel tablolar:**
+1. `t_user` — user_id (UUID), name, surname, email, internal
+2. `t_group` — group_id, group_eid (readable name), users (many-to-many)
+3. `t_device` — dbid, name, element_type_id, management_ip, access_protocol
+4. `t_device_group` — name, parent_group_id (hierarchy)
+5. `t_device_realm` — **Erişim matrisi**: Device Group'ları + User Group'ları birleştirir
+6. `sapm_account` — Credential: username, password (enc), device_id, change_period
+7. `sapm_group` — Credential folder/group (hierarchy)
+8. `assigned_credential` — Credential'ı user/group'a device/device_group bazında ata
+9. `sc_sessions` — Session kaydı
+10. `t_function_group` — Portal yetki grupları (SAPM Admin, Network Admin, Log Admin)
+
+### Developer Kuralları — REFACTORING SPRINT
+- **YENİ FEATURE EKLEME** — Sadece mevcut yapıyı düzelt
+- **Menü sadeleştirmesi:** Sadece 8 ana menü: Users, Devices, Vault, Access Control, Sessions, Policies, Reports, System
+- **Device Realm implementasyonu:** AccessAssignment'ı Kron PAM realm modeline çevir
+- **Credential assignment:** Kron PAM `assigned_credential` modelini uygula
+- **Her commit ÖNCE build + çalıştır + login test et**
+- **PM agent YENİ issue AÇMAZ** — Sadece mevcut issue'ları yönetir
+- **Security agent sadece critical açar** — Medium/low ertelendi
+- **Developer agent sadece refactoring yapar** — Yeni endpoint/sayfa EKLEME
+
+### Refactoring Sprint Sırası
+1. Blazor menü sadeleştirmesi (30+ → 8 ana kategori)
+2. Device Realm entity + endpoint + UI
+3. Credential assignment refactoring (Kron PAM modeli)
+4. Gereksiz endpoint'leri kaldır veya gizle
+5. Session akışını realm-based erişim kontrolüyle entegre et
+6. Proxy'leri çalışır hale getir (SSH öncelikli)
 
 ### Remote Agent Schedule (15 run/gün - tam limit)
 
@@ -123,16 +160,14 @@ Her döngü GitHub Issues üzerinden koordine edilir. Agent'lar repoyu GitHub'da
 - **Çakışma önleme:** Agent'lar farklı saatlerde çalışır, üst üste binmez
 - **Duplicate:** Tüm agent'lar önce mevcut issue'ları kontrol eder
 
-### v2 Aktif Geliştirme Öncelikleri
-Aşağıdaki issue'lar sırayla implement edilecek:
+### v2 Aktif Geliştirme — DURDURULDU
+**Tüm v2 feature'lar DONDURULDU. Refactoring sprint'i tamamlanana kadar yeni feature yok.**
 
-| # | Issue | Açıklama |
-|---|-------|----------|
-| #125 | Session Live Monitoring | Canlı oturum izleme, admin müdahale |
-| #126 | Windows/Kerberos Auth | NTLM/Kerberos portal girişi |
-| #127 | Vendor Access Management | Tedarikçi/geçici erişim yönetimi |
-| #110 | RDP Full Integration | RDS Gateway (RemoteApp, Shadowing, HA) |
-| #116 | HTML5 RDP Terminal | Tarayıcıdan native client olmadan RDP |
+Refactoring tamamlandıktan sonra sıra:
+1. Device Realm tabanlı erişim kontrolü (Kron PAM modeli)
+2. SSH Proxy çalışır hale getirme
+3. Session recording + playback
+4. RDP Proxy
 
 ### Ertelenen Alanlar (v3+ — ŞU AN DOKUNMA)
 Bu alanlarda PM issue **AÇMAZ**, Developer kod **YAZMAZ**:
