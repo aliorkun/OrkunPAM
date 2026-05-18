@@ -84,7 +84,7 @@ public static class AccessAssignmentEndpoints
         });
 
         // Toggle enable/disable
-        group.MapPatch("/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
+        group.MapPost("/{id:guid}/toggle", async (Guid id, OrkunPamDbContext db) =>
         {
             var assignment = await db.AccessAssignments.FindAsync(id);
             if (assignment == null)
