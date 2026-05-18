@@ -29,6 +29,10 @@ try
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
+    // Background services should not crash the host
+    builder.Services.Configure<Microsoft.Extensions.Hosting.HostOptions>(opts =>
+        opts.BackgroundServiceExceptionBehavior = Microsoft.Extensions.Hosting.BackgroundServiceExceptionBehavior.Ignore);
+
     // === Database (SQLite for dev, SQL Server for prod) ===
     var connectionString = builder.Configuration.GetConnectionString("Default")
         ?? "Data Source=orkunpam.db";
