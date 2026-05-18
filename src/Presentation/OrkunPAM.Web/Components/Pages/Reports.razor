@@ -21,6 +21,10 @@
             @onclick="@(() => SetTab("custom"))">&#x1F527; Custom</button>
     <button class="pam-btn @(_tab == "compliance" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("compliance"))">&#x2705; Compliance</button>
+    <button class="pam-btn @(_tab == "patterns" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("patterns"))">&#x1F50D; Access Patterns</button>
+    <button class="pam-btn @(_tab == "apiusage" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("apiusage"))">&#x1F511; API Usage</button>
 </div>
 
 @if (_tab == "audit")
@@ -760,6 +764,316 @@ else if (_tab == "reports")
     }
 }
 
+@if (_tab == "patterns")
+{
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+                <div>
+                    <label class="pam-label">Period</label>
+                    <select class="pam-input pam-select" style="width:140px" @bind="_apDays">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+                <div style="align-self:flex-end">
+                    <button class="pam-btn pam-btn-primary" @onclick="LoadAccessPatternsAsync"
+                            disabled="@_apLoading">
+                        @(_apLoading ? "Loading…" : "Load Report")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_apError != null)
+    {
+        <div class="pam-alert pam-alert-danger">@_apError</div>
+    }
+
+    @if (_apSummary != null)
+    {
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold">@_apSummary.TotalSessions</div>
+                <div style="color:#888;font-size:0.85em">Total Sessions</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold">@_apSummary.UniqueUsers</div>
+                <div style="color:#888;font-size:0.85em">Unique Users</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold;color:#e74c3c">@_apSummary.LoginFailures</div>
+                <div style="color:#888;font-size:0.85em">Login Failures</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold">@(_apSummary.ProtocolBreakdown?.Count ?? 0)</div>
+                <div style="color:#888;font-size:0.85em">Protocol Types</div>
+            </div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Top Users by Session Count</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>User ID</th><th>Sessions</th></tr></thead>
+                        <tbody>
+                            @foreach (var u in _apSummary.TopUsers ?? [])
+                            {
+                                <tr>
+                                    <td style="font-family:monospace;font-size:0.85em">@u.UserId.ToString()[..8]…</td>
+                                    <td>@u.SessionCount</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Top Target Systems</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>Target</th><th>Sessions</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _apSummary.TopTargets ?? [])
+                            {
+                                <tr><td>@t.Target</td><td>@t.SessionCount</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (_apTimeOfDay != null)
+        {
+            <div class="pam-card" style="margin-bottom:16px">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Hourly Session Distribution (24h)</h4>
+                    <div style="display:flex;gap:2px;align-items:flex-end;height:120px;padding-bottom:4px">
+                        @{
+                            var maxHourly = _apTimeOfDay.Hourly?.Max(h => h.SessionCount) ?? 1;
+                            if (maxHourly == 0) maxHourly = 1;
+                        }
+                        @foreach (var h in _apTimeOfDay.Hourly ?? [])
+                        {
+                            var pct = (int)((double)h.SessionCount / maxHourly * 100);
+                            <div title="@h.Hour:00 — @h.SessionCount sessions"
+                                 style="flex:1;background:#3498db;height:@(pct)%;min-height:2px;border-radius:2px 2px 0 0">
+                            </div>
+                        }
+                    </div>
+                    <div style="display:flex;gap:2px;font-size:0.65em;color:#888">
+                        @for (int h = 0; h < 24; h++)
+                        {
+                            <div style="flex:1;text-align:center">@h</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Weekday Distribution</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>Day</th><th>Sessions</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _apSummary.WeekdayDistribution ?? [])
+                            {
+                                <tr><td>@d.Day</td><td>@d.SessionCount</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Protocol Breakdown</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>Protocol</th><th>Count</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _apSummary.ProtocolBreakdown ?? [])
+                            {
+                                <tr><td>@p.Protocol</td><td>@p.Count</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!_apLoading)
+    {
+        <div class="pam-alert pam-alert-info">Select a period and click "Load Report" to view access pattern analytics.</div>
+    }
+}
+
+@if (_tab == "apiusage")
+{
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+                <div>
+                    <label class="pam-label">Period</label>
+                    <select class="pam-input pam-select" style="width:140px" @bind="_auDays">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+                <div style="align-self:flex-end">
+                    <button class="pam-btn pam-btn-primary" @onclick="LoadApiUsageAsync"
+                            disabled="@_auLoading">
+                        @(_auLoading ? "Loading…" : "Load Report")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_auError != null)
+    {
+        <div class="pam-alert pam-alert-danger">@_auError</div>
+    }
+
+    @if (_auSummary != null)
+    {
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold">@_auSummary.TotalCalls</div>
+                <div style="color:#888;font-size:0.85em">Total API Calls</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold;color:#27ae60">@_auSummary.Granted</div>
+                <div style="color:#888;font-size:0.85em">Granted</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold;color:#e74c3c">@_auSummary.Denied</div>
+                <div style="color:#888;font-size:0.85em">Denied</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:2em;font-weight:bold;color:@(_auSummary.ErrorRate > 20 ? "#e74c3c" : "#888")">
+                    @_auSummary.ErrorRate%
+                </div>
+                <div style="color:#888;font-size:0.85em">Error Rate</div>
+            </div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Top API Clients</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>Client</th><th>Calls</th><th>Denied</th><th>Rate Limited</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _auSummary.TopClients ?? [])
+                            {
+                                <tr>
+                                    <td>@c.ClientName</td>
+                                    <td>@c.TotalCalls</td>
+                                    <td style="color:@(c.Denied > 0 ? "#e74c3c" : "inherit")">@c.Denied</td>
+                                    <td>@c.RateLimited</td>
+                                </tr>
+                            }
+                            @if (!(_auSummary.TopClients?.Any() ?? false))
+                            {
+                                <tr><td colspan="4" style="text-align:center;color:#888">No API client activity in this period.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="pam-card">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px">Top Audit Event Types</h4>
+                    <table class="pam-table" style="width:100%">
+                        <thead><tr><th>Event Type</th><th>Count</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _auSummary.AuditTopEventTypes ?? [])
+                            {
+                                <tr><td>@e.EventType</td><td>@e.Count</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        @if (_auAnomalies != null && ((_auAnomalies.HighDenialRateClients?.Any() ?? false) || (_auAnomalies.RateLimitedClients?.Any() ?? false)))
+        {
+            <div class="pam-card" style="margin-bottom:16px;border-left:4px solid #e74c3c">
+                <div class="pam-card-body">
+                    <h4 style="margin:0 0 12px;color:#e74c3c">&#x26A0; API Usage Anomalies</h4>
+                    @if (_auAnomalies.HighDenialRateClients?.Any() ?? false)
+                    {
+                        <p style="font-weight:bold">High Denial Rate (&gt;20%):</p>
+                        <table class="pam-table" style="width:100%;margin-bottom:12px">
+                            <thead><tr><th>Client</th><th>Total</th><th>Denied</th><th>Rate</th></tr></thead>
+                            <tbody>
+                                @foreach (var x in _auAnomalies.HighDenialRateClients)
+                                {
+                                    <tr>
+                                        <td>@x.ClientName</td>
+                                        <td>@x.TotalCalls</td>
+                                        <td style="color:#e74c3c">@x.DeniedCalls</td>
+                                        <td style="color:#e74c3c;font-weight:bold">@x.DenialRate%</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    @if (_auAnomalies.RateLimitedClients?.Any() ?? false)
+                    {
+                        <p style="font-weight:bold">Rate Limit Hits:</p>
+                        <table class="pam-table" style="width:100%">
+                            <thead><tr><th>Client</th><th>Rate Limit Hits</th></tr></thead>
+                            <tbody>
+                                @foreach (var x in _auAnomalies.RateLimitedClients)
+                                {
+                                    <tr><td>@x.ClientName</td><td style="color:#e67e22;font-weight:bold">@x.RateLimitHits</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="pam-card">
+            <div class="pam-card-body">
+                <h4 style="margin:0 0 12px">Hourly API Call Distribution</h4>
+                <div style="display:flex;gap:2px;align-items:flex-end;height:100px">
+                    @{
+                        var maxAuHourly = _auSummary.HourlyTrend?.Max(h => h.CallCount) ?? 1;
+                        if (maxAuHourly == 0) maxAuHourly = 1;
+                    }
+                    @foreach (var h in _auSummary.HourlyTrend ?? [])
+                    {
+                        var pct = (int)((double)h.CallCount / maxAuHourly * 100);
+                        <div title="@h.Hour:00 — @h.CallCount calls"
+                             style="flex:1;background:#9b59b6;height:@(pct)%;min-height:2px;border-radius:2px 2px 0 0">
+                        </div>
+                    }
+                </div>
+                <div style="display:flex;gap:2px;font-size:0.65em;color:#888;margin-top:2px">
+                    @for (int h = 0; h < 24; h++)
+                    {
+                        <div style="flex:1;text-align:center">@h</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (!_auLoading)
+    {
+        <div class="pam-alert pam-alert-info">Select a period and click "Load Report" to view API usage analytics.</div>
+    }
+}
+
 @code {
     private string _tab = "audit";
     private AuditVerifyResult? _integrityResult;
@@ -806,6 +1120,20 @@ else if (_tab == "reports")
     private bool                 _cmpLoading;
     private string?              _cmpError;
     private ComplianceReportResultDto? _cmpReport;
+
+    // ---- Access Patterns state (#209) ----
+    private int                        _apDays    = 30;
+    private bool                       _apLoading;
+    private string?                    _apError;
+    private AccessPatternSummaryDto?   _apSummary;
+    private AccessPatternTimeOfDayDto? _apTimeOfDay;
+
+    // ---- API Usage state (#209) ----
+    private int                    _auDays    = 30;
+    private bool                   _auLoading;
+    private string?                _auError;
+    private ApiUsageSummaryDto?    _auSummary;
+    private ApiUsageAnomaliesDto?  _auAnomalies;
 
     private async Task SetTab(string tab)
     {
@@ -1375,5 +1703,23 @@ else if (_tab == "reports")
 
         var filename = _cmpReport.Framework + "-compliance-" + DateTime.Now.ToString("yyyyMMdd") + ".html";
         await JS.InvokeVoidAsync("downloadCsvFile", filename, sb.ToString());
+    }
+
+    private async Task LoadAccessPatternsAsync()
+    {
+        _apLoading = true; _apError = null; StateHasChanged();
+        _apSummary    = await Api.GetAccessPatternSummaryAsync(_apDays);
+        _apTimeOfDay  = await Api.GetAccessPatternTimeOfDayAsync(_apDays);
+        if (_apSummary == null) _apError = "Failed to load access pattern report.";
+        _apLoading = false; StateHasChanged();
+    }
+
+    private async Task LoadApiUsageAsync()
+    {
+        _auLoading = true; _auError = null; StateHasChanged();
+        _auSummary   = await Api.GetApiUsageSummaryAsync(_auDays);
+        _auAnomalies = await Api.GetApiUsageAnomaliesAsync(Math.Min(_auDays, 7));
+        if (_auSummary == null) _auError = "Failed to load API usage report.";
+        _auLoading = false; StateHasChanged();
     }
 }

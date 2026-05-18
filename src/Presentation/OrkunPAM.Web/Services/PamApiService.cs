@@ -2322,6 +2322,43 @@ public sealed class PamApiService
         var result = await GetAsync<ListResult<ReconciliationHistoryDto>>("/api/v1/compliance/reconciliation/history");
         return result?.Data;
     }
+
+    // Access Pattern Analytics (#209)
+    public async Task<AccessPatternSummaryDto?> GetAccessPatternSummaryAsync(int days = 30)
+    {
+        var result = await GetAsync<SingleResult<AccessPatternSummaryDto>>("/api/v1/reports/access-patterns/summary?days=" + days);
+        return result?.Data;
+    }
+
+    public async Task<AccessPatternTimeOfDayDto?> GetAccessPatternTimeOfDayAsync(int days = 30)
+    {
+        var result = await GetAsync<SingleResult<AccessPatternTimeOfDayDto>>("/api/v1/reports/access-patterns/time-of-day?days=" + days);
+        return result?.Data;
+    }
+
+    public async Task<AccessPatternUserDto?> GetAccessPatternByUserAsync(string userId, int days = 30)
+    {
+        var result = await GetAsync<SingleResult<AccessPatternUserDto>>("/api/v1/reports/access-patterns/user/" + userId + "?days=" + days);
+        return result?.Data;
+    }
+
+    public async Task<ApiUsageSummaryDto?> GetApiUsageSummaryAsync(int days = 30)
+    {
+        var result = await GetAsync<SingleResult<ApiUsageSummaryDto>>("/api/v1/reports/api-usage/summary?days=" + days);
+        return result?.Data;
+    }
+
+    public async Task<ApiClientUsageDto?> GetApiClientUsageAsync(string clientId, int days = 30)
+    {
+        var result = await GetAsync<SingleResult<ApiClientUsageDto>>("/api/v1/reports/api-usage/by-client/" + clientId + "?days=" + days);
+        return result?.Data;
+    }
+
+    public async Task<ApiUsageAnomaliesDto?> GetApiUsageAnomaliesAsync(int days = 7)
+    {
+        var result = await GetAsync<SingleResult<ApiUsageAnomaliesDto>>("/api/v1/reports/api-usage/anomalies?days=" + days);
+        return result?.Data;
+    }
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3263,4 +3300,99 @@ public record ThreatIntelReportDto(
     List<ThreatIocSourceDto>?   BySource,
     List<ThreatIocHitDto>?      Hits24h,
     DateTime                    GeneratedAtUtc);
+
+// Access Pattern Analytics DTOs (#209)
+public record AccessPatternPeriodDto(int Days, DateTime Since);
+public record AccessPatternTopUserDto(string UserId, int SessionCount);
+public record AccessPatternTopTargetDto(string Target, int SessionCount);
+public record AccessPatternPeakHourDto(int Hour, int SessionCount);
+public record AccessPatternWeekdayDto(string Day, int SessionCount);
+public record AccessPatternProtocolDto(string Protocol, int Count);
+
+public record AccessPatternSummaryDto(
+    AccessPatternPeriodDto?          Period,
+    int                              TotalSessions,
+    int                              UniqueUsers,
+    int                              LoginFailures,
+    List<AccessPatternTopUserDto>?   TopUsers,
+    List<AccessPatternTopTargetDto>? TopTargets,
+    List<AccessPatternPeakHourDto>?  PeakHours,
+    List<AccessPatternWeekdayDto>?   WeekdayDistribution,
+    List<AccessPatternProtocolDto>?  ProtocolBreakdown);
+
+public record AccessPatternHourlyDto(int Hour, int SessionCount, int UniqueUsers, int BlockedCount);
+
+public record AccessPatternTimeOfDayDto(
+    AccessPatternPeriodDto?        Period,
+    List<AccessPatternHourlyDto>?  Hourly);
+
+public record AccessPatternUserSummaryDto(string Id, string? Username, string? DisplayName);
+public record AccessPatternAuditCatDto(string Category, int Count);
+public record AccessPatternAnomalyDto(string? AnomalyType, decimal RiskScore, DateTime DetectedAtUtc, bool IsAcknowledged);
+public record AccessPatternUserTargetDto(string Target, int SessionCount, DateTime LastAccessUtc);
+
+public record AccessPatternUserDto(
+    AccessPatternUserSummaryDto?        User,
+    AccessPatternPeriodDto?             Period,
+    int                                 TotalSessions,
+    int                                 AvgSessionDurationSeconds,
+    List<AccessPatternPeakHourDto>?     LoginHoursHistogram,
+    List<AccessPatternUserTargetDto>?   TopTargets,
+    List<AccessPatternProtocolDto>?     ProtocolUsage,
+    List<AccessPatternAuditCatDto>?     AuditCategorySummary,
+    List<AccessPatternAnomalyDto>?      RecentAnomalies);
+
+// API Usage DTOs (#209)
+public record ApiUsageClientDto(
+    string  ClientId,
+    string  ClientName,
+    int     TotalCalls,
+    int     Granted,
+    int     Denied,
+    int     RateLimited);
+
+public record ApiUsageHourlyDto(int Hour, int CallCount);
+public record ApiUsageEventTypeDto(string EventType, int Count);
+
+public record ApiUsageSummaryDto(
+    AccessPatternPeriodDto?        Period,
+    int                            TotalCalls,
+    int                            Granted,
+    int                            Denied,
+    int                            RateLimited,
+    double                         ErrorRate,
+    List<ApiUsageClientDto>?       TopClients,
+    List<ApiUsageHourlyDto>?       HourlyTrend,
+    List<ApiUsageEventTypeDto>?    AuditTopEventTypes);
+
+public record ApiClientInfoDto(
+    string    Id,
+    string    Name,
+    string    ClientId,
+    bool      IsEnabled,
+    int       RateLimitPerMinute,
+    DateTime? LastUsedAtUtc,
+    int       CredentialAccessCount);
+
+public record ApiClientDailyDto(string Date, int Calls, int Granted, int Denied);
+public record ApiClientIpDto(string Ip, int Count);
+
+public record ApiClientUsageDto(
+    ApiClientInfoDto?          Client,
+    AccessPatternPeriodDto?    Period,
+    int                        TotalCalls,
+    int                        Granted,
+    int                        Denied,
+    int                        RateLimited,
+    List<ApiClientDailyDto>?   DailyTrend,
+    List<ApiUsageHourlyDto>?   HourlyProfile,
+    List<ApiClientIpDto>?      TopSourceIps);
+
+public record ApiUsageHighDenialDto(string ClientId, string ClientName, int TotalCalls, int DeniedCalls, double DenialRate);
+public record ApiUsageRateLimitDto(string ClientId, string ClientName, int RateLimitHits);
+
+public record ApiUsageAnomaliesDto(
+    AccessPatternPeriodDto?          Period,
+    List<ApiUsageHighDenialDto>?     HighDenialRateClients,
+    List<ApiUsageRateLimitDto>?      RateLimitedClients);
 
