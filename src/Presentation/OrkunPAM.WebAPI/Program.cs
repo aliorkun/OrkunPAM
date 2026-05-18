@@ -105,6 +105,9 @@ try
     // === LDAP Scheduled Sync (#90) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.LdapPamSyncService>();
 
+    // === HttpClient (required by ThreatFeedService) ===
+    builder.Services.AddHttpClient();
+
     // === Audit Integrity Daily Job (#91) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AuditIntegrityJob>();
 
