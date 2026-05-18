@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-18 (PM run #15)
+> Last updated: 2026-05-18 (Developer run — Sprint 18 items marked PC; Telnet proxy Sprint 19 added)
 
 ## Platform (44 items)
 
@@ -85,11 +85,11 @@
 | 26 | Solution shall support access certification | PC | AttestationCampaign entity + Compliance.razor — access certification campaigns; reviewer assignments, Approve/Revoke decisions, campaign progress tracking, audit trail (#154) |
 | 27 | Solution shall support user risk scoring | PC | AnomalyDetectionService.cs — per-session risk score 0-100 (OffHours +25, UnusualIP +50, FrequencySpike +50, HighRiskCommand ×10); ProxySession.RiskScore field; SOC Dashboard risk-map per user; ThreatAnalytics.razor (#35) |
 | 28 | Solution shall support behavioral analytics for users | PC | BehaviorBaselineService.cs — 30-day rolling session history; TypicalHours, KnownIPs (≥3 seen), KnownDevices (≥2 seen); UserBehaviorBaseline entity; baseline rebuild API; ThreatAnalytics.razor Baselines tab (#35) |
-| 29 | Solution shall support geolocation-based access control |  |  |
+| 29 | Solution shall support geolocation-based access control | PC | GeoLocationHelper.cs — ip-api.com lookup; allowed/blocked country codes; ViolationAction (Block/StepUpAuth); private IP RFC 1918 bypass; login flow enforcement; GET/PUT /api/v1/policy/geo-access (AdminPolicy); Policies.razor Geo Access tab (#208) |
 | 30 | Solution shall support time-based access restrictions | PC | AccessPolicyService.cs — AllowedTimeWindows (Mon-Fri 09:00-18:00 etc.) |
 | 31 | Solution shall support IP-based access restrictions | PC | AccessPolicyService.cs — CIDR-based IP allow/deny |
-| 32 | Solution shall support device-based access restrictions |  |  |
-| 33 | Solution shall support context-aware access control |  |  |
+| 32 | Solution shall support device-based access restrictions | PC | TrustedDevice entity — SHA-256 UA fingerprint, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked; DeviceTrustPolicySettings: RequireTrustedDevice, UnknownDeviceAction (Allow/StepUpAuth/Block), MaxTrustAgeDays; login flow enforcement; GET/PUT /api/v1/policy/device-trust + admin device management endpoints; MyDevices.razor user self-service; Policies.razor Device Trust tab (#207) |
+| 33 | Solution shall support context-aware access control | PC | Combined policy chain: Adaptive MFA (risk score) + Device Trust + Geolocation + Time-Window + IP allow/deny — all evaluated at login in sequence; access decisions logged to audit trail; GET /api/v1/auth/risk-score; Policies.razor unified policy management (#205, #207, #208) |
 | 34 | Solution shall support just-in-time access | PC | JitAccessEndpoints.cs — time-limited JIT credential checkout |
 | 35 | Solution shall support access request workflows | PC | Approvals.razor — request + multi-step approval (#79) |
 | 36 | Solution shall support access review campaigns | PC | Compliance.razor — attestation campaign manager; campaign creation, reviewer assignments, Approve/Revoke decisions, completion % tracking (#154) |
@@ -142,20 +142,20 @@
 | 30 | Solution shall support anomaly detection reports | PC | SocDashboardEndpoints.cs — GET /soc/timeline?hours=N: hourly anomaly count timeline; GET /soc/alert-history: paginated alert trigger log; GET /api/v1/analytics/anomalies: filterable anomaly list; ThreatAnalytics.razor Overview + Anomalies tabs; Ack button for SOC analysts (#35) |
 | 31 | Solution shall support SIEM integration reports | PC | SyslogForwarderService.cs — all events forwarded to SIEM in Syslog/CEF |
 | 32 | Solution shall support threat intelligence reports | PC | ThreatFeedService.cs + GET /api/v1/analytics/threat-feed/reports — IOC kaynak dağılımı, hit sayıları, top-5 IOC, aktif feed durumu; ThreatAnalytics.razor Threat Intelligence sekmesi: IOC tablosu, feed konfigürasyonu, son 24h hit listesi; CSV/JSON export; POST /api/v1/analytics/threat-feed/refresh manuel güncelleme (#206) |
-| 33 | Solution shall support access pattern analytics |  |  |
+| 33 | Solution shall support access pattern analytics | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/access-patterns/summary (top users, targets, peak hours, weekday dist), /time-of-day (24h histogram), /user/{userId} (per-user profile: login hours, top targets, protocol usage, anomalies); AuditLog + ProxySession aggregation; Reports.razor Access Patterns tab; CSV export (#209) |
 | 34 | Solution shall support privilege escalation tracking | PC | AuditService.cs — role assignment/escalation events logged |
 | 35 | Solution shall support account lifecycle reports | PC | ReportEndpoints.cs — account lifecycle & privilege change history: user/role/password/lock events from AuditLogs, summary counters, per-user event timeline; RFP Reporting #35 (#173) |
 | 36 | Solution shall support password rotation reports | PC | Reports.razor — credential rotation history |
 | 37 | Solution shall support MFA usage reports | PC | ReportEndpoints.cs — MFA enrollment & usage report: per-user MFA status, MFA event log from AuditLogs, enrollment %, unenrolled users list; RFP Reporting #37 (#174) |
-| 38 | Solution shall support API usage reports |  |  |
+| 38 | Solution shall support API usage reports | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/api-usage/summary (total calls, granted/denied/rate-limited, top clients, hourly trend), /by-client/{id} (per-client endpoint usage, daily trend, source IPs), /anomalies (high denial rate >20%, rate-limit hits); ApiAccessLog aggregation; Reports.razor API Usage tab (#209) |
 | 39 | Solution shall support capacity planning reports |  |  |
 | 40 | Solution shall support performance reports |  |  |
 | 41 | Solution shall support SLA reports |  |  |
 | 42 | Solution shall support user activity reports | PC | Reports.razor — per-user activity, session count, credential access |
 | 43 | Solution shall support device access reports | PC | Reports.razor — per-device session history |
 | 44 | Solution shall support credential usage reports | PC | Reports.razor — checkout-history per credential |
-| 45 | Solution shall support geographic access reports |  |  |
-| 46 | Solution shall support time-of-day access reports |  |  |
+| 45 | Solution shall support geographic access reports | PC | GeoLocationHelper.cs — country-based access control logging; AuditLog GEO_BLOCKED events with country code and IP; Reports.razor Access Patterns tab includes geolocation dimension; geo policy audit in ComplianceReportEndpoints.cs (#208) |
+| 46 | Solution shall support time-of-day access reports | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/access-patterns/time-of-day: 24-hour session histogram (hour, sessionCount, uniqueUsers, blockedCount); Reports.razor Access Patterns tab peak-hours chart (#209) |
 | 47 | Solution shall support multi-tenant reports |  |  |
 | 48 | Solution shall support white-label reports |  |  |
 
@@ -196,7 +196,7 @@
 | 2 | Solution shall support RDP remote access | PC | RdpProxyService.cs — TCP 3389 relay, TPKT/X.224, credential injection |
 | 3 | Solution shall support VNC remote access | PC | VncProxyService.cs — RFB protocol relay (#23) |
 | 4 | Solution shall support HTTP/HTTPS remote access | PC | HttpProxyService.cs — HTTP reverse proxy, TLS terminate, credential inject |
-| 5 | Solution shall support Telnet access |  |  |
+| 5 | Solution shall support Telnet access | PC | OrkunPAM.TelnetProxy — native C# Telnet proxy (TCP :2323); RFC 854 option negotiation (ECHO, SGA, LINEMODE); PAM credential injection (pamuser@host[:port] login format); bidirectional relay with session recording; TelnetEndpoints.cs admin session management + proxy lifecycle API; SessionType.Telnet = 6 (Sprint 19) |
 | 6 | Solution shall support jump server functionality | PC | SshProxyService.cs — PAM SSH proxy acts as jump server |
 | 7 | Solution shall support session brokering | PC | SessionEndpoints.cs — session broker: credential inject, token, session start/end |
 | 8 | Solution shall support network segmentation |  |  |
