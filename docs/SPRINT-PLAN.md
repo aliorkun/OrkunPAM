@@ -628,7 +628,7 @@
 **Durum:** Tamamlandi ✅
 
 | Item | Aciklama | Durum |
-|------|----------|---------|
+|------|----------|----------|
 | TCP connect timeout | SshTargetClient.ConnectAsync — 15s timeout, unreachable host gracefully handled | ✅ Tamamlandi |
 | SSH proxy session-start endpoint | `POST /api/v1/ssh/proxy/session-start` — SSH proxy'nin PAM DB'ye session kaydetmesi | ✅ Tamamlandi |
 | SSH proxy session-end endpoint | `POST /api/v1/ssh/proxy/session-end` — session kapanisinda DB guncelleme + recording path | ✅ Tamamlandi |
@@ -652,8 +652,31 @@
 
 ---
 
+## Sprint 30 - Security Fixes + RDP Proxy Admin Termination ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #224 | [HIGH] ValidateProxySecret — non-constant-time string comparison (timing side-channel) | security | ✅ Kapatildi |
+| #226 | [MEDIUM] SSH proxy session-start/end endpoint audit log eksik | security | ✅ Kapatildi |
+| #225 | [MEDIUM] SSH Proxy — PAM kullanici parolasi .NET string olarak managed heap'te kaliyor | security | ✅ Kapatildi |
+| #223 | [MVP] RDP Proxy Session Lifecycle — PAM DB Integration + Admin Termination | product | ✅ Kapatildi |
+| #222 | [MVP] SSH Proxy ProxySession Recording Path DB Link | product | ✅ Kapatildi (Sprint 29'da zaten implemente edilmisti) |
+
+**Sprint 30 Tamamlanan Bilesenler (2026-05-19):**
+- **#224 fix [HIGH]:** `SshProxySessionEndpoints.ValidateProxySecret` — `CryptographicOperations.FixedTimeEquals` ile constant-time karsilastirma; `using System.Security.Cryptography` eklendi
+- **#226 fix [MEDIUM]:** `session-start` endpoint'e `ILogger<Program> logger` eklendi; `[AUDIT] SSH_SESSION_STARTED` + `[AUDIT] SSH_SESSION_ENDED` structured log mesajlari eklendi
+- **#225 fix [MEDIUM]:** `SshServerSession.DoUserAuthAsync` — `SshEncoding.ReadByteString` kullaniyor (string yerine byte[]); auth sonrasi `CryptographicOperations.ZeroMemory(passwordBytes)`; `PamApiClient.ValidateUserAsync` `byte[]` parametre aliyor
+- **#223 [MVP]:** `RdpProxySessionEndpoints.cs` (yeni dosya) — `GET /api/v1/rdp/proxy/sessions/{id}/status` endpoint (constant-time secret, AdminTermination kontrolu); `Program.cs`: `api.MapRdpProxySessionEndpoints()` kaydi; `RdpProxy.PamApiClient`: `IsTerminatedAsync` eklendi; `RdpServerSession.IdleWatchAsync` + `RelayRawAsync` — `api` ve `pamSessionId` parametreleri ile admin termination polling (her 60s)
+- **#222:** Incelendi — Sprint 29'da zaten implemente edilmis (EndSessionAsync + RecordingPath). Issue stale, kapatildi.
+
+**Ilerleme:** 5/5 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 29 tamamlandi.** SSH Proxy artik session lifecycle'i tam destekliyor: DB'ye kayit, admin termination, recording path referansi, TCP timeout.
+**Sprint 30 tamamlandi.** 1 HIGH + 2 MEDIUM security bulgu kapatildi, RDP proxy admin termination eklendi.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
