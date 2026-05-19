@@ -235,8 +235,8 @@ internal sealed class SshServerSession
                 continue;
             }
 
-            var _changeReq = SshEncoding.ReadBool(authPkt, ref pos);
-            var password   = SshEncoding.ReadString(authPkt, ref pos);
+            var _changeReq    = SshEncoding.ReadBool(authPkt, ref pos);
+            var passwordBytes = SshEncoding.ReadByteString(authPkt, ref pos);
             CryptographicOperations.ZeroMemory(authPkt);
 
             var atIdx     = username.IndexOf('@');
@@ -245,12 +245,14 @@ internal sealed class SshServerSession
 
             if (string.IsNullOrEmpty(targetHost))
             {
+                CryptographicOperations.ZeroMemory(passwordBytes);
                 _log.LogWarning("Auth rejected: no target host in username '{User}'", username);
                 await SendAuthFailureAsync("password");
                 continue;
             }
 
-            var (valid, userId) = await _api.ValidateUserAsync(pamUser, password, _ct);
+            var (valid, userId) = await _api.ValidateUserAsync(pamUser, passwordBytes, _ct);
+            CryptographicOperations.ZeroMemory(passwordBytes);
             if (!valid)
             {
                 _log.LogWarning("PAM auth failure for '{User}' from {ClientIp}", pamUser, _clientIp);
