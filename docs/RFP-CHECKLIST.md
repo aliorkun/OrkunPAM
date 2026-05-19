@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-18 (PM run #16 — Sprint 19 complete; Sprint 20 planned: #214 Session Live Monitor, #215 SMS OTP MFA, #216 Session Tagging)
+> Last updated: 2026-05-19 (PM run #17 — Sprint 20 ✅ (#214 #215 #216), Sprint 22 NavMenu 8-category ✅, Sprint 23 Device Realm ✅, Sprint 24 Credential Assignment ✅; open security: #217 #218)
 
 ## Platform (44 items)
 
@@ -61,7 +61,7 @@
 | 2 | Solution shall support Active Directory integration | PC | LdapPamSyncService.cs — scheduled AD sync + AD group → PAM group membership sync; uSNChanged delta sync; multi-domain Global Catalog (port 3268) support; bulk user/group reconciliation (#141) |
 | 3 | Solution shall support LDAP integration | PC | AdSyncService.cs — LDAP (port 389/636) bind + search |
 | 4 | Solution shall support role-based access control | FC | PamRole enum + RoleEndpoints.cs — 7 roles, endpoint-level enforcement |
-| 5 | Solution shall support group-based access control | PC | GroupEndpoints.cs — group CRUD, group→credential/device binding |
+| 5 | Solution shall support group-based access control | PC | GroupEndpoints.cs — group CRUD, group→credential/device binding; DeviceRealm entity — access matrix: UserGroups × DeviceGroups (Kron PAM model); DeviceRealmEndpoints.cs + DeviceRealms.razor (Sprint 23) |
 | 6 | Solution shall support user provisioning and de-provisioning | PC | UserEndpoints.cs — create/update/disable/delete; AD sync auto-provision |
 | 7 | Solution shall support self-service password reset | PC | ForgotPassword.razor — email token, 30-min TTL, PBKDF2 re-hash (#135) |
 | 8 | Solution shall support password policies | PC | PolicyEndpoints.cs — complexity, min length, history depth, expiry |
@@ -166,7 +166,7 @@
 | 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enroll/verify; RFC 6238 compliant |
 | 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — WebAuthn credential registration & assertion; hardware security key (YubiKey/Touch ID) support; FIDO2.NET library; passwordless + MFA second factor; user self-enrollment UI (#158) |
 | 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
-| 4 | Solution shall support SMS-based OTP |  |  |
+| 4 | Solution shall support SMS-based OTP | PC | SmsGatewayService.cs (Twilio/NetGSM/Webhook, native HttpClient); SmsOtpEndpoints.cs (send/verify, CSPRNG 6-digit, SHA-256 hash, 10-min TTL, 5-fail lockout); SmsOtpTokens migration; Login.razor SMS OTP step; Policies.razor SmsOtpEnabled; Integrations.razor SMS Gateway tab (#215) |
 | 5 | Solution shall support email-based OTP | PC | EmailOtpEndpoints.cs — CSPRNG 6-digit OTP; SHA-256 hashed storage; 10-min TTL; single-use; 5-fail lockout; rate-limit 3/15 min; user enumeration prevention; Login.razor Email OTP step; Policies.razor EmailOtpEnabled toggle; audit events (#178) |
 | 6 | Solution shall support push notifications | PC | PushMfaEndpoints.cs — device enrollment (POST /auth/push/enroll), challenge creation (POST /auth/push/challenge), mobile app polling (GET /auth/push/challenge/{id}/status), approve/deny (PUT /{id}/approve|deny); 5-min TTL, 1 pending challenge/user; Microsoft Authenticator / Duo-style flow; Login.razor Push step; audit logged (#196) |
 | 7 | Solution shall support hardware tokens (OATH) |  |  |
@@ -222,7 +222,7 @@
 | 28 | Solution shall support screen capture |  |  |
 | 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp |
 | 30 | Solution shall support screen recording |  |  |
-| 31 | Solution shall support session analytics |  |  |
+| 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214) |
 | 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk color coding |
 | 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement |
 | 34 | Solution shall support session compliance |  |  |
@@ -239,7 +239,7 @@
 | 45 | Solution shall support session export |  |  |
 | 46 | Solution shall support session archival | PC | RecordingRetentionService.cs — configurable retention, auto-archive |
 | 47 | Solution shall support session restoration |  |  |
-| 48 | Solution shall support session tagging |  |  |
+| 48 | Solution shall support session tagging | PC | SessionTag + SessionAnnotation entities + migration; SessionTagEndpoints.cs (add/remove tag, add annotation, GET by-tag search); Sessions.razor tag badge column + Add Tag/Add Note modals; SessionPlayback.razor annotation panel; audit events: SessionTagAdded/Removed/AnnotationAdded (#216) |
 | 153 | Solution shall support recording of SSH/CLI/RDP/VNC sessions | PC | SessionRecordingService.cs — SSH/RDP/VNC/HTTP recording + playback (#34) |
 | 158 | Solution shall support time-based access restrictions | PC | AccessPolicyService.cs — AllowedTimeWindows: Mon-Fri 09:00-18:00 configurable |
 
@@ -257,7 +257,7 @@
 | 8 | Solution shall support credential access control | PC | GroupEndpoints.cs + CredentialEndpoints.cs — group-based access binding |
 | 9 | Solution shall support credential audit trail | FC | AuditService.cs — all credential access, checkout, rotation events logged |
 | 10 | Solution shall support credential sharing | PC | GroupEndpoints.cs — group-level credential sharing |
-| 11 | Solution shall support credential delegation |  |  |
+| 11 | Solution shall support credential delegation | PC | AssignedCredential entity — maps Credential → User/Group with optional DeviceGroup scope (Kron PAM assigned_credential model); AssignedCredentialEndpoints.cs (CRUD admin + /my-credentials user endpoint + toggle); CredentialAssignments.razor UI; FK cascade delete + SetNull on DeviceGroup (Sprint 24) |
 | 12 | Solution shall support credential federation |  |  |
 | 13 | Solution shall support credential synchronization | PC | CredentialEndpoints.cs — sync endpoint for credential state |
 | 14 | Solution shall support credential injection | FC | SshServerSession.cs + RdpProxyService.cs — credential injection at session start |
