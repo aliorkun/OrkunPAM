@@ -55,7 +55,20 @@ internal sealed class SshTargetClient : IDisposable
     internal async Task ConnectAsync(CancellationToken ct)
     {
         _tcp = new TcpClient();
-        await _tcp.ConnectAsync(_host, _port, ct);
+
+        // Enforce a 15-second TCP connect timeout so a hung/unreachable target doesn't
+        // block a session slot indefinitely.
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        connectCts.CancelAfter(TimeSpan.FromSeconds(15));
+        try
+        {
+            await _tcp.ConnectAsync(_host, _port, connectCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SshException($"TCP connection to {_host}:{_port} timed out after 15 seconds");
+        }
+
         _conn = new SshConnection(_tcp.GetStream());
 
         _targetSshVersion = await _conn.ExchangeVersionsAsync(ClientVersion, ct);

@@ -31,6 +31,7 @@ internal sealed class SshServerSession
     private string _clientVersion = "";
     private byte[]? _sessionId;
     private readonly string _clientIp;
+    private string? _lastRecordingPath;
 
     internal SshServerSession(TcpClient client, SshHostKey hostKey, PamApiClient api,
         SshProxyOptions opts, ILogger log, CancellationToken ct, HashChainStore? hashChain = null)
@@ -47,6 +48,8 @@ internal sealed class SshServerSession
 
     internal async Task RunAsync()
     {
+        string? pamSessionId = null;
+        var sessionStart = DateTime.UtcNow;
         try
         {
             _clientVersion = await _conn.ExchangeVersionsAsync(ServerVersion, _ct);
@@ -54,20 +57,24 @@ internal sealed class SshServerSession
 
             await DoKeyExchangeAsync();
 
-            var (pamUser, targetHost, _) = await DoUserAuthAsync();
+            var (pamUser, targetHost, userId) = await DoUserAuthAsync();
 
             var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(_ct);
 
             // Fetch session policy for command filtering
             var sessionPolicy = await _api.GetFullSessionPolicyAsync(_ct);
 
-            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId) =
+            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
             _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth}, tofu: {Tofu})",
                 targetUser, targetIp, targetPort, pamUser,
                 targetPrivateKey != null ? "publickey" : "password",
                 expectedFingerprint == null ? "first-use" : "verified");
+
+            // Register session in PAM DB (non-fatal if it fails)
+            pamSessionId = await _api.StartSessionAsync(
+                userId, deviceId, credentialId, _clientIp, targetIp, targetPort, _ct);
 
             using var target = new SshTargetClient(
                 targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log,
@@ -78,13 +85,18 @@ internal sealed class SshServerSession
             if (expectedFingerprint == null && target.ObservedFingerprint != null)
                 await _api.StoreSshFingerprintAsync(deviceId, target.ObservedFingerprint, _ct);
 
-            await RelayAsync(target, idleTimeoutMinutes, sessionPolicy);
+            await RelayAsync(target, idleTimeoutMinutes, sessionPolicy, pamSessionId);
         }
         catch (OperationCanceledException) { }
         catch (SshException ex) { _log.LogWarning("SSH protocol error: {Msg}", ex.Message); }
         catch (Exception ex)    { _log.LogError(ex, "Session error"); }
         finally
         {
+            if (pamSessionId != null)
+            {
+                var duration = (int)(DateTime.UtcNow - sessionStart).TotalSeconds;
+                await _api.EndSessionAsync(pamSessionId, duration, _lastRecordingPath);
+            }
             await _conn.DisposeAsync();
         }
     }
@@ -183,7 +195,7 @@ internal sealed class SshServerSession
     // User Auth (PAM credentials — username format: pamuser@target-host)
     // -------------------------------------------------------------------------
 
-    private async Task<(string pamUser, string targetHost, string pamPassword)> DoUserAuthAsync()
+    private async Task<(string pamUser, string targetHost, string? userId)> DoUserAuthAsync()
     {
         var svcReq = await _conn.ReadPacketAsync(_ct);
         if (svcReq[0] != Msg.ServiceRequest)
@@ -238,7 +250,8 @@ internal sealed class SshServerSession
                 continue;
             }
 
-            if (!await _api.ValidateUserAsync(pamUser, password, _ct))
+            var (valid, userId) = await _api.ValidateUserAsync(pamUser, password, _ct);
+            if (!valid)
             {
                 _log.LogWarning("PAM auth failure for '{User}' from {ClientIp}", pamUser, _clientIp);
                 await SendAuthFailureAsync("password");
@@ -250,7 +263,7 @@ internal sealed class SshServerSession
             await _conn.SendPacketAsync([Msg.UserauthSuccess], _ct);
             _log.LogInformation("Authenticated: {PamUser} → target '{TargetHost}'",
                 pamUser, targetHost);
-            return (pamUser, targetHost, password);
+            return (pamUser, targetHost, userId);
         }
 
         throw new SshException("Too many authentication failures");
@@ -269,7 +282,7 @@ internal sealed class SshServerSession
     // Channel handling: capture client requests, then relay
     // -------------------------------------------------------------------------
 
-    private async Task RelayAsync(SshTargetClient target, int idleTimeoutMinutes, SessionPolicyInfo? sessionPolicy = null)
+    private async Task RelayAsync(SshTargetClient target, int idleTimeoutMinutes, SessionPolicyInfo? sessionPolicy = null, string? pamSessionId = null)
     {
         // Step 1: receive CHANNEL_OPEN from client
         var pkt = await _conn.ReadPacketAsync(_ct);
@@ -415,7 +428,7 @@ internal sealed class SshServerSession
                 commandFilter, filterMode, sessionPolicy?.CommandFilterRulesJson,
                 sessionPolicy?.DoubleConfirmRiskThreshold ?? 0,
                 sessionPolicy?.DoubleConfirmCommandsJson);
-            var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
+            var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts, pamSessionId);
 
             await Task.WhenAny(relayTask, idleTask);
 
@@ -429,21 +442,37 @@ internal sealed class SshServerSession
         {
             recorder.Stop();
             await recorder.FlushAsync();
+            _lastRecordingPath = recorder.RecordingPath;
         }
     }
 
-    private static async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks, CancellationTokenSource cts)
+    private async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks,
+        CancellationTokenSource cts, string? pamSessionId)
     {
         var timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        int tickCount = 0;
         try
         {
             while (!cts.IsCancellationRequested)
             {
                 await Task.Delay(30_000, cts.Token);
+                tickCount++;
+
+                // Poll for admin termination every ~60s (every 2nd tick)
+                if (pamSessionId != null && tickCount % 2 == 0)
+                {
+                    if (await _api.IsTerminatedAsync(pamSessionId, cts.Token))
+                    {
+                        _log.LogInformation("SSH session {Id} terminated by admin", pamSessionId);
+                        await cts.CancelAsync();
+                        return;
+                    }
+                }
+
                 var idleFor = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - Interlocked.Read(ref lastActivityTicks[0]));
                 if (idleFor >= timeout)
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync();
                     return;
                 }
             }

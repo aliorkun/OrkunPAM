@@ -497,6 +497,7 @@ try
     api.MapDeviceTrustEndpoints();
     api.MapAccessPatternEndpoints();
     api.MapTelnetEndpoints();
+    api.MapSshProxySessionEndpoints();
     api.MapLiveSessionEndpoints();
     api.MapSmsOtpEndpoints();
     api.MapSessionTagEndpoints();
