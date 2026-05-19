@@ -561,9 +561,23 @@
 
 ---
 
+## Sprint 26 - Refactoring #4: Gereksiz Sayfa ve Endpoint Temizligi ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — Blazor template sayfalar silindi, kullanim disi endpoint kaydi kaldirildi
+
+| Item | Aciklama | Durum |
+|------|----------|-------|
+| Counter.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
+| Weather.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
+| MapAccessAssignmentEndpoints() | Eski model (Sprint 24 AssignedCredential ile superseded) — Program.cs'den kaldirildi | ✅ Tamamlandi |
+
+**Ilerleme:** 3/3 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 25 tamamlandi.** Security backlog temiz.
-**Siradaki:** Refactoring Sprint #4 — Gereksiz endpoint/sayfalari kaldir veya gizle (30+ menüyü sadeleştir)
+**Sprint 26 tamamlandi.** Gereksiz demo sayfalar ve eski endpoint kaydi temizlendi.
+**Siradaki:** Refactoring Sprint #5 — Session akisini realm-based erisim kontroluyle entegre et (DeviceRealm → Session baslama akisi)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
