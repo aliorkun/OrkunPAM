@@ -33,8 +33,8 @@ internal sealed class PamApiClient
                 "PamApi:ProxySecret must be at least 32 characters. Generate with: openssl rand -base64 32");
     }
 
-    /// <summary>Validate PAM username + password. Returns true if valid.</summary>
-    internal async Task<bool> ValidateUserAsync(string username, string password, CancellationToken ct)
+    /// <summary>Validate PAM username + password. Returns (isValid, userId).</summary>
+    internal async Task<(bool Valid, string? UserId)> ValidateUserAsync(string username, string password, CancellationToken ct)
     {
         try
         {
@@ -42,12 +42,16 @@ internal sealed class PamApiClient
             var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
                 new { username, password, mfaCode = (string?)null }, ct);
 
-            return resp.IsSuccessStatusCode;
+            if (!resp.IsSuccessStatusCode) return (false, null);
+
+            var json = await resp.Content.ReadFromJsonAsync<LoginResponse>(ct);
+            var userId = json?.Data?.UserId;
+            return (true, userId);
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Failed to validate user '{User}' against PAM API", username);
-            return false;
+            return (false, null);
         }
     }
 
@@ -56,7 +60,7 @@ internal sealed class PamApiClient
     /// Also returns the stored SSH host key fingerprint (null = first connection, TOFU applies) and deviceId.
     /// Throws InvalidOperationException on any failure -- caller must close session (fail-closed).
     /// </summary>
-    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId)>
+    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId, string credentialId)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
     {
         try
@@ -141,7 +145,8 @@ internal sealed class PamApiClient
                 passwordBytes,
                 string.IsNullOrEmpty(privateKey) ? null : privateKey,
                 device.SshHostKeyFingerprint,
-                device.Id);
+                device.Id,
+                cred.Id);
         }
         catch (InvalidOperationException)
         {
@@ -257,15 +262,78 @@ internal sealed class PamApiClient
         });
     }
 
+    /// <summary>Register session start with the PAM WebAPI. Returns assigned session ID or null on failure.</summary>
+    internal async Task<string?> StartSessionAsync(
+        string? userId, string deviceId, string credentialId,
+        string clientIp, string targetIp, int targetPort, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ssh/proxy/session-start");
+            req.Content = JsonContent.Create(new { userId, deviceId, credentialId, clientIp, targetIp, targetPort });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = await resp.Content.ReadFromJsonAsync<SessionStartResponse>(ct);
+            return json?.Data?.SessionId;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "StartSession API call failed (non-fatal)");
+            return null;
+        }
+    }
+
+    /// <summary>Record session end. Best-effort — never throws.</summary>
+    internal async Task EndSessionAsync(string sessionId, int durationSeconds, string? recordingPath)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ssh/proxy/session-end");
+            req.Content = JsonContent.Create(new { sessionId, durationSeconds, recordingPath });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            await client.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "EndSession API call failed for session {SessionId} (non-fatal)", sessionId);
+        }
+    }
+
+    /// <summary>Check if an admin has terminated this session via the UI.</summary>
+    internal async Task<bool> IsTerminatedAsync(string sessionId, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                $"/api/v1/ssh/proxy/sessions/{sessionId}/status");
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return false;
+            var json = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(ct);
+            return json.TryGetProperty("data", out var d) &&
+                   d.TryGetProperty("terminated", out var t) && t.GetBoolean();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // Response DTOs
     private record LoginResponse(LoginData? Data);
-    private record LoginData(string Token);
+    private record LoginData(string? Token, string? UserId);
     private record DeviceListResponse(IEnumerable<DeviceDto>? Data);
     private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort, string? SshHostKeyFingerprint);
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
     private record DecryptData(string? Password, string? PrivateKey);
+    private record SessionStartResponse(SessionStartData? Data);
+    private record SessionStartData(string SessionId);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
     private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
     private record FullSessionPolicyResponse(bool Success, FullSessionPolicyData? Data);

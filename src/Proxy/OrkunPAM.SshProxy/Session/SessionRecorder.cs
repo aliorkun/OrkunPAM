@@ -38,6 +38,8 @@ internal sealed class SessionRecorder
         _hashChain = hashChain;
     }
 
+    internal string? RecordingPath => _recId != null ? Path.Combine(_recDir, $"{_recId}.ascrec") : null;
+
     internal void Start(byte[]? sessionId)
     {
         _startUtc = DateTime.UtcNow;
