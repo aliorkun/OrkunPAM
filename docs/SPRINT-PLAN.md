@@ -513,9 +513,38 @@
 
 ---
 
+---
+
+## Sprint 24 - Credential Assignment Refactoring (Kron PAM `assigned_credential` modeli) ✅ TAMAMLANDI
+**Tarih:** 2026-05-19
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| — | AssignedCredential entity (Kron PAM model) | refactor | ✅ Tamamlandi |
+| — | AssignedCredential migration | refactor | ✅ Tamamlandi |
+| — | AssignedCredentialEndpoints (CRUD + my-credentials) | refactor | ✅ Tamamlandi |
+| — | PamApiService AssignedCredential methods + DTO | refactor | ✅ Tamamlandi |
+| — | CredentialAssignments.razor Blazor UI | refactor | ✅ Tamamlandi |
+| — | NavMenu: Credential Assignments linki | refactor | ✅ Tamamlandi |
+
+**Sprint 24 Tamamlanan Bilesenler (2026-05-19):**
+- `AssignedCredential` entity: CredentialId, PrincipalType (User/Group), PrincipalId, DeviceGroupId (optional scope), IsEnabled, Notes
+- `20260519_AddAssignedCredential.cs` migration: AssignedCredentials tablosu + FK (Cascade to Credential, SetNull to DeviceGroup) + indexler
+- `AssignedCredentialEndpoints.cs`: GET list, POST create, DELETE, POST toggle, GET /by-credential/{id}, GET /my-credentials (user endpoint)
+- `OrkunPamDbContext`: DbSet<AssignedCredential> + model konfigurasyonu
+- `Program.cs`: `api.MapAssignedCredentialEndpoints()` kaydedildi
+- `PamApiService.cs`: GetAssignedCredentialsAsync, CreateAssignedCredentialAsync, DeleteAssignedCredentialAsync, ToggleAssignedCredentialAsync + AssignedCredentialDto
+- `CredentialAssignments.razor`: Tam CRUD UI — principal type/ID dropdown (User/Group), credential dropdown, device group scope, toggle/delete
+- `NavMenu.razor`: "Credential Assignments" linki Access Control bolumune eklendi
+
+**Ilerleme:** 6/6 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 23 tamamlandi.** Refactoring Sprint devam ediyor.
-**Siradaki:** Credential assignment refactoring (Kron PAM `assigned_credential` modeli) — CLAUDE.md Refactoring Sprint #3
+**Sprint 24 tamamlandi.** Refactoring Sprint devam ediyor.
+**Siradaki:** Refactoring Sprint #4 — Gereksiz endpoint/sayfalari kaldir veya gizle (30+ menüyü sadeleştir)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
