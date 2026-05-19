@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-19 (PM run #18 — Sprint 25 ✅ security fix: AssignedCredential audit logging #217 + unique constraint #218; Sprint 26 ✅ refactoring cleanup: demo pages + old AccessAssignment endpoint kaldırıldı; refactoring sprint 4/6 tamamlandı)
+> Last updated: 2026-05-19 (PM run #19 — Sprint 27 ✅ realm-based session access control (DeviceRealm → SSH/RDP/WebSSH); Sprint 28 ✅ session-list role-based scope fixes #220 #221; Sprint 29 ✅ SSH proxy PAM-DB session lifecycle + IdleWatch admin termination; **REFACTORING SPRINT 6/6 TAMAMLANDI** 🎉)
 
 ## Platform (44 items)
 
@@ -61,7 +61,7 @@
 | 2 | Solution shall support Active Directory integration | PC | LdapPamSyncService.cs — scheduled AD sync + AD group → PAM group membership sync; uSNChanged delta sync; multi-domain Global Catalog (port 3268) support; bulk user/group reconciliation (#141) |
 | 3 | Solution shall support LDAP integration | PC | AdSyncService.cs — LDAP (port 389/636) bind + search |
 | 4 | Solution shall support role-based access control | FC | PamRole enum + RoleEndpoints.cs — 7 roles, endpoint-level enforcement |
-| 5 | Solution shall support group-based access control | PC | GroupEndpoints.cs — group CRUD, group→credential/device binding; DeviceRealm entity — access matrix: UserGroups × DeviceGroups (Kron PAM model); DeviceRealmEndpoints.cs + DeviceRealms.razor (Sprint 23) |
+| 5 | Solution shall support group-based access control | PC | GroupEndpoints.cs — group CRUD, group→credential/device binding; DeviceRealm entity — access matrix: UserGroups × DeviceGroups (Kron PAM model); DeviceRealmEndpoints.cs + DeviceRealms.razor (Sprint 23); Sprint 27: realm-first access check enforced at session creation (CreateSession/CreateRdpSession/WebSSH) — DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync + HasRealmAccessAsync; GetMyAccessibleDevicesAsync for device dropdown (realm-filtered for non-admins) |
 | 6 | Solution shall support user provisioning and de-provisioning | PC | UserEndpoints.cs — create/update/disable/delete; AD sync auto-provision |
 | 7 | Solution shall support self-service password reset | PC | ForgotPassword.razor — email token, 30-min TTL, PBKDF2 re-hash (#135) |
 | 8 | Solution shall support password policies | PC | PolicyEndpoints.cs — complexity, min length, history depth, expiry |
@@ -192,18 +192,18 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|------|
-| 1 | Solution shall support SSH remote access | FC | SshProxyService.cs — native C# SSH (RFC 4253) proxy on port 2222 |
+| 1 | Solution shall support SSH remote access | FC | SshProxyService.cs — native C# SSH (RFC 4253) proxy on port 2222; Sprint 29: full PAM-DB session lifecycle — POST /api/v1/ssh/proxy/session-start|session-end|session-status; SshServerSession: StartSessionAsync after credential inject, EndSessionAsync in finally block; SshTargetClient: 15s TCP connect timeout; LoginData.UserId field; GetTargetCredentialAsync returns credentialId |
 | 2 | Solution shall support RDP remote access | PC | RdpProxyService.cs — TCP 3389 relay, TPKT/X.224, credential injection |
 | 3 | Solution shall support VNC remote access | PC | VncProxyService.cs — RFB protocol relay (#23) |
 | 4 | Solution shall support HTTP/HTTPS remote access | PC | HttpProxyService.cs — HTTP reverse proxy, TLS terminate, credential inject |
 | 5 | Solution shall support Telnet access | PC | OrkunPAM.TelnetProxy — native C# Telnet proxy (TCP :2323); RFC 854 option negotiation (ECHO, SGA, LINEMODE); PAM credential injection (pamuser@host[:port] login format); bidirectional relay with session recording; TelnetEndpoints.cs admin session management + proxy lifecycle API; SessionType.Telnet = 6 (Sprint 19) |
 | 6 | Solution shall support jump server functionality | PC | SshProxyService.cs — PAM SSH proxy acts as jump server |
-| 7 | Solution shall support session brokering | PC | SessionEndpoints.cs — session broker: credential inject, token, session start/end |
+| 7 | Solution shall support session brokering | PC | SessionEndpoints.cs — session broker: credential inject, token, session start/end; Sprint 27: realm-first brokering — CreateSession/CreateRdpSession/WebSshEndpoints check DeviceRealm coverage before credential injection; accessible-devices filtered by realm membership (GET /api/v1/device-realms/accessible-devices) |
 | 8 | Solution shall support network segmentation |  |  |
 | 9 | Solution shall support access isolation | PC | SshProxyService.cs — isolated session per user, no lateral movement |
 | 10 | Solution shall support session recording | FC | SessionRecordingService.cs — full session recording (text + binary) |
 | 11 | Solution shall support session playback | PC | SessionPlayback.razor — asciinema replay, search, timestamp seek (#34) |
-| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — DELETE /sessions/{id} + admin terminate via SignalR |
+| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — DELETE /sessions/{id} + admin terminate via SignalR; Sprint 29: SSH proxy IdleWatchAsync polls PamApiClient.IsTerminatedAsync every 60s — admin session termination propagates to proxy relay; TelnetSession: same pattern (Sprint 21) |
 | 13 | Solution shall support session timeout | PC | SessionPolicyService.cs — session duration/idle timeout |
 | 14 | Solution shall support connection throttling | PC | SshProxyService.cs — concurrent session limit per policy |
 | 15 | Solution shall support bandwidth management |  |  |
@@ -222,7 +222,7 @@
 | 28 | Solution shall support screen capture |  |  |
 | 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp |
 | 30 | Solution shall support screen recording |  |  |
-| 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214) |
+| 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214); Sprint 28: role-based scope — GET /api/v1/sessions + /active: privileged roles (GlobalAdmin/Auditor/SessionAdmin) see all sessions; regular users see only own sessions (CWE-200/284 fix, closes #221) |
 | 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk color coding |
 | 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement |
 | 34 | Solution shall support session compliance |  |  |
