@@ -1,0 +1,328 @@
+@page "/device-realms"
+@inject PamApiService Api
+
+<PageTitle>Device Realms &#x2014; OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Device Realms</h2>
+    <p style="color:var(--pam-muted);font-size:0.85em;margin:4px 0 0">
+        Access matrix: map user groups to device groups (Kron PAM realm model).
+    </p>
+</div>
+
+@if (_msg != null) { <div class="pam-alert pam-alert-info">@_msg</div> }
+@if (_err != null) { <div class="pam-alert pam-alert-danger">@_err</div> }
+
+<div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="pam-btn pam-btn-primary" @onclick="@(() => ShowCreate())">+ New Realm</button>
+</div>
+
+@if (_creating || _editing != null)
+{
+    <div class="pam-card" style="max-width:640px;margin-bottom:20px">
+        <div class="pam-card-body">
+            <strong>@(_editing != null ? "Edit Realm" : "Create Realm")</strong>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+                <div style="grid-column:1/-1">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input" placeholder="e.g. Production Servers" @bind="_fName" />
+                </div>
+                <div style="grid-column:1/-1">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input" placeholder="Optional description" @bind="_fDesc" />
+                </div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:8px">
+                <button class="pam-btn pam-btn-primary" @onclick="@(() => SaveAsync())" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => CancelForm())">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_realms == null)
+{
+    <div class="pam-alert pam-alert-info">Loading...</div>
+}
+else if (_realms.Count == 0)
+{
+    <div class="pam-alert pam-alert-info">No device realms yet. Create one to define access zones.</div>
+}
+else
+{
+    @foreach (var realm in _realms)
+    {
+        var isSelected = _selectedId == realm.Id;
+        <div class="pam-card" style="margin-bottom:12px">
+            <div class="pam-card-body">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <div style="flex:1;min-width:160px">
+                        <strong>@realm.Name</strong>
+                        @if (!realm.IsEnabled)
+                        {
+                            <span style="margin-left:6px;font-size:0.75em;color:var(--pam-muted)">[Disabled]</span>
+                        }
+                        @if (!string.IsNullOrEmpty(realm.Description))
+                        {
+                            <div style="font-size:0.8em;color:var(--pam-muted)">@realm.Description</div>
+                        }
+                        <div style="font-size:0.75em;color:var(--pam-muted);margin-top:2px">
+                            @(realm.UserGroups?.Count ?? 0) user group(s) &rarr;
+                            @(realm.DeviceGroups?.Count ?? 0) device group(s)
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                        <button class="pam-btn pam-btn-secondary" style="font-size:0.8em"
+                                @onclick="@(() => ToggleDetails(realm.Id))">
+                            @(isSelected ? "Hide" : "Manage")
+                        </button>
+                        <button class="pam-btn pam-btn-secondary" style="font-size:0.8em"
+                                @onclick="@(() => StartEdit(realm))">Edit</button>
+                        <button class="pam-btn pam-btn-secondary" style="font-size:0.8em"
+                                @onclick="@(() => ToggleRealmAsync(realm.Id))">
+                            @(realm.IsEnabled ? "Disable" : "Enable")
+                        </button>
+                        <button class="pam-btn pam-btn-danger" style="font-size:0.8em"
+                                @onclick="@(() => DeleteRealmAsync(realm.Id))">Delete</button>
+                    </div>
+                </div>
+
+                @if (isSelected)
+                {
+                    <hr style="margin:12px 0;border-color:var(--pam-border)" />
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+                        <!-- User Groups panel -->
+                        <div>
+                            <div style="font-weight:600;font-size:0.9em;margin-bottom:8px">User Groups</div>
+                            @if (realm.UserGroups != null && realm.UserGroups.Count > 0)
+                            {
+                                @foreach (var ug in realm.UserGroups)
+                                {
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--pam-border)">
+                                        <span style="font-size:0.85em">@ug.Name</span>
+                                        <button class="pam-btn pam-btn-danger" style="font-size:0.75em;padding:2px 8px"
+                                                @onclick="@(() => RemoveUserGroupAsync(realm.Id, ug.UserGroupId))">
+                                            Remove
+                                        </button>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div style="font-size:0.8em;color:var(--pam-muted)">No user groups assigned.</div>
+                            }
+                            <div style="margin-top:8px;display:flex;gap:6px">
+                                <select class="pam-input" style="font-size:0.82em" @bind="_addUgId">
+                                    <option value="">-- select group --</option>
+                                    @if (_allGroups != null)
+                                    {
+                                        @foreach (var g in _allGroups)
+                                        {
+                                            <option value="@g.Id">@g.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <button class="pam-btn pam-btn-primary" style="font-size:0.8em;white-space:nowrap"
+                                        @onclick="@(() => AddUserGroupAsync(realm.Id))"
+                                        disabled="@string.IsNullOrEmpty(_addUgId)">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Device Groups panel -->
+                        <div>
+                            <div style="font-weight:600;font-size:0.9em;margin-bottom:8px">Device Groups</div>
+                            @if (realm.DeviceGroups != null && realm.DeviceGroups.Count > 0)
+                            {
+                                @foreach (var dg in realm.DeviceGroups)
+                                {
+                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--pam-border)">
+                                        <span style="font-size:0.85em">@dg.Name</span>
+                                        <button class="pam-btn pam-btn-danger" style="font-size:0.75em;padding:2px 8px"
+                                                @onclick="@(() => RemoveDeviceGroupAsync(realm.Id, dg.DeviceGroupId))">
+                                            Remove
+                                        </button>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div style="font-size:0.8em;color:var(--pam-muted)">No device groups assigned.</div>
+                            }
+                            <div style="margin-top:8px;display:flex;gap:6px">
+                                <select class="pam-input" style="font-size:0.82em" @bind="_addDgId">
+                                    <option value="">-- select device group --</option>
+                                    @if (_allDeviceGroups != null)
+                                    {
+                                        @foreach (var dg in _allDeviceGroups)
+                                        {
+                                            <option value="@dg.Id">@dg.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <button class="pam-btn pam-btn-primary" style="font-size:0.8em;white-space:nowrap"
+                                        @onclick="@(() => AddDeviceGroupAsync(realm.Id))"
+                                        disabled="@string.IsNullOrEmpty(_addDgId)">Add</button>
+                            </div>
+                        </div>
+
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<DeviceRealmDto>? _realms;
+    private List<GroupDto>? _allGroups;
+    private List<DeviceGroupDto>? _allDeviceGroups;
+
+    private bool _creating;
+    private DeviceRealmDto? _editing;
+    private string _fName = "";
+    private string _fDesc = "";
+    private bool _saving;
+
+    private string? _selectedId;
+    private string _addUgId = "";
+    private string _addDgId = "";
+
+    private string? _msg;
+    private string? _err;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        var t1 = Api.GetDeviceRealmsAsync();
+        var t2 = Api.GetGroupsAsync();
+        var t3 = Api.GetDeviceGroupsAsync();
+        await Task.WhenAll(t1, t2, t3);
+        _realms = t1.Result;
+        _allGroups = t2.Result;
+        _allDeviceGroups = t3.Result;
+    }
+
+    private void ShowCreate()
+    {
+        _creating = true;
+        _editing = null;
+        _fName = "";
+        _fDesc = "";
+        _msg = null; _err = null;
+    }
+
+    private void StartEdit(DeviceRealmDto realm)
+    {
+        _editing = realm;
+        _creating = false;
+        _fName = realm.Name;
+        _fDesc = realm.Description ?? "";
+        _msg = null; _err = null;
+    }
+
+    private void CancelForm()
+    {
+        _creating = false;
+        _editing = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_fName)) { _err = "Name is required."; return; }
+        _saving = true; _err = null;
+
+        bool ok;
+        if (_editing != null)
+            ok = await Api.UpdateDeviceRealmAsync(_editing.Id, _fName, _fDesc, null);
+        else
+            ok = await Api.CreateDeviceRealmAsync(_fName, _fDesc, null);
+
+        _saving = false;
+        if (ok)
+        {
+            _msg = _editing != null ? "Realm updated." : "Realm created.";
+            _creating = false; _editing = null;
+            _realms = await Api.GetDeviceRealmsAsync();
+        }
+        else
+        {
+            _err = "Operation failed.";
+        }
+    }
+
+    private void ToggleDetails(string realmId)
+    {
+        _selectedId = _selectedId == realmId ? null : realmId;
+        _addUgId = "";
+        _addDgId = "";
+    }
+
+    private async Task ToggleRealmAsync(string realmId)
+    {
+        _err = null;
+        if (await Api.ToggleDeviceRealmAsync(realmId))
+        {
+            _realms = await Api.GetDeviceRealmsAsync();
+        }
+        else _err = "Toggle failed.";
+    }
+
+    private async Task DeleteRealmAsync(string realmId)
+    {
+        _err = null;
+        if (await Api.DeleteDeviceRealmAsync(realmId))
+        {
+            if (_selectedId == realmId) _selectedId = null;
+            _realms = await Api.GetDeviceRealmsAsync();
+            _msg = "Realm deleted.";
+        }
+        else _err = "Delete failed.";
+    }
+
+    private async Task AddUserGroupAsync(string realmId)
+    {
+        if (string.IsNullOrEmpty(_addUgId)) return;
+        _err = null;
+        if (await Api.AddUserGroupToRealmAsync(realmId, _addUgId))
+        {
+            _addUgId = "";
+            _realms = await Api.GetDeviceRealmsAsync();
+        }
+        else _err = "Failed to add user group.";
+    }
+
+    private async Task RemoveUserGroupAsync(string realmId, string groupId)
+    {
+        _err = null;
+        if (await Api.RemoveUserGroupFromRealmAsync(realmId, groupId))
+            _realms = await Api.GetDeviceRealmsAsync();
+        else _err = "Failed to remove user group.";
+    }
+
+    private async Task AddDeviceGroupAsync(string realmId)
+    {
+        if (string.IsNullOrEmpty(_addDgId)) return;
+        _err = null;
+        if (await Api.AddDeviceGroupToRealmAsync(realmId, _addDgId))
+        {
+            _addDgId = "";
+            _realms = await Api.GetDeviceRealmsAsync();
+        }
+        else _err = "Failed to add device group.";
+    }
+
+    private async Task RemoveDeviceGroupAsync(string realmId, string deviceGroupId)
+    {
+        _err = null;
+        if (await Api.RemoveDeviceGroupFromRealmAsync(realmId, deviceGroupId))
+            _realms = await Api.GetDeviceRealmsAsync();
+        else _err = "Failed to remove device group.";
+    }
+}
