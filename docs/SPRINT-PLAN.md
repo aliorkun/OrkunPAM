@@ -575,9 +575,39 @@
 
 ---
 
+---
+
+## Sprint 27 - Refactoring #5: Session Akisi Realm-Based Erisim Kontrolu ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — DeviceRealm → SSH/RDP/WebSSH session baslama akisina entegre edildi
+
+| Item | Aciklama | Durum |
+|------|----------|-------|
+| DeviceRealmEndpoints: IsDeviceCoveredByRealmAsync | Cihazin realm kapsaminda olup olmadigini kontrol eden statik helper | ✅ Tamamlandi |
+| DeviceRealmEndpoints: HasRealmAccessAsync | Kullanicinin cihaza realm uzerinden erisimini dogrulayan statik helper | ✅ Tamamlandi |
+| GET /api/v1/device-realms/accessible-devices | Mevcut kullanicinin realm uyeligi araciligiyla erisebilecegi cihaz listesi | ✅ Tamamlandi |
+| SessionEndpoints: CreateSession realm check | SSH/generic session baslatmada realm-first, AccessAssignment fallback | ✅ Tamamlandi |
+| SessionEndpoints: CreateRdpSession realm check | RDP session baslatmada realm-first, AccessAssignment fallback | ✅ Tamamlandi |
+| WebSshEndpoints: realm check | WebSocket SSH koprusunde realm-first, CredentialPermission fallback | ✅ Tamamlandi |
+| PamApiService: GetMyAccessibleDevicesAsync | /accessible-devices endpoint'ini cagiran servis metodu | ✅ Tamamlandi |
+| Connect.razor: realm-filtered device list | Cihaz dropdown'u artik realm filtrelemeli liste kullaniyor | ✅ Tamamlandi |
+
+**Sprint 27 Tamamlanan Bilesenler (2026-05-19):**
+- `DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync`: Cihazin DeviceGroupMembers → DeviceRealmDeviceGroups zincirinden aktif bir realm kapsaminda olup olmadigini sorgular
+- `DeviceRealmEndpoints.HasRealmAccessAsync`: Kullanicinin UserGroups → DeviceRealm → DeviceGroups matrisinden belirtilen cihaza erisimi oldugunu dogrular
+- `GET /api/v1/device-realms/accessible-devices`: Realm konfigurasyonu yapilmissa kullanicinin realm uyeligi araciligiyla erisebilecegi cihazlari doner; realm konfigurasyonu yoksa tum cihazlari doner (backward compatible); admin rolleri icin tum cihazlar
+- `SessionEndpoints.CreateSession` + `CreateRdpSession`: `HasAccessAssignmentAsync` dogrudan cagirisi kaldirildi — once `IsDeviceCoveredByRealmAsync` kontrol edilir, realm kapsamindaysa `HasRealmAccessAsync`; realm kapsaminda degilse `HasAccessAssignmentAsync` fallback'i
+- `WebSshEndpoints`: WebSocket SSH koprusunde ayni realm-first / CredentialPermission-fallback mantiği
+- `PamApiService.GetMyAccessibleDevicesAsync`: `/api/v1/device-realms/accessible-devices` endpoint'ini `ListResult<DeviceDto>` olarak sorgular
+- `Connect.razor`: `GetDevicesAsync` yerine `GetMyAccessibleDevicesAsync` kullaniliyor — Connect sayfasi artik sadece kullanicinin realm erisimi olan cihazlari gosteriyor
+
+**Ilerleme:** 8/8 (%100) ✅ — Sprint 27 TAMAMLANDI
+
+---
+
 ## Sonraki Adim
-**Sprint 26 tamamlandi.** Gereksiz demo sayfalar ve eski endpoint kaydi temizlendi.
-**Siradaki:** Refactoring Sprint #5 — Session akisini realm-based erisim kontroluyle entegre et (DeviceRealm → Session baslama akisi)
+**Sprint 27 tamamlandi.** Session akisi realm-based erisim kontroluyle entegre edildi.
+**Siradaki:** Refactoring Sprint #6 — SSH Proxy'yi calısır hale getir (gerçek TCP relay testi, hata durumu yönetimi)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

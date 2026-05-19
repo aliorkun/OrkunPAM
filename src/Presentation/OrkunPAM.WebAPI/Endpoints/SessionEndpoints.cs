@@ -491,14 +491,30 @@ public static class SessionEndpoints
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
 
-        // Check PAM access assignment: does this user have permission to connect to this device with this credential?
-        if (!isAdmin && !await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+        // Access check: realm-based (Kron PAM model) takes priority over legacy AccessAssignment.
+        // When the device is in a realm-covered device group, realm membership is enforced.
+        // When no realm covers the device, fall back to the legacy AccessAssignment check.
+        if (!isAdmin)
         {
-            logger.LogWarning("Session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
-                userId, req.DeviceId, req.CredentialId);
-            return Results.Json(
-                new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
-                statusCode: 403);
+            if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId))
+            {
+                if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, req.DeviceId))
+                {
+                    logger.LogWarning("Session rejected: user {UserId} has no realm access for device {DeviceId}",
+                        userId, req.DeviceId);
+                    return Results.Json(
+                        new { success = false, errors = new[] { "No realm access for this device" } },
+                        statusCode: 403);
+                }
+            }
+            else if (!await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+            {
+                logger.LogWarning("Session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                    userId, req.DeviceId, req.CredentialId);
+                return Results.Json(
+                    new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
+                    statusCode: 403);
+            }
         }
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
@@ -610,14 +626,28 @@ public static class SessionEndpoints
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
 
-        // Check PAM access assignment
-        if (!isAdmin && !await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+        // Access check: realm-based takes priority; fall back to legacy AccessAssignment.
+        if (!isAdmin)
         {
-            logger.LogWarning("RDP session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
-                userId, req.DeviceId, req.CredentialId);
-            return Results.Json(
-                new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
-                statusCode: 403);
+            if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId))
+            {
+                if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, req.DeviceId))
+                {
+                    logger.LogWarning("RDP session rejected: user {UserId} has no realm access for device {DeviceId}",
+                        userId, req.DeviceId);
+                    return Results.Json(
+                        new { success = false, errors = new[] { "No realm access for this device" } },
+                        statusCode: 403);
+                }
+            }
+            else if (!await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, req.DeviceId, req.CredentialId))
+            {
+                logger.LogWarning("RDP session rejected: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                    userId, req.DeviceId, req.CredentialId);
+                return Results.Json(
+                    new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
+                    statusCode: 403);
+            }
         }
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))

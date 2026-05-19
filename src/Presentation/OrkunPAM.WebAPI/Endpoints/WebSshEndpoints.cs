@@ -66,24 +66,39 @@ public static class WebSshEndpoints
             if (cred == null || cred.DeviceId != deviceId || cred.PasswordEnc == null)
             { ctx.Response.StatusCode = 404; return; }
 
-            // Authorization: admin roles bypass; all others need explicit credential/folder permission
+            // Authorization: admin roles bypass; all others checked via realm (Kron PAM model)
+            // or fall back to credential/folder permission when device is not realm-covered.
             var isAdmin = principal.IsInRole("GlobalAdmin")
                        || principal.IsInRole("VaultAdmin")
                        || principal.IsInRole("SessionAdmin");
             if (!isAdmin)
             {
-                var hasPermission = await db.CredentialPermissions.AnyAsync(
-                    p => p.PrincipalType == PrincipalType.User
-                         && p.PrincipalId == userId
-                         && ((p.CredentialId == credentialId) || (p.FolderId == cred.FolderId))
-                         && p.PermissionLevel >= PermissionLevel.Use);
-                if (!hasPermission)
+                if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, deviceId))
                 {
-                    logger.LogWarning(
-                        "WebSSH: user {UserId} unauthorized access attempt to credential {CredId}", userId, credentialId);
-                    ctx.Response.StatusCode = 403;
-                    await ctx.Response.WriteAsync("Access denied");
-                    return;
+                    if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, deviceId))
+                    {
+                        logger.LogWarning(
+                            "WebSSH: user {UserId} has no realm access for device {DeviceId}", userId, deviceId);
+                        ctx.Response.StatusCode = 403;
+                        await ctx.Response.WriteAsync("Access denied");
+                        return;
+                    }
+                }
+                else
+                {
+                    var hasPermission = await db.CredentialPermissions.AnyAsync(
+                        p => p.PrincipalType == PrincipalType.User
+                             && p.PrincipalId == userId
+                             && ((p.CredentialId == credentialId) || (p.FolderId == cred.FolderId))
+                             && p.PermissionLevel >= PermissionLevel.Use);
+                    if (!hasPermission)
+                    {
+                        logger.LogWarning(
+                            "WebSSH: user {UserId} unauthorized access attempt to credential {CredId}", userId, credentialId);
+                        ctx.Response.StatusCode = 403;
+                        await ctx.Response.WriteAsync("Access denied");
+                        return;
+                    }
                 }
             }
 
