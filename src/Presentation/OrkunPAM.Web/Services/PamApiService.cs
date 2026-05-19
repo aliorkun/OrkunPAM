@@ -2456,6 +2456,127 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Device Realm API methods
+    public async Task<List<DeviceRealmDto>?> GetDeviceRealmsAsync()
+    {
+        var result = await GetAsync<ListResult<DeviceRealmDto>>("/api/v1/device-realms");
+        return result?.Data;
+    }
+
+    public async Task<DeviceRealmDto?> GetDeviceRealmAsync(string id)
+    {
+        var result = await GetAsync<SingleResult<DeviceRealmDto>>("/api/v1/device-realms/" + id);
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateDeviceRealmAsync(string name, string? description, string? sessionPolicyId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/device-realms", new
+            {
+                name,
+                description,
+                sessionPolicyId = sessionPolicyId == null ? (Guid?)null : Guid.Parse(sessionPolicyId)
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateDeviceRealmAsync(string id, string? name, string? description, string? sessionPolicyId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync("/api/v1/device-realms/" + id, new
+            {
+                name,
+                description,
+                sessionPolicyId = sessionPolicyId == null ? (Guid?)null : Guid.Parse(sessionPolicyId)
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteDeviceRealmAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/device-realms/" + id)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleDeviceRealmAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.PostAsync("/api/v1/device-realms/" + id + "/toggle", null)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddUserGroupToRealmAsync(string realmId, string groupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/device-realms/" + realmId + "/user-groups",
+                new { groupId = Guid.Parse(groupId) });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RemoveUserGroupFromRealmAsync(string realmId, string groupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/device-realms/" + realmId + "/user-groups/" + groupId)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddDeviceGroupToRealmAsync(string realmId, string deviceGroupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/device-realms/" + realmId + "/device-groups",
+                new { groupId = Guid.Parse(deviceGroupId) });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> RemoveDeviceGroupFromRealmAsync(string realmId, string deviceGroupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/device-realms/" + realmId + "/device-groups/" + deviceGroupId)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<GroupDto>?> GetGroupsAsync()
+    {
+        var result = await GetAsync<ListResult<GroupDto>>("/api/v1/groups");
+        return result?.Data;
+    }
+
+    public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
+    {
+        var result = await GetAsync<ListResult<DeviceGroupDto>>("/api/v1/device-groups");
+        return result?.Data;
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3523,5 +3644,22 @@ public record LiveSessionStatusDto(
     List<LiveObserverDto>? Observers);
 
 public record LiveObserverDto(string? ObserverUsername, DateTime JoinedAtUtc);
+
+// Device Realm DTOs
+public record DeviceRealmGroupDto(string UserGroupId, string Name);
+public record DeviceRealmDeviceGroupDto(string DeviceGroupId, string Name);
+public record DeviceRealmDto(
+    string Id,
+    string Name,
+    string? Description,
+    bool IsEnabled,
+    string? SessionPolicyId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
+    List<DeviceRealmGroupDto>? UserGroups,
+    List<DeviceRealmDeviceGroupDto>? DeviceGroups);
+
+public record GroupDto(string Id, string Name, string? Description, string? Source, int MemberCount);
+public record DeviceGroupDto(string Id, string Name, string? Description);
 
 public record LiveStreamChunkDto(string Text, int NewOffset);

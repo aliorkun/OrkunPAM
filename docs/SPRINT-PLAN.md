@@ -482,9 +482,40 @@
 
 ---
 
+---
+
+## Sprint 23 - Refactoring: Device Realm Entity + API + UI
+**Tarih:** 19 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| — | DeviceRealm entity (Kron PAM model) | refactor | ✅ Tamamlandi |
+| — | DeviceRealm migration (3 tablo) | refactor | ✅ Tamamlandi |
+| — | DeviceRealmEndpoints (CRUD + group mgmt) | refactor | ✅ Tamamlandi |
+| — | PamApiService Device Realm methods + DTOs | refactor | ✅ Tamamlandi |
+| — | DeviceRealms.razor Blazor UI | refactor | ✅ Tamamlandi |
+| — | NavMenu: Device Realms linki (Access Control altinda) | refactor | ✅ Tamamlandi |
+
+**Sprint 23 Tamamlanan Bilesenler (2026-05-19):**
+- `DeviceRealm` entity: Name, Description, IsEnabled, SessionPolicyId — Kron PAM realm modeli
+- `DeviceRealmUserGroup` junction: DeviceRealmId + UserGroupId (composite PK)
+- `DeviceRealmDeviceGroup` junction: DeviceRealmId + DeviceGroupId (composite PK)
+- `OrkunPamDbContext`: 3 yeni DbSet + model konfigurasyonu (cascade delete, unique index)
+- `20260519_AddDeviceRealm.cs` migration: DeviceRealms + DeviceRealmUserGroups + DeviceRealmDeviceGroups tablolari + FK + index
+- `DeviceRealmEndpoints.cs`: CRUD (GET list, GET single, POST, PUT, DELETE) + toggle + user group add/remove + device group add/remove + my-access
+- `Program.cs`: `api.MapDeviceRealmEndpoints()` kaydedildi
+- `PamApiService.cs`: 12 yeni metot (GetDeviceRealmsAsync, GetDeviceRealmAsync, CreateDeviceRealmAsync, UpdateDeviceRealmAsync, DeleteDeviceRealmAsync, ToggleDeviceRealmAsync, AddUserGroupToRealmAsync, RemoveUserGroupFromRealmAsync, AddDeviceGroupToRealmAsync, RemoveDeviceGroupFromRealmAsync, GetGroupsAsync, GetDeviceGroupsAsync) + DTO'lar (DeviceRealmDto, DeviceRealmGroupDto, DeviceRealmDeviceGroupDto, GroupDto, DeviceGroupDto)
+- `DeviceRealms.razor`: Access matrix yonetim UI — realm CRUD + user group/device group atama (her realm icin acilir panel)
+- `NavMenu.razor`: "Device Realms" linki Access Control bolumune eklendi
+
+**Ilerleme:** 6/6 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 22 tamamlandi.** Refactoring Sprint devam ediyor.
-**Siradaki:** Device Realm entity + endpoint + UI (CLAUDE.md Refactoring Sprint #2)
+**Sprint 23 tamamlandi.** Refactoring Sprint devam ediyor.
+**Siradaki:** Credential assignment refactoring (Kron PAM `assigned_credential` modeli) — CLAUDE.md Refactoring Sprint #3
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

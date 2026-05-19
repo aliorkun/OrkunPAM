@@ -501,6 +501,7 @@ try
     api.MapLiveSessionEndpoints();
     api.MapSmsOtpEndpoints();
     api.MapSessionTagEndpoints();
+    api.MapDeviceRealmEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

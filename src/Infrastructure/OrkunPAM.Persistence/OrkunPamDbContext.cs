@@ -157,6 +157,11 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Access Assignment (PAM authorization matrix)
     public DbSet<AccessAssignment> AccessAssignments => Set<AccessAssignment>();
 
+    // Device Realm (Kron PAM model — user group × device group access matrix)
+    public DbSet<DeviceRealm> DeviceRealms => Set<DeviceRealm>();
+    public DbSet<DeviceRealmUserGroup> DeviceRealmUserGroups => Set<DeviceRealmUserGroup>();
+    public DbSet<DeviceRealmDeviceGroup> DeviceRealmDeviceGroups => Set<DeviceRealmDeviceGroup>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -567,6 +572,28 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(o => o.SessionId);
             e.HasIndex(o => o.ObserverUserId);
             e.Property(o => o.ObserverUsername).HasMaxLength(256);
+        });
+
+        // === Device Realm (Kron PAM model) ===
+        modelBuilder.Entity<DeviceRealm>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(256);
+            e.Property(r => r.Description).HasMaxLength(1024);
+            e.HasIndex(r => r.Name).IsUnique();
+            e.HasMany(r => r.UserGroups).WithOne(rg => rg.DeviceRealm).HasForeignKey(rg => rg.DeviceRealmId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(r => r.DeviceGroups).WithOne(rg => rg.DeviceRealm).HasForeignKey(rg => rg.DeviceRealmId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeviceRealmUserGroup>(e =>
+        {
+            e.HasKey(rg => new { rg.DeviceRealmId, rg.UserGroupId });
+            e.HasOne(rg => rg.UserGroup).WithMany().HasForeignKey(rg => rg.UserGroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeviceRealmDeviceGroup>(e =>
+        {
+            e.HasKey(rg => new { rg.DeviceRealmId, rg.DeviceGroupId });
+            e.HasOne(rg => rg.DeviceGroup).WithMany().HasForeignKey(rg => rg.DeviceGroupId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Seed built-in data
