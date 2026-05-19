@@ -585,6 +585,14 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasOne(a => a.DeviceGroup).WithMany().HasForeignKey(a => a.DeviceGroupId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(a => a.CredentialId);
             e.HasIndex(a => a.PrincipalId);
+            // Partial unique index: DeviceGroupId IS NOT NULL
+            e.HasIndex(a => new { a.CredentialId, a.PrincipalType, a.PrincipalId, a.DeviceGroupId })
+             .IsUnique()
+             .HasFilter("[DeviceGroupId] IS NOT NULL");
+            // Partial unique index: DeviceGroupId IS NULL
+            e.HasIndex(a => new { a.CredentialId, a.PrincipalType, a.PrincipalId })
+             .IsUnique()
+             .HasFilter("[DeviceGroupId] IS NULL");
         });
 
         // === Device Realm (Kron PAM model) ===

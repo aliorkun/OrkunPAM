@@ -542,8 +542,27 @@
 
 ---
 
+## ~~Sprint 25 - Security Fix: AssignedCredential Audit + Unique Constraint~~ ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — 2 HIGH security bulgu fix'lendi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #217 | [HIGH] AssignedCredentialEndpoints audit logging eksik (CWE-778) | security | ✅ Kapatildi |
+| #218 | [HIGH] AssignedCredentials unique constraint eksik — access revocation bypass (CWE-284) | security | ✅ Kapatildi |
+
+**Sprint 25 Tamamlanan Bilesenler (2026-05-19):**
+- `AssignedCredentialEndpoints.cs`: `IAuditService` inject edildi; POST/DELETE/Toggle endpoint'lerine `CREDENTIAL_ASSIGNMENT_CREATED/DELETED/ENABLED/DISABLED` audit event'leri eklendi (#217)
+- `AssignedCredentialEndpoints.cs`: POST `/` — `AnyAsync` duplicate check eklendi; duplicate varsa 409 Conflict donerilen (#218)
+- `OrkunPamDbContext.cs`: `AssignedCredential` entity konfigurasyonuna iki partial unique index eklendi — `[DeviceGroupId] IS NOT NULL` ve `[DeviceGroupId] IS NULL` (#218)
+- `20260519_AddAssignedCredentialUniqueIndex.cs`: migration ile DB'ye 2 partial unique index yansitildi (#218)
+
+**Ilerleme:** 2/2 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 24 tamamlandi.** Refactoring Sprint devam ediyor.
+**Sprint 25 tamamlandi.** Security backlog temiz.
 **Siradaki:** Refactoring Sprint #4 — Gereksiz endpoint/sayfalari kaldir veya gizle (30+ menüyü sadeleştir)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
