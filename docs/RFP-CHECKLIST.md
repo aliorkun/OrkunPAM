@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-19 (PM run #17 — Sprint 20 ✅ (#214 #215 #216), Sprint 22 NavMenu 8-category ✅, Sprint 23 Device Realm ✅, Sprint 24 Credential Assignment ✅; open security: #217 #218)
+> Last updated: 2026-05-19 (PM run #18 — Sprint 25 ✅ security fix: AssignedCredential audit logging #217 + unique constraint #218; Sprint 26 ✅ refactoring cleanup: demo pages + old AccessAssignment endpoint kaldırıldı; refactoring sprint 4/6 tamamlandı)
 
 ## Platform (44 items)
 
@@ -257,7 +257,7 @@
 | 8 | Solution shall support credential access control | PC | GroupEndpoints.cs + CredentialEndpoints.cs — group-based access binding |
 | 9 | Solution shall support credential audit trail | FC | AuditService.cs — all credential access, checkout, rotation events logged |
 | 10 | Solution shall support credential sharing | PC | GroupEndpoints.cs — group-level credential sharing |
-| 11 | Solution shall support credential delegation | PC | AssignedCredential entity — maps Credential → User/Group with optional DeviceGroup scope (Kron PAM assigned_credential model); AssignedCredentialEndpoints.cs (CRUD admin + /my-credentials user endpoint + toggle); CredentialAssignments.razor UI; FK cascade delete + SetNull on DeviceGroup (Sprint 24) |
+| 11 | Solution shall support credential delegation | PC | AssignedCredential entity — maps Credential → User/Group with optional DeviceGroup scope (Kron PAM assigned_credential model); AssignedCredentialEndpoints.cs (CRUD admin + /my-credentials user endpoint + toggle); CredentialAssignments.razor UI; FK cascade delete + SetNull on DeviceGroup (Sprint 24); full audit trail via AuditService.cs (assign/revoke events logged); unique constraint prevents duplicate assignments (Sprint 25, fixes #217 #218) |
 | 12 | Solution shall support credential federation |  |  |
 | 13 | Solution shall support credential synchronization | PC | CredentialEndpoints.cs — sync endpoint for credential state |
 | 14 | Solution shall support credential injection | FC | SshServerSession.cs + RdpProxyService.cs — credential injection at session start |
