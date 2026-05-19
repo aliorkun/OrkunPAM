@@ -438,8 +438,28 @@
 
 ---
 
+## ~~Sprint 21 - Infrastructure Stubs Fix~~ ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — AutoRotationService wirklandi, SSH/MySQL/PostgreSQL rotation stublari duzeltildi, Telnet admin terminasyonu duzeltildi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| — | AutoRotationService + PasswordRotationOrchestrator DI kaydi | infra-fix | ✅ Tamamlandi |
+| — | SSH/MySQL/PostgreSQL rotation stub fixleri (RotationService) | infra-fix | ✅ Tamamlandi |
+| — | TelnetSession.CheckTerminationAsync stub fix | proxy-fix | ✅ Tamamlandi |
+
+**Sprint 21 Tamamlanan Bilesenler (2026-05-19):**
+- `Program.cs`: `SshPasswordRotator`, `WmiPasswordRotator`, `MySqlPasswordRotator`, `PostgreSqlPasswordRotator` → `IPasswordRotator` olarak Scoped kayit
+- `Program.cs`: `PasswordRotationOrchestrator` Scoped kayit + `AutoRotationService` HostedService kayit — otomatik parola rotasyonu artik calisir
+- `RotationService.cs`: `ILoggerFactory` inject edildi; `RotateViaSshAsync` → `SshPasswordRotator` delegate; `RotateViaMySqlAsync` → `MySqlPasswordRotator` delegate; `RotateViaPostgreSqlAsync` → `PostgreSqlPasswordRotator` delegate — manuel rotasyon artik gercek implementasyonu kullanir
+- `TelnetSession.CheckTerminationAsync`: `static` stub kaldirildi — 30s aralikla `_api.IsTerminatedAsync` polling + admin terminasyonu artik calisir
+
+**Ilerleme:** 3/3 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 20 tamamlandi.** PM agent bir sonraki sprint'i planlar.
+**Sprint 21 tamamlandi.** PM agent bir sonraki sprint'i planlar.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
