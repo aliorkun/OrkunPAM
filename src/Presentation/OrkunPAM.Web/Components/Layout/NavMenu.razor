@@ -20,37 +20,47 @@
     }
 
     <nav class="pam-nav">
-        <div class="pam-nav-section">Overview</div>
         <NavLink class="pam-nav-link" href="/" Match="NavLinkMatch.All">
             <span class="pam-nav-icon">&#x229E;</span> Dashboard
+        </NavLink>
+
+        <div class="pam-nav-section">Users</div>
+        <NavLink class="pam-nav-link" href="/users">
+            <span class="pam-nav-icon">&#x1F464;</span> Users
         </NavLink>
         <NavLink class="pam-nav-link" href="/portal">
             <span class="pam-nav-icon">&#x1F9D1;</span> My Portal
         </NavLink>
-        <NavLink class="pam-nav-link" href="/sessions">
-            <span class="pam-nav-icon">&#x25B6;</span> Active Sessions
+        <NavLink class="pam-nav-link" href="/my-devices">
+            <span class="pam-nav-icon">&#x1F4BB;</span> My Devices
         </NavLink>
-        <NavLink class="pam-nav-link" href="/session-playback">
-            <span class="pam-nav-icon">&#x23EF;</span> Session Playback
+        <NavLink class="pam-nav-link" href="/security-keys">
+            <span class="pam-nav-icon">&#x1F5DD;</span> Security Keys
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/push-devices">
+            <span class="pam-nav-icon">&#x1F4F1;</span> Push MFA Devices
         </NavLink>
 
-        <div class="pam-nav-section">Access</div>
-        <NavLink class="pam-nav-link" href="/vault">
-            <span class="pam-nav-icon">&#x1F511;</span> Vault
-        </NavLink>
+        <div class="pam-nav-section">Devices</div>
         <NavLink class="pam-nav-link" href="/devices">
             <span class="pam-nav-icon">&#x1F5B5;</span> Devices
         </NavLink>
-
-        <div class="pam-nav-section">Identity</div>
-        <NavLink class="pam-nav-link" href="/users">
-            <span class="pam-nav-icon">&#x1F464;</span> Users
+        <NavLink class="pam-nav-link" href="/cloud-pam">
+            <span class="pam-nav-icon">&#x2601;</span> Cloud PAM
         </NavLink>
-        <NavLink class="pam-nav-link" href="/policies">
-            <span class="pam-nav-icon">&#x1F4CB;</span> Policies
+        <NavLink class="pam-nav-link" href="/discovery">
+            <span class="pam-nav-icon">&#x1F50D;</span> Discovery
         </NavLink>
 
-        <div class="pam-nav-section">Workflow</div>
+        <div class="pam-nav-section">Vault</div>
+        <NavLink class="pam-nav-link" href="/vault">
+            <span class="pam-nav-icon">&#x1F511;</span> Vault
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/certificates">
+            <span class="pam-nav-icon">&#x1F4DC;</span> Certificates
+        </NavLink>
+
+        <div class="pam-nav-section">Access Control</div>
         <NavLink class="pam-nav-link" href="/approvals">
             <span class="pam-nav-icon">&#x2705;</span> Approvals
             @if (_pendingCount > 0)
@@ -58,17 +68,42 @@
                 <span class="pam-nav-badge pam-nav-badge-red">@_pendingCount</span>
             }
         </NavLink>
-        <NavLink class="pam-nav-link" href="/break-glass">
-            <span class="pam-nav-icon">&#x1F6A8;</span> Break Glass
-        </NavLink>
         <NavLink class="pam-nav-link" href="/jit">
             <span class="pam-nav-icon">&#x23F1;</span> JIT Access
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/break-glass">
+            <span class="pam-nav-icon">&#x1F6A8;</span> Break Glass
         </NavLink>
         <NavLink class="pam-nav-link" href="/vendors">
             <span class="pam-nav-icon">&#x1F3ED;</span> Vendor Access
         </NavLink>
 
-        <div class="pam-nav-section">Reporting</div>
+        <div class="pam-nav-section">Sessions</div>
+        <NavLink class="pam-nav-link" href="/sessions">
+            <span class="pam-nav-icon">&#x25B6;</span> Active Sessions
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/session-playback">
+            <span class="pam-nav-icon">&#x23EF;</span> Session Playback
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/connect">
+            <span class="pam-nav-icon">&#x2328;</span> SSH / RDP
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/network-access">
+            <span class="pam-nav-icon">&#x2B21;</span> TACACS+ / RADIUS
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/rdp-management">
+            <span class="pam-nav-icon">&#x1F5A5;</span> RDP Management
+        </NavLink>
+
+        <div class="pam-nav-section">Policies</div>
+        <NavLink class="pam-nav-link" href="/policies">
+            <span class="pam-nav-icon">&#x1F4CB;</span> Policies
+        </NavLink>
+        <NavLink class="pam-nav-link" href="/threat-analytics">
+            <span class="pam-nav-icon">&#x26A0;</span> SOC Dashboard
+        </NavLink>
+
+        <div class="pam-nav-section">Reports</div>
         <NavLink class="pam-nav-link" href="/reports">
             <span class="pam-nav-icon">&#x1F4CA;</span> Reports
         </NavLink>
@@ -82,52 +117,12 @@
             <span class="pam-nav-icon">&#x2714;</span> Compliance
         </NavLink>
 
-        <div class="pam-nav-section">Terminal</div>
-        <NavLink class="pam-nav-link" href="/connect">
-            <span class="pam-nav-icon">&#x2328;</span> SSH / RDP
-        </NavLink>
-
-        <div class="pam-nav-section">Network</div>
-        <NavLink class="pam-nav-link" href="/network-access">
-            <span class="pam-nav-icon">&#x2B21;</span> TACACS+ / RADIUS
-        </NavLink>
-        <NavLink class="pam-nav-link" href="/rdp-management">
-            <span class="pam-nav-icon">&#x1F5A5;</span> RDP Management
-        </NavLink>
-
-        <div class="pam-nav-section">Cloud</div>
-        <NavLink class="pam-nav-link" href="/cloud-pam">
-            <span class="pam-nav-icon">&#x2601;</span> Cloud PAM
-        </NavLink>
-
-        <div class="pam-nav-section">Threat Analytics</div>
-        <NavLink class="pam-nav-link" href="/threat-analytics">
-            <span class="pam-nav-icon">&#x26A0;</span> SOC Dashboard
-        </NavLink>
-
-        <div class="pam-nav-section">Security</div>
-        <NavLink class="pam-nav-link" href="/security-keys">
-            <span class="pam-nav-icon">&#x1F5DD;</span> Security Keys
-        </NavLink>
-        <NavLink class="pam-nav-link" href="/push-devices">
-            <span class="pam-nav-icon">&#x1F4F1;</span> Push MFA Devices
-        </NavLink>
-        <NavLink class="pam-nav-link" href="/certificates">
-            <span class="pam-nav-icon">&#x1F4DC;</span> Certificates
-        </NavLink>
-        <NavLink class="pam-nav-link" href="/my-devices">
-            <span class="pam-nav-icon">&#x1F4BB;</span> My Devices
-        </NavLink>
-
         <div class="pam-nav-section">System</div>
         <NavLink class="pam-nav-link" href="/system-health">
             <span class="pam-nav-icon">&#x2764;</span> System Health
         </NavLink>
         <NavLink class="pam-nav-link" href="/system-logs">
             <span class="pam-nav-icon">&#x1F4DC;</span> System Logs
-        </NavLink>
-        <NavLink class="pam-nav-link" href="/discovery">
-            <span class="pam-nav-icon">&#x1F50D;</span> Discovery
         </NavLink>
         <NavLink class="pam-nav-link" href="/integrations">
             <span class="pam-nav-icon">&#x1F517;</span> Integrations

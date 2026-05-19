@@ -458,8 +458,33 @@
 
 ---
 
+## ~~Sprint 22 - Refactoring: NavMenu Sadeleştirmesi~~ ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — NavMenu 11 bolum (Overview/Access/Identity/Workflow/Reporting/Terminal/Network/Cloud/Threat Analytics/Security/System) → 8 ana kategori (Users/Devices/Vault/Access Control/Sessions/Policies/Reports/System)
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| — | NavMenu: 11 bolum → 8 kategori (CLAUDE.md Refactoring Sprint #1) | refactor | ✅ Tamamlandi |
+
+**Sprint 22 Tamamlanan Bilesenler (2026-05-19):**
+- `NavMenu.razor`: "Overview" bolumu kaldirildi — Dashboard tek basina ust item oldu
+- "Access" (Vault+Devices) ayrildi: Vault kendi bolumune, Devices kendi bolumune tasindi
+- "Identity" (Users+Policies) ayrildi: Users bolumu + Policies bolumu ayri
+- "Workflow" → "Access Control" olarak yeniden adlandirildi
+- "Terminal" + "Network" birlestirildi → "Sessions" bolumu (SSH/RDP + TACACS+/RADIUS + RDP Mgmt)
+- "Cloud" Devices bolumune tasindi (Cloud PAM artik Devices altinda)
+- "Threat Analytics" Policies bolumune tasindi (SOC Dashboard artik Policies altinda)
+- "Security" (Security Keys/Push MFA/My Devices) Users bolumune tasindi
+- Tum mevcut nav link'ler korundu, sadece gruplamasi degisti
+- Sonuc: 11 bolum → 8 bolum (CLAUDE.md hedefi: Users/Devices/Vault/Access Control/Sessions/Policies/Reports/System)
+
+**Ilerleme:** 1/1 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 21 tamamlandi.** PM agent bir sonraki sprint'i planlar.
+**Sprint 22 tamamlandi.** Refactoring Sprint devam ediyor.
+**Siradaki:** Device Realm entity + endpoint + UI (CLAUDE.md Refactoring Sprint #2)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
