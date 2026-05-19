@@ -605,8 +605,26 @@
 
 ---
 
+## ~~Sprint 28 - Security Fix: Session List Exposure (CWE-200/284)~~ ✅ TAMAMLANDI
+**Tarih:** 19 Mayis 2026
+**Durum:** Tamamlandi — 2 HIGH security bulgu fix'lendi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #221 | [HIGH] Session list endpoints expose all users' sessions | security | ✅ Kapatildi |
+| #220 | [HIGH] Realm access check not enforced at session creation | security | ✅ Kapatildi (Sprint 27'de zaten implemente edilmisti) |
+
+**Sprint 28 Tamamlanan Bilesenler (2026-05-19):**
+- `SessionEndpoints.cs` `GET /` — `HttpContext` inject edildi; `isPrivileged` kontrolu (GlobalAdmin/Auditor/SessionAdmin); privileged olmayan kullanici sadece kendi session'larini gorur; userId filtresi artik sadece privileged callers icin gecerli
+- `SessionEndpoints.cs` `GET /active` — `HttpContext` inject edildi; ayni `isPrivileged` kontrolu; non-admin kullanici sadece kendi aktif session'larini gorur
+- Issue #220 incelendi — `CreateSession` + `CreateRdpSession` + `WebSshEndpoints` zaten Sprint 27'de realm check implement etmisti; issue stale, kapatildi
+
+**Ilerleme:** 2/2 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 27 tamamlandi.** Session akisi realm-based erisim kontroluyle entegre edildi.
+**Sprint 28 tamamlandi.** Session list exposure (CWE-200/284) fix'lendi, realm check stale issue kapatildi.
 **Siradaki:** Refactoring Sprint #6 — SSH Proxy'yi calısır hale getir (gerçek TCP relay testi, hata durumu yönetimi)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026

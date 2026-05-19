@@ -92,14 +92,26 @@ public static class SessionEndpoints
             return await CreateSession(req, SessionType.Sql, 1433, db, vault, logger, cache, context);
         });
 
-        sessions.MapGet("/", async (OrkunPamDbContext db, string? status, Guid? userId,
+        sessions.MapGet("/", async (OrkunPamDbContext db, HttpContext context, string? status, Guid? userId,
             SessionType? type, DateTime? from, DateTime? to, int page = 1, int pageSize = 50) =>
         {
+            var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+
             var query = db.ProxySessions.AsQueryable();
+
+            if (!isPrivileged)
+            {
+                if (!Guid.TryParse(callerIdStr, out var callerId)) return Results.Unauthorized();
+                query = query.Where(ps => ps.UserId == callerId);
+            }
+            else
+            {
+                if (userId.HasValue) query = query.Where(ps => ps.UserId == userId.Value);
+            }
 
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<SessionStatus>(status, true, out var s))
                 query = query.Where(ps => ps.Status == s);
-            if (userId.HasValue) query = query.Where(ps => ps.UserId == userId.Value);
             if (type.HasValue) query = query.Where(ps => ps.SessionType == type.Value);
             if (from.HasValue) query = query.Where(ps => ps.StartedAtUtc >= from.Value);
             if (to.HasValue) query = query.Where(ps => ps.StartedAtUtc <= to.Value);
@@ -122,10 +134,20 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
         });
 
-        sessions.MapGet("/active", async (OrkunPamDbContext db) =>
+        sessions.MapGet("/active", async (OrkunPamDbContext db, HttpContext context) =>
         {
-            var active = await db.ProxySessions
-                .Where(ps => ps.Status == SessionStatus.Active)
+            var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isPrivileged = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("Auditor") || context.User.IsInRole("SessionAdmin");
+
+            var query = db.ProxySessions.Where(ps => ps.Status == SessionStatus.Active);
+
+            if (!isPrivileged)
+            {
+                if (!Guid.TryParse(callerIdStr, out var callerId)) return Results.Unauthorized();
+                query = query.Where(ps => ps.UserId == callerId);
+            }
+
+            var active = await query
                 .Select(ps => new
                 {
                     ps.Id, ps.UserId, ps.DeviceId,
