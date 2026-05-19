@@ -623,9 +623,37 @@
 
 ---
 
+## Sprint 29 - Refactoring #6: SSH Proxy Session Lifecycle + TCP Hardening
+**Tarih:** 19 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Item | Aciklama | Durum |
+|------|----------|---------|
+| TCP connect timeout | SshTargetClient.ConnectAsync — 15s timeout, unreachable host gracefully handled | ✅ Tamamlandi |
+| SSH proxy session-start endpoint | `POST /api/v1/ssh/proxy/session-start` — SSH proxy'nin PAM DB'ye session kaydetmesi | ✅ Tamamlandi |
+| SSH proxy session-end endpoint | `POST /api/v1/ssh/proxy/session-end` — session kapanisinda DB guncelleme + recording path | ✅ Tamamlandi |
+| SSH proxy session-status endpoint | `GET /api/v1/ssh/proxy/sessions/{id}/status` — admin termination polling | ✅ Tamamlandi |
+| PamApiClient session lifecycle | StartSessionAsync + EndSessionAsync + IsTerminatedAsync eklendi | ✅ Tamamlandi |
+| SshServerSession lifecycle entegrasyonu | RunAsync: StartSession sonrasi, EndSession finally'de; IdleWatchAsync: 60s admin termination check | ✅ Tamamlandi |
+| SessionRecorder.RecordingPath | FlushAsync sonrasi recording path expose edildi | ✅ Tamamlandi |
+| ValidateUserAsync userId desteği | LoginData UserId eklendi; ValidateUserAsync (bool, userId?) doner | ✅ Tamamlandi |
+| GetTargetCredentialAsync credentialId | Return tuple'a credentialId eklendi | ✅ Tamamlandi |
+
+**Sprint 29 Tamamlanan Bilesenler (2026-05-19):**
+- `SshProxySessionEndpoints.cs`: 3 yeni endpoint — session-start, session-end, session-status (X-Proxy-Secret korumal)
+- `Program.cs`: `api.MapSshProxySessionEndpoints()` kaydi eklendi
+- `SshTargetClient.ConnectAsync`: 15s TCP connect timeout — unreachable host artik aninda SshException atar
+- `PamApiClient` (SSH): `StartSessionAsync`, `EndSessionAsync`, `IsTerminatedAsync` eklendi; `LoginData` UserId dahil; `GetTargetCredentialAsync` artik `credentialId` de doner
+- `SshServerSession.RunAsync`: userId + credentialId yakalanir; `StartSessionAsync` credentials sonrasi cagirilir; `EndSessionAsync` finally'de garantili cagrilir
+- `SshServerSession.IdleWatchAsync`: `static` kaldirildi; her 60s admin termination check (`IsTerminatedAsync`); admin terminasyonu artik calisir
+- `SessionRecorder.RecordingPath`: property eklendi — FlushAsync sonrasi path okunabilir; EndSession'a recording path gecilir
+
+**Ilerleme:** 9/9 (%100) ✅ — Sprint 29 TAMAMLANDI
+
+---
+
 ## Sonraki Adim
-**Sprint 28 tamamlandi.** Session list exposure (CWE-200/284) fix'lendi, realm check stale issue kapatildi.
-**Siradaki:** Refactoring Sprint #6 — SSH Proxy'yi calısır hale getir (gerçek TCP relay testi, hata durumu yönetimi)
+**Sprint 29 tamamlandi.** SSH Proxy artik session lifecycle'i tam destekliyor: DB'ye kayit, admin termination, recording path referansi, TCP timeout.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
