@@ -2577,6 +2577,54 @@ public sealed class PamApiService
         return result?.Data;
     }
 
+    // === Assigned Credentials (Sprint 24 — Kron PAM assigned_credential model) ===
+
+    public async Task<List<AssignedCredentialDto>?> GetAssignedCredentialsAsync(
+        string? credentialId = null, string? principalId = null)
+    {
+        var url = "/api/v1/assigned-credentials?pageSize=500";
+        if (!string.IsNullOrEmpty(credentialId)) url += "&credentialId=" + credentialId;
+        if (!string.IsNullOrEmpty(principalId))  url += "&principalId="  + principalId;
+        var result = await GetAsync<PagedResult<AssignedCredentialDto>>(url);
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateAssignedCredentialAsync(
+        string credentialId, string principalType, string principalId,
+        string? deviceGroupId, string? notes)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var principalTypeInt = principalType == "Group" ? 1 : 0;
+            var body = new
+            {
+                CredentialId  = Guid.Parse(credentialId),
+                PrincipalType = principalTypeInt,
+                PrincipalId   = Guid.Parse(principalId),
+                DeviceGroupId = string.IsNullOrEmpty(deviceGroupId) ? (Guid?)null : Guid.Parse(deviceGroupId),
+                Notes         = notes
+            };
+            var resp = await client.PostAsJsonAsync("/api/v1/assigned-credentials", body, JsonOpts);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteAssignedCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync("/api/v1/assigned-credentials/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleAssignedCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/assigned-credentials/" + id + "/toggle", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3661,5 +3709,17 @@ public record DeviceRealmDto(
 
 public record GroupDto(string Id, string Name, string? Description, string? Source, int MemberCount);
 public record DeviceGroupDto(string Id, string Name, string? Description);
+
+// Assigned Credential DTOs (Sprint 24)
+public record AssignedCredentialDto(
+    string    Id,
+    string    CredentialId,
+    string    CredentialName,
+    string    PrincipalType,
+    string    PrincipalId,
+    string?   DeviceGroupId,
+    bool      IsEnabled,
+    string?   Notes,
+    DateTime  CreatedAtUtc);
 
 public record LiveStreamChunkDto(string Text, int NewOffset);

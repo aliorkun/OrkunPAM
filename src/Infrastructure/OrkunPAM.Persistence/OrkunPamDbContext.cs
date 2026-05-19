@@ -157,6 +157,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // Access Assignment (PAM authorization matrix)
     public DbSet<AccessAssignment> AccessAssignments => Set<AccessAssignment>();
 
+    // Assigned Credential (Kron PAM assigned_credential — credential → user/group mapping)
+    public DbSet<AssignedCredential> AssignedCredentials => Set<AssignedCredential>();
+
     // Device Realm (Kron PAM model — user group × device group access matrix)
     public DbSet<DeviceRealm> DeviceRealms => Set<DeviceRealm>();
     public DbSet<DeviceRealmUserGroup> DeviceRealmUserGroups => Set<DeviceRealmUserGroup>();
@@ -572,6 +575,16 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(o => o.SessionId);
             e.HasIndex(o => o.ObserverUserId);
             e.Property(o => o.ObserverUsername).HasMaxLength(256);
+        });
+
+        // === Assigned Credential (Kron PAM model) ===
+        modelBuilder.Entity<AssignedCredential>(e =>
+        {
+            e.Property(a => a.Notes).HasMaxLength(1024);
+            e.HasOne(a => a.Credential).WithMany().HasForeignKey(a => a.CredentialId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.DeviceGroup).WithMany().HasForeignKey(a => a.DeviceGroupId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(a => a.CredentialId);
+            e.HasIndex(a => a.PrincipalId);
         });
 
         // === Device Realm (Kron PAM model) ===
