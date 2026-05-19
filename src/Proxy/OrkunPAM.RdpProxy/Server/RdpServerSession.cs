@@ -224,7 +224,7 @@ internal sealed class RdpServerSession
                     // Legacy: plain TCP relay (no credential injection or auditing)
                     _log.LogWarning("RDP session {SessionId}: running in TCP relay mode (no TLS termination)",
                         sessionInfo.SessionId);
-                    await RelayRawAsync(clientSide, targetSide, recorder, ct, idleTimeoutMinutes);
+                    await RelayRawAsync(clientSide, targetSide, recorder, ct, idleTimeoutMinutes, _api, sessionInfo.SessionId);
                 }
 
                 var duration = (int)(DateTimeOffset.UtcNow - startTime).TotalSeconds;
@@ -370,7 +370,7 @@ internal sealed class RdpServerSession
             clientSide, targetSide, fromTarget: false, recorder, auditor, idleCts.Token, lastActivity);
         var targetToClient = PumpWithAuditAsync(
             targetSide, clientSide, fromTarget: true, recorder, auditor, idleCts.Token, lastActivity);
-        var idleWatcher = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
+        var idleWatcher = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts, _api, sessionInfo.SessionId);
 
         await Task.WhenAny(clientToTarget, targetToClient, idleWatcher);
         await idleCts.CancelAsync();
@@ -442,7 +442,9 @@ internal sealed class RdpServerSession
         Stream target,
         RdpSessionRecorder recorder,
         CancellationToken ct,
-        int idleTimeoutMinutes)
+        int idleTimeoutMinutes,
+        PamApiClient? api = null,
+        string? pamSessionId = null)
     {
         const int BufSize = 65536;
         var buf1 = new byte[BufSize];
@@ -452,7 +454,7 @@ internal sealed class RdpServerSession
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var clientToTarget = PumpRawAsync(client, target, buf1, fromTarget: false, recorder, idleCts.Token, lastActivity);
         var targetToClient = PumpRawAsync(target, client, buf2, fromTarget: true,  recorder, idleCts.Token, lastActivity);
-        var idleWatcher    = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts);
+        var idleWatcher    = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts, api, pamSessionId);
 
         await Task.WhenAny(clientToTarget, targetToClient, idleWatcher);
         await idleCts.CancelAsync();
@@ -478,14 +480,28 @@ internal sealed class RdpServerSession
         }
     }
 
-    private static async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks, CancellationTokenSource cts)
+    private static async Task IdleWatchAsync(int timeoutMinutes, long[] lastActivityTicks,
+        CancellationTokenSource cts, PamApiClient? api = null, string? pamSessionId = null)
     {
         var timeout = TimeSpan.FromMinutes(timeoutMinutes);
+        int tickCount = 0;
         try
         {
             while (!cts.IsCancellationRequested)
             {
                 await Task.Delay(30_000, cts.Token);
+                tickCount++;
+
+                // Poll for admin termination every ~60s (every 2nd tick)
+                if (api != null && pamSessionId != null && tickCount % 2 == 0)
+                {
+                    if (await api.IsTerminatedAsync(pamSessionId, cts.Token))
+                    {
+                        await cts.CancelAsync();
+                        return;
+                    }
+                }
+
                 var idleFor = TimeSpan.FromTicks(DateTime.UtcNow.Ticks - Interlocked.Read(ref lastActivityTicks[0]));
                 if (idleFor >= timeout)
                 {
