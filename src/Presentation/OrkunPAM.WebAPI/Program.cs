@@ -100,6 +100,14 @@ try
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IRotationService, OrkunPAM.Persistence.Services.RotationService>();
 
+    // === Password Rotation Orchestrator + Dedicated Rotators (#32) ===
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.SshPasswordRotator>();
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.WmiPasswordRotator>();
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.MySqlPasswordRotator>();
+    builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.PostgreSqlPasswordRotator>();
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.PasswordRotationOrchestrator>();
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.AutoRotationService>();
+
     // === Email / SMTP (#54) ===
     builder.Services.AddScoped<IEmailService, OrkunPAM.Persistence.Services.SmtpEmailService>();
 

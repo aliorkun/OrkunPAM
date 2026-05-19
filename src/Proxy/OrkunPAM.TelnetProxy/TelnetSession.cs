@@ -261,12 +261,22 @@ internal sealed class TelnetSession
         await targetStream.WriteAsync("\r\n"u8.ToArray(), ct);
     }
 
-    private static async Task CheckTerminationAsync(
+    private async Task CheckTerminationAsync(
         string sessionId, CancellationTokenSource linked, CancellationToken ct)
     {
-        // Stub — real implementation would call PAM API every 30s
-        // For now this task just runs until cancelled
-        try { await Task.Delay(Timeout.Infinite, ct); }
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);
+                if (await _api.IsTerminatedAsync(sessionId, ct))
+                {
+                    _log.LogInformation("Telnet session {Id} terminated by admin", sessionId);
+                    linked.Cancel();
+                    return;
+                }
+            }
+        }
         catch (OperationCanceledException) { }
     }
 

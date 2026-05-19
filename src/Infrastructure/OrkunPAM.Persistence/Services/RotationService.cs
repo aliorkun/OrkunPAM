@@ -17,10 +17,12 @@ public interface IRotationService
 public sealed class RotationService : IRotationService
 {
     private readonly ILogger<RotationService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
 
-    public RotationService(ILogger<RotationService> logger)
+    public RotationService(ILogger<RotationService> logger, ILoggerFactory loggerFactory)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
     }
 
     public async Task<RotationResult> RotatePasswordAsync(RotationConnector connector, RotationTarget target, CancellationToken ct = default)
@@ -110,8 +112,8 @@ public sealed class RotationService : IRotationService
                 connection.Bind();
 
                 // AD password change requires the unicodePwd attribute with quoted password in UTF-16LE
-                var newPasswordBytes = System.Text.Encoding.Unicode.GetBytes($"\"{target.NewPassword}\"");
-                var oldPasswordBytes = System.Text.Encoding.Unicode.GetBytes($"\"{target.CurrentPassword}\"");
+                var newPasswordBytes = System.Text.Encoding.Unicode.GetBytes($"\"{ target.NewPassword}\"");
+                var oldPasswordBytes = System.Text.Encoding.Unicode.GetBytes($"\"{ target.CurrentPassword}\"");
 
                 // Find user DN
                 var baseDn = target.Domain != null
@@ -184,50 +186,16 @@ public sealed class RotationService : IRotationService
         }
     }
 
-    private async Task<RotationResult> RotateViaMySqlAsync(RotationTarget target, CancellationToken ct)
+    private Task<RotationResult> RotateViaMySqlAsync(RotationTarget target, CancellationToken ct)
     {
-        // Native MySQL protocol - will use raw TCP in proxy implementation
-        // For now, basic TCP probe to verify connectivity
-        return await Task.Run(() =>
-        {
-            try
-            {
-                using var client = new System.Net.Sockets.TcpClient();
-                var connectResult = client.BeginConnect(target.Host, target.Port, null, null);
-                if (!connectResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5)))
-                    return new RotationResult(false, $"Cannot connect to MySQL at {target.Host}:{target.Port}", "MySQL");
-
-                client.EndConnect(connectResult);
-                // Full MySQL protocol rotation will be implemented with native proxy
-                return new RotationResult(false, "MySQL native protocol rotation pending proxy implementation", "MySQL");
-            }
-            catch (Exception ex)
-            {
-                return new RotationResult(false, $"MySQL connection failed: {ex.Message}", "MySQL");
-            }
-        }, ct);
+        var rotator = new MySqlPasswordRotator(_loggerFactory.CreateLogger<MySqlPasswordRotator>());
+        return rotator.RotatePasswordAsync(target, ct);
     }
 
-    private async Task<RotationResult> RotateViaPostgreSqlAsync(RotationTarget target, CancellationToken ct)
+    private Task<RotationResult> RotateViaPostgreSqlAsync(RotationTarget target, CancellationToken ct)
     {
-        // Native PostgreSQL protocol - will use raw TCP in proxy implementation
-        return await Task.Run(() =>
-        {
-            try
-            {
-                using var client = new System.Net.Sockets.TcpClient();
-                var connectResult = client.BeginConnect(target.Host, target.Port, null, null);
-                if (!connectResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5)))
-                    return new RotationResult(false, $"Cannot connect to PostgreSQL at {target.Host}:{target.Port}", "PostgreSQL");
-
-                client.EndConnect(connectResult);
-                return new RotationResult(false, "PostgreSQL native protocol rotation pending proxy implementation", "PostgreSQL");
-            }
-            catch (Exception ex)
-            {
-                return new RotationResult(false, $"PostgreSQL connection failed: {ex.Message}", "PostgreSQL");
-            }
-        }, ct);
+        var rotator = new PostgreSqlPasswordRotator(_loggerFactory.CreateLogger<PostgreSqlPasswordRotator>());
+        return rotator.RotatePasswordAsync(target, ct);
     }
 
     private Task<RotationResult> RotateViaWinRmAsync(RotationTarget target, CancellationToken ct)
@@ -241,11 +209,8 @@ public sealed class RotationService : IRotationService
 
     private Task<RotationResult> RotateViaSshAsync(RotationTarget target, CancellationToken ct)
     {
-        // SSH native implementation - will be part of SSH proxy service
-        return Task.FromResult(new RotationResult(false,
-            "SSH rotation pending native proxy implementation. Host reachable: " +
-            IsPortOpen(target.Host, target.Port > 0 ? target.Port : 22),
-            "SSH"));
+        var rotator = new SshPasswordRotator(_loggerFactory.CreateLogger<SshPasswordRotator>());
+        return rotator.RotatePasswordAsync(target, ct);
     }
 
     private Task<RotationResult> RotateViaWmiAsync(RotationTarget target, CancellationToken ct)
