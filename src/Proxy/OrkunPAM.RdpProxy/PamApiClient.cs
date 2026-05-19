@@ -116,6 +116,27 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>Check if an admin has terminated this RDP session via the UI.</summary>
+    internal async Task<bool> IsTerminatedAsync(string sessionId, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                $"/api/v1/rdp/proxy/sessions/{sessionId}/status");
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return false;
+            var json = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(ct);
+            return json.TryGetProperty("data", out var d) &&
+                   d.TryGetProperty("terminated", out var t) && t.GetBoolean();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Returns (IdleTimeoutMinutes, MaxConcurrentSessions) from the global session policy. Falls back to safe defaults on any error.</summary>
     internal async Task<(int IdleTimeoutMinutes, int MaxConcurrentSessions)> GetSessionPolicyAsync(CancellationToken ct)
     {

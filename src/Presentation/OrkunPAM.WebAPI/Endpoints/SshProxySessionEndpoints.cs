@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Enums;
@@ -12,7 +13,7 @@ public static class SshProxySessionEndpoints
         // POST /api/v1/ssh/proxy/session-start — register a new SSH session in the DB
         app.MapPost("/api/v1/ssh/proxy/session-start",
             async (SshSessionStartRequest req, OrkunPamDbContext db,
-                   IConfiguration config, HttpContext context) =>
+                   IConfiguration config, HttpContext context, ILogger<Program> logger) =>
         {
             if (!ValidateProxySecret(context, config)) return Results.Unauthorized();
 
@@ -32,6 +33,10 @@ public static class SshProxySessionEndpoints
 
             db.ProxySessions.Add(session);
             await db.SaveChangesAsync();
+
+            logger.LogInformation(
+                "[AUDIT] SSH_SESSION_STARTED userId={UserId} deviceId={DeviceId} clientIp={ClientIp} targetIp={TargetIp}:{TargetPort} sessionId={SessionId}",
+                req.UserId, req.DeviceId, req.ClientIp, req.TargetIp, req.TargetPort, session.Id);
 
             return Results.Ok(new { success = true, data = new { sessionId = session.Id.ToString() } });
         }).WithTags("SSH").AllowAnonymous();
@@ -64,6 +69,11 @@ public static class SshProxySessionEndpoints
             }
 
             await db.SaveChangesAsync();
+
+            logger.LogInformation(
+                "[AUDIT] SSH_SESSION_ENDED sessionId={SessionId} duration={Duration}s recordingPath={Path} status={Status}",
+                sessionId, req.DurationSeconds, req.RecordingPath ?? "none", session.Status);
+
             return Results.Ok(new { success = true });
         }).WithTags("SSH").AllowAnonymous();
 
@@ -93,7 +103,10 @@ public static class SshProxySessionEndpoints
         var expected = config["ProxyService:Secret"] ?? config["PamApi:ProxySecret"] ?? "";
         if (expected.Length < 32) return false;
         var provided = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
-        return provided == expected;
+        // CWE-208: constant-time comparison prevents timing side-channel attacks
+        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expected);
+        var providedBytes = System.Text.Encoding.UTF8.GetBytes(provided);
+        return CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
     }
 
     private sealed record SshSessionStartRequest(

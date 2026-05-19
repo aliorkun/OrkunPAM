@@ -33,12 +33,14 @@ internal sealed class PamApiClient
                 "PamApi:ProxySecret must be at least 32 characters. Generate with: openssl rand -base64 32");
     }
 
-    /// <summary>Validate PAM username + password. Returns (isValid, userId).</summary>
-    internal async Task<(bool Valid, string? UserId)> ValidateUserAsync(string username, string password, CancellationToken ct)
+    /// <summary>Validate PAM username + password bytes. Returns (isValid, userId).</summary>
+    internal async Task<(bool Valid, string? UserId)> ValidateUserAsync(string username, byte[] passwordBytes, CancellationToken ct)
     {
         try
         {
             var client = _factory.CreateClient("PamApi");
+            // String is unavoidably on managed heap during JSON serialization; byte[] is zeroed by caller.
+            var password = System.Text.Encoding.UTF8.GetString(passwordBytes);
             var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
                 new { username, password, mfaCode = (string?)null }, ct);
 
