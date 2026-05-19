@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Access;
+using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Persistence;
 
 namespace OrkunPAM.WebAPI.Endpoints;
@@ -214,6 +215,121 @@ public static class DeviceRealmEndpoints
 
             return Results.Ok(new { success = true, data = realms });
         }).RequireAuthorization();
+
+        // Accessible devices — devices in realm-accessible device groups for the current user.
+        // Admins see all devices. Non-admins see only devices in device groups covered by their realm membership.
+        // Falls back to all devices when no realm covers any device (empty realm configuration).
+        app.MapGet("/api/v1/device-realms/accessible-devices", async (OrkunPamDbContext db, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var isAdmin = context.User.IsInRole("GlobalAdmin")
+                       || context.User.IsInRole("VaultAdmin")
+                       || context.User.IsInRole("SessionAdmin");
+
+            IQueryable<OrkunPAM.Domain.Entities.Device.Device> query;
+
+            if (isAdmin)
+            {
+                query = db.Devices;
+            }
+            else
+            {
+                // Check if any realm has device group assignments (realm feature is in use)
+                var anyRealmDeviceGroup = await db.DeviceRealms
+                    .AnyAsync(r => r.IsEnabled && r.DeviceGroups.Any());
+
+                if (!anyRealmDeviceGroup)
+                {
+                    // Realm not configured yet — show all devices (backward compatible)
+                    query = db.Devices;
+                }
+                else
+                {
+                    var userGroupIds = await db.UserGroups
+                        .Where(ug => ug.UserId == userId)
+                        .Select(ug => ug.GroupId)
+                        .ToListAsync();
+
+                    var realmDeviceGroupIds = await db.DeviceRealms
+                        .Where(r => r.IsEnabled && r.UserGroups.Any(ug => userGroupIds.Contains(ug.UserGroupId)))
+                        .SelectMany(r => r.DeviceGroups.Select(dg => dg.DeviceGroupId))
+                        .Distinct()
+                        .ToListAsync();
+
+                    var accessibleDeviceIds = await db.DeviceGroupMembers
+                        .Where(dgm => realmDeviceGroupIds.Contains(dgm.DeviceGroupId))
+                        .Select(dgm => dgm.DeviceId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    query = db.Devices.Where(d => accessibleDeviceIds.Contains(d.Id));
+                }
+            }
+
+            var devices = await query
+                .OrderBy(d => d.Hostname)
+                .Select(d => new
+                {
+                    Id       = d.Id.ToString(),
+                    d.Hostname,
+                    d.Fqdn,
+                    d.IpAddress,
+                    Type     = d.DeviceType.ToString(),
+                    Protocol = d.ConnectionProtocol.ToString(),
+                    d.ConnectionPort,
+                    d.OperatingSystem,
+                    Status   = d.Status.ToString(),
+                    d.IsReachable,
+                    d.IsManaged,
+                    CredentialCount = db.Credentials.Count(c => c.DeviceId == d.Id)
+                })
+                .ToListAsync();
+
+            return Results.Ok(new { success = true, data = devices });
+        }).RequireAuthorization();
+    }
+
+    /// <summary>
+    /// Returns true if any enabled realm contains a device group that the given device belongs to.
+    /// When false, the realm feature is not covering this device → fall back to legacy AccessAssignment.
+    /// </summary>
+    public static async Task<bool> IsDeviceCoveredByRealmAsync(OrkunPamDbContext db, Guid deviceId)
+    {
+        var deviceGroupIds = await db.DeviceGroupMembers
+            .Where(dgm => dgm.DeviceId == deviceId)
+            .Select(dgm => dgm.DeviceGroupId)
+            .ToListAsync();
+
+        if (deviceGroupIds.Count == 0) return false;
+
+        return await db.DeviceRealms
+            .AnyAsync(r => r.IsEnabled && r.DeviceGroups.Any(dg => deviceGroupIds.Contains(dg.DeviceGroupId)));
+    }
+
+    /// <summary>
+    /// Returns true if the user's group membership grants access to the device via an enabled realm.
+    /// </summary>
+    public static async Task<bool> HasRealmAccessAsync(OrkunPamDbContext db, Guid userId, Guid deviceId)
+    {
+        var userGroupIds = await db.UserGroups
+            .Where(ug => ug.UserId == userId)
+            .Select(ug => ug.GroupId)
+            .ToListAsync();
+
+        var deviceGroupIds = await db.DeviceGroupMembers
+            .Where(dgm => dgm.DeviceId == deviceId)
+            .Select(dgm => dgm.DeviceGroupId)
+            .ToListAsync();
+
+        if (deviceGroupIds.Count == 0 || userGroupIds.Count == 0) return false;
+
+        return await db.DeviceRealms
+            .AnyAsync(r => r.IsEnabled
+                && r.UserGroups.Any(ug => userGroupIds.Contains(ug.UserGroupId))
+                && r.DeviceGroups.Any(dg => deviceGroupIds.Contains(dg.DeviceGroupId)));
     }
 }
 

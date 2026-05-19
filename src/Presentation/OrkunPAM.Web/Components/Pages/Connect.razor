@@ -155,8 +155,10 @@
 
         _pamHost = new Uri(Nav.BaseUri).Host;
 
-        var result = await Api.GetDevicesAsync(pageSize: 200);
-        _devices = result?.Data ?? [];
+        // Use realm-filtered device list (shows only devices the user can access via realm membership).
+        // Falls back to all devices when realm is not configured.
+        var accessible = await Api.GetMyAccessibleDevicesAsync();
+        _devices = accessible ?? [];
 
         if (!string.IsNullOrEmpty(DeviceId))
         {
