@@ -138,7 +138,7 @@
 
 ## ~~Sprint 9 - RFP Gap: Reporting + Auth + CLI~~ ✅ TAMAMLANDI
 **Tarih:** 16-22 Mayıs 2026
-**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarını kapattı
+**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarnı kapattı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|------|
@@ -389,7 +389,7 @@
 **Durum:** Tamamlandi
 
 | Item | Aciklama | Durum |
-|------|----------|—----|
+|------|----------|—---|
 | Counter.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | Weather.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | MapAccessAssignmentEndpoints() | Eski model (Sprint 24 AssignedCredential ile superseded) — Program.cs'den kaldirildi | ✅ Tamamlandi |
@@ -585,9 +585,35 @@
 
 ---
 
+## Sprint 39 - Credential Governance + Export + Alerts (RFP PV #20, #33, #35)
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi ✅
+
+| Item | Baslik | Tip | Durum |
+|------|--------|-----|-------|
+| — | CredentialGovernanceEndpoints.cs — 4 endpoint (summary, access-matrix, stale-access, export) | refactor | ✅ Tamamlandi |
+| — | CredentialAlertService.cs — gunluk expiry + critical-risk email alert BackgroundService | infra | ✅ Tamamlandi |
+| — | CredentialGovernance.razor — Blazor UI (summary cards, Access Matrix tab, Stale Access tab) | UI | ✅ Tamamlandi |
+| — | PamApiService.cs — governance DTOs + 4 yeni method | infra | ✅ Tamamlandi |
+| — | NavMenu: Vault → Governance linki eklendi | UI | ✅ Tamamlandi |
+| — | Program.cs — CredentialAlertService + MapCredentialGovernanceEndpoints kaydi | infra | ✅ Tamamlandi |
+| — | RFP-CHECKLIST.md — RA #34, RA #35, PV #20, PV #33, PV #35 → PC | docs | ✅ Tamamlandi |
+
+**Sprint 39 Tamamlanan Bilesenler (2026-05-20):**
+- **CredentialGovernanceEndpoints.cs:** 4 endpoint — `/api/v1/vault/governance/summary` (expired/expiring/never-rotated/critical counts), `/access-matrix` (paginated who-has-access-to-what), `/stale-access` (unused assignments 30-180d), `/api/v1/vault/credentials/export` (CSV metadata, no passwords)
+- **CredentialAlertService.cs:** Daily BackgroundService — expiry alert for credentials expiring ≤7 days; critical-risk alert for Critical-level credentials; emails VaultAdmin/GlobalAdmin; 24h dedup via AuditLog (`CREDENTIAL_EXPIRY_ALERT`, `CREDENTIAL_CRITICAL_RISK_ALERT` events)
+- **CredentialGovernance.razor:** `/vault/governance` page — 8 summary stat cards, Access Matrix tab (paginated), Stale Access tab (configurable 30/60/90/180d window), CSV export button
+- **PamApiService.cs:** `GetCredentialGovernanceSummaryAsync`, `GetCredentialAccessMatrixAsync`, `GetStaleCredentialAccessAsync`, `ExportCredentialsCsvAsync` + 6 new DTOs
+- **NavMenu.razor:** "Governance" link under Vault section
+- **RFP items closed:** Remote Access #34 (session compliance) → PC, Remote Access #35 (session governance) → PC, Password Vault #20 (credential export) → PC, Password Vault #33 (credential alerts) → PC, Password Vault #35 (credential governance) → PC
+
+**Ilerleme:** 7/7 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 38 tamamlandi.** #236 Session Compliance View implement edildi.
-**Siradaki:** Sprint 39 — Backlog'da yeni priority:mvp issue bekleniyor. Security agent yeni issue acarsa critical/high once fix'le.
+**Sprint 39 tamamlandi.** Credential Governance + Export + Alerts implement edildi. 5 RFP item → PC.
+**Siradaki:** Sprint 40 — Backlog'da yeni priority:mvp issue bekleniyor. Security agent yeni issue acarsa critical/high once fix'le.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
