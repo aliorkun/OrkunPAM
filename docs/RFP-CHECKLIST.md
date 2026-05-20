@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-20 (PM run #20 — Sprint 30: RDP proxy admin termination (#223) Remote Access #12 notu güncellendi; Sprint 31: Platform #15 PC (zaten güncel); Sprint 32: MFA #12 PC (zaten güncel) ✅)
+> Last updated: 2026-05-20 (PM run #21 — Sprint 34 #232: Password Vault #25+#31 → PC; Sprint 35 #231: Remote Access #27 → PC ✅)
 
 ## Platform (44 items)
 
@@ -46,7 +46,7 @@
 | 36 | Solution shall support automated policy compliance checks. | PC | PolicyEndpoints.cs — policy compliance reporting; policy-compliance report (#120) |
 | 37 | Solution shall support integration with SIEM systems. | PC | SyslogForwarderService.cs — RFC 5424 Syslog + ArcSight CEF; UDP/TCP/TLS; auto-forward audit events (#122); SoarIntegration.cs — bi-directional Splunk SOAR / Palo Alto XSOAR playbook connector: PAM alert → SOAR trigger, SOAR action → PAM response (block/rotate/terminate), webhook ingest; Integrations.razor SOAR tab (#197) |
 | 38 | Solution shall support integration with ticketing systems. | PC | IntegrationEndpoints.cs — ServiceNow/OneDesk/Jira/BMC/Generic ITSM config CRUD, toggle, test; HMAC-SHA256 inbound webhook; ticket state → ApprovalStatus.Approved/Denied; Integrations.razor ITSM tab (#114) |
-| 39 | Solution shall provide dashboards for operational visibility. | PC | Dashboard.razor — live stats, session activity, credential status |
+| 39 | Solution shall provide dashboards for operational visibility. | PC | Dashboard.razor — live stats, session activity, credential status; Home.razor: High Risk Credentials stat card + top-5 high-risk credentials table widget (Sprint 34, #232) |
 | 40 | Solution shall support role-based access control (RBAC). | FC | PamRole enum — GlobalAdmin, VaultAdmin, SessionAdmin, Auditor, PasswordViewer; enforced on all endpoints |
 | 41 | Solution shall support separation of duties. | PC | PasswordViewer SoD — GlobalAdmin/VaultAdmin cannot checkout without separate PasswordViewer role (#140) |
 | 42 | Solution shall support privileged account lifecycle management. | PC | AccountLifecycleJob.cs — temp account expiry, inactivity lockout, pwd-age lockout, warning emails (#135, #137) |
@@ -113,7 +113,7 @@
 | 1 | Solution shall provide pre-built compliance reports | PC | Reports.razor — 9 pre-built reports: credential-expiry, group-membership, policy-compliance, checkout-history, break-glass, jit-access, privileged-inventory, vendor-access, compliance-summary (#120) |
 | 2 | Solution shall support custom report creation | PC | CustomReportEndpoints.cs + CustomReportDefinition entity — ad-hoc query builder: data source (AuditLogs/Sessions/Credentials/Users), date range, per-source filters, column selection, preview table, save/run/delete, CSV export; Reports.razor Custom tab (#169) |
 | 3 | Solution shall support scheduled report delivery | PC | ReportScheduleEndpoints.cs + ReportSchedulerService.cs — cron-based schedule (daily/weekly/monthly), SMTP email delivery, RBAC-enforced (AdminPolicy); Reports.razor Scheduled Delivery tab (#159) |
-| 4 | Solution shall support blocked command reporting | PC | Reports.razor — blocked commands per user/device, filter by risk score; SshServerSession.cs command log (#136) |
+| 4 | Solution shall support blocked command reporting | PC | Reports.razor — blocked commands per user/device, filter by risk score; SshServerSession.cs command log (#136); CommandFilterPolicyEndpoints.cs /effective endpoint — SSH proxy receives active policy rules; COMMAND_FILTER_POLICY_CREATED/UPDATED audit events (Sprint 35, #231) |
 | 5 | Solution shall support export in multiple formats | PC | Reports.razor — CSV + JSON export |
 | 6 | Solution shall provide executive dashboards | PC | Reports.razor Executive tab — CISO KPI widgets: active sessions, credential rotation rate, policy compliance %, MFA adoption %, failed login count, top risky users, risk trend chart (Chart.js); ReportEndpoints executive-dashboard endpoint (#168) |
 | 7 | Solution shall provide operational dashboards | PC | Dashboard.razor — live stats, session/credential/approval metrics |
@@ -123,7 +123,7 @@
 | 11 | Solution shall support audit log export | PC | AuditService.cs — CSV/JSON export from Reports.razor |
 | 12 | Solution shall support compliance frameworks (SOX, PCI, HIPAA) | PC | ComplianceReportEndpoints.cs + ComplianceEndpoints.cs — SOX/PCI-DSS/ISO 27001 pre-built control sets; per-framework pass/fail/partial scoring; control-level evidence drill-down; Reports.razor Compliance tab with framework selector (#179) |
 | 13 | Solution shall support regulatory reporting | PC | ComplianceReportEndpoints.cs — POST /api/v1/compliance/report/generate per framework; HTML print-friendly output for auditors; scheduled delivery via ReportSchedulerService.cs; SOX/PCI-DSS/ISO 27001 templates (#179) |
-| 14 | Solution shall support risk reporting | PC | SocDashboardEndpoints.cs — GET /soc/risk-map: per-user risk score with anomaly type breakdown; GET /soc/dashboard: top risky users + risk trend; ThreatAnalytics.razor Risk Map tab; session RiskScore in Sessions.razor (#35) |
+| 14 | Solution shall support risk reporting | PC | SocDashboardEndpoints.cs — GET /soc/risk-map: per-user risk score with anomaly type breakdown; GET /soc/dashboard: top risky users + risk trend; ThreatAnalytics.razor Risk Map tab; session RiskScore in Sessions.razor (#35); credential risk summary — GET /api/v1/vault/credentials/risk-summary (Low/Medium/High/Critical counts); Home.razor high-risk widget (Sprint 34, #232) |
 | 15 | Solution shall support checkout/export history report | PC | Reports.razor — checkout-history report |
 | 16 | Solution shall support group membership report | PC | Reports.razor — group-membership report |
 | 17 | Solution shall support policy compliance report | PC | Reports.razor — policy-compliance report |
@@ -181,7 +181,7 @@
 | 16 | Solution shall support MFA exception management |  |  |
 | 17 | Solution shall support MFA for API access |  |  |
 | 18 | Solution shall support MFA for service accounts |  |  |
-| 19 | Solution shall support MFA throttling | PC | AuthEndpoints.cs — rate limiting on /auth/login + /auth/verify-mfa |
+| 19 | Solution shall support MFA throttling | PC | AuthEndpoints.cs — rate limiting on /auth/login + /auth/verify-mfa; GET /api/v1/auth/mfa/enrollment — rate limiting via RequireRateLimiting("auth") (Sprint 33, #229) |
 | 20 | Solution shall support MFA session persistence |  |  |
 | 21 | Solution shall support MFA for remote access | PC | MFA required alongside username/password for all remote sessions (#151) |
 | 22 | Solution shall support MFA for privileged workstations |  |  |
@@ -218,7 +218,7 @@
 | 24 | Solution shall support printer redirection control | PC | RdpProxyService.cs — printer/drive redirection audit |
 | 25 | Solution shall support drive mapping control | PC | RdpProxyService.cs — drive mapping control in RDP session |
 | 26 | Solution shall support USB control |  |  |
-| 27 | Solution shall support application control |  |  |
+| 27 | Solution shall support application control | PC | CommandFilterPolicy + CommandFilterPolicyRule entities + migration (20260520_AddCommandFilterPolicy); CommandFilterPolicyEndpoints.cs — 10 endpoints under /api/v1/policies/command-filter (AdminPolicy): CRUD + toggle + rule management + /effective (SSH proxy compatible JSON); Policies.razor "Command Filter" tab — policy list, rule editor (regex/glob pattern + Allow/Deny/Alert action + RiskScore 0-100), DeviceGroup scope, New Policy modal, Delete confirm; audit events: COMMAND_FILTER_POLICY_CREATED/UPDATED/DELETED/TOGGLED; PamApiService.cs: 8 new methods + 3 DTOs (Sprint 35, #231) |
 | 28 | Solution shall support screen capture |  |  |
 | 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp |
 | 30 | Solution shall support screen recording |  |  |
@@ -271,13 +271,13 @@
 | 22 | Solution shall support credential profiles | PC | CredentialEndpoints.cs — credential type profiles (Linux, Windows, DB, API) |
 | 23 | Solution shall support credential policies | PC | PolicyEndpoints.cs — credential rotation policy, complexity |
 | 24 | Solution shall support credential compliance | PC | PolicyEndpoints.cs — policy-compliance report for credentials |
-| 25 | Solution shall support credential risk scoring |  |  |
+| 25 | Solution shall support credential risk scoring | PC | CredentialRiskScoringService.cs (daily BackgroundService) — 7 risk factors: rotation age >90d (+20), never rotated (+30), shared to multiple assignees (+15), no checkout history (+10), password expired (+25), failed/terminated sessions in last 7d (+15), admin/root/svc username (+10); score 0-100 mapped to Low/Medium/High/Critical; CredentialRiskEndpoints.cs: GET /api/v1/vault/credentials/risk-summary + GET /high-risk (AdminPolicy) + POST /{id}/risk/rescore; Vault.razor: color-coded risk badge column; Home.razor: high-risk stat card + top-5 table widget (Sprint 34, #232) |
 | 26 | Solution shall support credential dual control | PC | PasswordViewer SoD — admin cannot checkout without separate PasswordViewer role; dual-control enforcement (#140) |
 | 27 | Solution shall support credential checkout | PC | CredentialEndpoints.cs — self-assignment prevention: PasswordViewer cannot be granted by same user (#140); POST /api/v1/vault/credentials/{id}/request-access — approval-gated checkout: reason + ticket, 48h TTL, duplicate detection, admin group notification; Vault.razor Request Access modal (Sprint 14) |
 | 28 | Solution shall support credential check-in | PC | CredentialEndpoints.cs — check-in after session/manual checkout |
 | 29 | Solution shall support credential time-limited access | PC | JitAccessEndpoints.cs — time-limited JIT credential access |
 | 30 | Solution shall support credential just-in-time access | PC | JitAccessEndpoints.cs — JIT access with approval workflow |
-| 31 | Solution shall support credential analytics |  |  |
+| 31 | Solution shall support credential analytics | PC | CredentialRiskScoringService.cs — daily analytics per credential: RiskScore (0-100), RiskLevel (Low/Medium/High/Critical), RiskScoredAtUtc; GET /api/v1/vault/credentials/risk-summary — aggregated Low/Medium/High/Critical counts; GET /high-risk — credentials with score >50; Home.razor dashboard: high-risk credential stat card + top-5 ranked list; Vault.razor risk badge for at-a-glance analytics (Sprint 34, #232) |
 | 32 | Solution shall support credential reporting | PC | Reports.razor — checkout-history, rotation history reports |
 | 33 | Solution shall support credential alerts |  |  |
 | 34 | Solution shall support credential notifications | PC | SmtpEmailService.cs — expiry warning emails |
