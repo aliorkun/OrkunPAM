@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-20 (Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures — PM run #22)
+> Last updated: 2026-05-20 (Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures — PM run #22)
 
 ## Platform (44 items)
 
@@ -236,7 +236,7 @@
 | 42 | Solution shall support session delegation |  |  |
 | 43 | Solution shall support session federation |  |  |
 | 44 | Solution shall support session search | PC | SessionPlaybackEndpoints.cs — full-text session search |
-| 45 | Solution shall support session export |  |  |
+| 45 | Solution shall support session export | PC | SessionEndpoints.cs — GET /api/v1/sessions/{id}/export (ZIP: asciinema JSON + metadata JSON, audit logged SESSION_RECORDING_EXPORTED); GET /api/v1/sessions/export/bulk (multi-session ZIP, AdminPolicy + AuditorPolicy); SessionPlayback.razor Export button (#239) |
 | 46 | Solution shall support session archival | PC | RecordingRetentionService.cs — configurable retention, auto-archive |
 | 47 | Solution shall support session restoration |  |  |
 | 48 | Solution shall support session tagging | PC | SessionTag + SessionAnnotation entities + migration; SessionTagEndpoints.cs (add/remove tag, add annotation, GET by-tag search); Sessions.razor tag badge column + Add Tag/Add Note modals; SessionPlayback.razor annotation panel; audit events: SessionTagAdded/Removed/AnnotationAdded (#216) |
