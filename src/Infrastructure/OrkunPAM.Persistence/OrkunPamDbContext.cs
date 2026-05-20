@@ -165,6 +165,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceRealmUserGroup> DeviceRealmUserGroups => Set<DeviceRealmUserGroup>();
     public DbSet<DeviceRealmDeviceGroup> DeviceRealmDeviceGroups => Set<DeviceRealmDeviceGroup>();
 
+    // Command Filter Policy (#231)
+    public DbSet<CommandFilterPolicy> CommandFilterPolicies => Set<CommandFilterPolicy>();
+    public DbSet<CommandFilterPolicyRule> CommandFilterPolicyRules => Set<CommandFilterPolicyRule>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -615,6 +619,24 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         {
             e.HasKey(rg => new { rg.DeviceRealmId, rg.DeviceGroupId });
             e.HasOne(rg => rg.DeviceGroup).WithMany().HasForeignKey(rg => rg.DeviceGroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // === Command Filter Policy (#231) ===
+        modelBuilder.Entity<CommandFilterPolicy>(e =>
+        {
+            e.Property(p => p.Name).HasMaxLength(256);
+            e.Property(p => p.Description).HasMaxLength(1024);
+            e.Property(p => p.Mode).HasConversion<byte>();
+            e.HasMany(p => p.Rules).WithOne().HasForeignKey(r => r.PolicyId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(p => p.IsEnabled);
+        });
+
+        modelBuilder.Entity<CommandFilterPolicyRule>(e =>
+        {
+            e.Property(r => r.Pattern).HasMaxLength(512);
+            e.Property(r => r.Action).HasMaxLength(32);
+            e.Property(r => r.Justification).HasMaxLength(1024);
+            e.HasIndex(r => r.PolicyId);
         });
 
         // Seed built-in data
