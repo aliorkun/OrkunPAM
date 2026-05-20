@@ -138,7 +138,7 @@
 
 ## ~~Sprint 9 - RFP Gap: Reporting + Auth + CLI~~ ✅ TAMAMLANDI
 **Tarih:** 16-22 Mayıs 2026
-**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarnı kapattı
+**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarını kapattı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|------|
@@ -556,7 +556,7 @@
 - **AutoRotationService.cs:** Rotasyon basarisiz olduğunda `IEmailService` ile VaultAdmin/GlobalAdmin rollerine email bildirimi
 - **CredentialRiskEndpoints.cs:** `GET /api/v1/vault/credentials/rotation-failures` endpoint eklendi
 - **Home.razor:** "Rotation Failures (24h)" stat card + son 5 rotation failure widget
-- **Vault.razor:** Başarısiz rotasyon için kirmizi "Failed" badge + tooltip
+- **Vault.razor:** Başarısız rotasyon için kirmizi "Failed" badge + tooltip
 - **VaultEndpoints.cs:** Projeksiyonlara `RotationFailureCount`, `LastRotationError`, `LastRotationFailedAtUtc` eklendi
 - **PamApiService.cs:** `CredentialDto` +3 alan, `GetRotationFailuresAsync()`, `RotationFailureItemDto`, `RotationFailuresResponseDto`
 - **Cache fixes (#237/#238):** CommandFilterPolicy mutation'lari cache temizliyor, /effective endpoint'e `action` alani eklendi
