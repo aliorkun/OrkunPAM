@@ -7,16 +7,24 @@
 
 <div class="pam-page-header" style="display:flex;align-items:center;justify-content:space-between;">
     <h2 class="pam-page-title">Sessions</h2>
-    <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportCsvAsync">Export CSV</button>
+    <div style="display:flex;gap:.5rem">
+        @if (_activeTab == "sessions")
+        {
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportCsvAsync">Export CSV</button>
+        }
+        @if (_activeTab == "compliance")
+        {
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportComplianceCsvAsync">Export Compliance CSV</button>
+        }
+    </div>
 </div>
 
-<div class="pam-filters">
-    <select class="pam-input pam-select" @bind="_statusFilter" @bind:after="LoadAsync">
-        <option value="">All Sessions</option>
-        <option value="Active">Active</option>
-        <option value="Completed">Completed</option>
-        <option value="Failed">Failed</option>
-    </select>
+<!-- Tab navigation -->
+<div class="pam-tabs" style="margin-bottom:1rem">
+    <button class="pam-tab @(_activeTab == "sessions" ? "active" : "")"
+            @onclick="@(() => SwitchTab("sessions"))">Sessions</button>
+    <button class="pam-tab @(_activeTab == "compliance" ? "active" : "")"
+            @onclick="@(() => SwitchTab("compliance"))">Compliance</button>
 </div>
 
 @if (_error != null)
@@ -24,92 +32,262 @@
     <div class="pam-alert pam-alert-danger">@_error</div>
 }
 
-<div class="pam-card">
-    <div class="pam-card-body p-0">
-        @if (_loading)
-        {
-            <div class="pam-loading-text p-4">Loading sessions&#x2026;</div>
-        }
-        else if (_sessions == null || _sessions.Count == 0)
-        {
-            <div class="pam-empty p-4">No sessions found.</div>
-        }
-        else
-        {
-            <table class="pam-table pam-table-hover">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Target</th>
-                        <th>Port</th>
-                        <th>Client</th>
-                        <th>Status</th>
-                        <th>Started</th>
-                        <th>Duration</th>
-                        <th>Tags</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in _sessions)
-                    {
-                        <tr>
-                            <td><span class="pam-badge">@s.SessionType</span></td>
-                            <td>@(s.TargetIpAddress ?? "&#x2014;")</td>
-                            <td>@(s.TargetPort?.ToString() ?? "&#x2014;")</td>
-                            <td>@(s.ClientIpAddress ?? "&#x2014;")</td>
-                            <td>
-                                <span class="pam-status @StatusClass(s.Status)">@s.Status</span>
-                            </td>
-                            <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
-                            <td>@Duration(s)</td>
-                            <td style="max-width:160px">
-                                @if (!string.IsNullOrEmpty(s.Tags))
-                                {
-                                    @foreach (var tag in s.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                                    {
-                                        <span class="pam-badge pam-badge-secondary" style="margin:1px;font-size:0.72em">@tag</span>
-                                    }
-                                }
-                                <button class="pam-btn-icon" title="Edit tags"
-                                        @onclick="@(() => OpenTagModal(s))">&#x1F3F7;</button>
-                            </td>
-                            <td style="display:flex;gap:4px;flex-wrap:wrap;">
-                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                                        @onclick="@(() => OpenAnnotationsPanel(s.Id))">
-                                    &#x1F4DD; Notes
-                                </button>
-                                @if (s.Status == "Active")
-                                {
-                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
-                                            @onclick="@(() => Nav.NavigateTo("/live-monitor/" + s.Id))">
-                                        &#x25CF; Live
-                                    </button>
-                                    <button class="pam-btn pam-btn-warning pam-btn-sm"
-                                            disabled="@(_shadowingId == s.Id)"
-                                            @onclick="@(() => ShadowAsync(s.Id))">
-                                        @(_shadowingId == s.Id ? "&#x2026;" : "Shadow")
-                                    </button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+@* ── Sessions Tab ───────────────────────────────────────────────────────────── *@
+@if (_activeTab == "sessions")
+{
+    <div class="pam-filters">
+        <select class="pam-input pam-select" @bind="_statusFilter" @bind:after="LoadAsync">
+            <option value="">All Sessions</option>
+            <option value="Active">Active</option>
+            <option value="Completed">Completed</option>
+            <option value="Failed">Failed</option>
+        </select>
+    </div>
 
-            @if (_meta != null && _meta.TotalCount > _pageSize)
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_loading)
             {
-                <div class="pam-pagination">
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page == 1)" @onclick="PrevPage">&#x2190; Prev</button>
-                    <span class="pam-page-info">Page @_page of @TotalPages &#x2014; @_meta.TotalCount sessions</span>
-                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                            disabled="@(_page >= TotalPages)" @onclick="NextPage">Next &#x2192;</button>
+                <div class="pam-loading-text p-4">Loading sessions&#x2026;</div>
+            }
+            else if (_sessions == null || _sessions.Count == 0)
+            {
+                <div class="pam-empty p-4">No sessions found.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Target</th>
+                            <th>Port</th>
+                            <th>Client</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Tags</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _sessions)
+                        {
+                            <tr>
+                                <td><span class="pam-badge">@s.SessionType</span></td>
+                                <td>@(s.TargetIpAddress ?? "&#x2014;")</td>
+                                <td>@(s.TargetPort?.ToString() ?? "&#x2014;")</td>
+                                <td>@(s.ClientIpAddress ?? "&#x2014;")</td>
+                                <td>
+                                    <span class="pam-status @StatusClass(s.Status)">@s.Status</span>
+                                </td>
+                                <td>@s.StartedAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td>@Duration(s)</td>
+                                <td style="max-width:160px">
+                                    @if (!string.IsNullOrEmpty(s.Tags))
+                                    {
+                                        @foreach (var tag in s.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                                        {
+                                            <span class="pam-badge pam-badge-secondary" style="margin:1px;font-size:0.72em">@tag</span>
+                                        }
+                                    }
+                                    <button class="pam-btn-icon" title="Edit tags"
+                                            @onclick="@(() => OpenTagModal(s))">&#x1F3F7;</button>
+                                </td>
+                                <td style="display:flex;gap:4px;flex-wrap:wrap;">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => OpenAnnotationsPanel(s.Id))">
+                                        &#x1F4DD; Notes
+                                    </button>
+                                    @if (s.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                                @onclick="@(() => Nav.NavigateTo("/live-monitor/" + s.Id))">
+                                            &#x25CF; Live
+                                        </button>
+                                        <button class="pam-btn pam-btn-warning pam-btn-sm"
+                                                disabled="@(_shadowingId == s.Id)"
+                                                @onclick="@(() => ShadowAsync(s.Id))">
+                                            @(_shadowingId == s.Id ? "&#x2026;" : "Shadow")
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                @if (_meta != null && _meta.TotalCount > _pageSize)
+                {
+                    <div class="pam-pagination">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page == 1)" @onclick="PrevPage">&#x2190; Prev</button>
+                        <span class="pam-page-info">Page @_page of @TotalPages &#x2014; @_meta.TotalCount sessions</span>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page >= TotalPages)" @onclick="NextPage">Next &#x2192;</button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@* ── Compliance Tab ─────────────────────────────────────────────────────────── *@
+@if (_activeTab == "compliance")
+{
+    <div class="pam-filters" style="margin-bottom:1rem">
+        <label class="pam-label" style="margin-right:.5rem;align-self:center">Period:</label>
+        <button class="pam-btn @(_complianceDays == 7  ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetComplianceDays(7))">7d</button>
+        <button class="pam-btn @(_complianceDays == 30 ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetComplianceDays(30))">30d</button>
+        <button class="pam-btn @(_complianceDays == 90 ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetComplianceDays(90))">90d</button>
+    </div>
+
+    @if (_complianceLoading)
+    {
+        <div class="pam-loading-text">Loading compliance data&#x2026;</div>
+    }
+    else if (_compliance == null)
+    {
+        <div class="pam-empty">No compliance data available.</div>
+    }
+    else
+    {
+        <!-- Stat cards row -->
+        <div class="pam-stat-row" style="margin-bottom:1.25rem">
+            <div class="pam-stat-card pam-stat-green">
+                <div class="pam-stat-icon">&#x2713;</div>
+                <div class="pam-stat-body">
+                    <div class="pam-stat-value">@_compliance.ComplianceRate%</div>
+                    <div class="pam-stat-label">Compliance Rate</div>
+                </div>
+            </div>
+            <div class="pam-stat-card pam-stat-blue">
+                <div class="pam-stat-icon">&#x25BA;</div>
+                <div class="pam-stat-body">
+                    <div class="pam-stat-value">@_compliance.TotalSessions</div>
+                    <div class="pam-stat-label">Total Sessions</div>
+                </div>
+            </div>
+            <div class="pam-stat-card pam-stat-red">
+                <div class="pam-stat-icon">&#x26A0;</div>
+                <div class="pam-stat-body">
+                    <div class="pam-stat-value">@_compliance.ViolatedSessions</div>
+                    <div class="pam-stat-label">Violated Sessions</div>
+                </div>
+            </div>
+            <div class="pam-stat-card pam-stat-orange">
+                <div class="pam-stat-icon">&#x2717;</div>
+                <div class="pam-stat-body">
+                    <div class="pam-stat-value">@_compliance.BlockedCommands</div>
+                    <div class="pam-stat-label">Blocked Commands</div>
+                </div>
+            </div>
+            <div class="pam-stat-card pam-stat-red">
+                <div class="pam-stat-icon">&#x23F9;</div>
+                <div class="pam-stat-body">
+                    <div class="pam-stat-value">@_compliance.AdminTerminated</div>
+                    <div class="pam-stat-label">Admin Terminated</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compliance rate progress bar -->
+        <div class="pam-card" style="margin-bottom:1rem">
+            <div class="pam-card-header">
+                <h3 class="pam-card-title">Compliance Rate</h3>
+                <span style="font-size:0.85em;color:#888">@_compliance.CleanSessions clean / @_compliance.TotalSessions total</span>
+            </div>
+            <div class="pam-card-body">
+                <div style="background:#30363d;border-radius:8px;height:24px;overflow:hidden;position:relative">
+                    <div style="background:@(_compliance.ComplianceRate >= 90 ? "#22c55e" : _compliance.ComplianceRate >= 70 ? "#f59e0b" : "#ef4444");height:100%;width:@(_compliance.ComplianceRate)%;transition:width .5s;border-radius:8px"></div>
+                    <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.8em;font-weight:600">@_compliance.ComplianceRate%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="pam-row">
+            <!-- Violation Types -->
+            @if (_compliance.ViolationTypes != null && _compliance.ViolationTypes.Count > 0)
+            {
+                <div class="pam-card" style="flex:1;min-width:300px;margin-bottom:1rem">
+                    <div class="pam-card-header">
+                        <h3 class="pam-card-title">Violation Types</h3>
+                    </div>
+                    <div class="pam-card-body p-0">
+                        <table class="pam-table">
+                            <thead><tr><th>Type</th><th>Count</th></tr></thead>
+                            <tbody>
+                                @foreach (var vt in _compliance.ViolationTypes)
+                                {
+                                    <tr>
+                                        <td><span class="pam-badge pam-badge-secondary" style="font-size:0.75em">@vt.Key</span></td>
+                                        <td><strong style="color:#ef4444">@vt.Value</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             }
+
+            <!-- Top Violating Users -->
+            @if (_compliance.TopViolatingUsers != null && _compliance.TopViolatingUsers.Count > 0)
+            {
+                <div class="pam-card" style="flex:1;min-width:280px;margin-bottom:1rem">
+                    <div class="pam-card-header">
+                        <h3 class="pam-card-title">Top Violating Users</h3>
+                    </div>
+                    <div class="pam-card-body p-0">
+                        <table class="pam-table">
+                            <thead><tr><th>User</th><th>Violations</th></tr></thead>
+                            <tbody>
+                                @foreach (var u in _compliance.TopViolatingUsers)
+                                {
+                                    <tr>
+                                        <td>@u.Username</td>
+                                        <td><span class="pam-badge" style="background:#ef4444;color:white">@u.ViolationCount</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- Top Violating Devices -->
+            @if (_compliance.TopViolatingDevices != null && _compliance.TopViolatingDevices.Count > 0)
+            {
+                <div class="pam-card" style="flex:1;min-width:280px;margin-bottom:1rem">
+                    <div class="pam-card-header">
+                        <h3 class="pam-card-title">Top Violating Devices</h3>
+                    </div>
+                    <div class="pam-card-body p-0">
+                        <table class="pam-table">
+                            <thead><tr><th>Device</th><th>Violations</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in _compliance.TopViolatingDevices)
+                                {
+                                    <tr>
+                                        <td>@d.Hostname</td>
+                                        <td><span class="pam-badge" style="background:#ef4444;color:white">@d.ViolationCount</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (_compliance.TopViolatingUsers == null || _compliance.TopViolatingUsers.Count == 0)
+        {
+            <div class="pam-empty" style="margin-top:1rem">No policy violations detected in this period.</div>
         }
-    </div>
-</div>
+    }
+}
 
 @* Tag edit modal *@
 @if (_tagSession != null)
@@ -195,6 +373,14 @@
     private const int         _pageSize     = 20;
     private string?           _shadowingId;
 
+    // Tabs
+    private string _activeTab = "sessions";
+
+    // Compliance
+    private SessionComplianceSummaryDto? _compliance;
+    private bool                         _complianceLoading = false;
+    private int                          _complianceDays    = 30;
+
     // Tags
     private SessionDto? _tagSession;
     private string      _tagInput   = "";
@@ -216,6 +402,21 @@
         await LoadAsync();
     }
 
+    private async Task SwitchTab(string tab)
+    {
+        _activeTab = tab;
+        _error = null;
+        StateHasChanged();
+        if (tab == "compliance" && _compliance == null)
+            await LoadComplianceAsync();
+    }
+
+    private async Task SetComplianceDays(int days)
+    {
+        _complianceDays = days;
+        await LoadComplianceAsync();
+    }
+
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
@@ -223,6 +424,14 @@
         if (result == null) _error = "Failed to load sessions.";
         else { _sessions = result.Data; _meta = result.Meta; }
         _loading = false; StateHasChanged();
+    }
+
+    private async Task LoadComplianceAsync()
+    {
+        _complianceLoading = true; _error = null; StateHasChanged();
+        _compliance = await Api.GetSessionComplianceSummaryAsync(_complianceDays);
+        if (_compliance == null) _error = "Failed to load compliance data.";
+        _complianceLoading = false; StateHasChanged();
     }
 
     private static string StatusClass(string s) => s switch
@@ -265,6 +474,38 @@
         if (csv == null) { _error = "Export failed."; StateHasChanged(); return; }
         await JS.InvokeVoidAsync("downloadCsvFile",
             "sessions-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", csv);
+    }
+
+    private async Task ExportComplianceCsvAsync()
+    {
+        if (_compliance == null) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Compliance Report — " + DateTime.Now.ToString("yyyy-MM-dd"));
+        sb.AppendLine($"Period,{_complianceDays} days");
+        sb.AppendLine($"Compliance Rate,{_compliance.ComplianceRate}%");
+        sb.AppendLine($"Total Sessions,{_compliance.TotalSessions}");
+        sb.AppendLine($"Violated Sessions,{_compliance.ViolatedSessions}");
+        sb.AppendLine($"Blocked Commands,{_compliance.BlockedCommands}");
+        sb.AppendLine($"Admin Terminated,{_compliance.AdminTerminated}");
+        sb.AppendLine();
+        sb.AppendLine("Violation Type,Count");
+        if (_compliance.ViolationTypes != null)
+            foreach (var vt in _compliance.ViolationTypes)
+                sb.AppendLine($"{vt.Key},{vt.Value}");
+        sb.AppendLine();
+        sb.AppendLine("Top Violating Users");
+        sb.AppendLine("Username,Violations");
+        if (_compliance.TopViolatingUsers != null)
+            foreach (var u in _compliance.TopViolatingUsers)
+                sb.AppendLine($"{u.Username},{u.ViolationCount}");
+        sb.AppendLine();
+        sb.AppendLine("Top Violating Devices");
+        sb.AppendLine("Hostname,Violations");
+        if (_compliance.TopViolatingDevices != null)
+            foreach (var d in _compliance.TopViolatingDevices)
+                sb.AppendLine($"{d.Hostname},{d.ViolationCount}");
+        await JS.InvokeVoidAsync("downloadCsvFile",
+            "compliance-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
     }
 
     // ── Tags ─────────────────────────────────────────────────────────────────
