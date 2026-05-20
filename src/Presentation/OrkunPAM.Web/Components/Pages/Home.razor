@@ -53,6 +53,13 @@
             <div class="pam-stat-label">High Risk Credentials</div>
         </div>
     </div>
+    <div class="pam-stat-card pam-stat-red">
+        <div class="pam-stat-icon">✗</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@(_rotationFailures?.Count24h.ToString() ?? "—")</div>
+            <div class="pam-stat-label">Rotation Failures (24h)</div>
+        </div>
+    </div>
 </div>
 
 <div class="pam-row">
@@ -132,6 +139,36 @@
         </div>
     }
 
+    <!-- Rotation Failures Widget (#235) -->
+    @if (_rotationFailures != null && _rotationFailures.Items.Count > 0)
+    {
+        <div class="pam-card" style="margin-bottom:1.25rem;width:100%">
+            <div class="pam-card-header">
+                <h3 class="pam-card-title">✗ Rotation Failures</h3>
+                <a href="/vault" class="pam-link">Open Vault</a>
+            </div>
+            <div class="pam-card-body">
+                <table class="pam-table">
+                    <thead>
+                        <tr><th>Name</th><th>Username</th><th>Failures</th><th>Last Error</th><th>Failed At</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rf in _rotationFailures.Items.Take(5))
+                        {
+                            <tr>
+                                <td><strong>@rf.Name</strong></td>
+                                <td>@(rf.Username ?? "—")</td>
+                                <td><span class="pam-badge" style="background:#dc2626;color:white">@rf.RotationFailureCount</span></td>
+                                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="@rf.LastRotationError">@(rf.LastRotationError ?? "—")</td>
+                                <td>@(rf.LastRotationFailedAtUtc.HasValue ? rf.LastRotationFailedAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm") : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
     <!-- Quick Actions -->
     <div class="pam-card pam-card-sm">
         <div class="pam-card-header">
@@ -180,6 +217,7 @@
     private List<SessionDto>? _sessions;
     private CredentialRiskSummaryDto? _riskSummary;
     private List<HighRiskCredentialDto>? _highRiskCreds;
+    private RotationFailuresResponseDto? _rotationFailures;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -209,6 +247,7 @@
 
         try { _riskSummary = await Api.GetCredentialRiskSummaryAsync(); } catch { }
         try { _highRiskCreds = await Api.GetHighRiskCredentialsAsync(); } catch { }
+        try { _rotationFailures = await Api.GetRotationFailuresAsync(); } catch { }
 
         StateHasChanged();
     }

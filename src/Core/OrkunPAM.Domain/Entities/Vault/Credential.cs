@@ -52,6 +52,11 @@ public class Credential : AuditableEntity
     public string RiskLevel { get; set; } = "Low";
     public DateTime? RiskScoredAtUtc { get; set; }
 
+    // Rotation failure tracking (#235)
+    public string? LastRotationError { get; set; }
+    public int RotationFailureCount { get; set; }
+    public DateTime? LastRotationFailedAtUtc { get; set; }
+
     public ICollection<CredentialPermission> Permissions { get; set; } = new List<CredentialPermission>();
     public ICollection<PasswordHistory> PasswordHistories { get; set; } = new List<PasswordHistory>();
 

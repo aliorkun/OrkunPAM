@@ -55,6 +55,32 @@ public static class CredentialRiskEndpoints
             return Results.Ok(new { success = true, data = items });
         }).RequireAuthorization("AdminPolicy").WithTags("Vault");
 
+        // GET /api/v1/vault/credentials/rotation-failures — credentials with rotation failures in last 24h
+        app.MapGet("/api/v1/vault/credentials/rotation-failures", async (OrkunPamDbContext db) =>
+        {
+            var since = DateTime.UtcNow.AddHours(-24);
+            var items = await db.Credentials
+                .Where(c => c.RotationFailureCount > 0 && c.LastRotationFailedAtUtc != null)
+                .OrderByDescending(c => c.LastRotationFailedAtUtc)
+                .Take(50)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    c.Username,
+                    c.RotationFailureCount,
+                    c.LastRotationError,
+                    c.LastRotationFailedAtUtc,
+                    c.LastRotatedAtUtc,
+                    FolderName = c.Folder.Name
+                })
+                .ToListAsync();
+
+            var count24h = items.Count(x => x.LastRotationFailedAtUtc >= since);
+
+            return Results.Ok(new { success = true, data = new { count24h, items } });
+        }).RequireAuthorization("AdminPolicy").WithTags("Vault");
+
         // POST /api/v1/vault/credentials/{id}/risk/rescore — manually rescore a single credential
         app.MapPost("/api/v1/vault/credentials/{id:guid}/risk/rescore", async (
             Guid id, OrkunPamDbContext db, IAuditService audit,

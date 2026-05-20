@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Enums;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Persistence.Services;
 
@@ -118,6 +119,7 @@ public sealed class AutoRotationService : BackgroundService
         var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
         var rotationService = scope.ServiceProvider.GetRequiredService<IRotationService>();
         var orchestrator = scope.ServiceProvider.GetRequiredService<PasswordRotationOrchestrator>();
+        var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
         var credential = await db.Credentials
             .Include(c => c.RotationPolicy)
@@ -210,11 +212,14 @@ public sealed class AutoRotationService : BackgroundService
             {
                 // Restore to Active so manual rotation can be attempted
                 credential.Status = CredentialStatus.Active;
+                credential.LastRotationError = result.Message?[..Math.Min(result.Message.Length, 1024)];
+                credential.RotationFailureCount++;
+                credential.LastRotationFailedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
 
                 await audit.LogAsync(
                     category: "AutoRotation",
-                    eventType: "AutoRotationFailed",
+                    eventType: "CREDENTIAL_ROTATION_FAILED",
                     actorUserId: null,
                     actorUsername: "auto-rotation",
                     actorIp: "127.0.0.1",
@@ -226,7 +231,8 @@ public sealed class AutoRotationService : BackgroundService
                         DeviceHostname = device.Hostname,
                         Connector = connector.ToString(),
                         Error = result.Message,
-                        result.ResponseTimeMs
+                        result.ResponseTimeMs,
+                        FailureCount = credential.RotationFailureCount
                     },
                     outcome: AuditOutcome.Failure,
                     ct: ct);
@@ -234,6 +240,8 @@ public sealed class AutoRotationService : BackgroundService
                 _logger.LogWarning(
                     "AutoRotation failed for '{Name}' on {Host}: {Error}",
                     credential.Name, device.Hostname, result.Message);
+
+                await NotifyRotationFailureAsync(emailService, db, credential, device.Hostname, result.Message ?? "Unknown error", ct);
             }
         }
         catch (Exception ex)
@@ -244,6 +252,9 @@ public sealed class AutoRotationService : BackgroundService
             try
             {
                 credential.Status = CredentialStatus.Active;
+                credential.LastRotationError = ex.Message[..Math.Min(ex.Message.Length, 1024)];
+                credential.RotationFailureCount++;
+                credential.LastRotationFailedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception saveEx)
@@ -253,15 +264,70 @@ public sealed class AutoRotationService : BackgroundService
 
             await audit.LogAsync(
                 category: "AutoRotation",
-                eventType: "AutoRotationError",
+                eventType: "CREDENTIAL_ROTATION_FAILED",
                 actorUserId: null,
                 actorUsername: "auto-rotation",
                 actorIp: "127.0.0.1",
                 targetType: "Credential",
                 targetId: credentialId.ToString(),
-                details: new { Error = ex.Message },
+                details: new { Error = ex.Message, FailureCount = credential.RotationFailureCount },
                 outcome: AuditOutcome.Failure,
                 ct: ct);
+
+            try
+            {
+                await NotifyRotationFailureAsync(emailService, db, credential, null, ex.Message, ct);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Failed to send rotation failure email for credential {Id}", credentialId);
+            }
+        }
+    }
+
+    private async Task NotifyRotationFailureAsync(
+        IEmailService emailService,
+        OrkunPamDbContext db,
+        Domain.Entities.Vault.Credential credential,
+        string? deviceHostname,
+        string errorMessage,
+        CancellationToken ct)
+    {
+        try
+        {
+            var adminEmails = await db.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .Where(u => u.Email != null
+                    && u.Status == UserStatus.Active
+                    && u.UserRoles.Any(ur => ur.Role.Name == "GlobalAdmin" || ur.Role.Name == "VaultAdmin"))
+                .Select(u => u.Email!)
+                .Distinct()
+                .ToListAsync(ct);
+
+            if (adminEmails.Count == 0)
+                return;
+
+            var subject = $"[OrkunPAM] Credential Rotation Failed: {credential.Name}";
+            var body = $"""
+                <h2 style="color:#dc2626">Credential Rotation Failed</h2>
+                <table style="border-collapse:collapse;font-family:sans-serif">
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Credential</strong></td><td>{System.Net.WebUtility.HtmlEncode(credential.Name)}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Username</strong></td><td>{System.Net.WebUtility.HtmlEncode(credential.Username ?? "—")}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Device</strong></td><td>{System.Net.WebUtility.HtmlEncode(deviceHostname ?? "—")}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Error</strong></td><td style="color:#dc2626">{System.Net.WebUtility.HtmlEncode(errorMessage)}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Failure Count</strong></td><td>{credential.RotationFailureCount}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Time (UTC)</strong></td><td>{credential.LastRotationFailedAtUtc:yyyy-MM-dd HH:mm:ss}</td></tr>
+                </table>
+                <p>Log in to <strong>OrkunPAM</strong> to investigate and resolve this issue.</p>
+                """;
+
+            foreach (var email in adminEmails)
+                await emailService.SendAsync(email, subject, body, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "NotifyRotationFailureAsync failed for credential {Id}", credential.Id);
         }
     }
 }
