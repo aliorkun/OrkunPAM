@@ -32,6 +32,7 @@
     </button>
     <button class="pam-tab @(_tab == "jit" ? "active" : "")" @onclick="@(() => SetTab("jit"))">+ Request Access</button>
     <button class="pam-tab @(_tab == "profile" ? "active" : "")" @onclick="@(() => SetTab("profile"))">My Profile</button>
+    <button class="pam-tab @(_tab == "security" ? "active" : "")" @onclick="@(() => SetTab("security"))">Security</button>
 </div>
 
 @* ===== MY DEVICES ===== *@
@@ -439,6 +440,108 @@
     </div>
 }
 
+@* ===== SECURITY (MFA DEVICES) ===== *@
+@if (_tab == "security")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>My MFA Methods</span>
+            <span class="pam-text-muted" style="font-size:.85rem">Enrolled second-factor authentication methods</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loadingSecurity)
+            {
+                <div class="pam-loading-text">Loading MFA methods...</div>
+            }
+            else if (_mfaDevices == null || _mfaDevices.Count == 0)
+            {
+                <div class="pam-empty">
+                    No MFA methods enrolled. Enable MFA from
+                    <a href="/mfa-setup" style="color:#58a6ff">MFA Setup</a>.
+                </div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Device / Method</th>
+                            <th>Status</th>
+                            <th>Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _mfaDevices)
+                        {
+                            <tr>
+                                <td>
+                                    @switch (d.Type)
+                                    {
+                                        case "totp":
+                                            <span class="pam-badge pam-badge-blue">TOTP</span>
+                                            break;
+                                        case "email_otp":
+                                            <span class="pam-badge pam-badge-blue">Email OTP</span>
+                                            break;
+                                        case "sms":
+                                            <span class="pam-badge pam-badge-blue">SMS OTP</span>
+                                            break;
+                                        case "fido2":
+                                            <span class="pam-badge pam-badge-purple">FIDO2</span>
+                                            break;
+                                        case "push":
+                                            <span class="pam-badge pam-badge-green">Push</span>
+                                            break;
+                                        default:
+                                            <span class="pam-badge">@d.Type</span>
+                                            break;
+                                    }
+                                </td>
+                                <td><strong>@d.Name</strong></td>
+                                <td><span class="pam-badge pam-badge-green">@d.Status</span></td>
+                                <td><span class="pam-text-muted">@(d.Detail ?? "—")</span></td>
+                                <td>
+                                    @if (d.Type == "totp" || d.Type == "email_otp" || d.Type == "sms")
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                                @onclick="@(() => RevokeByTypeAsync(d.Type))"
+                                                disabled="@_submitting">
+                                            Revoke
+                                        </button>
+                                    }
+                                    else if (d.Type == "fido2" && d.DeviceId != null)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                                @onclick="@(() => RevokeFido2Async(d.DeviceId))"
+                                                disabled="@_submitting">
+                                            Revoke
+                                        </button>
+                                    }
+                                    else if (d.Type == "push" && d.DeviceId != null)
+                                    {
+                                        <button class="pam-btn pam-btn-xs pam-btn-danger"
+                                                @onclick="@(() => RevokePushAsync(d.DeviceId))"
+                                                disabled="@_submitting">
+                                            Revoke
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+                <a href="/mfa-setup" class="pam-btn pam-btn-secondary pam-btn-sm">Manage TOTP</a>
+                <a href="/security-keys" class="pam-btn pam-btn-secondary pam-btn-sm">Manage Security Keys</a>
+                <a href="/push-devices" class="pam-btn pam-btn-secondary pam-btn-sm">Manage Push Devices</a>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "devices";
     private bool _loading;
@@ -474,6 +577,9 @@
     private string _pwNew      = string.Empty;
     private string _pwConfirm  = string.Empty;
 
+    private List<MfaDeviceDto>? _mfaDevices;
+    private bool _loadingSecurity;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -491,6 +597,7 @@
         else if (tab == "sessions") await LoadMySessionsAsync();
         else if (tab == "requests") await LoadMyRequestsAsync();
         else if (tab == "profile") await LoadProfileAsync();
+        else if (tab == "security") await LoadMfaDevicesAsync();
     }
 
     private async Task LoadDevicesAsync()
@@ -620,6 +727,42 @@
         _loading = true;
         _profile = await Api.GetMyProfileAsync();
         _loading = false;
+    }
+
+    private async Task LoadMfaDevicesAsync()
+    {
+        _loadingSecurity = true;
+        _mfaDevices = await Api.GetMyMfaDevicesAsync();
+        _loadingSecurity = false;
+    }
+
+    private async Task RevokeByTypeAsync(string type)
+    {
+        _error = null; _success = null; _submitting = true;
+        var ok = await Api.RevokeMfaDeviceByTypeAsync(type);
+        _submitting = false;
+        if (ok) { _success = "MFA method revoked."; await LoadMfaDevicesAsync(); }
+        else _error = "Failed to revoke MFA method.";
+    }
+
+    private async Task RevokeFido2Async(string? credId)
+    {
+        if (credId == null) return;
+        _error = null; _success = null; _submitting = true;
+        var ok = await Api.RevokeFido2DeviceAsync(credId);
+        _submitting = false;
+        if (ok) { _success = "Security key revoked."; await LoadMfaDevicesAsync(); }
+        else _error = "Failed to revoke security key.";
+    }
+
+    private async Task RevokePushAsync(string? deviceId)
+    {
+        if (deviceId == null) return;
+        _error = null; _success = null; _submitting = true;
+        var ok = await Api.RevokePushDeviceAsync(deviceId);
+        _submitting = false;
+        if (ok) { _success = "Push device revoked."; await LoadMfaDevicesAsync(); }
+        else _error = "Failed to revoke push device.";
     }
 
     private async Task DoChangePasswordAsync()

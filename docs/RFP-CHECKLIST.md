@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-19 (PM run #19 — Sprint 27 ✅ realm-based session access control (DeviceRealm → SSH/RDP/WebSSH); Sprint 28 ✅ session-list role-based scope fixes #220 #221; Sprint 29 ✅ SSH proxy PAM-DB session lifecycle + IdleWatch admin termination; **REFACTORING SPRINT 6/6 TAMAMLANDI** 🎉)
+> Last updated: 2026-05-20 (Sprint 32 ✅ MFA Device Management — MfaDeviceEndpoints.cs: GET /api/v1/my/mfa-devices unified list (TOTP/EmailOTP/SMS/FIDO2/Push), DELETE by-type/fido2/push; admin: GET+DELETE /api/v1/admin/users/{id}/mfa-devices/* (AdminPolicy); SelfService.razor Security tab; full audit trail; **RFP MFA #12 → PC**)
 
 ## Platform (44 items)
 
@@ -174,7 +174,7 @@
 | 9 | Solution shall support MFA bypass policies | PC | windows.auth.mfa_bypass config — Kerberos-authenticated users skip TOTP; configurable per-domain; Integrations.razor Windows Auth tab MFA bypass toggle (#126) |
 | 10 | Solution shall support MFA enrollment self-service | PC | QrCodeEndpoints.cs — TOTP self-enrollment via QR code |
 | 11 | Solution shall support MFA audit logging | FC | AuditService.cs — MFA verify/fail events logged |
-| 12 | Solution shall support MFA device management |  |  |
+| 12 | Solution shall support MFA device management | PC | MfaDeviceEndpoints.cs — GET /api/v1/my/mfa-devices (unified list: TOTP/EmailOTP/SMS/FIDO2/Push); DELETE by-type/{totp|email_otp|sms}; DELETE fido2/{credId}; DELETE push/{deviceId}; admin: GET+DELETE /api/v1/admin/users/{id}/mfa-devices/* (AdminPolicy); SelfService.razor "Security" tab — enrolled MFA methods table with type badges + inline revoke; full audit trail (Sprint 32) |
 | 13 | Solution shall support MFA for privileged operations | PC | MFA enforced at login; required for vault checkout and session start |
 | 14 | Solution shall support MFA for admin access | PC | MFA policy applied to all admin roles |
 | 15 | Solution shall support MFA reporting | PC | ReportEndpoints.cs — MFA enrollment & usage report: enrollment %, per-user MFA method, unenrolled list, MFA event history from AuditLogs; Reports.razor MFA tab (#174) |
