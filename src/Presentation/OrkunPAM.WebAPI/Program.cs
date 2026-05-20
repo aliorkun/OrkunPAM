@@ -155,6 +155,9 @@ try
     // === Credential Risk Scoring (#232) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.CredentialRiskScoringService>();
 
+    // === Credential Alerts — expiry + critical risk daily emails (Sprint 39) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.CredentialAlertService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -509,6 +512,7 @@ try
     api.MapAssignedCredentialEndpoints();
     api.MapMfaDeviceEndpoints();
     api.MapCredentialRiskEndpoints();
+    api.MapCredentialGovernanceEndpoints();
     api.MapCommandFilterPolicyEndpoints();
     api.MapSessionComplianceEndpoints();
 

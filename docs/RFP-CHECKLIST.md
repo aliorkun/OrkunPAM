@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-20 (PM run #21 — Sprint 34 #232: Password Vault #25+#31 → PC; Sprint 35 #231: Remote Access #27 → PC ✅)
+> Last updated: 2026-05-20 (Sprint 39 — Remote Access #34+#35 → PC; Password Vault #20+#33+#35 → PC)
 
 ## Platform (44 items)
 
@@ -225,8 +225,8 @@
 | 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214); Sprint 28: role-based scope — GET /api/v1/sessions + /active: privileged roles (GlobalAdmin/Auditor/SessionAdmin) see all sessions; regular users see only own sessions (CWE-200/284 fix, closes #221) |
 | 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk color coding |
 | 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement |
-| 34 | Solution shall support session compliance |  |  |
-| 35 | Solution shall support session governance |  |  |
+| 34 | Solution shall support session compliance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/summary (compliance rate, violation types, top violating users/devices, blocked commands, admin-terminated sessions); Sessions.razor Compliance tab with stat cards, progress bar, period selector (7d/30d/90d), CSV export (Sprint 38, #236) |
+| 35 | Solution shall support session governance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/governance-report: admin terminations log, realm-access-denied events, JIT-ticketed sessions, command-blocked sessions with counts; governance data available in Sessions.razor Compliance tab (Sprint 38, #236) |
 | 36 | Solution shall support session audit trail | FC | AuditService.cs — all session events in hash-chained audit log |
 | 37 | Solution shall support session reporting | PC | Reports.razor — session activity, filter, export |
 | 38 | Solution shall support session alerts | PC | InProcessEventBus.cs + SessionEventRelayService.cs — CommandBlocked → SignalR alert |
@@ -266,7 +266,7 @@
 | 17 | Solution shall support credential backup | PC | BackupService.cs — encrypted backup includes credentials |
 | 18 | Solution shall support credential recovery | PC | BackupService.cs — restore from encrypted backup |
 | 19 | Solution shall support credential import | PC | CredentialEndpoints.cs — bulk import via CSV |
-| 20 | Solution shall support credential export |  |  |
+| 20 | Solution shall support credential export | PC | GET /api/v1/vault/credentials/export (AdminPolicy) — CSV export of vault credential metadata (Id, Name, Username, Type, Folder, Status, RiskScore, RiskLevel, LastRotated, NextRotation, ExpiresAt, IsDiscovered, RotationFailures, CreatedAt); passwords never exported; CredentialGovernance.razor Export button (Sprint 39) |
 | 21 | Solution shall support credential templates |  |  |
 | 22 | Solution shall support credential profiles | PC | CredentialEndpoints.cs — credential type profiles (Linux, Windows, DB, API) |
 | 23 | Solution shall support credential policies | PC | PolicyEndpoints.cs — credential rotation policy, complexity |
@@ -279,9 +279,9 @@
 | 30 | Solution shall support credential just-in-time access | PC | JitAccessEndpoints.cs — JIT access with approval workflow |
 | 31 | Solution shall support credential analytics | PC | CredentialRiskScoringService.cs — daily analytics per credential: RiskScore (0-100), RiskLevel (Low/Medium/High/Critical), RiskScoredAtUtc; GET /api/v1/vault/credentials/risk-summary — aggregated Low/Medium/High/Critical counts; GET /high-risk — credentials with score >50; Home.razor dashboard: high-risk credential stat card + top-5 ranked list; Vault.razor risk badge for at-a-glance analytics (Sprint 34, #232) |
 | 32 | Solution shall support credential reporting | PC | Reports.razor — checkout-history, rotation history reports |
-| 33 | Solution shall support credential alerts |  |  |
+| 33 | Solution shall support credential alerts | PC | CredentialAlertService.cs (daily BackgroundService) — expiry alert: email VaultAdmin/GlobalAdmin when credentials expire within 7 days; critical risk alert: email when Critical-level credentials detected; CREDENTIAL_EXPIRY_ALERT + CREDENTIAL_CRITICAL_RISK_ALERT audit events; 24h deduplication via AuditLog; SmtpEmailService.cs delivery (Sprint 39) |
 | 34 | Solution shall support credential notifications | PC | SmtpEmailService.cs — expiry warning emails |
-| 35 | Solution shall support credential governance |  |  |
+| 35 | Solution shall support credential governance | PC | CredentialGovernanceEndpoints.cs — GET /api/v1/vault/governance/summary (expired, expiring-in-7d, never-rotated, critical-risk, orphaned-assignments counts); GET /api/v1/vault/governance/access-matrix (who has access to what, principal type, last used, device group scope); GET /api/v1/vault/governance/stale-access (users with assigned credentials unused for 30/60/90/180d); CredentialGovernance.razor dashboard — summary cards, Access Matrix tab, Stale Access tab; NavMenu Vault → Governance (Sprint 39) |
 | 36 | Solution shall support credential integration | PC | CredentialEndpoints.cs — REST API for external credential integration |
 | 37 | Solution shall support credential automation |  |  |
 | 38 | Solution shall support credential orchestration |  |  |
