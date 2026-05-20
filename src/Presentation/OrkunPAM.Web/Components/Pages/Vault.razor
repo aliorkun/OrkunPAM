@@ -166,23 +166,23 @@
                                                             @onclick="@(() => OpenRequestAccess(c.Id, c.Name))">&#x1F4CB;</button>
                                                 }
                                                 <button class="pam-btn-icon" title="Checkout credential"
-                                                        @onclick="@(() => OpenCheckout(c.Id, c.Name))">↗</button>
+                                                        @onclick="@(() => OpenCheckout(c.Id, c.Name))">&#x2197;</button>
                                             }
                                         }
                                         @if (isMyCheckout)
                                         {
                                             <button class="pam-btn-icon" title="Check in"
-                                                    @onclick="@(() => CheckinAsync(c.Id))">↙</button>
+                                                    @onclick="@(() => CheckinAsync(c.Id))">&#x2199;</button>
                                         }
                                         @if (c.Type == "UserPassword")
                                         {
                                             <button class="pam-btn-icon pam-btn-rotate" title="Rotate password"
-                                                    @onclick="@(() => OpenRotateModal(c.Id, c.Name))">↻</button>
+                                                    @onclick="@(() => OpenRotateModal(c.Id, c.Name))">&#x21BB;</button>
                                         }
                                         @if (!string.IsNullOrEmpty(c.DeviceId))
                                         {
                                             <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
-                                                    @onclick='@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))'>⌨</button>
+                                                    @onclick='@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))'>&#x2328;</button>
                                         }
                                     </div>
                                 </td>
