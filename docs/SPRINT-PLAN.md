@@ -389,7 +389,7 @@
 **Durum:** Tamamlandi
 
 | Item | Aciklama | Durum |
-|------|----------|—---|
+|------|----------|—|
 | Counter.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | Weather.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | MapAccessAssignmentEndpoints() | Eski model (Sprint 24 AssignedCredential ile superseded) — Program.cs'den kaldirildi | ✅ Tamamlandi |
@@ -611,9 +611,42 @@
 
 ---
 
+## ~~Sprint 40 - Security Fix: Governance Endpoint Hardening~~ ✅ TAMAMLANDI
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi — 3 HIGH security bulgu fix'lendi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #242 | [HIGH] /credentials/export audit log eksik (CWE-778) | security | ✅ Kapatildi |
+| #243 | [HIGH] AutoRotationService hata mesajlari sifre sizdirabilir (CWE-209) | security | ✅ Kapatildi |
+| #244 | [HIGH] stale-access endpoint sinarsiz sorgu OOM/DoS riski (CWE-400) | security | ✅ Kapatildi |
+
+**Ilerleme:** 3/3 (%100) ✅
+
+---
+
+## ~~Sprint 41 - MVP Feature: Session Recording Export & Download (#239)~~ ✅ TAMAMLANDI
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #239 | Session Recording Export & Download — Compliance Auditor Erisimi (RA #45) | MVP-SESSION | ✅ Kapatildi |
+
+**Sprint 41 Tamamlanan Bilesenler (2026-05-20):**
+- **SessionEndpoints.cs:** `GET /api/v1/sessions/{id}/export` — ZIP bundle: `session-{id}/metadata.json` (session details) + `recording.json` (SSH asciinema_v2) or `recording.bin` (other types); role-guard GlobalAdmin/Auditor/SessionAdmin; audit log `SESSION_RECORDING_EXPORTED`
+- **SessionEndpoints.cs:** `GET /api/v1/sessions/export/bulk` — multi-session ZIP of metadata.json files; limit clamped 1-500; filter by from/to/userId/deviceId; role-guard GlobalAdmin/Auditor; audit log `SESSION_RECORDING_BULK_EXPORTED`
+- **SessionPlayback.razor:** `@inject IJSRuntime JS` + `DownloadRecordingAsync()` → `JS.InvokeVoidAsync("open", url, "_self")` — Download button triggers real browser file download
+- **PamApiService.cs:** `GetSessionExportUrl(sessionId)` + `GetSessionBulkExportUrl(from, to, userId, deviceId, limit)` URL builder helpers
+- **RFP-CHECKLIST.md:** Remote Access #45 (session export) → PC
+
+**Ilerleme:** 5/5 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 39 tamamlandi.** Credential Governance + Export + Alerts implement edildi. 5 RFP item → PC.
-**Siradaki:** Sprint 40 — Backlog'da yeni priority:mvp issue bekleniyor. Security agent yeni issue acarsa critical/high once fix'le.
+**Sprint 41 tamamlandi.** Session Recording Export push'landi, #239 kapatildi.
+**Siradaki:** #241 Credential Automation Scripts, #240 Visual Screen Capture.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
