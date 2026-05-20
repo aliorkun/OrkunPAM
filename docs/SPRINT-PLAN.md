@@ -368,7 +368,7 @@
 
 **#207 Device Trust — Tamamlanan bilesenler (2026-05-18):**
 - `TrustedDevice` entity: DeviceFingerprint (SHA-256 of UA), UserId, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked, LastSeenAtUtc
-- DbContext: TrustedDevices DbSet + model config + unique index (UserId, DeviceFingerprint)
+- DbContext: TrustedDevices DbSet + model konfigurasyonu + unique index (UserId, DeviceFingerprint)
 - `DeviceTrustPolicySettings`: Enabled, RequireTrustedDevice, UnknownDeviceAction (Allow/StepUpAuth/Block), MaxTrustAgeDays, AutoRegisterOnLogin
 - `GET/PUT /api/v1/policy/device-trust` — policy CRUD (AdminPolicy)
 - `GET /api/v1/my/trusted-devices` — user's own devices
@@ -702,8 +702,37 @@
 
 ---
 
+## Sprint 32 - MFA Device Management (RFP MFA #12)
+**Tarih:** 20 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Item | Aciklama | Durum |
+|------|----------|-------|
+| MfaDeviceEndpoints.cs | GET /api/v1/my/mfa-devices + DELETE by-type/fido2/push | ✅ Tamamlandi |
+| Admin endpoints | GET/DELETE /api/v1/admin/users/{id}/mfa-devices/* (AdminPolicy) | ✅ Tamamlandi |
+| Program.cs | api.MapMfaDeviceEndpoints() kaydi | ✅ Tamamlandi |
+| PamApiService.cs | GetMyMfaDevicesAsync, RevokeMfaDeviceByTypeAsync, RevokeFido2DeviceAsync, RevokePushDeviceAsync + MfaDeviceDto | ✅ Tamamlandi |
+| SelfService.razor | "Security" sekmesi — MFA metod listesi + revoke butonlari | ✅ Tamamlandi |
+| RFP MFA #12 | MFA device management → PC | ✅ Guncellendi |
+
+**Tamamlanan Bilesenler (2026-05-20):**
+- `MfaDeviceEndpoints.cs`: Unified MFA device yonetimi — TOTP/EmailOTP/SMS/FIDO2/Push tum metodlari tek API'den yonetilebilir
+- `GET /api/v1/my/mfa-devices`: Kullanicinin aktif MFA metod listesi (TOTP, Email OTP, SMS, FIDO2 keys, Push devices)
+- `DELETE /api/v1/my/mfa-devices/by-type/{type}`: TOTP/email_otp/sms revoke
+- `DELETE /api/v1/my/mfa-devices/fido2/{credId}`: FIDO2 security key revoke (IsActive=false)
+- `DELETE /api/v1/my/mfa-devices/push/{deviceId}`: Push MFA device revoke (SystemConfig sil)
+- Admin endpoints: `GET/DELETE /api/v1/admin/users/{userId}/mfa-devices/*` — AdminPolicy ile herhangi kullanicinin MFA metodu yonetimi
+- Audit logging: MFA_TOTP_REVOKED, MFA_EMAIL_OTP_REVOKED, MFA_SMS_REVOKED, MFA_FIDO2_REVOKED, MFA_PUSH_REVOKED + admin varyantlari
+- `PamApiService.cs`: 4 yeni metot + `MfaDeviceDto` record
+- `SelfService.razor`: "Security" sekmesi — tum MFA metotlari tablo halinde, type badge (TOTP/Email OTP/SMS/FIDO2/Push), detail alani, revoke butonu; TOTP/SecurityKeys/PushDevices yonetim sayfalarına linkler
+- RFP MFA #12 (MFA device management) → PC
+
+**Ilerleme:** 6/6 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 31 tamamlandi.** Kullanici profil sayfasi + sifre degistirme eklendi. RFP Platform #15 kapandi.
+**Sprint 32 tamamlandi.** MFA Device Management eklendi. RFP MFA #12 kapandi.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
