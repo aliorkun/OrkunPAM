@@ -675,8 +675,35 @@
 
 ---
 
+## ~~Sprint 31 - User Profile + Password Change~~ ✅ TAMAMLANDI
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi — Kullanici profil sayfasi + sifre degistirme
+
+| Item | Aciklama | Durum |
+|------|----------|-------|
+| GET /api/v1/auth/me | Mevcut kullanicinin profil bilgilerini donduren endpoint | ✅ Tamamlandi |
+| PamApiService.GetMyProfileAsync | /api/v1/auth/me cagiran servis metodu | ✅ Tamamlandi |
+| PamApiService.ChangePasswordAsync | /api/v1/auth/change-password cagiran servis metodu | ✅ Tamamlandi |
+| UserProfileDto | Profil bilgileri icin DTO record | ✅ Tamamlandi |
+| SelfService.razor — Profile tab | Hesap bilgileri + sifre degistirme formu | ✅ Tamamlandi |
+| RFP Platform #15 | Kullanici sifre degistirme → PC | ✅ Guncellendi |
+
+**Tamamlanan Bilesenler (2026-05-20):**
+- `GET /api/v1/auth/me`: JWT'den userId cikararak kullanicinin profilini dondurur (username, email, displayName, authSource, status, mfaEnabled, mfaType, mustChangePassword, passwordLastChanged, passwordExpiresAt, lastLoginAtUtc, lastLoginIp, language, timezone, roles)
+- `PamApiService.GetMyProfileAsync()`: /api/v1/auth/me cagiran Blazor servis metodu
+- `PamApiService.ChangePasswordAsync(currentPw, newPw)`: /api/v1/auth/change-password ile hata mesaji ayiklayarak sonuc dondurur
+- `UserProfileDto` record: 17 alan, null-safe, List<string>? Roles
+- `SelfService.razor` "My Profile" sekmesi:
+  - Account Info karti: username, displayName, email, authSource, status, roles, MFA durumu, son giris, sifre gecmisi, timezone, dil
+  - Change Password karti: mevcut + yeni + onayla alanlar; sadece Local hesaplarda gosterilir; MustChangePassword uyari banner
+- Platform RFP #15 → PC
+
+**Ilerleme:** 5/5 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 30 tamamlandi.** 1 HIGH + 2 MEDIUM security bulgu kapatildi, RDP proxy admin termination eklendi.
+**Sprint 31 tamamlandi.** Kullanici profil sayfasi + sifre degistirme eklendi. RFP Platform #15 kapandi.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

@@ -828,6 +828,45 @@ public static class AuthEndpoints
                 }
             });
         }).RequireAuthorization("WindowsAuth").WithTags("Auth");
+
+        // === My Profile ===
+        app.MapGet("/api/v1/auth/me", async (OrkunPamDbContext db, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users
+                .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.Id == userId, context.RequestAborted);
+            if (user == null) return Results.NotFound();
+
+            var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = user.Id,
+                    username = user.Username,
+                    displayName = user.DisplayName,
+                    email = user.Email,
+                    authSource = user.AuthSource.ToString(),
+                    status = user.Status.ToString(),
+                    mfaEnabled = user.MfaEnabled,
+                    mfaType = user.MfaType.ToString(),
+                    mustChangePassword = user.MustChangePassword,
+                    passwordLastChanged = user.PasswordLastChanged,
+                    passwordExpiresAt = user.PasswordExpiresAt,
+                    lastLoginAtUtc = user.LastLoginAtUtc,
+                    lastLoginIp = user.LastLoginIp,
+                    language = user.Language,
+                    timezone = user.Timezone,
+                    roles
+                }
+            });
+        }).RequireAuthorization().WithTags("Auth");
     }
 }
 

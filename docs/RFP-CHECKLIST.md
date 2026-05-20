@@ -22,7 +22,7 @@
 | 12 | Solution shall have out of the box management capability for network devices and systems (Juniper, Cisco IOS, Cisco IOS- | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492) built-in server; Cisco/Juniper/Aruba CLI AAA via TCP :49 (#111) |
 | 13 | Solution shall support adapting to different brand/model devices and systems, which will be used in the future. |  |  |
 | 14 | Solution shall have out of the box support for script usage on NAS devices. |  |  |
-| 15 | Solution shall support users to change their passwords and force to create the passwords in a complex way as well as cha |  |  |
+| 15 | Solution shall support users to change their passwords and force to create the passwords in a complex way as well as cha | PC | AuthEndpoints.cs — POST /api/v1/auth/change-password (current pw + policy validation + history check + MustChangePassword flag reset); SelfService.razor "My Profile" tab — Change Password form with complexity hint; GET /api/v1/auth/me profile endpoint; PamApiService.ChangePasswordAsync + GetMyProfileAsync (Sprint 31) |
 | 16 | Solution shall support to be scaled to serve a carrier grade number of devices and users besides redundancy which lets 9 |  |  |
 | 17 | Solution shall support to active-active redundancy. |  |  |
 | 18 | Solution shall support disaster recovery. | PC | BackupService.cs — AES-256-GCM encrypted backup/restore, Hangfire scheduler, Blazor UI (#55) |

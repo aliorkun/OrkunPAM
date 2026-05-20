@@ -31,6 +31,7 @@
         @if (_mySessions != null) { <span class="pam-badge-count">@_mySessions.Count</span> }
     </button>
     <button class="pam-tab @(_tab == "jit" ? "active" : "")" @onclick="@(() => SetTab("jit"))">+ Request Access</button>
+    <button class="pam-tab @(_tab == "profile" ? "active" : "")" @onclick="@(() => SetTab("profile"))">My Profile</button>
 </div>
 
 @* ===== MY DEVICES ===== *@
@@ -350,6 +351,94 @@
     </div>
 }
 
+@* ===== MY PROFILE ===== *@
+@if (_tab == "profile")
+{
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+        @* --- Account Info Card --- *@
+        <div class="pam-card" style="flex:1;min-width:280px;max-width:440px">
+            <div class="pam-card-header">Account Information</div>
+            <div class="pam-card-body">
+                @if (_loading)
+                {
+                    <div class="pam-loading-text">Loading profile...</div>
+                }
+                else if (_profile == null)
+                {
+                    <div class="pam-empty">Could not load profile.</div>
+                }
+                else
+                {
+                    <table class="pam-table pam-table-compact">
+                        <tbody>
+                            <tr><td style="color:var(--pam-muted);width:140px">Username</td><td><strong>@_profile.Username</strong></td></tr>
+                            <tr><td style="color:var(--pam-muted)">Display Name</td><td>@(_profile.DisplayName ?? "—")</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Email</td><td>@(_profile.Email ?? "—")</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Auth Source</td><td><span class="pam-badge pam-badge-blue">@_profile.AuthSource</span></td></tr>
+                            <tr><td style="color:var(--pam-muted)">Status</td><td>
+                                @if (_profile.Status == "Active")
+                                { <span class="pam-badge pam-badge-green">Active</span> }
+                                else
+                                { <span class="pam-badge pam-badge-gray">@_profile.Status</span> }
+                            </td></tr>
+                            <tr><td style="color:var(--pam-muted)">Roles</td><td>
+                                @if (_profile.Roles != null)
+                                { @foreach (var r in _profile.Roles) { <span class="pam-badge pam-badge-purple" style="margin-right:4px">@r</span> } }
+                                else { <span class="pam-text-muted">—</span> }
+                            </td></tr>
+                            <tr><td style="color:var(--pam-muted)">MFA</td><td>
+                                @if (_profile.MfaEnabled)
+                                { <span class="pam-badge pam-badge-green">Enabled (@_profile.MfaType)</span> }
+                                else
+                                { <span class="pam-badge pam-badge-yellow">Disabled</span> }
+                            </td></tr>
+                            <tr><td style="color:var(--pam-muted)">Last Login</td><td>@(_profile.LastLoginAtUtc.HasValue ? _profile.LastLoginAtUtc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC" : "—")</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Password Changed</td><td>@(_profile.PasswordLastChanged.HasValue ? _profile.PasswordLastChanged.Value.ToString("yyyy-MM-dd") : "Never")</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Password Expires</td><td>@(_profile.PasswordExpiresAt.HasValue ? _profile.PasswordExpiresAt.Value.ToString("yyyy-MM-dd") : "Never")</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Timezone</td><td>@_profile.Timezone</td></tr>
+                            <tr><td style="color:var(--pam-muted)">Language</td><td>@_profile.Language</td></tr>
+                        </tbody>
+                    </table>
+                    @if (_profile.MustChangePassword)
+                    {
+                        <div class="pam-alert pam-alert-warning" style="margin-top:12px">You must change your password before continuing.</div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* --- Change Password Card --- *@
+        <div class="pam-card" style="flex:1;min-width:280px;max-width:380px">
+            <div class="pam-card-header">Change Password</div>
+            <div class="pam-card-body">
+                @if (_profile != null && _profile.AuthSource != "Local")
+                {
+                    <div class="pam-empty">Password change is only available for local accounts. Your account uses <strong>@_profile.AuthSource</strong> authentication.</div>
+                }
+                else
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Current Password</label>
+                        <input type="password" class="pam-input" @bind="_pwCurrent" autocomplete="current-password" />
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">New Password</label>
+                        <input type="password" class="pam-input" @bind="_pwNew" autocomplete="new-password" />
+                        <span class="pam-text-muted" style="font-size:0.8em">Min 12 chars, include uppercase, lowercase, number and special character.</span>
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Confirm New Password</label>
+                        <input type="password" class="pam-input" @bind="_pwConfirm" autocomplete="new-password" />
+                    </div>
+                    <button class="pam-btn pam-btn-primary" @onclick="DoChangePasswordAsync" disabled="@_submitting">
+                        @(_submitting ? "Saving..." : "Change Password")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "devices";
     private bool _loading;
@@ -380,6 +469,11 @@
     private int _jitDuration = 60;
     private string _jitReason = string.Empty;
 
+    private UserProfileDto? _profile;
+    private string _pwCurrent  = string.Empty;
+    private string _pwNew      = string.Empty;
+    private string _pwConfirm  = string.Empty;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -396,6 +490,7 @@
         else if (tab == "vault") await LoadCredentialsAsync();
         else if (tab == "sessions") await LoadMySessionsAsync();
         else if (tab == "requests") await LoadMyRequestsAsync();
+        else if (tab == "profile") await LoadProfileAsync();
     }
 
     private async Task LoadDevicesAsync()
@@ -518,6 +613,39 @@
         _submitting = false;
         if (ok) { _success = "Session ended."; await LoadMySessionsAsync(); }
         else _error = "Failed to end session.";
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true;
+        _profile = await Api.GetMyProfileAsync();
+        _loading = false;
+    }
+
+    private async Task DoChangePasswordAsync()
+    {
+        _error = null; _success = null;
+        if (string.IsNullOrWhiteSpace(_pwCurrent))
+        { _error = "Current password is required."; return; }
+        if (string.IsNullOrWhiteSpace(_pwNew) || _pwNew.Length < 8)
+        { _error = "New password must be at least 8 characters."; return; }
+        if (_pwNew != _pwConfirm)
+        { _error = "New passwords do not match."; return; }
+
+        _submitting = true;
+        var (ok, err) = await Api.ChangePasswordAsync(_pwCurrent, _pwNew);
+        _submitting = false;
+
+        if (ok)
+        {
+            _success = "Password changed successfully.";
+            _pwCurrent = _pwNew = _pwConfirm = string.Empty;
+            await LoadProfileAsync();
+        }
+        else
+        {
+            _error = err ?? "Password change failed.";
+        }
     }
 
     private static string JitStatusClass(string status) => status switch

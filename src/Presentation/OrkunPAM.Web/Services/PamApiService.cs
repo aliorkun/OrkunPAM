@@ -2625,6 +2625,42 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // === User Profile (#231 — Sprint 31) ===
+    public async Task<UserProfileDto?> GetMyProfileAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.GetAsync("/api/v1/auth/me");
+            if (!resp.IsSuccessStatusCode) return null;
+            var body = await resp.Content.ReadFromJsonAsync<SingleResult<UserProfileDto>>(JsonOpts);
+            return body?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<(bool Success, string? Error)> ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/change-password",
+                new { currentPassword, newPassword }, JsonOpts);
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync();
+            try
+            {
+                var json = JsonSerializer.Deserialize<JsonElement>(body, JsonOpts);
+                string? msg = null;
+                if (json.TryGetProperty("errors", out var errArr) && errArr.GetArrayLength() > 0)
+                    msg = errArr[0].GetString();
+                return (false, msg ?? "Password change failed");
+            }
+            catch { return (false, "Password change failed"); }
+        }
+        catch { return (false, "Request failed"); }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3723,3 +3759,21 @@ public record AssignedCredentialDto(
     DateTime  CreatedAtUtc);
 
 public record LiveStreamChunkDto(string Text, int NewOffset);
+
+public record UserProfileDto(
+    string    Id,
+    string    Username,
+    string?   DisplayName,
+    string?   Email,
+    string    AuthSource,
+    string    Status,
+    bool      MfaEnabled,
+    string    MfaType,
+    bool      MustChangePassword,
+    DateTime? PasswordLastChanged,
+    DateTime? PasswordExpiresAt,
+    DateTime? LastLoginAtUtc,
+    string?   LastLoginIp,
+    string    Language,
+    string    Timezone,
+    List<string>? Roles);
