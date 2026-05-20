@@ -2734,7 +2734,21 @@ public sealed class PamApiService
         catch { return (false, "Request failed"); }
     }
 
+    // === Session Compliance (#236) ===
+    public async Task<SessionComplianceSummaryDto?> GetSessionComplianceSummaryAsync(int days = 30)
+    {
+        var result = await GetAsync<SingleResult<SessionComplianceSummaryDto>>(
+            $"/api/v1/sessions/compliance/summary?days={days}");
+        return result?.Data;
+    }
+
     // === Credential Risk Scoring (#232) ===
+    public async Task<RotationFailuresResponseDto?> GetRotationFailuresAsync()
+    {
+        var result = await GetAsync<SingleResult<RotationFailuresResponseDto>>("/api/v1/vault/credentials/rotation-failures");
+        return result?.Data;
+    }
+
     public async Task<CredentialRiskSummaryDto?> GetCredentialRiskSummaryAsync()
     {
         var result = await GetAsync<SingleResult<CredentialRiskSummaryDto>>("/api/v1/vault/credentials/risk-summary");
@@ -2826,7 +2840,8 @@ public record SessionDto(
     string?   TargetIpAddress,
     int?      TargetPort,
     DateTime  StartedAtUtc,
-    DateTime? EndedAtUtc);
+    DateTime? EndedAtUtc,
+    string?   Tags = null);
 
 public record CredentialDto(
     string    Id,
@@ -2844,7 +2859,10 @@ public record CredentialDto(
     bool      RequiresApproval,
     int       RiskScore = 0,
     string    RiskLevel = "Low",
-    DateTime? RiskScoredAtUtc = null);
+    DateTime? RiskScoredAtUtc = null,
+    int       RotationFailureCount = 0,
+    string?   LastRotationError = null,
+    DateTime? LastRotationFailedAtUtc = null);
 
 public record FolderDto(
     string  Id,
@@ -3918,3 +3936,34 @@ public record CommandFilterRuleDto(
     int     RiskScore,
     string? Justification,
     int     SortOrder);
+
+// Session Compliance DTOs (#236)
+public record ComplianceViolatingUserDto(string UserId, string Username, int ViolationCount);
+public record ComplianceViolatingDeviceDto(string DeviceId, string Hostname, int ViolationCount);
+public record SessionComplianceSummaryDto(
+    int                                   PeriodDays,
+    DateTime                              Since,
+    int                                   TotalSessions,
+    int                                   ViolatedSessions,
+    int                                   CleanSessions,
+    double                                ComplianceRate,
+    int                                   AdminTerminated,
+    int                                   BlockedCommands,
+    Dictionary<string, int>?              ViolationTypes,
+    List<ComplianceViolatingUserDto>?     TopViolatingUsers,
+    List<ComplianceViolatingDeviceDto>?   TopViolatingDevices);
+
+// Rotation failure alert DTOs (#235)
+public record RotationFailureItemDto(
+    string    Id,
+    string    Name,
+    string?   Username,
+    int       RotationFailureCount,
+    string?   LastRotationError,
+    DateTime? LastRotationFailedAtUtc,
+    DateTime? LastRotatedAtUtc,
+    string?   FolderName);
+
+public record RotationFailuresResponseDto(
+    int                         Count24h,
+    List<RotationFailureItemDto> Items);

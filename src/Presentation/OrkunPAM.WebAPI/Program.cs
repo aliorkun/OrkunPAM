@@ -510,6 +510,7 @@ try
     api.MapMfaDeviceEndpoints();
     api.MapCredentialRiskEndpoints();
     api.MapCommandFilterPolicyEndpoints();
+    api.MapSessionComplianceEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

@@ -540,9 +540,54 @@
 
 ---
 
+## Sprint 37 - Credential Rotation Failure Alerts (PV #33)
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #235 | Credential Rotation Failure Alerts — Email + Dashboard Notification | MVP-VAULT | ✅ Tamamlandi |
+| #237 | Cache Invalidation: CommandFilterPolicy mutations | security | ✅ Tamamlandi |
+| #238 | Missing `action` field in /effective endpoint | bug | ✅ Tamamlandi |
+
+**Sprint 37 Tamamlanan Bilesenler (2026-05-20):**
+- **Credential.cs entity:** `LastRotationError`, `RotationFailureCount`, `LastRotationFailedAtUtc` alanlari eklendi
+- **Migration 20260520_AddCredentialRotationFailure:** 3 yeni kolon Credentials tablosuna eklendi
+- **AutoRotationService.cs:** Rotasyon basarisiz olduğunda `IEmailService` ile VaultAdmin/GlobalAdmin rollerine email bildirimi
+- **CredentialRiskEndpoints.cs:** `GET /api/v1/vault/credentials/rotation-failures` endpoint eklendi
+- **Home.razor:** "Rotation Failures (24h)" stat card + son 5 rotation failure widget
+- **Vault.razor:** Başarısiz rotasyon için kirmizi "Failed" badge + tooltip
+- **VaultEndpoints.cs:** Projeksiyonlara `RotationFailureCount`, `LastRotationError`, `LastRotationFailedAtUtc` eklendi
+- **PamApiService.cs:** `CredentialDto` +3 alan, `GetRotationFailuresAsync()`, `RotationFailureItemDto`, `RotationFailuresResponseDto`
+- **Cache fixes (#237/#238):** CommandFilterPolicy mutation'lari cache temizliyor, /effective endpoint'e `action` alani eklendi
+
+**Ilerleme:** 3/3 (%100) ✅
+
+---
+
+## Sprint 38 - Session Compliance View (RA #34 + #35)
+**Tarih:** 20 Mayis 2026
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #236 | Session Compliance View — Policy Violation Summary Dashboard | MVP-SESSIONS | ✅ Tamamlandi |
+
+**Sprint 38 Tamamlanan Bilesenler (2026-05-20):**
+- **SessionComplianceEndpoints.cs (yeni):** 3 endpoint — `/summary`, `/violations`, `/governance-report`
+- **Sessions.razor:** "Compliance" sekmesi eklendi — compliance rate, stat cards, violation types, top users/devices
+- **CSV Export:** Compliance raporu CSV olarak indirilebilir
+- **Program.cs:** `MapSessionComplianceEndpoints()` kayit edildi
+- **PamApiService.cs:** `GetSessionComplianceSummaryAsync()`, `SessionComplianceSummaryDto`, `ComplianceViolatingUserDto`, `ComplianceViolatingDeviceDto`
+- **SessionDto:** `Tags` alani eklendi (optional, mevcut kod uyumlulugu)
+
+**Ilerleme:** 1/1 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 36 tamamlandi.** #234 CommandFilterPolicy DB Integration implement edildi.
-**Siradaki:** Sprint 37 — Backlog'daki bir sonraki priority:mvp issue (#235 Credential Rotation Failure Alerts veya #236 Session Compliance View)
+**Sprint 38 tamamlandi.** #236 Session Compliance View implement edildi.
+**Siradaki:** Sprint 39 — Backlog'da yeni priority:mvp issue bekleniyor. Security agent yeni issue acarsa critical/high once fix'le.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
