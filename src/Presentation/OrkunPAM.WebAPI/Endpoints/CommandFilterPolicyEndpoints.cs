@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Enums;
@@ -35,7 +36,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // POST — create policy
-        group.MapPost("/", async (CreateCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapPost("/", async (CreateCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { success = false, errors = new[] { "Name is required" } });
@@ -55,6 +56,8 @@ public static class CommandFilterPolicyEndpoints
 
             db.CommandFilterPolicies.Add(policy);
             await db.SaveChangesAsync();
+
+            cache.Remove("policy:session:effective");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "COMMAND_FILTER_POLICY_CREATED", null, null, ip,
@@ -93,7 +96,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // PUT {id} — update policy metadata
-        group.MapPut("/{id:guid}", async (Guid id, UpdateCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapPut("/{id:guid}", async (Guid id, UpdateCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             var policy = await db.CommandFilterPolicies.FindAsync(id);
             if (policy == null)
@@ -109,6 +112,8 @@ public static class CommandFilterPolicyEndpoints
 
             await db.SaveChangesAsync();
 
+            cache.Remove("policy:session:effective");
+
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "COMMAND_FILTER_POLICY_UPDATED", null, null, ip,
                 "CommandFilterPolicy", policy.Id.ToString(), new { policy.Name, policy.IsEnabled });
@@ -117,7 +122,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // DELETE {id}
-        group.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             var policy = await db.CommandFilterPolicies.FindAsync(id);
             if (policy == null)
@@ -125,6 +130,8 @@ public static class CommandFilterPolicyEndpoints
 
             db.CommandFilterPolicies.Remove(policy);
             await db.SaveChangesAsync();
+
+            cache.Remove("policy:session:effective");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "COMMAND_FILTER_POLICY_DELETED", null, null, ip,
@@ -134,7 +141,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // PUT {id}/toggle — enable / disable
-        group.MapPut("/{id:guid}/toggle", async (Guid id, ToggleCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapPut("/{id:guid}/toggle", async (Guid id, ToggleCommandFilterPolicyRequest req, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             var policy = await db.CommandFilterPolicies.FindAsync(id);
             if (policy == null)
@@ -142,6 +149,8 @@ public static class CommandFilterPolicyEndpoints
 
             policy.IsEnabled = req.IsEnabled;
             await db.SaveChangesAsync();
+
+            cache.Remove("policy:session:effective");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var action = req.IsEnabled ? "COMMAND_FILTER_POLICY_ENABLED" : "COMMAND_FILTER_POLICY_DISABLED";
@@ -168,7 +177,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // POST {id}/rules — add rule
-        group.MapPost("/{id:guid}/rules", async (Guid id, AddCommandFilterRuleRequest req, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapPost("/{id:guid}/rules", async (Guid id, AddCommandFilterRuleRequest req, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             var policy = await db.CommandFilterPolicies.FindAsync(id);
             if (policy == null)
@@ -202,6 +211,8 @@ public static class CommandFilterPolicyEndpoints
             db.CommandFilterPolicyRules.Add(rule);
             await db.SaveChangesAsync();
 
+            cache.Remove("policy:session:effective");
+
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "COMMAND_FILTER_RULE_ADDED", null, null, ip,
                 "CommandFilterPolicyRule", rule.Id.ToString(),
@@ -212,7 +223,7 @@ public static class CommandFilterPolicyEndpoints
         });
 
         // DELETE {id}/rules/{ruleId}
-        group.MapDelete("/{id:guid}/rules/{ruleId:guid}", async (Guid id, Guid ruleId, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+        group.MapDelete("/{id:guid}/rules/{ruleId:guid}", async (Guid id, Guid ruleId, OrkunPamDbContext db, IAuditService audit, IMemoryCache cache, HttpContext ctx) =>
         {
             var rule = await db.CommandFilterPolicyRules
                 .FirstOrDefaultAsync(r => r.Id == ruleId && r.PolicyId == id);
@@ -222,6 +233,8 @@ public static class CommandFilterPolicyEndpoints
 
             db.CommandFilterPolicyRules.Remove(rule);
             await db.SaveChangesAsync();
+
+            cache.Remove("policy:session:effective");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "COMMAND_FILTER_RULE_REMOVED", null, null, ip,
@@ -249,7 +262,7 @@ public static class CommandFilterPolicyEndpoints
                 return Results.Ok(new { success = true, data = new { mode = 0, rulesJson = (string?)null } });
 
             var rulesJson = JsonSerializer.Serialize(
-                policy.Rules.Select(r => new { pattern = r.Pattern, isRegex = r.IsRegex, riskScore = (decimal)r.RiskScore / 10m }));
+                policy.Rules.Select(r => new { pattern = r.Pattern, isRegex = r.IsRegex, riskScore = (decimal)r.RiskScore / 10m, action = r.Action ?? "Deny" }));
 
             return Results.Ok(new
             {
