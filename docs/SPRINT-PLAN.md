@@ -731,8 +731,51 @@
 
 ---
 
+## Sprint 33 - Security Fix: MFA + Geolocation + Enrollment
+**Tarih:** 20 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #227 | [HIGH] Admin MFA revoke — tip kontrolu eksik (CWE-287) | security | ✅ Kapatildi |
+| #228 | [MEDIUM] Geolocation IP lookup HTTP → HTTPS (CWE-319) | security | ✅ Kapatildi |
+| #229 | [MEDIUM] MFA enrollment GET endpoint — rate limiting + idempotency eksik | security | ✅ Kapatildi |
+
+**Sprint 33 Tamamlanan Bilesenler (2026-05-20):**
+- **#227 fix [HIGH]:** `MfaDeviceEndpoints.cs` admin revoke `switch` — tum case'lere `MfaType != X` kontrolu eklendi; tip eslesmezse 400 BadRequest doner; audit log artik dogru tip yaziyor
+- **#228 fix [MEDIUM]:** `AuthEndpoints.cs` `GeoLocationHelper.LookupCountryCodeAsync` — `http://ip-api.com/` → `https://ip-api.com/` (CWE-319 cleartext transmission kapatildi)
+- **#229 fix [MEDIUM]:** `AuthEndpoints.cs` MFA enrollment GET endpoint — `.RequireRateLimiting("auth")` eklendi; idempotent davranis: `user.MfaSecret != null` ise yeni secret uretilmez, mevcut secret decrypt + QR yeniden olusturulur (secret overwrite / DB flood onlendi); `ITotpService.RebuildSecretAndQr` metodu eklendi
+
+**Ilerleme:** 3/3 (%100) ✅
+
+---
+
+## Sprint 34 - MVP Feature: Credential Risk Scoring (#232)
+**Tarih:** 20 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #232 | [MVP] Credential Risk Scoring — Vault Kimlik Bilgisi Risk Skoru | product | ✅ Kapatildi |
+
+**Sprint 34 Tamamlanan Bilesenler (2026-05-20):**
+- **Credential entity:** `ExpiresAtUtc`, `RiskScore`, `RiskLevel`, `RiskScoredAtUtc` alanlari eklendi
+- **Migration:** `20260520_AddCredentialRiskScore.cs` — 4 yeni kolon + IX_Credentials_RiskLevel index
+- **CredentialRiskScoringService** (BackgroundService, gunluk): 7 risk faktoru hesaplama — rotasyon yasi, hic rotasyon yok, coklu assignment, orphaned, sifre suresi dolmus, basarisiz session, admin/root kullanici adi
+- **CredentialRiskEndpoints.cs:** 3 endpoint — risk-summary, high-risk (AdminPolicy), rescore (AdminPolicy)
+- **Program.cs:** `AddHostedService<CredentialRiskScoringService>` + `MapCredentialRiskEndpoints()` kaydi
+- **PamApiService.cs:** `CredentialDto` +3 alan (RiskScore/RiskLevel/RiskScoredAtUtc) + `GetCredentialRiskSummaryAsync` + `GetHighRiskCredentialsAsync` + `RescoreCredentialAsync` + `CredentialRiskSummaryDto` + `HighRiskCredentialDto`
+- **Vault.razor:** Risk badge kolonu (renk kodlu: Yesil/Sari/Kirmizi/Mor)
+- **Home.razor:** "High Risk Credentials" stat card + top-5 tablosu widget
+- RFP Password Vault #25 + #31 → PC, Reporting #14 guclendirildi, Platform #39 guclendirildi
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 32 tamamlandi.** MFA Device Management eklendi. RFP MFA #12 kapandi.
+**Sprint 34 tamamlandi.** #232 Credential Risk Scoring implement edildi ve push edildi.
+**Siradaki:** Sprint 35 — #231 Session Command Filter Admin UI (MVP)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

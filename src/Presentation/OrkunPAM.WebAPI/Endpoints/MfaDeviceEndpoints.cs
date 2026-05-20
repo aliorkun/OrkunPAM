@@ -150,6 +150,8 @@ public static class MfaDeviceEndpoints
             switch (type.ToLowerInvariant())
             {
                 case "totp":
+                    if (user.MfaType != MfaType.Totp)
+                        return Results.BadRequest(new { success = false, errors = new[] { "User's active MFA type is not TOTP" } });
                     user.MfaEnabled = false;
                     user.MfaSecret = null;
                     await db.SaveChangesAsync();
@@ -157,13 +159,17 @@ public static class MfaDeviceEndpoints
                     return Results.Ok(new { success = true, data = "TOTP revoked by admin" });
 
                 case "email_otp":
-                    if (user.MfaType == MfaType.EmailOtp) user.MfaEnabled = false;
+                    if (user.MfaType != MfaType.EmailOtp)
+                        return Results.BadRequest(new { success = false, errors = new[] { "User's active MFA type is not Email OTP" } });
+                    user.MfaEnabled = false;
                     await db.SaveChangesAsync();
                     _ = audit.LogAsync("MFA", "ADMIN_MFA_EMAIL_OTP_REVOKED", adminId, actorName, ip, "User", userId.ToString(), details);
                     return Results.Ok(new { success = true, data = "Email OTP revoked by admin" });
 
                 case "sms":
-                    if (user.MfaType == MfaType.Sms) user.MfaEnabled = false;
+                    if (user.MfaType != MfaType.Sms)
+                        return Results.BadRequest(new { success = false, errors = new[] { "User's active MFA type is not SMS OTP" } });
+                    user.MfaEnabled = false;
                     await db.SaveChangesAsync();
                     _ = audit.LogAsync("MFA", "ADMIN_MFA_SMS_REVOKED", adminId, actorName, ip, "User", userId.ToString(), details);
                     return Results.Ok(new { success = true, data = "SMS OTP revoked by admin" });

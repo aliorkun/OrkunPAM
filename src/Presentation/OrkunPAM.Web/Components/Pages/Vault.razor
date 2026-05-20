@@ -87,6 +87,7 @@
                             <th>Name</th>
                             <th>Username</th>
                             <th>Type</th>
+                            <th>Risk</th>
                             <th>Status</th>
                             <th>Checkout Expires</th>
                             <th>Actions</th>
@@ -112,6 +113,18 @@
                                 </td>
                                 <td>@(c.Username ?? "—")</td>
                                 <td><span class="pam-badge">@c.Type</span></td>
+                                <td>
+                                    @{
+                                        var riskColor = c.RiskLevel switch {
+                                            "Critical" => "#6b21a8",
+                                            "High"     => "#dc2626",
+                                            "Medium"   => "#d97706",
+                                            _          => "#16a34a"
+                                        };
+                                    }
+                                    <span class="pam-badge" style="background:@riskColor;color:white;font-size:0.72em"
+                                          title="Risk score: @c.RiskScore">@c.RiskLevel</span>
+                                </td>
                                 <td>
                                     @if (isCheckedOut)
                                     {

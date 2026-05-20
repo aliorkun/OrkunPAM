@@ -2661,6 +2661,25 @@ public sealed class PamApiService
         catch { return (false, "Request failed"); }
     }
 
+    // === Credential Risk Scoring (#232) ===
+    public async Task<CredentialRiskSummaryDto?> GetCredentialRiskSummaryAsync()
+    {
+        var result = await GetAsync<SingleResult<CredentialRiskSummaryDto>>("/api/v1/vault/credentials/risk-summary");
+        return result?.Data;
+    }
+
+    public async Task<List<HighRiskCredentialDto>?> GetHighRiskCredentialsAsync()
+    {
+        var result = await GetAsync<ListResult<HighRiskCredentialDto>>("/api/v1/vault/credentials/high-risk");
+        return result?.Data;
+    }
+
+    public async Task<bool> RescoreCredentialAsync(string id)
+    {
+        var resp = await _http.PostAsync($"/api/v1/vault/credentials/{id}/risk/rescore", null);
+        return resp.IsSuccessStatusCode;
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2748,7 +2767,10 @@ public record CredentialDto(
     string?   CheckedOutByUserId,
     DateTime? CheckOutExpiresUtc,
     DateTime? LastRotatedAtUtc,
-    bool      RequiresApproval);
+    bool      RequiresApproval,
+    int       RiskScore = 0,
+    string    RiskLevel = "Low",
+    DateTime? RiskScoredAtUtc = null);
 
 public record FolderDto(
     string  Id,
@@ -3777,3 +3799,16 @@ public record UserProfileDto(
     string    Language,
     string    Timezone,
     List<string>? Roles);
+
+// Credential Risk Scoring DTOs (#232)
+public record CredentialRiskSummaryDto(int Critical, int High, int Medium, int Low, int Total);
+public record HighRiskCredentialDto(
+    string    Id,
+    string    Name,
+    string?   Username,
+    int       RiskScore,
+    string    RiskLevel,
+    DateTime? RiskScoredAtUtc,
+    DateTime? LastRotatedAtUtc,
+    DateTime? ExpiresAtUtc,
+    string?   FolderName);

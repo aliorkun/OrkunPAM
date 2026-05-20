@@ -235,20 +235,32 @@ public static class AuthEndpoints
             if (user == null || user.MfaEnrollmentTokenExpiry == null || user.MfaEnrollmentTokenExpiry < DateTime.UtcNow)
                 return Results.BadRequest(new { success = false, error = "Token expired or invalid." });
 
-            var (secret, qrUri) = totp.GenerateSecret(user.Username);
-            var secretBytes = TotpService.Base32Decode(secret);
-            try
+            string secret;
+            string qrUri;
+            // Idempotent: only generate a new secret if one doesn't exist yet
+            if (user.MfaSecret == null)
             {
-                var encResult = vault.Encrypt(secretBytes, "MfaSecret");
-                if (encResult.IsFailure) return Results.Problem("Failed to protect MFA secret");
-                user.MfaSecret = encResult.Value;
+                (secret, qrUri) = totp.GenerateSecret(user.Username);
+                var secretBytes = TotpService.Base32Decode(secret);
+                try
+                {
+                    var encResult = vault.Encrypt(secretBytes, "MfaSecret");
+                    if (encResult.IsFailure) return Results.Problem("Failed to protect MFA secret");
+                    user.MfaSecret = encResult.Value;
+                }
+                finally { CryptographicOperations.ZeroMemory(secretBytes); }
+                await db.SaveChangesAsync();
             }
-            finally { CryptographicOperations.ZeroMemory(secretBytes); }
-
-            await db.SaveChangesAsync();
+            else
+            {
+                var decResult = vault.Decrypt(user.MfaSecret);
+                if (decResult.IsFailure) return Results.Problem("Failed to read MFA secret");
+                try { (secret, qrUri) = totp.RebuildSecretAndQr(user.Username, decResult.Value); }
+                finally { CryptographicOperations.ZeroMemory(decResult.Value); }
+            }
 
             return Results.Ok(new { success = true, data = new { username = user.Username, secret, qrUri } });
-        }).AllowAnonymous().WithTags("Auth");
+        }).AllowAnonymous().WithTags("Auth").RequireRateLimiting("auth");
 
         // POST /api/v1/auth/mfa/enrollment/confirm — validate token + TOTP code, enable MFA
         app.MapPost("/api/v1/auth/mfa/enrollment/confirm", async (MfaEnrollmentConfirmRequest req,
@@ -1012,7 +1024,7 @@ internal static class GeoLocationHelper
         try
         {
             var json = await GeoClient.GetStringAsync(
-                $"http://ip-api.com/json/{Uri.EscapeDataString(ip)}?fields=status,countryCode");
+                $"https://ip-api.com/json/{Uri.EscapeDataString(ip)}?fields=status,countryCode");
             var r = JsonSerializer.Deserialize<IpApiResult>(json, JsonOpts);
             return r?.Status == "success" ? r.CountryCode : null;
         }

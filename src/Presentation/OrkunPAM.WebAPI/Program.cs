@@ -152,6 +152,9 @@ try
     // === Threat Intelligence Feed (#206) ===
     builder.Services.AddHostedService<OrkunPAM.Persistence.Services.ThreatFeedService>();
 
+    // === Credential Risk Scoring (#232) ===
+    builder.Services.AddHostedService<OrkunPAM.Persistence.Services.CredentialRiskScoringService>();
+
     // === Session Recording Playback ===
     builder.Services.AddScoped<OrkunPAM.Persistence.Services.IRecordingPlaybackService, OrkunPAM.Persistence.Services.RecordingPlaybackService>();
 
@@ -505,6 +508,7 @@ try
     api.MapDeviceRealmEndpoints();
     api.MapAssignedCredentialEndpoints();
     api.MapMfaDeviceEndpoints();
+    api.MapCredentialRiskEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

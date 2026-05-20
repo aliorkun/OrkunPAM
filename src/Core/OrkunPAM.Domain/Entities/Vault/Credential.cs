@@ -45,6 +45,13 @@ public class Credential : AuditableEntity
     public CredentialStatus Status { get; set; } = CredentialStatus.Active;
     public int Version { get; set; } = 1;
 
+    public DateTime? ExpiresAtUtc { get; set; }
+
+    // Risk scoring (#232)
+    public int RiskScore { get; set; }
+    public string RiskLevel { get; set; } = "Low";
+    public DateTime? RiskScoredAtUtc { get; set; }
+
     public ICollection<CredentialPermission> Permissions { get; set; } = new List<CredentialPermission>();
     public ICollection<PasswordHistory> PasswordHistories { get; set; } = new List<PasswordHistory>();
 

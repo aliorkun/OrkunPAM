@@ -12,6 +12,9 @@ public interface ITotpService
 
     /// <summary>Generate current TOTP code (for testing/SMS).</summary>
     string GenerateCode(byte[] secret);
+
+    /// <summary>Rebuild the base32 secret string and QR URI from an existing secret byte array (idempotent re-display).</summary>
+    (string Secret, string QrUri) RebuildSecretAndQr(string username, byte[] secretBytes, string issuer = "OrkunPAM");
 }
 
 /// <summary>
@@ -57,6 +60,13 @@ public sealed class TotpService : ITotpService
 
     public string GenerateCode(byte[] secret) =>
         ComputeTotp(secret, GetCurrentTimeStep());
+
+    public (string Secret, string QrUri) RebuildSecretAndQr(string username, byte[] secretBytes, string issuer = "OrkunPAM")
+    {
+        var base32Secret = Base32Encode(secretBytes);
+        var uri = $"otpauth://totp/{Uri.EscapeDataString(issuer)}:{Uri.EscapeDataString(username)}?secret={base32Secret}&issuer={Uri.EscapeDataString(issuer)}&algorithm=SHA1&digits={CodeLength}&period={TimeStep}";
+        return (base32Secret, uri);
+    }
 
     private static long GetCurrentTimeStep() =>
         DateTimeOffset.UtcNow.ToUnixTimeSeconds() / TimeStep;

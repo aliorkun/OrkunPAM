@@ -46,6 +46,13 @@
             <div class="pam-stat-label">Pending Approvals</div>
         </div>
     </div>
+    <div class="pam-stat-card pam-stat-red">
+        <div class="pam-stat-icon">⚠</div>
+        <div class="pam-stat-body">
+            <div class="pam-stat-value">@((_riskSummary != null ? _riskSummary.Critical + _riskSummary.High : 0).ToString())</div>
+            <div class="pam-stat-label">High Risk Credentials</div>
+        </div>
+    </div>
 </div>
 
 <div class="pam-row">
@@ -93,6 +100,38 @@
         </div>
     </div>
 
+    <!-- High Risk Credentials Widget (#232) -->
+    @if (_highRiskCreds != null && _highRiskCreds.Count > 0)
+    {
+        <div class="pam-card" style="margin-bottom:1.25rem;width:100%">
+            <div class="pam-card-header">
+                <h3 class="pam-card-title">⚠ High Risk Credentials</h3>
+                <a href="/vault" class="pam-link">Open Vault</a>
+            </div>
+            <div class="pam-card-body">
+                <table class="pam-table">
+                    <thead>
+                        <tr><th>Name</th><th>Username</th><th>Risk</th><th>Score</th><th>Folder</th><th>Last Rotated</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cr in _highRiskCreds.Take(5))
+                        {
+                            var rColor = cr.RiskLevel switch { "Critical" => "#6b21a8", "High" => "#dc2626", _ => "#d97706" };
+                            <tr>
+                                <td><strong>@cr.Name</strong></td>
+                                <td>@(cr.Username ?? "—")</td>
+                                <td><span class="pam-badge" style="background:@rColor;color:white;font-size:0.72em">@cr.RiskLevel</span></td>
+                                <td>@cr.RiskScore</td>
+                                <td>@(cr.FolderName ?? "—")</td>
+                                <td>@(cr.LastRotatedAtUtc.HasValue ? cr.LastRotatedAtUtc.Value.ToString("yyyy-MM-dd") : "Never")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
     <!-- Quick Actions -->
     <div class="pam-card pam-card-sm">
         <div class="pam-card-header">
@@ -139,6 +178,8 @@
     private int? _totalCredentials;
     private int? _pendingApprovals;
     private List<SessionDto>? _sessions;
+    private CredentialRiskSummaryDto? _riskSummary;
+    private List<HighRiskCredentialDto>? _highRiskCreds;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -165,6 +206,9 @@
 
         var sessions = await Api.GetSessionsAsync(pageSize: 5);
         _sessions = sessions?.Data ?? [];
+
+        try { _riskSummary = await Api.GetCredentialRiskSummaryAsync(); } catch { }
+        try { _highRiskCreds = await Api.GetHighRiskCredentialsAsync(); } catch { }
 
         StateHasChanged();
     }
