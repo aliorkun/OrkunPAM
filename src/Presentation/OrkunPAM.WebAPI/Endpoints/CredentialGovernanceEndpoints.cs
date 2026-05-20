@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using System.Security.Claims;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -55,6 +57,7 @@ public static class CredentialGovernanceEndpoints
         app.MapGet("/api/v1/vault/governance/access-matrix", async (
             OrkunPamDbContext db, int page = 1, int pageSize = 50) =>
         {
+            pageSize = Math.Clamp(pageSize, 1, 500);
             var query = db.AssignedCredentials
                 .Include(a => a.Credential).ThenInclude(c => c.Folder)
                 .Include(a => a.DeviceGroup)
@@ -117,19 +120,27 @@ public static class CredentialGovernanceEndpoints
             return Results.Ok(new { success = true, data = result, meta = new { page, pageSize, total } });
         }).RequireAuthorization("AdminPolicy").WithTags("Vault");
 
-        // GET /api/v1/vault/governance/stale-access?inactiveDays=90
+        // GET /api/v1/vault/governance/stale-access?inactiveDays=90&page=1&pageSize=200
         app.MapGet("/api/v1/vault/governance/stale-access", async (
-            OrkunPamDbContext db, int inactiveDays = 90) =>
+            OrkunPamDbContext db, int inactiveDays = 90, int page = 1, int pageSize = 200) =>
         {
+            pageSize = Math.Clamp(pageSize, 1, 500);
+            inactiveDays = Math.Clamp(inactiveDays, 1, 365);
             var cutoff = DateTime.UtcNow.AddDays(-inactiveDays);
 
-            var assignments = await db.AssignedCredentials
+            var baseQuery = db.AssignedCredentials
                 .Include(a => a.Credential)
                 .Where(a => a.IsEnabled && a.PrincipalType == PrincipalType.User)
+                .OrderBy(a => a.CreatedAtUtc);
+
+            var totalAssignments = await baseQuery.CountAsync();
+            var assignments = await baseQuery
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             if (assignments.Count == 0)
-                return Results.Ok(new { success = true, data = Array.Empty<object>(), total = 0 });
+                return Results.Ok(new { success = true, data = Array.Empty<object>(), total = 0, page, pageSize, totalAssignments });
 
             var credIds = assignments.Select(a => a.CredentialId).Distinct().ToList();
             var uids    = assignments.Select(a => a.PrincipalId).Distinct().ToList();
@@ -170,11 +181,12 @@ public static class CredentialGovernanceEndpoints
                 .ThenByDescending(x => x.DaysInactive ?? int.MaxValue)
                 .ToList();
 
-            return Results.Ok(new { success = true, data = stale, total = stale.Count });
+            return Results.Ok(new { success = true, data = stale, total = stale.Count, page, pageSize, totalAssignments });
         }).RequireAuthorization("AdminPolicy").WithTags("Vault");
 
         // GET /api/v1/vault/credentials/export — CSV metadata export (no passwords)
-        app.MapGet("/api/v1/vault/credentials/export", async (OrkunPamDbContext db) =>
+        app.MapGet("/api/v1/vault/credentials/export", async (
+            OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
         {
             var credentials = await db.Credentials
                 .Include(c => c.Folder)
@@ -187,6 +199,16 @@ public static class CredentialGovernanceEndpoints
                     c.IsDiscovered, c.RotationFailureCount, c.CreatedAtUtc
                 })
                 .ToListAsync();
+
+            var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var actorId = Guid.TryParse(userIdStr, out var uid) ? uid : (Guid?)null;
+            var actorName = ctx.User.Identity?.Name ?? "unknown";
+            var actorIp = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            await audit.LogAsync("Vault", "CREDENTIAL_METADATA_EXPORTED",
+                actorId, actorName, actorIp,
+                "Credential", "all",
+                new { count = credentials.Count });
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("Id,Name,Username,Type,Folder,Status,RiskScore,RiskLevel,LastRotated,NextRotation,ExpiresAt,IsDiscovered,RotationFailures,CreatedAt");

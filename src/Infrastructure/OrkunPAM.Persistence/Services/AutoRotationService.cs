@@ -212,7 +212,7 @@ public sealed class AutoRotationService : BackgroundService
             {
                 // Restore to Active so manual rotation can be attempted
                 credential.Status = CredentialStatus.Active;
-                credential.LastRotationError = result.Message?[..Math.Min(result.Message.Length, 1024)];
+                credential.LastRotationError = SanitizeErrorMessage(result.Message);
                 credential.RotationFailureCount++;
                 credential.LastRotationFailedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
@@ -230,7 +230,7 @@ public sealed class AutoRotationService : BackgroundService
                         CredentialName = credential.Name,
                         DeviceHostname = device.Hostname,
                         Connector = connector.ToString(),
-                        Error = result.Message,
+                        Error = SanitizeErrorMessage(result.Message),
                         result.ResponseTimeMs,
                         FailureCount = credential.RotationFailureCount
                     },
@@ -252,7 +252,7 @@ public sealed class AutoRotationService : BackgroundService
             try
             {
                 credential.Status = CredentialStatus.Active;
-                credential.LastRotationError = ex.Message[..Math.Min(ex.Message.Length, 1024)];
+                credential.LastRotationError = SanitizeErrorMessage(ex.Message);
                 credential.RotationFailureCount++;
                 credential.LastRotationFailedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
@@ -270,7 +270,7 @@ public sealed class AutoRotationService : BackgroundService
                 actorIp: "127.0.0.1",
                 targetType: "Credential",
                 targetId: credentialId.ToString(),
-                details: new { Error = ex.Message, FailureCount = credential.RotationFailureCount },
+                details: new { Error = SanitizeErrorMessage(ex.Message), FailureCount = credential.RotationFailureCount },
                 outcome: AuditOutcome.Failure,
                 ct: ct);
 
@@ -283,6 +283,14 @@ public sealed class AutoRotationService : BackgroundService
                 _logger.LogError(emailEx, "Failed to send rotation failure email for credential {Id}", credentialId);
             }
         }
+    }
+
+    private static string SanitizeErrorMessage(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return "Rotation failed";
+        var sanitized = System.Text.RegularExpressions.Regex.Replace(
+            message, @"(?i)(password|pass|pwd|secret|token|key)\s*[=:'""\"\s*\S+", "$1=[REDACTED]");
+        return sanitized[..Math.Min(sanitized.Length, 512)];
     }
 
     private async Task NotifyRotationFailureAsync(
