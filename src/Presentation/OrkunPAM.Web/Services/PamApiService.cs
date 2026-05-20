@@ -2676,8 +2676,9 @@ public sealed class PamApiService
 
     public async Task<bool> RescoreCredentialAsync(string id)
     {
-        var resp = await _http.PostAsync($"/api/v1/vault/credentials/{id}/risk/rescore", null);
-        return resp.IsSuccessStatusCode;
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/vault/credentials/{id}/risk/rescore", null)).IsSuccessStatusCode; }
+        catch { return false; }
     }
 
 }
