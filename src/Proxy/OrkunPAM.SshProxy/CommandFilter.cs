@@ -42,6 +42,8 @@ internal sealed class CommandFilterRule
     public bool IsRegex { get; set; }
     public decimal RiskScore { get; set; } = 5.0m;
     public string? Description { get; set; }
+    /// <summary>Per-rule action: "Deny" (block), "Alert" (warn+allow), "Allow" (explicit pass). Null = mode-driven.</summary>
+    public string? Action { get; set; }
 }
 
 /// <summary>
@@ -127,10 +129,15 @@ internal sealed class CommandFilter : ICommandFilter
                     CalculateRiskScore(command)),
 
             CommandFilterModeProxy.Blacklist => matched
-                ? new FilterResult(FilterAction.Block,
-                    $"Command matches blacklist rule: {matchedRule?.Description ?? matchedRule?.Pattern}",
-                    matchedRule?.RiskScore ?? CalculateRiskScore(command),
-                    matchedRule?.Pattern)
+                ? matchedRule?.Action == "Alert"
+                    ? new FilterResult(FilterAction.Warn,
+                        $"Command alerted by policy: {matchedRule?.Description ?? matchedRule?.Pattern}",
+                        matchedRule?.RiskScore ?? CalculateRiskScore(command),
+                        matchedRule?.Pattern)
+                    : new FilterResult(FilterAction.Block,
+                        $"Command matches blacklist rule: {matchedRule?.Description ?? matchedRule?.Pattern}",
+                        matchedRule?.RiskScore ?? CalculateRiskScore(command),
+                        matchedRule?.Pattern)
                 : new FilterResult(FilterAction.Allow, RiskScore: CalculateRiskScore(command)),
 
             _ => new FilterResult(FilterAction.Allow)

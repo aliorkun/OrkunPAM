@@ -138,7 +138,7 @@
 
 ## ~~Sprint 9 - RFP Gap: Reporting + Auth + CLI~~ ✅ TAMAMLANDI
 **Tarih:** 16-22 Mayıs 2026
-**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarını kapattı
+**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarnı kapattı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|------|
@@ -389,7 +389,7 @@
 **Durum:** Tamamlandi
 
 | Item | Aciklama | Durum |
-|------|----------|-------|
+|------|----------|—----|
 | Counter.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | Weather.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | MapAccessAssignmentEndpoints() | Eski model (Sprint 24 AssignedCredential ile superseded) — Program.cs'den kaldirildi | ✅ Tamamlandi |
@@ -518,9 +518,31 @@
 
 ---
 
+## Sprint 36 - CommandFilterPolicy DB Integration (SSH Proxy Enforcement)
+**Tarih:** 20 Mayis 2026 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #234 | CommandFilterService → CommandFilterPolicy DB Integration | MVP-PROXY | ✅ Tamamlandi |
+
+**Sprint 36 Tamamlanan Bilesenler (2026-05-20):**
+- **PolicyEndpoints.cs `GET /api/v1/policy/session`:** `CommandFilterPolicies` DB'den etkin global politikayi okuyarak `CommandFilterMode` + `CommandFilterRulesJson` alanlarini override eder — Sprint 35 admin UI'da tanimlanan politikalar artik SSH proxy'e ulasiyor
+- **IMemoryCache (5 dakika TTL):** `policy:session:effective` cache key — SSH proxy session-start'ta DB'ye her seferinde gitmez
+- **Cache invalidation:** `POST /api/v1/policy/session` artik `policy:session:effective` cache'ini de temizliyor
+- **Rules JSON:** Her kural `pattern`, `isRegex`, `riskScore`, `action` alanlarini icerir
+- **CommandFilterRule.Action:** Proxy'nin `CommandFilterRule` entity'sine `Action` alani eklendi
+- **Alert action support:** `Action = "Alert"` kurallar → proxy `FilterAction.Warn` dondurur (komut gecer, uyari logu yazilir) — onceden hic desteklenmiyordu
+- **Deny action (default):** Mevcut `FilterAction.Block` davranisi korundu (Blacklist mode + matched = block)
+- **using import:** `PolicyEndpoints.cs`'e `using OrkunPAM.Domain.Entities.Session;` eklendi
+
+**Ilerleme:** 4/4 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 35 tamamlandi.** #231 Session Command Filter Admin UI implement edildi ve push edildi.
-**Siradaki:** Sprint 36 — Backlog'daki bir sonraki priority:mvp issue
+**Sprint 36 tamamlandi.** #234 CommandFilterPolicy DB Integration implement edildi.
+**Siradaki:** Sprint 37 — Backlog'daki bir sonraki priority:mvp issue (#235 Credential Rotation Failure Alerts veya #236 Session Compliance View)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
@@ -528,7 +550,7 @@
 
 ## Sprint Kuralları
 - Her sprint sonunda Coordinator tag atar
-- Sprint değişlikliği bu dosya güncellenerek yapılır
+- Sprint değişikliği bu dosya güncellenerek yapılır
 - Developer agent "Aktif Sprint" bölümündeki issue'lara odaklanır
 - Sprint dışı issue'lar backlog'da kalır
 - Security critical/high her zaman sprint'i keser (acil fix)

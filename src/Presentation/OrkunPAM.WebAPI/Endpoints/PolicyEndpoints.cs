@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using OrkunPAM.Domain.Entities.Identity;
+using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
@@ -187,11 +188,40 @@ public static class PolicyEndpoints
             return Results.Ok(new { success = true });
         });
 
-        pwdGroup.MapGet("/session", async (OrkunPamDbContext db) =>
+        pwdGroup.MapGet("/session", async (OrkunPamDbContext db, IMemoryCache cache) =>
         {
+            const string CacheKey = "policy:session:effective";
+            if (cache.TryGetValue<SessionPolicySettings>(CacheKey, out var cachedSettings) && cachedSettings != null)
+                return Results.Ok(new { success = true, data = cachedSettings });
+
             var p = await db.Policies.FirstOrDefaultAsync(
                 x => x.PolicyType == "Session" && x.Scope == PolicyScope.Global);
             var settings = ReadPolicy<SessionPolicySettings>(p?.PolicyJson ?? "{}");
+
+            // Overlay with DB-backed CommandFilterPolicy (enabled global policy overrides JSON blob)
+            var cfPolicy = await db.CommandFilterPolicies
+                .Include(cfp => cfp.Rules.OrderBy(r => r.SortOrder))
+                .Where(cfp => cfp.IsEnabled && cfp.DeviceGroupId == null)
+                .FirstOrDefaultAsync();
+
+            if (cfPolicy != null)
+            {
+                var rulesJson = JsonSerializer.Serialize(
+                    cfPolicy.Rules.Select(r => new
+                    {
+                        pattern   = r.Pattern,
+                        isRegex   = r.IsRegex,
+                        riskScore = (decimal)r.RiskScore / 10m,
+                        action    = r.Action ?? "Deny"
+                    }));
+                settings = settings with
+                {
+                    CommandFilterMode      = (byte)cfPolicy.Mode,
+                    CommandFilterRulesJson = rulesJson
+                };
+            }
+
+            cache.Set(CacheKey, settings, TimeSpan.FromMinutes(5));
             return Results.Ok(new { success = true, data = settings });
         });
 
@@ -226,6 +256,7 @@ public static class PolicyEndpoints
             await UpsertGlobalPolicyAsync(db, "Session", "Global Session Policy", req);
 
             cache.Remove("policy:session:global:concurrent");
+            cache.Remove("policy:session:effective");
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             await audit.LogAsync("Policy", "SESSION_POLICY_UPDATED", null, null, ip,
