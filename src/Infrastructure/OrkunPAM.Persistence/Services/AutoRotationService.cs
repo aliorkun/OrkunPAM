@@ -29,7 +29,7 @@ public sealed class AutoRotationService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("AutoRotationService started — checking every {Interval} minutes", Interval.TotalMinutes);
+        _logger.LogInformation("AutoRotationService started - checking every {Interval} minutes", Interval.TotalMinutes);
 
         // Initial delay to let the application fully start
         await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
@@ -46,7 +46,7 @@ public sealed class AutoRotationService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "AutoRotationService cycle failed — will retry next interval");
+                _logger.LogError(ex, "AutoRotationService cycle failed - will retry next interval");
             }
 
             await Task.Delay(Interval, stoppingToken);
@@ -63,10 +63,6 @@ public sealed class AutoRotationService : BackgroundService
 
         var now = DateTime.UtcNow;
 
-        // Find credentials that are due for rotation:
-        // - Have a RotationPolicy assigned (RotationPolicyId != null)
-        // - NextRotationAtUtc has passed
-        // - Status is Active (not currently checked out or rotating)
         var dueCredentials = await db.Credentials
             .Include(c => c.RotationPolicy)
             .Where(c => c.RotationPolicyId != null
@@ -74,7 +70,7 @@ public sealed class AutoRotationService : BackgroundService
                 && c.NextRotationAtUtc <= now
                 && c.Status == CredentialStatus.Active)
             .OrderBy(c => c.NextRotationAtUtc)
-            .Take(MaxConcurrentRotations * 2) // fetch extra in case some are locked
+            .Take(MaxConcurrentRotations * 2)
             .ToListAsync(ct);
 
         if (dueCredentials.Count == 0)
@@ -108,12 +104,11 @@ public sealed class AutoRotationService : BackgroundService
         }
 
         await Task.WhenAll(tasks);
-        _logger.LogInformation("AutoRotation cycle complete — processed {Count} credentials", dueCredentials.Count);
+        _logger.LogInformation("AutoRotation cycle complete - processed {Count} credentials", dueCredentials.Count);
     }
 
     private async Task RotateCredentialAsync(Guid credentialId, Domain.Entities.Vault.RotationPolicy policy, CancellationToken ct)
     {
-        // Each rotation gets its own scope to avoid DbContext threading issues
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OrkunPamDbContext>();
         var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
@@ -131,27 +126,24 @@ public sealed class AutoRotationService : BackgroundService
             return;
         }
 
-        // Double-check it's still eligible
         if (credential.Status != CredentialStatus.Active)
         {
-            _logger.LogDebug("AutoRotation: skipping credential {Id} — status is {Status}", credentialId, credential.Status);
+            _logger.LogDebug("AutoRotation: skipping credential {Id} - status is {Status}", credentialId, credential.Status);
             return;
         }
 
-        // Mark as rotating to prevent concurrent checkout
         credential.Status = CredentialStatus.Rotating;
         await db.SaveChangesAsync(ct);
 
         try
         {
-            // Resolve which device this credential belongs to
             var deviceCredential = await db.DeviceCredentials
                 .Include(dc => dc.Device)
                 .FirstOrDefaultAsync(dc => dc.CredentialId == credentialId, ct);
 
             if (deviceCredential?.Device == null)
             {
-                _logger.LogWarning("AutoRotation: no device found for credential {Id} — skipping", credentialId);
+                _logger.LogWarning("AutoRotation: no device found for credential {Id} - skipping", credentialId);
                 credential.Status = CredentialStatus.Active;
                 await db.SaveChangesAsync(ct);
                 return;
@@ -167,7 +159,7 @@ public sealed class AutoRotationService : BackgroundService
                 Host: device.IpAddress ?? device.Hostname,
                 Port: device.ConnectionPort ?? 22,
                 Username: credential.Username ?? "",
-                CurrentPassword: null, // Orchestrator handles decryption
+                CurrentPassword: null,
                 NewPassword: newPassword);
 
             var result = await orchestrator.RotateAsync(
@@ -210,7 +202,6 @@ public sealed class AutoRotationService : BackgroundService
             }
             else
             {
-                // Restore to Active so manual rotation can be attempted
                 credential.Status = CredentialStatus.Active;
                 credential.LastRotationError = SanitizeErrorMessage(result.Message);
                 credential.RotationFailureCount++;
@@ -248,7 +239,6 @@ public sealed class AutoRotationService : BackgroundService
         {
             _logger.LogError(ex, "AutoRotation error for credential {Id}", credentialId);
 
-            // Ensure we don't leave credential stuck in Rotating status
             try
             {
                 credential.Status = CredentialStatus.Active;
@@ -285,11 +275,14 @@ public sealed class AutoRotationService : BackgroundService
         }
     }
 
+    // Strips potential credential values from error messages before writing to DB or audit log.
+    // Matches patterns like: password=secret, pwd: hunter2, token 'abc123'
     private static string SanitizeErrorMessage(string? message)
     {
         if (string.IsNullOrEmpty(message)) return "Rotation failed";
+        // Use non-verbatim string so double-quote in character class can be escaped safely
         var sanitized = System.Text.RegularExpressions.Regex.Replace(
-            message, @"(?i)(password|pass|pwd|secret|token|key)\s*[=:'""\"\s*\S+", "$1=[REDACTED]");
+            message, "(?i)(password|pass|pwd|secret|token|key)\\s*[:=\\s']+\\s*\\S+", "$1=[REDACTED]");
         return sanitized[..Math.Min(sanitized.Length, 512)];
     }
 
@@ -321,8 +314,8 @@ public sealed class AutoRotationService : BackgroundService
                 <h2 style="color:#dc2626">Credential Rotation Failed</h2>
                 <table style="border-collapse:collapse;font-family:sans-serif">
                   <tr><td style="padding:4px 12px 4px 0"><strong>Credential</strong></td><td>{System.Net.WebUtility.HtmlEncode(credential.Name)}</td></tr>
-                  <tr><td style="padding:4px 12px 4px 0"><strong>Username</strong></td><td>{System.Net.WebUtility.HtmlEncode(credential.Username ?? "—")}</td></tr>
-                  <tr><td style="padding:4px 12px 4px 0"><strong>Device</strong></td><td>{System.Net.WebUtility.HtmlEncode(deviceHostname ?? "—")}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Username</strong></td><td>{System.Net.WebUtility.HtmlEncode(credential.Username ?? "?")}</td></tr>
+                  <tr><td style="padding:4px 12px 4px 0"><strong>Device</strong></td><td>{System.Net.WebUtility.HtmlEncode(deviceHostname ?? "?")}</td></tr>
                   <tr><td style="padding:4px 12px 4px 0"><strong>Error</strong></td><td style="color:#dc2626">{System.Net.WebUtility.HtmlEncode(errorMessage)}</td></tr>
                   <tr><td style="padding:4px 12px 4px 0"><strong>Failure Count</strong></td><td>{credential.RotationFailureCount}</td></tr>
                   <tr><td style="padding:4px 12px 4px 0"><strong>Time (UTC)</strong></td><td>{credential.LastRotationFailedAtUtc:yyyy-MM-dd HH:mm:ss}</td></tr>
