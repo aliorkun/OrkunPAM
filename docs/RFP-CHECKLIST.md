@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-20 (Sprint 32 ✅ MFA Device Management — MfaDeviceEndpoints.cs: GET /api/v1/my/mfa-devices unified list (TOTP/EmailOTP/SMS/FIDO2/Push), DELETE by-type/fido2/push; admin: GET+DELETE /api/v1/admin/users/{id}/mfa-devices/* (AdminPolicy); SelfService.razor Security tab; full audit trail; **RFP MFA #12 → PC**)
+> Last updated: 2026-05-20 (PM run #20 — Sprint 30: RDP proxy admin termination (#223) Remote Access #12 notu güncellendi; Sprint 31: Platform #15 PC (zaten güncel); Sprint 32: MFA #12 PC (zaten güncel) ✅)
 
 ## Platform (44 items)
 
@@ -203,7 +203,7 @@
 | 9 | Solution shall support access isolation | PC | SshProxyService.cs — isolated session per user, no lateral movement |
 | 10 | Solution shall support session recording | FC | SessionRecordingService.cs — full session recording (text + binary) |
 | 11 | Solution shall support session playback | PC | SessionPlayback.razor — asciinema replay, search, timestamp seek (#34) |
-| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — DELETE /sessions/{id} + admin terminate via SignalR; Sprint 29: SSH proxy IdleWatchAsync polls PamApiClient.IsTerminatedAsync every 60s — admin session termination propagates to proxy relay; TelnetSession: same pattern (Sprint 21) |
+| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — DELETE /sessions/{id} + admin terminate via SignalR; Sprint 29: SSH proxy IdleWatchAsync polls PamApiClient.IsTerminatedAsync every 60s — admin session termination propagates to proxy relay; TelnetSession: same pattern (Sprint 21); Sprint 30 (#223): RDP proxy admin termination — RdpProxySessionEndpoints.cs GET /api/v1/rdp/proxy/sessions/{id}/status + RdpProxy.PamApiClient.IsTerminatedAsync + RdpServerSession.IdleWatchAsync 60s polling — admin termination now propagates to active RDP relay |
 | 13 | Solution shall support session timeout | PC | SessionPolicyService.cs — session duration/idle timeout |
 | 14 | Solution shall support connection throttling | PC | SshProxyService.cs — concurrent session limit per policy |
 | 15 | Solution shall support bandwidth management |  |  |
@@ -297,3 +297,7 @@
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|------|
+| — | *(162 items — PAM Template.xlsx'den doldurulacak; tamamlanan özellikler aşağıda Remote Access bölümüyle çakışan maddeler için güncellenecek)* |  |  |
