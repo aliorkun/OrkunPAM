@@ -370,6 +370,79 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Command Filter Policy (#231)
+    public async Task<List<CommandFilterPolicyDto>?> GetCommandFilterPoliciesAsync()
+    {
+        var result = await GetAsync<SimpleResult<CommandFilterPolicyDto>>("/api/v1/policies/command-filter");
+        return result?.Data;
+    }
+
+    public async Task<CommandFilterPolicyDetailDto?> GetCommandFilterPolicyAsync(string id)
+    {
+        var result = await GetAsync<SingleResult<CommandFilterPolicyDetailDto>>($"/api/v1/policies/command-filter/{id}");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateCommandFilterPolicyAsync(string name, string? description, bool isEnabled, string mode, string? deviceGroupId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/command-filter",
+                new { name, description, isEnabled, mode, deviceGroupId = deviceGroupId == null ? (Guid?)null : Guid.Parse(deviceGroupId) });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateCommandFilterPolicyAsync(string id, string? name, bool? isEnabled, string? mode)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/command-filter/{id}", new { name, isEnabled, mode });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ToggleCommandFilterPolicyAsync(string id, bool enabled)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/command-filter/{id}/toggle", new { isEnabled = enabled });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCommandFilterPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddCommandFilterRuleAsync(string policyId, string pattern, bool isRegex, string action, int riskScore, string? justification)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/policies/command-filter/{policyId}/rules",
+                new { pattern, isRegex, action, riskScore, justification });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCommandFilterRuleAsync(string policyId, string ruleId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{policyId}/rules/{ruleId}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     public async Task<PasswordPolicySettingsDto?> GetPasswordPolicyAsync()
     {
         var result = await GetAsync<PolicySettingResult<PasswordPolicySettingsDto>>("/api/v1/policy/password");
@@ -3813,3 +3886,35 @@ public record HighRiskCredentialDto(
     DateTime? LastRotatedAtUtc,
     DateTime? ExpiresAtUtc,
     string?   FolderName);
+
+// Command Filter Policy DTOs (#231)
+public record CommandFilterPolicyDto(
+    string    Id,
+    string    Name,
+    string?   Description,
+    bool      IsEnabled,
+    string    Mode,
+    string?   DeviceGroupId,
+    int       RuleCount,
+    DateTime  CreatedAtUtc,
+    DateTime  UpdatedAtUtc);
+
+public record CommandFilterPolicyDetailDto(
+    string    Id,
+    string    Name,
+    string?   Description,
+    bool      IsEnabled,
+    string    Mode,
+    string?   DeviceGroupId,
+    DateTime  CreatedAtUtc,
+    DateTime  UpdatedAtUtc,
+    List<CommandFilterRuleDto>? Rules);
+
+public record CommandFilterRuleDto(
+    string  Id,
+    string  Pattern,
+    bool    IsRegex,
+    string  Action,
+    int     RiskScore,
+    string? Justification,
+    int     SortOrder);
