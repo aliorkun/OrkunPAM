@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-20 (Sprint 39 — Remote Access #34+#35 → PC; Password Vault #20+#33+#35 → PC)
+> Last updated: 2026-05-20 (Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures — PM run #22)
 
 ## Platform (44 items)
 
@@ -218,13 +218,13 @@
 | 24 | Solution shall support printer redirection control | PC | RdpProxyService.cs — printer/drive redirection audit |
 | 25 | Solution shall support drive mapping control | PC | RdpProxyService.cs — drive mapping control in RDP session |
 | 26 | Solution shall support USB control |  |  |
-| 27 | Solution shall support application control | PC | CommandFilterPolicy + CommandFilterPolicyRule entities + migration (20260520_AddCommandFilterPolicy); CommandFilterPolicyEndpoints.cs — 10 endpoints under /api/v1/policies/command-filter (AdminPolicy): CRUD + toggle + rule management + /effective (SSH proxy compatible JSON); Policies.razor "Command Filter" tab — policy list, rule editor (regex/glob pattern + Allow/Deny/Alert action + RiskScore 0-100), DeviceGroup scope, New Policy modal, Delete confirm; audit events: COMMAND_FILTER_POLICY_CREATED/UPDATED/DELETED/TOGGLED; PamApiService.cs: 8 new methods + 3 DTOs (Sprint 35, #231) |
+| 27 | Solution shall support application control | PC | CommandFilterPolicy + CommandFilterPolicyRule entities + migration (20260520_AddCommandFilterPolicy); CommandFilterPolicyEndpoints.cs — 10 endpoints under /api/v1/policies/command-filter (AdminPolicy): CRUD + toggle + rule management + /effective (SSH proxy compatible JSON); Policies.razor "Command Filter" tab — policy list, rule editor (regex/glob pattern + Allow/Deny/Alert action + RiskScore 0-100), DeviceGroup scope, New Policy modal, Delete confirm; audit events: COMMAND_FILTER_POLICY_CREATED/UPDATED/DELETED/TOGGLED; PamApiService.cs: 8 new methods + 3 DTOs (Sprint 35, #231); Sprint 36 (#234): SSH proxy enforcement live — PolicyEndpoints.cs queries CommandFilterPolicies DB, IMemoryCache 5-min TTL (policy:session:effective), cache invalidated on all mutations; CommandFilterRule.Action field active (Alert → FilterAction.Warn passes command + logs warning, Block rejects); DB-driven policies now actively filter commands in live SSH sessions |
 | 28 | Solution shall support screen capture |  |  |
 | 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp |
 | 30 | Solution shall support screen recording |  |  |
 | 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214); Sprint 28: role-based scope — GET /api/v1/sessions + /active: privileged roles (GlobalAdmin/Auditor/SessionAdmin) see all sessions; regular users see only own sessions (CWE-200/284 fix, closes #221) |
 | 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk color coding |
-| 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement |
+| 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement; CommandFilterService.cs (Sprint 36, #234) — real-time SSH command filtering via CommandFilterPolicy DB (IMemoryCache 5-min TTL, cache-invalidated on mutation); Alert rules return FilterAction.Warn (command passes + audit logged); Block rules reject command immediately |
 | 34 | Solution shall support session compliance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/summary (compliance rate, violation types, top violating users/devices, blocked commands, admin-terminated sessions); Sessions.razor Compliance tab with stat cards, progress bar, period selector (7d/30d/90d), CSV export (Sprint 38, #236) |
 | 35 | Solution shall support session governance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/governance-report: admin terminations log, realm-access-denied events, JIT-ticketed sessions, command-blocked sessions with counts; governance data available in Sessions.razor Compliance tab (Sprint 38, #236) |
 | 36 | Solution shall support session audit trail | FC | AuditService.cs — all session events in hash-chained audit log |
@@ -249,7 +249,7 @@
 |---|-------------|--------|------|
 | 1 | Solution shall support credential storage | FC | CredentialEndpoints.cs + VaultEncryptionService.cs — AES-256-GCM encrypted credential store |
 | 2 | Solution shall support credential retrieval | FC | CredentialEndpoints.cs — RBAC-enforced checkout flow |
-| 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job |
+| 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job; Sprint 37 (#235): AutoRotationService records LastRotationError + RotationFailureCount + LastRotationFailedAtUtc on failure; IEmailService email alerts to VaultAdmin/GlobalAdmin; GET /api/v1/vault/credentials/rotation-failures (AdminPolicy); Vault.razor red "Failed" badge (failure count + last error tooltip); Home.razor Rotation Failures (24h) stat card + top-5 failures widget; CREDENTIAL_ROTATION_FAILED audit event |
 | 4 | Solution shall support credential expiry | PC | CredentialEndpoints.cs — expiry date, Reports.razor credential-expiry report |
 | 5 | Solution shall support credential discovery | PC | DiscoveryEndpoints.cs — POST /api/v1/vault/discovery (create scan config), POST /{id}/run (trigger AD scan); AD group-based privileged account discovery + bulk import to vault; DiscoveredCredential entity with status lifecycle; audit logged (#189) |
 | 6 | Solution shall support credential onboarding | PC | Vault.razor — Add Credential form; manual onboarding |
@@ -297,7 +297,3 @@
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
-
-| # | Requirement | Status | Notes |
-|---|-------------|--------|------|
-| — | *(162 items — PAM Template.xlsx'den doldurulacak; tamamlanan özellikler aşağıda Remote Access bölümüyle çakışan maddeler için güncellenecek)* |  |  |
