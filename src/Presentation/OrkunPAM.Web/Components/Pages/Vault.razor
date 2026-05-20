@@ -26,7 +26,7 @@
     <!-- Folder Sidebar -->
     <aside class="pam-vault-sidebar">
         <div class="pam-vault-folder-item @(_selectedFolderId == null ? "active" : "")"
-             @onclick="() => SelectFolderAsync(null)">
+             @onclick="@(() => SelectFolderAsync(null))">
             <span>📁</span>
             <span class="pam-vault-folder-name">All Credentials</span>
             @if (_allTotal > 0)
@@ -40,7 +40,7 @@
             @foreach (var root in _folders.Where(f => f.ParentFolderId == null).OrderBy(f => f.Name))
             {
                 <div class="pam-vault-folder-item @(_selectedFolderId == root.Id ? "active" : "")"
-                     @onclick="() => SelectFolderAsync(root.Id)">
+                     @onclick="@(() => SelectFolderAsync(root.Id))">
                     <span>📁</span>
                     <span class="pam-vault-folder-name">@root.Name</span>
                     <span class="pam-vault-folder-count">@root.CredentialCount</span>
@@ -48,7 +48,7 @@
                 @foreach (var child in _folders.Where(f => f.ParentFolderId == root.Id).OrderBy(f => f.Name))
                 {
                     <div class="pam-vault-folder-item child @(_selectedFolderId == child.Id ? "active" : "")"
-                         @onclick="() => SelectFolderAsync(child.Id)">
+                         @onclick="@(() => SelectFolderAsync(child.Id))">
                         <span>📁</span>
                         <span class="pam-vault-folder-name">@child.Name</span>
                         <span class="pam-vault-folder-count">@child.CredentialCount</span>
@@ -134,6 +134,11 @@
                                     {
                                         <span class="pam-status @(c.Status == "Active" ? "pam-status-active" : "pam-status-done")">@c.Status</span>
                                     }
+                                    @if (c.RotationFailureCount > 0)
+                                    {
+                                        <span class="pam-badge" style="background:#dc2626;color:white;font-size:0.7em;margin-left:4px"
+                                              title="@("Rotation failed " + c.RotationFailureCount + "x — " + (c.LastRotationError ?? "unknown error"))">Failed</span>
+                                    }
                                 </td>
                                 <td>
                                     @if (isCheckedOut && c.CheckOutExpiresUtc.HasValue)
@@ -211,11 +216,11 @@
 <!-- Checkout Modal -->
 @if (_showCheckout)
 {
-    <div class="pam-modal-overlay" @onclick="() => _showCheckout = false">
+    <div class="pam-modal-overlay" @onclick="@(() => _showCheckout = false)">
         <div class="pam-modal" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
                 <h3 class="pam-modal-title">Checkout — @_coCredName</h3>
-                <button class="pam-close-btn" @onclick="() => _showCheckout = false">×</button>
+                <button class="pam-close-btn" @onclick="@(() => _showCheckout = false)">×</button>
             </div>
             <div class="pam-modal-body">
                 @if (_coError != null)
@@ -239,7 +244,7 @@
                 </div>
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="() => _showCheckout = false">Cancel</button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showCheckout = false)">Cancel</button>
                 <button class="pam-btn pam-btn-primary" @onclick="SubmitCheckoutAsync" disabled="@_coSaving">
                     @if (_coSaving) { <span class="pam-spinner-sm"></span> }
                     Checkout
@@ -252,11 +257,11 @@
 <!-- Request Access Modal -->
 @if (_showRequestAccess)
 {
-    <div class="pam-modal-overlay" @onclick="() => _showRequestAccess = false">
+    <div class="pam-modal-overlay" @onclick="@(() => _showRequestAccess = false)">
         <div class="pam-modal" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
                 <h3 class="pam-modal-title">Request Access — @_raCredName</h3>
-                <button class="pam-close-btn" @onclick="() => _showRequestAccess = false">×</button>
+                <button class="pam-close-btn" @onclick="@(() => _showRequestAccess = false)">×</button>
             </div>
             <div class="pam-modal-body">
                 @if (_raError != null)
@@ -285,7 +290,7 @@
                 }
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="() => _showRequestAccess = false">Close</button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRequestAccess = false)">Close</button>
                 @if (_raSuccess == null)
                 {
                     <button class="pam-btn pam-btn-primary" @onclick="SubmitRequestAccessAsync" disabled="@_raSaving">
@@ -340,7 +345,7 @@
                                 <div class="pam-reveal-password pam-reveal-masked">••••••••••••••••</div>
                             }
                             <button class="pam-btn pam-btn-secondary pam-btn-sm" style="align-self:flex-start"
-                                    @onclick="() => _passVisible = !_passVisible">
+                                    @onclick="@(() => _passVisible = !_passVisible)">
                                 @(_passVisible ? "Hide" : "Reveal")
                             </button>
                         </div>
@@ -364,11 +369,11 @@
 <!-- Add Credential Modal -->
 @if (_showAdd)
 {
-    <div class="pam-modal-overlay" @onclick="() => _showAdd = false">
+    <div class="pam-modal-overlay" @onclick="@(() => _showAdd = false)">
         <div class="pam-modal" @onclick:stopPropagation="true">
             <div class="pam-modal-header">
                 <h3 class="pam-modal-title">Add Credential</h3>
-                <button class="pam-close-btn" @onclick="() => _showAdd = false">×</button>
+                <button class="pam-close-btn" @onclick="@(() => _showAdd = false)">×</button>
             </div>
             <div class="pam-modal-body">
                 @if (_addError != null)
@@ -456,7 +461,7 @@
                 </div>
             </div>
             <div class="pam-modal-footer">
-                <button class="pam-btn pam-btn-secondary" @onclick="() => _showAdd = false">Cancel</button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showAdd = false)">Cancel</button>
                 <button class="pam-btn pam-btn-primary" @onclick="SubmitAddAsync" disabled="@_addSaving">
                     @if (_addSaving) { <span class="pam-spinner-sm"></span> }
                     Add Credential

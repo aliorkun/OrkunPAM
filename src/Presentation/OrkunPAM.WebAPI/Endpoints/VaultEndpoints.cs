@@ -95,7 +95,9 @@ public static class VaultEndpoints
                     c.DeviceId, c.Tags,
                     c.LastRotatedAtUtc, c.NextRotationAtUtc,
                     c.CheckedOutByUserId, c.CheckOutExpiresUtc,
-                    c.RequiresApproval
+                    c.RequiresApproval,
+                    c.RiskScore, c.RiskLevel,
+                    c.RotationFailureCount, c.LastRotationError, c.LastRotationFailedAtUtc
                 }).ToListAsync();
             return Results.Ok(new { success = true, data = creds });
         });
@@ -125,7 +127,9 @@ public static class VaultEndpoints
                     c.DeviceId, c.Tags, c.IsDiscovered, c.IsTakenOver,
                     c.LastRotatedAtUtc, c.NextRotationAtUtc,
                     IsCheckedOut = c.CheckedOutByUserId != null,
-                    c.CheckedOutByUserId, c.CheckOutExpiresUtc
+                    c.CheckedOutByUserId, c.CheckOutExpiresUtc,
+                    c.RiskScore, c.RiskLevel,
+                    c.RotationFailureCount, c.LastRotationError, c.LastRotationFailedAtUtc
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
@@ -797,4 +801,3 @@ public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
 public record RotateCredentialRequest(string? Host, int? Port, string Connector, string? Domain);
-public record RequestAccessRequest(string? Reason, string? TicketNumber);
