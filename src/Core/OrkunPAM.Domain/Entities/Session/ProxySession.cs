@@ -75,3 +75,25 @@ public class CommandLog
     public bool WasBlocked { get; set; }
     public string? BlockReason { get; set; }
 }
+
+public class CommandFilterPolicy : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public CommandFilterMode Mode { get; set; } = CommandFilterMode.Blacklist;
+    public Guid? DeviceGroupId { get; set; }
+    public ICollection<CommandFilterPolicyRule> Rules { get; set; } = [];
+}
+
+public class CommandFilterPolicyRule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PolicyId { get; set; }
+    public string Pattern { get; set; } = string.Empty;
+    public bool IsRegex { get; set; }
+    public string Action { get; set; } = "Deny";
+    public int RiskScore { get; set; } = 50;
+    public string? Justification { get; set; }
+    public int SortOrder { get; set; }
+}
