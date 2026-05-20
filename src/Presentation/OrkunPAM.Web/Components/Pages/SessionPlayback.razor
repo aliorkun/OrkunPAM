@@ -2,6 +2,7 @@
 @page "/session-playback/{SessionId}"
 @inject PamApiService Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Session Playback — OrkunPAM</PageTitle>
 
@@ -502,7 +503,7 @@ else
         Nav.NavigateTo("/session-playback");
     }
 
-    // ── Playback controls ────────────────────────────────────────────
+    // ── Playback controls ───────────────────────────────────────────────
 
     private void TogglePlayback()
     {
@@ -578,7 +579,7 @@ else
         RenderTerminalAtTime(targetTime);
     }
 
-    // ── Search ───────────────────────────────────────────────────────
+    // ── Search ───────────────────────────────────────────────────
 
     private async Task HandleSearchKeyUp(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
     {
@@ -594,18 +595,16 @@ else
         StateHasChanged();
     }
 
-    // ── Download ─────────────────────────────────────────────────────
+    // ── Download ─────────────────────────────────────────────────
 
     private async Task DownloadRecordingAsync()
     {
-        _error = "Download initiated. Check browser downloads.";
-        StateHasChanged();
-        // In a real implementation this would trigger a JS interop file download.
-        // For now, the API endpoint can be called directly via the browser.
-        await Task.CompletedTask;
+        if (string.IsNullOrEmpty(SessionId)) return;
+        var url = $"/api/v1/sessions/{SessionId}/export";
+        await JS.InvokeVoidAsync("open", url, "_self");
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────
 
     private static string StatusClass(string s) => s switch
     {
