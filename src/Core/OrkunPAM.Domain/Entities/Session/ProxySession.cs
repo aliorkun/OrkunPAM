@@ -99,6 +99,24 @@ public class CommandFilterPolicyRule
 }
 
 /// <summary>
+/// Controls which RDP/VNC virtual channels are permitted in a session.
+/// Policies are scoped to a DeviceGroup (or global if DeviceGroupId is null).
+/// </summary>
+public class PeripheralRedirectionPolicy : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public bool AllowClipboard { get; set; } = false;
+    public bool AllowDriveRedirection { get; set; } = false;
+    public bool AllowPrinterRedirection { get; set; } = true;
+    public bool AllowUsbRedirection { get; set; } = false;
+    public bool AllowAudioRedirection { get; set; } = false;
+    public bool AllowSmartCardRedirection { get; set; } = true;
+    public Guid? DeviceGroupId { get; set; }
+}
+
+/// <summary>
 /// A periodic screen-capture snapshot taken during an RDP or VNC session.
 /// DataBase64 is null when actual pixel capture is not available (TCP-relay mode).
 /// </summary>

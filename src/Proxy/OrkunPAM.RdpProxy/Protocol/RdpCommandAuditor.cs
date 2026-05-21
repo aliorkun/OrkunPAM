@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using OrkunPAM.RdpProxy;
 
 namespace OrkunPAM.RdpProxy.Protocol;
 
@@ -56,11 +57,16 @@ internal sealed class RdpCommandAuditor
     private long _driveRedirectionCount;
     private long _printerRedirectionCount;
 
+    private PeripheralPolicy _policy = new(false, false, true, false, false, true);
+
     public RdpCommandAuditor(string sessionId, ILogger log)
     {
         _sessionId = sessionId;
         _log = log;
     }
+
+    /// <summary>Sets the peripheral redirection policy for this session.</summary>
+    public void SetPeripheralPolicy(PeripheralPolicy policy) => _policy = policy;
 
     /// <summary>Clipboard transfer count during this session.</summary>
     public long ClipboardTransferCount => Interlocked.Read(ref _clipboardTransferCount);
@@ -90,6 +96,37 @@ internal sealed class RdpCommandAuditor
         {
             RegisterChannel(baseChannelId + i, channelNames[i]);
         }
+    }
+
+    /// <summary>
+    /// Returns true if the PDU should be blocked (dropped) based on peripheral policy.
+    /// Logs an audit event on first block for each channel type.
+    /// </summary>
+    public bool ShouldBlockPdu(byte[] tpktPacket, bool fromTarget)
+    {
+        try
+        {
+            int channelId = RdpPduParser.GetMcsChannelId(tpktPacket);
+            if (channelId < 0 || !_channelMap.TryGetValue(channelId, out var channelName))
+                return false;
+
+            return channelName switch
+            {
+                CliprdChannelName when !_policy.AllowClipboard => LogAndBlock("CLIPBOARD_REDIRECTION_BLOCKED", channelName),
+                RdpdrChannelName when !_policy.AllowDriveRedirection && !_policy.AllowPrinterRedirection => LogAndBlock("DRIVE_REDIRECTION_BLOCKED", channelName),
+                "rdpsnd" when !_policy.AllowAudioRedirection => LogAndBlock("AUDIO_REDIRECTION_BLOCKED", channelName),
+                _ => false
+            };
+        }
+        catch { return false; }
+    }
+
+    private bool LogAndBlock(string auditEvent, string channelName)
+    {
+        _log.LogWarning(
+            "Session {SessionId} POLICY: {AuditEvent} — channel={Channel} blocked by peripheral policy",
+            _sessionId, auditEvent, channelName);
+        return true;
     }
 
     /// <summary>

@@ -187,13 +187,56 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>Returns peripheral channel permissions. Falls back to secure defaults (block clipboard/drive/USB/audio) on any error.</summary>
+    internal async Task<PeripheralPolicy> GetPeripheralPolicyAsync(Guid? deviceGroupId, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var url = deviceGroupId.HasValue
+                ? $"/api/v1/policies/peripheral/effective?deviceGroupId={deviceGroupId}"
+                : "/api/v1/policies/peripheral/effective";
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var data = await resp.Content.ReadFromJsonAsync<PeripheralPolicyResponse>(ct);
+                var p = data?.Data;
+                if (p != null)
+                    return new PeripheralPolicy(
+                        p.AllowClipboard, p.AllowDriveRedirection,
+                        p.AllowPrinterRedirection, p.AllowUsbRedirection,
+                        p.AllowAudioRedirection, p.AllowSmartCardRedirection);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to fetch peripheral policy — using secure defaults");
+        }
+        // Secure defaults: block clipboard/drive/USB/audio, allow printer+smartcard
+        return new PeripheralPolicy(false, false, true, false, false, true);
+    }
+
     // ---- Response DTOs ----
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);
     private record SessionTokenResponse(RdpSessionInfo? Data);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);
     private record SessionPolicyData(int IdleTimeoutMinutes, int MaxConcurrentSessions);
+    private record PeripheralPolicyResponse(bool Success, PeripheralPolicyData? Data);
+    private record PeripheralPolicyData(
+        bool AllowClipboard, bool AllowDriveRedirection, bool AllowPrinterRedirection,
+        bool AllowUsbRedirection, bool AllowAudioRedirection, bool AllowSmartCardRedirection);
 }
+
+internal sealed record PeripheralPolicy(
+    bool AllowClipboard,
+    bool AllowDriveRedirection,
+    bool AllowPrinterRedirection,
+    bool AllowUsbRedirection,
+    bool AllowAudioRedirection,
+    bool AllowSmartCardRedirection);
 
 internal sealed record RdpSessionInfo(
     string SessionId,

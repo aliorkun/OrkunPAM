@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using OrkunPAM.RdpProxy;
 using OrkunPAM.RdpProxy.Protocol;
 using OrkunPAM.RdpProxy.Session;
 
@@ -132,6 +133,7 @@ internal sealed class RdpServerSession
         _log.LogInformation("RDP session {SessionId}: target connection established", sessionInfo.SessionId);
 
         var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(ct);
+        var peripheralPolicy = await _api.GetPeripheralPolicyAsync(null, ct);
 
         var masterKey = string.IsNullOrEmpty(_opts.RecordingEncryptionKeyBase64)
             ? null : Convert.FromBase64String(_opts.RecordingEncryptionKeyBase64);
@@ -235,7 +237,7 @@ internal sealed class RdpServerSession
                 {
                     // TLS terminated: parse PDUs, inject credentials, audit channels
                     await RunTlsTerminatedSessionAsync(
-                        clientSide, targetSide, recorder, sessionInfo, idleTimeoutMinutes, ct);
+                        clientSide, targetSide, recorder, sessionInfo, idleTimeoutMinutes, peripheralPolicy, ct);
                 }
                 else
                 {
@@ -283,6 +285,7 @@ internal sealed class RdpServerSession
         RdpSessionRecorder recorder,
         RdpSessionInfo sessionInfo,
         int idleTimeoutMinutes,
+        PeripheralPolicy peripheralPolicy,
         CancellationToken ct)
     {
         var injector = new CredentialInjector(
@@ -292,6 +295,7 @@ internal sealed class RdpServerSession
             _log);
 
         var auditor = new RdpCommandAuditor(sessionInfo.SessionId, _log);
+        auditor.SetPeripheralPolicy(peripheralPolicy);
         bool negotiationComplete = false;
 
         // Phase 1: PDU-by-PDU relay during RDP negotiation
@@ -447,6 +451,12 @@ internal sealed class RdpServerSession
             }
 
             Interlocked.Exchange(ref lastActivityTicks[0], DateTime.UtcNow.Ticks);
+
+            // Enforce peripheral policy — drop blocked channel PDUs
+            bool blocked = false;
+            try { blocked = auditor.ShouldBlockPdu(tpktPacket, fromTarget); }
+            catch { /* policy check failure must not break the session */ }
+            if (blocked) continue;
 
             // Audit the packet (non-blocking, best-effort)
             try { auditor.InspectPdu(tpktPacket, fromTarget); }

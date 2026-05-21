@@ -174,6 +174,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === Credential Templates (#248) ===
     public DbSet<CredentialTemplate> CredentialTemplates => Set<CredentialTemplate>();
 
+    // === Peripheral Redirection Policy (#249) ===
+    public DbSet<PeripheralRedirectionPolicy> PeripheralRedirectionPolicies => Set<PeripheralRedirectionPolicy>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -642,6 +645,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(r => r.Action).HasMaxLength(32);
             e.Property(r => r.Justification).HasMaxLength(1024);
             e.HasIndex(r => r.PolicyId);
+        });
+
+        // === Peripheral Redirection Policy (#249) ===
+        modelBuilder.Entity<PeripheralRedirectionPolicy>(e =>
+        {
+            e.Property(p => p.Name).HasMaxLength(256).IsRequired();
+            e.Property(p => p.Description).HasMaxLength(1024);
+            e.HasIndex(p => p.IsEnabled);
+            e.HasIndex(p => p.DeviceGroupId);
         });
 
         // === Credential Templates (#248) ===

@@ -23,6 +23,7 @@
     <button class="pam-tab @(_tab=="device-trust"?"pam-tab-active":"")" @onclick="@(() => SwitchTab("device-trust"))">Device Trust</button>
     <button class="pam-tab @(_tab=="geo-access"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("geo-access"))">Geo Access</button>
     <button class="pam-tab @(_tab=="cmd-filter"?"pam-tab-active":"")"   @onclick="@(() => SwitchTab("cmd-filter"))">Command Filter</button>
+    <button class="pam-tab @(_tab=="peripheral"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("peripheral"))">Peripheral Control</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -824,6 +825,152 @@
     </div>
 }
 
+@if (_tab == "peripheral")
+{
+    <div class="pam-page-header" style="margin-bottom:1rem">
+        <span style="font-weight:600;font-size:1rem">RDP/VNC Peripheral Redirection Policies</span>
+        <button class="pam-btn pam-btn-primary" @onclick="OpenAddPrpModal">+ New Policy</button>
+    </div>
+    <div class="pam-alert pam-alert-info" style="margin-bottom:1rem;font-size:0.85rem">
+        Controls which virtual channels are permitted in RDP/VNC sessions.
+        <strong>Clipboard, drive, USB, and audio</strong> are blocked by default. Printer and smart card are allowed.
+        Policies are matched by DeviceGroup scope; a global policy applies when no group match exists.
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_prpLoading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_prpPolicies == null || _prpPolicies.Count == 0)
+            {
+                <div class="pam-empty p-4">No peripheral policies defined. Secure defaults apply: clipboard, drive, USB and audio are blocked.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Clipboard</th><th>Drive</th><th>Printer</th>
+                            <th>USB</th><th>Audio</th><th>Smart Card</th>
+                            <th>Scope</th><th>Status</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _prpPolicies)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@p.Name</strong>
+                                    @if (!string.IsNullOrEmpty(p.Description))
+                                    { <div style="font-size:0.8rem;color:#888">@p.Description</div> }
+                                </td>
+                                <td>@(p.AllowClipboard ? "✅" : "🚫")</td>
+                                <td>@(p.AllowDriveRedirection ? "✅" : "🚫")</td>
+                                <td>@(p.AllowPrinterRedirection ? "✅" : "🚫")</td>
+                                <td>@(p.AllowUsbRedirection ? "✅" : "🚫")</td>
+                                <td>@(p.AllowAudioRedirection ? "✅" : "🚫")</td>
+                                <td>@(p.AllowSmartCardRedirection ? "✅" : "🚫")</td>
+                                <td>@(p.DeviceGroupId == null ? "Global" : "Device Group")</td>
+                                <td>
+                                    @if (p.IsEnabled) { <span class="pam-status pam-status-active">Enabled</span> }
+                                    else              { <span class="pam-status pam-status-done">Disabled</span> }
+                                </td>
+                                <td>
+                                    <div class="pam-actions">
+                                        <button class="pam-btn-icon" title="Edit"
+                                                @onclick="@(() => OpenEditPrpModal(p))">&#9998;</button>
+                                        <button class="pam-btn-icon pam-btn-danger" title="Delete"
+                                                @onclick="@(() => ConfirmDeletePrp(p))">&#128465;</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_showAddPrp)
+{
+    <div class="pam-modal-overlay" @onclick="CloseAddPrpModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_prpEditId == null ? "New" : "Edit") Peripheral Policy</h3>
+                <button class="pam-close-btn" @onclick="CloseAddPrpModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_prpAddError != null) { <div class="pam-alert pam-alert-danger">@_prpAddError</div> }
+                <div class="pam-form-group">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input w-100-input" @bind="_prpName" placeholder="e.g. Strict - No Clipboard" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_prpDesc" placeholder="Optional" />
+                </div>
+                <div style="font-weight:600;margin:.75rem 0 .5rem">Channel Permissions</div>
+                <div class="pam-form-row" style="flex-wrap:wrap;gap:.5rem 1.5rem">
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpClipboard" /> Clipboard
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpDrive" /> Drive Redirection
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpPrinter" /> Printer Redirection
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpUsb" /> USB Redirection
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpAudio" /> Audio Redirection
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpSmartCard" /> Smart Card Redirection
+                    </label>
+                </div>
+                <div class="pam-form-group" style="margin-top:.75rem">
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer">
+                        <input type="checkbox" @bind="_prpEnabled" /> Enabled
+                    </label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseAddPrpModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitPrpAsync" disabled="@_prpAddSaving">
+                    @if (_prpAddSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_prpEditId == null ? "Create Policy" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_prpDeleteTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="CancelDeletePrp">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Delete Peripheral Policy</h3>
+                <button class="pam-close-btn" @onclick="CancelDeletePrp">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete policy <strong>@_prpDeleteTarget.Name</strong>?</p>
+                <p class="pam-hint pam-hint-warn">This cannot be undone.</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CancelDeletePrp">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="ExecuteDeletePrpAsync">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -1017,6 +1164,24 @@
     private string _ruleJustification = "";
     private bool   _ruleSaving       = false;
 
+    // Peripheral Redirection Policy (#249)
+    private bool   _prpLoading       = false;
+    private List<PeripheralRedirectionPolicyDto>? _prpPolicies;
+    private PeripheralRedirectionPolicyDto?       _prpDeleteTarget;
+    private string? _prpEditId;
+    private bool    _showAddPrp      = false;
+    private string? _prpAddError;
+    private bool    _prpAddSaving    = false;
+    private string  _prpName         = "";
+    private string  _prpDesc         = "";
+    private bool    _prpEnabled      = true;
+    private bool    _prpClipboard    = false;
+    private bool    _prpDrive        = false;
+    private bool    _prpPrinter      = true;
+    private bool    _prpUsb          = false;
+    private bool    _prpAudio        = false;
+    private bool    _prpSmartCard    = true;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -1038,6 +1203,7 @@
             case "device-trust": await LoadDeviceTrustPolicyAsync();     break;
             case "geo-access":   await LoadGeolocationPolicyAsync();     break;
             case "cmd-filter":   await LoadCfpAsync();                   break;
+            case "peripheral":   await LoadPrpAsync();                   break;
         }
     }
 
@@ -1390,5 +1556,66 @@
         else
             _cfpSelected = await Api.GetCommandFilterPolicyAsync(policyId);
         StateHasChanged();
+    }
+
+    // Peripheral Redirection Policy methods (#249)
+    private async Task LoadPrpAsync()
+    {
+        _prpLoading = true; StateHasChanged();
+        _prpPolicies = await Api.GetPeripheralPoliciesAsync();
+        _prpLoading = false; StateHasChanged();
+    }
+
+    private void OpenAddPrpModal()
+    {
+        _prpEditId = null; _prpName = ""; _prpDesc = "";
+        _prpEnabled = true; _prpClipboard = false; _prpDrive = false;
+        _prpPrinter = true; _prpUsb = false; _prpAudio = false; _prpSmartCard = true;
+        _prpAddError = null; _showAddPrp = true; StateHasChanged();
+    }
+
+    private void OpenEditPrpModal(PeripheralRedirectionPolicyDto p)
+    {
+        _prpEditId = p.Id.ToString(); _prpName = p.Name; _prpDesc = p.Description ?? "";
+        _prpEnabled = p.IsEnabled; _prpClipboard = p.AllowClipboard; _prpDrive = p.AllowDriveRedirection;
+        _prpPrinter = p.AllowPrinterRedirection; _prpUsb = p.AllowUsbRedirection;
+        _prpAudio = p.AllowAudioRedirection; _prpSmartCard = p.AllowSmartCardRedirection;
+        _prpAddError = null; _showAddPrp = true; StateHasChanged();
+    }
+
+    private void CloseAddPrpModal() { _showAddPrp = false; _prpAddError = null; StateHasChanged(); }
+
+    private async Task SubmitPrpAsync()
+    {
+        _prpAddError = null;
+        if (string.IsNullOrWhiteSpace(_prpName)) { _prpAddError = "Name is required."; return; }
+        _prpAddSaving = true; StateHasChanged();
+        bool ok;
+        if (_prpEditId == null)
+        {
+            ok = await Api.CreatePeripheralPolicyAsync(
+                _prpName.Trim(), string.IsNullOrWhiteSpace(_prpDesc) ? null : _prpDesc.Trim(), _prpEnabled,
+                _prpClipboard, _prpDrive, _prpPrinter, _prpUsb, _prpAudio, _prpSmartCard, null);
+        }
+        else
+        {
+            ok = await Api.UpdatePeripheralPolicyAsync(
+                _prpEditId, _prpName.Trim(), _prpEnabled,
+                _prpClipboard, _prpDrive, _prpPrinter, _prpUsb, _prpAudio, _prpSmartCard);
+        }
+        _prpAddSaving = false;
+        if (!ok) { _prpAddError = "Failed to save policy."; StateHasChanged(); return; }
+        CloseAddPrpModal(); await LoadPrpAsync();
+    }
+
+    private void ConfirmDeletePrp(PeripheralRedirectionPolicyDto p) { _prpDeleteTarget = p; StateHasChanged(); }
+    private void CancelDeletePrp() { _prpDeleteTarget = null; StateHasChanged(); }
+
+    private async Task ExecuteDeletePrpAsync()
+    {
+        if (_prpDeleteTarget == null) return;
+        var id = _prpDeleteTarget.Id.ToString(); _prpDeleteTarget = null;
+        if (!await Api.DeletePeripheralPolicyAsync(id)) _error = "Failed to delete policy.";
+        await LoadPrpAsync();
     }
 }

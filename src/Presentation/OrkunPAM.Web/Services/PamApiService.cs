@@ -2879,6 +2879,67 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Peripheral Redirection Policy (#249)
+    public async Task<List<PeripheralRedirectionPolicyDto>?> GetPeripheralPoliciesAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var r = await client.GetFromJsonAsync<ListResult<PeripheralRedirectionPolicyDto>>("/api/v1/policies/peripheral");
+            return r?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> CreatePeripheralPolicyAsync(
+        string name, string? description, bool isEnabled,
+        bool allowClipboard, bool allowDrive, bool allowPrinter,
+        bool allowUsb, bool allowAudio, bool allowSmartCard,
+        Guid? deviceGroupId)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/peripheral", new
+            {
+                name, description, isEnabled,
+                allowClipboard, allowDriveRedirection = allowDrive,
+                allowPrinterRedirection = allowPrinter, allowUsbRedirection = allowUsb,
+                allowAudioRedirection = allowAudio, allowSmartCardRedirection = allowSmartCard,
+                deviceGroupId
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdatePeripheralPolicyAsync(
+        string id, string? name, bool? isEnabled,
+        bool? allowClipboard, bool? allowDrive, bool? allowPrinter,
+        bool? allowUsb, bool? allowAudio, bool? allowSmartCard)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/peripheral/{id}", new
+            {
+                name, isEnabled,
+                allowClipboard, allowDriveRedirection = allowDrive,
+                allowPrinterRedirection = allowPrinter, allowUsbRedirection = allowUsb,
+                allowAudioRedirection = allowAudio, allowSmartCardRedirection = allowSmartCard
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeletePeripheralPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/peripheral/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -4137,3 +4198,18 @@ public record CredentialTemplateDto(
     bool     IsBuiltIn,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
+
+public record PeripheralRedirectionPolicyDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    bool      IsEnabled,
+    bool      AllowClipboard,
+    bool      AllowDriveRedirection,
+    bool      AllowPrinterRedirection,
+    bool      AllowUsbRedirection,
+    bool      AllowAudioRedirection,
+    bool      AllowSmartCardRedirection,
+    Guid?     DeviceGroupId,
+    DateTime  CreatedAtUtc,
+    DateTime  UpdatedAtUtc);

@@ -709,9 +709,33 @@
 
 ---
 
+## Sprint 45 — Peripheral Redirection Control (#249)
+**Tarih:** 2026-05-21 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #249 | [MVP] RDP/VNC USB & Peripheral Redirection Control | MVP-SESSION | ✅ Tamamlandi |
+
+**Sprint 45 Tamamlanan Bilesenler (2026-05-21):**
+- **PeripheralRedirectionPolicy entity** (ProxySession.cs): Name, IsEnabled, AllowClipboard, AllowDriveRedirection, AllowPrinterRedirection, AllowUsbRedirection, AllowAudioRedirection, AllowSmartCardRedirection, DeviceGroupId FK
+- **Migration `20260521_AddPeripheralRedirectionPolicy`:** PeripheralRedirectionPolicies tablosu + 2 index (IsEnabled, DeviceGroupId)
+- **DbContext:** PeripheralRedirectionPolicies DbSet + OnModelCreating config
+- **PeripheralPolicyEndpoints.cs:** 5 endpoint — GET list, POST, GET {id}, PUT, DELETE (AdminPolicy) + GET /effective (X-Proxy-Secret); secure defaults when no policy configured
+- **Program.cs:** MapPeripheralPolicyEndpoints() kaydedildi
+- **PamApiService.cs:** PeripheralRedirectionPolicyDto + GetPeripheralPoliciesAsync, CreatePeripheralPolicyAsync, UpdatePeripheralPolicyAsync, DeletePeripheralPolicyAsync
+- **Policies.razor:** "Peripheral Control" tab — policy table (emoji channel indicators), New/Edit modal (checkbox toggles per channel), Delete confirm modal; SwitchTab case + LoadPrpAsync
+- **RDP PamApiClient:** GetPeripheralPolicyAsync() — X-Proxy-Secret header, fallback to secure defaults
+- **RdpCommandAuditor:** SetPeripheralPolicy() + ShouldBlockPdu() — CLIPRDR/RDPDR/RDPSND channels dropped when blocked; CLIPBOARD_REDIRECTION_BLOCKED / DRIVE_REDIRECTION_BLOCKED / AUDIO_REDIRECTION_BLOCKED audit log
+- **RdpServerSession:** peripheralPolicy fetched at session start, passed to auditor; PumpWithAuditAsync checks ShouldBlockPdu before forwarding
+- **RFP-CHECKLIST.md:** RA #26 → PC
+
+**Ilerleme:** 10/10 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 44 tamamlandi.** Credential Templates #248 push'landi, PV #21 → PC.
-**Siradaki:** #249 RDP/VNC Peripheral Redirection Control veya diger RFP gap items.
+**Sprint 45 tamamlandi.** Peripheral Redirection Control #249 push'landi, RA #26 → PC.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
