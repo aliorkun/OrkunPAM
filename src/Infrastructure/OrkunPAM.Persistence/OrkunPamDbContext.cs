@@ -1,24 +1,21 @@
 using Microsoft.EntityFrameworkCore;
-using OrkunPAM.Domain.Entities.Aapm;
-using OrkunPAM.Domain.Entities.Access;
 using OrkunPAM.Domain.Entities.Analytics;
+using OrkunPAM.Domain.Entities.Audit;
+using OrkunPAM.Domain.Entities.Cloud;
 using OrkunPAM.Domain.Entities.Compliance;
-using OrkunPAM.Domain.Entities.Crypto;
-using OrkunPAM.Domain.Entities.DirectAccess;
-using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Entities.Identity;
+using OrkunPAM.Domain.Entities.Integration;
 using OrkunPAM.Domain.Entities.Session;
-using OrkunPAM.Domain.Entities.System;
 using OrkunPAM.Domain.Entities.Vault;
-using OrkunPAM.Domain.Entities.Security;
-using OrkunPAM.Domain.Entities.Workflow;
-using OrkunPAM.SharedKernel;
+using OrkunPAM.Domain.Entities.Network;
 
 namespace OrkunPAM.Persistence;
 
-public class OrkunPamDbContext : DbContext, IUnitOfWork
+public sealed class OrkunPamDbContext : DbContext
 {
+    public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> opts) : base(opts) { }
+
     // Identity
     public DbSet<User> Users => Set<User>();
     public DbSet<Group> Groups => Set<Group>();
@@ -43,18 +40,19 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CheckOutHistory> CheckOutHistories => Set<CheckOutHistory>();
     public DbSet<CredentialShare> CredentialShares => Set<CredentialShare>();
 
-    // Device
+    // Devices
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<Platform> Platforms => Set<Platform>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<DeviceGroupMember> DeviceGroupMembers => Set<DeviceGroupMember>();
     public DbSet<DeviceCredential> DeviceCredentials => Set<DeviceCredential>();
 
-    // Session
+    // Sessions
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
     public DbSet<SessionObserverLog> SessionObserverLogs => Set<SessionObserverLog>();
+    public DbSet<ScreenCaptureFrame> ScreenCaptureFrames => Set<ScreenCaptureFrame>();
 
     // Analytics
     public DbSet<CommandRiskRule> CommandRiskRules => Set<CommandRiskRule>();
@@ -63,7 +61,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AlertHistory> AlertHistories => Set<AlertHistory>();
 
-    // Direct Access
+    // Network
     public DbSet<TacacsConfig> TacacsConfigs => Set<TacacsConfig>();
     public DbSet<RadiusConfig> RadiusConfigs => Set<RadiusConfig>();
     public DbSet<AvpDefinition> AvpDefinitions => Set<AvpDefinition>();
@@ -72,588 +70,69 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ComplianceFramework> ComplianceFrameworks => Set<ComplianceFramework>();
     public DbSet<ControlAssessment> ControlAssessments => Set<ControlAssessment>();
     public DbSet<SodRule> SodRules => Set<SodRule>();
-    public DbSet<AttestationCampaign> AttestationCampaigns => Set<AttestationCampaign>();
-    public DbSet<AttestationDecision> AttestationDecisions => Set<AttestationDecision>();
+    public DbSet<AccessCertificationCampaign> AccessCertificationCampaigns => Set<AccessCertificationCampaign>();
+    public DbSet<AccessCertificationItem> AccessCertificationItems => Set<AccessCertificationItem>();
 
-    // Vault Discovery
-    public DbSet<DiscoveryJob> DiscoveryJobs => Set<DiscoveryJob>();
-    public DbSet<DiscoveredAccount> DiscoveredAccounts => Set<DiscoveredAccount>();
+    // Audit
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
-    // AAPM
-    public DbSet<ApiClient> ApiClients => Set<ApiClient>();
-    public DbSet<ApiClientCredentialAccess> ApiClientCredentialAccess => Set<ApiClientCredentialAccess>();
-    public DbSet<ApiAccessLog> ApiAccessLogs => Set<ApiAccessLog>();
+    // Integration
+    public DbSet<SiemConfig> SiemConfigs => Set<SiemConfig>();
+    public DbSet<WebhookConfig> WebhookConfigs => Set<WebhookConfig>();
+    public DbSet<Itsm> Itsms => Set<Itsm>();
+    public DbSet<SoarConfig> SoarConfigs => Set<SoarConfig>();
 
-    // Workflow
-    public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
-    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
-    public DbSet<ApprovalStep> ApprovalSteps => Set<ApprovalStep>();
-
-    // Crypto
-    public DbSet<MasterKey> MasterKeys => Set<MasterKey>();
-    public DbSet<DataEncryptionKey> DataEncryptionKeys => Set<DataEncryptionKey>();
-
-    // System
-    public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
-    public DbSet<SystemConfig> SystemConfigs => Set<SystemConfig>();
-    public DbSet<BackgroundJob> BackgroundJobs => Set<BackgroundJob>();
-
-    // Security
-    public DbSet<BreakGlassEvent> BreakGlassEvents => Set<BreakGlassEvent>();
-    public DbSet<JitAccessRequest> JitAccessRequests => Set<JitAccessRequest>();
-    public DbSet<VendorAccess> VendorAccesses => Set<VendorAccess>();
-
-    // SIEM (#63)
-    public DbSet<SiemTarget> SiemTargets => Set<SiemTarget>();
-
-    // Backup (#55)
-    public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
-
-    // System Health Monitoring (#138)
-    public DbSet<SystemAlarmLog> SystemAlarmLogs => Set<SystemAlarmLog>();
-
-    // Connection Scheduling (#142)
-    public DbSet<ScheduledSession> ScheduledSessions => Set<ScheduledSession>();
-
-    // Scheduled Report Delivery (#159)
-    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
-
-    // FIDO2/WebAuthn (#158)
-    public DbSet<Fido2Credential> Fido2Credentials => Set<Fido2Credential>();
-
-    // Custom Report Builder (#169)
-    public DbSet<CustomReportDefinition> CustomReportDefinitions => Set<CustomReportDefinition>();
-
-    // PKI / Smart Card Authentication (#115)
-    public DbSet<TrustedCaCertificate> TrustedCaCertificates => Set<TrustedCaCertificate>();
-    public DbSet<PkiUserCertificate> PkiUserCertificates => Set<PkiUserCertificate>();
-
-    // Native Desktop Client SSO (#170)
-    public DbSet<LaunchToken> LaunchTokens => Set<LaunchToken>();
-
-    // Email OTP MFA (#178)
-    public DbSet<EmailOtpToken> EmailOtpTokens => Set<EmailOtpToken>();
-
-    // SMS OTP MFA (#215)
-    public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
-
-    // Session Tagging & Annotation (#216)
-    public DbSet<SessionAnnotation> SessionAnnotations => Set<SessionAnnotation>();
-
-    // Cloud PAM — AWS / Azure / GCP (#37)
-    public DbSet<CloudAccount> CloudAccounts => Set<CloudAccount>();
-    public DbSet<CloudResource> CloudResources => Set<CloudResource>();
-    public DbSet<CloudJitRequest> CloudJitRequests => Set<CloudJitRequest>();
-
-    // Certificate Lifecycle Management (#191)
-    public DbSet<ManagedCertificate> ManagedCertificates => Set<ManagedCertificate>();
-
-    // Threat Intelligence (#206)
-    public DbSet<ThreatIndicator>  ThreatIndicators  => Set<ThreatIndicator>();
-    public DbSet<ThreatFeedConfig> ThreatFeedConfigs => Set<ThreatFeedConfig>();
-
-    // Device Trust (#207)
-    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
-
-    // Access Assignment (PAM authorization matrix)
-    public DbSet<AccessAssignment> AccessAssignments => Set<AccessAssignment>();
-
-    // Assigned Credential (Kron PAM assigned_credential — credential → user/group mapping)
+    // Access Control (Realm Model)
     public DbSet<AssignedCredential> AssignedCredentials => Set<AssignedCredential>();
-
-    // Device Realm (Kron PAM model — user group × device group access matrix)
     public DbSet<DeviceRealm> DeviceRealms => Set<DeviceRealm>();
     public DbSet<DeviceRealmUserGroup> DeviceRealmUserGroups => Set<DeviceRealmUserGroup>();
     public DbSet<DeviceRealmDeviceGroup> DeviceRealmDeviceGroups => Set<DeviceRealmDeviceGroup>();
 
-    // Command Filter Policy (#231)
+    // Command Filter
     public DbSet<CommandFilterPolicy> CommandFilterPolicies => Set<CommandFilterPolicy>();
     public DbSet<CommandFilterPolicyRule> CommandFilterPolicyRules => Set<CommandFilterPolicyRule>();
 
-    public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
+    // MFA
+    public DbSet<MfaDevice> MfaDevices => Set<MfaDevice>();
+    public DbSet<SmsOtpToken> SmsOtpTokens => Set<SmsOtpToken>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    // Discovery & Certificates
+    public DbSet<DiscoveredAccount> DiscoveredAccounts => Set<DiscoveredAccount>();
+    public DbSet<CertificateEntry> CertificateEntries => Set<CertificateEntry>();
+    public DbSet<CredentialTemplate> CredentialTemplates => Set<CredentialTemplate>();
+
+    // Threat Intelligence
+    public DbSet<ThreatIndicator> ThreatIndicators => Set<ThreatIndicator>();
+    public DbSet<ThreatFeedSource> ThreatFeedSources => Set<ThreatFeedSource>();
+
+    // Reports
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+    public DbSet<CustomReportDefinition> CustomReportDefinitions => Set<CustomReportDefinition>();
+
+    // Cloud
+    public DbSet<CloudProvider> CloudProviders => Set<CloudProvider>();
+
+    // Vendor
+    public DbSet<VendorAccess> VendorAccesses => Set<VendorAccess>();
+
+    // Scheduled Sessions
+    public DbSet<ScheduledSession> ScheduledSessions => Set<ScheduledSession>();
+
+    // Geolocation
+    public DbSet<GeoAccessRule> GeoAccessRules => Set<GeoAccessRule>();
+
+    // Device Trust
+    public DbSet<TrustedDevice> TrustedDevices => Set<TrustedDevice>();
+
+    // Watermark
+    public DbSet<SessionWatermark> SessionWatermarks => Set<SessionWatermark>();
+
+    // Connection Profiles
+    public DbSet<ConnectionProfile> ConnectionProfiles => Set<ConnectionProfile>();
+
+    protected override void OnModelCreating(ModelBuilder model)
     {
-        base.OnModelCreating(modelBuilder);
-
-        // === Identity ===
-        modelBuilder.Entity<User>(e =>
-        {
-            e.HasIndex(u => u.NormalizedUsername).IsUnique();
-            e.HasIndex(u => u.Email);
-            e.Property(u => u.Username).HasMaxLength(256);
-            e.Property(u => u.NormalizedUsername).HasMaxLength(256);
-            e.Property(u => u.DisplayName).HasMaxLength(512);
-            e.Property(u => u.Email).HasMaxLength(512);
-            e.HasQueryFilter(u => !u.IsDeleted);
-        });
-
-        modelBuilder.Entity<UserGroup>(e =>
-        {
-            e.HasKey(ug => new { ug.UserId, ug.GroupId });
-            e.HasOne(ug => ug.User).WithMany(u => u.UserGroups).HasForeignKey(ug => ug.UserId);
-            e.HasOne(ug => ug.Group).WithMany(g => g.UserGroups).HasForeignKey(ug => ug.GroupId);
-        });
-
-        modelBuilder.Entity<UserRole>(e =>
-        {
-            e.HasKey(ur => new { ur.UserId, ur.RoleId });
-        });
-
-        modelBuilder.Entity<GroupRole>(e =>
-        {
-            e.HasKey(gr => new { gr.GroupId, gr.RoleId });
-        });
-
-        modelBuilder.Entity<Role>(e =>
-        {
-            e.HasIndex(r => r.Name).IsUnique();
-            e.Property(r => r.Name).HasMaxLength(128);
-        });
-
-        modelBuilder.Entity<Permission>(e =>
-        {
-            e.HasKey(p => p.Code);
-            e.Property(p => p.Code).HasMaxLength(128);
-            e.Property(p => p.Module).HasMaxLength(64);
-        });
-
-        modelBuilder.Entity<RolePermission>(e =>
-        {
-            e.HasKey(rp => new { rp.RoleId, rp.PermissionCode });
-            e.HasOne(rp => rp.Permission).WithMany().HasForeignKey(rp => rp.PermissionCode);
-        });
-
-        modelBuilder.Entity<UserPasswordHistory>(e =>
-        {
-            e.HasKey(h => h.Id);
-            e.Property(h => h.Id).ValueGeneratedOnAdd();
-            e.HasOne(h => h.User).WithMany(u => u.PasswordHistories).HasForeignKey(h => h.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(h => new { h.UserId, h.CreatedAtUtc });
-            e.Property(h => h.PasswordHash).HasMaxLength(512);
-        });
-
-        modelBuilder.Entity<Group>(e =>
-        {
-            e.Property(g => g.Name).HasMaxLength(256);
-            e.HasOne(g => g.ParentGroup).WithMany(g => g.ChildGroups).HasForeignKey(g => g.ParentGroupId);
-        });
-
-        // === Vault ===
-        modelBuilder.Entity<VaultFolder>(e =>
-        {
-            e.Property(f => f.Name).HasMaxLength(256);
-            e.HasOne(f => f.ParentFolder).WithMany(f => f.ChildFolders).HasForeignKey(f => f.ParentFolderId);
-        });
-
-        modelBuilder.Entity<Credential>(e =>
-        {
-            e.Property(c => c.Name).HasMaxLength(512);
-            e.Property(c => c.Username).HasMaxLength(512);
-            e.HasIndex(c => new { c.FolderId, c.Status });
-            e.HasOne(c => c.RotationPolicy).WithMany().HasForeignKey(c => c.RotationPolicyId);
-        });
-
-        modelBuilder.Entity<PasswordHistory>(e =>
-        {
-            e.HasKey(ph => ph.Id);
-            e.Property(ph => ph.Id).ValueGeneratedOnAdd();
-            e.HasIndex(ph => ph.CredentialId);
-        });
-
-        modelBuilder.Entity<CheckOutHistory>(e =>
-        {
-            e.HasKey(ch => ch.Id);
-            e.Property(ch => ch.Id).ValueGeneratedOnAdd();
-            e.HasIndex(ch => new { ch.CredentialId, ch.CheckedOutAtUtc });
-        });
-
-        // === Device ===
-        modelBuilder.Entity<Device>(e =>
-        {
-            e.Property(d => d.Hostname).HasMaxLength(256);
-            e.Property(d => d.IpAddress).HasMaxLength(45);
-            e.HasIndex(d => d.Hostname);
-            e.HasIndex(d => d.IpAddress);
-        });
-
-        modelBuilder.Entity<DeviceGroupMember>(e =>
-        {
-            e.HasKey(dgm => new { dgm.DeviceId, dgm.DeviceGroupId });
-        });
-
-        modelBuilder.Entity<DeviceCredential>(e =>
-        {
-            e.HasKey(dc => new { dc.DeviceId, dc.CredentialId });
-        });
-
-        // === Session ===
-        modelBuilder.Entity<ProxySession>(e =>
-        {
-            e.HasIndex(s => new { s.UserId, s.StartedAtUtc });
-            e.HasIndex(s => s.Status);
-            e.Property(s => s.SessionTokenHash).HasMaxLength(64);
-            e.HasIndex(s => s.SessionTokenHash).IsUnique().HasFilter("[SessionTokenHash] IS NOT NULL");
-        });
-
-        modelBuilder.Entity<CommandLog>(e =>
-        {
-            e.HasKey(cl => cl.Id);
-            e.Property(cl => cl.Id).ValueGeneratedOnAdd();
-            e.HasIndex(cl => cl.SessionId);
-        });
-
-        // === Crypto ===
-        modelBuilder.Entity<MasterKey>(e =>
-        {
-            e.HasKey(mk => mk.Id);
-            e.Property(mk => mk.Id).ValueGeneratedOnAdd();
-            e.HasIndex(mk => mk.KeyVersion).IsUnique();
-        });
-
-        modelBuilder.Entity<DataEncryptionKey>(e =>
-        {
-            e.HasKey(dek => dek.Id);
-            e.Property(dek => dek.Id).ValueGeneratedOnAdd();
-            e.HasIndex(dek => dek.KeyVersion).IsUnique();
-        });
-
-        // === System ===
-        modelBuilder.Entity<AuditLogEntry>(e =>
-        {
-            e.HasKey(a => a.Id);
-            e.Property(a => a.Id).ValueGeneratedOnAdd();
-            e.HasIndex(a => a.Timestamp);
-            e.HasIndex(a => new { a.ActorUserId, a.Timestamp });
-            e.HasIndex(a => new { a.TargetType, a.TargetId });
-            e.Property(a => a.EventType).HasMaxLength(128);
-        });
-
-        modelBuilder.Entity<SystemConfig>(e =>
-        {
-            e.HasKey(sc => sc.Key);
-            e.Property(sc => sc.Key).HasMaxLength(256);
-        });
-
-        modelBuilder.Entity<SystemAlarmLog>(e =>
-        {
-            e.HasKey(s => s.Id);
-            e.Property(s => s.Id).ValueGeneratedOnAdd();
-            e.HasIndex(s => s.OccurredAtUtc);
-            e.HasIndex(s => new { s.MetricName, s.Status });
-            e.Property(s => s.MetricName).HasMaxLength(64);
-            e.Property(s => s.Severity).HasMaxLength(32);
-            e.Property(s => s.Status).HasMaxLength(32);
-        });
-
-        // === Analytics ===
-        modelBuilder.Entity<Anomaly>(e =>
-        {
-            e.HasKey(a => a.Id);
-            e.Property(a => a.Id).ValueGeneratedOnAdd();
-            e.HasIndex(a => new { a.UserId, a.DetectedAtUtc });
-        });
-
-        modelBuilder.Entity<AlertHistory>(e =>
-        {
-            e.HasKey(h => h.Id);
-            e.Property(h => h.Id).ValueGeneratedOnAdd();
-        });
-
-        // === Compliance ===
-        modelBuilder.Entity<AttestationDecision>(e =>
-        {
-            e.HasKey(d => d.Id);
-            e.Property(d => d.Id).ValueGeneratedOnAdd();
-            e.Property(d => d.SubjectUsername).HasMaxLength(256);
-            e.Property(d => d.ResourceName).HasMaxLength(512);
-            e.HasIndex(d => d.CampaignId);
-        });
-
-        modelBuilder.Entity<AttestationCampaign>(e =>
-        {
-            e.Property(c => c.Name).HasMaxLength(256);
-            e.HasIndex(c => c.Status);
-        });
-
-        // === AAPM ===
-        modelBuilder.Entity<ApiClient>(e =>
-        {
-            e.HasIndex(ac => ac.ClientId).IsUnique();
-        });
-
-        modelBuilder.Entity<ApiClientCredentialAccess>(e =>
-        {
-            e.HasKey(x => new { x.ApiClientId, x.CredentialId });
-        });
-
-        modelBuilder.Entity<ApiAccessLog>(e =>
-        {
-            e.HasKey(l => l.Id);
-            e.Property(l => l.Id).ValueGeneratedOnAdd();
-            e.HasIndex(l => new { l.ApiClientId, l.RequestedAtUtc });
-        });
-
-        // === Workflow ===
-        modelBuilder.Entity<ApprovalRequest>(e =>
-        {
-            e.HasIndex(ar => new { ar.RequesterId, ar.Status });
-        });
-
-        modelBuilder.Entity<ApprovalStep>(e =>
-        {
-            e.HasKey(s => s.Id);
-            e.Property(s => s.Id).ValueGeneratedOnAdd();
-            e.HasOne(s => s.Request).WithMany(r => r.Steps).HasForeignKey(s => s.RequestId);
-        });
-
-        // === Vendor Access (#127) ===
-        modelBuilder.Entity<VendorAccess>(e =>
-        {
-            e.HasIndex(v => v.InviteToken).IsUnique();
-            e.HasIndex(v => v.Status);
-            e.Property(v => v.VendorName).HasMaxLength(256);
-            e.Property(v => v.Company).HasMaxLength(256);
-            e.Property(v => v.Email).HasMaxLength(512);
-            e.Property(v => v.InviteToken).HasMaxLength(128);
-        });
-
-        // === Connection Scheduling (#142) ===
-        modelBuilder.Entity<ScheduledSession>(e =>
-        {
-            e.HasIndex(s => s.RequesterId);
-            e.HasIndex(s => s.Status);
-            e.HasIndex(s => new { s.ScheduledStartUtc, s.Status });
-            e.Property(s => s.RequesterUsername).HasMaxLength(256);
-            e.Property(s => s.DeviceName).HasMaxLength(256);
-            e.Property(s => s.Reason).HasMaxLength(1024);
-            e.Property(s => s.AdminNotes).HasMaxLength(1024);
-            e.Property(s => s.ApprovedByUsername).HasMaxLength(256);
-        });
-
-        // === FIDO2/WebAuthn (#158) ===
-        modelBuilder.Entity<Fido2Credential>(e =>
-        {
-            e.HasIndex(f => f.CredentialIdB64).IsUnique();
-            e.HasIndex(f => f.UserId);
-            e.Property(f => f.FriendlyName).HasMaxLength(256);
-            e.Property(f => f.CredentialIdB64).HasMaxLength(512);
-        });
-
-        // === PKI / Smart Card Authentication (#115) ===
-        modelBuilder.Entity<TrustedCaCertificate>(e =>
-        {
-            e.HasIndex(c => c.Thumbprint).IsUnique();
-            e.Property(c => c.Name).HasMaxLength(256);
-            e.Property(c => c.Thumbprint).HasMaxLength(128);
-            e.Property(c => c.Subject).HasMaxLength(1024);
-            e.Property(c => c.Issuer).HasMaxLength(1024);
-        });
-
-        modelBuilder.Entity<PkiUserCertificate>(e =>
-        {
-            e.HasIndex(p => p.CertThumbprint).IsUnique();
-            e.HasIndex(p => p.UserId);
-            e.Property(p => p.CertThumbprint).HasMaxLength(128);
-            e.Property(p => p.SubjectDn).HasMaxLength(1024);
-            e.Property(p => p.IssuingCaThumbprint).HasMaxLength(128);
-        });
-
-        // === Native Desktop Client SSO (#170) ===
-        modelBuilder.Entity<LaunchToken>(e =>
-        {
-            e.HasIndex(t => t.ExpiresAtUtc);
-            e.HasIndex(t => new { t.UserId, t.CreatedAtUtc });
-            e.Property(t => t.Protocol).HasMaxLength(16);
-            e.Property(t => t.TargetHost).HasMaxLength(512);
-            e.Property(t => t.CreatedByUsername).HasMaxLength(256);
-        });
-
-        // === Email OTP MFA (#178) ===
-        modelBuilder.Entity<EmailOtpToken>(e =>
-        {
-            e.HasIndex(t => t.UserId);
-            e.HasIndex(t => t.ExpiresAtUtc);
-            e.Property(t => t.HashedCode).HasMaxLength(64);
-            e.Property(t => t.RequestedFromIp).HasMaxLength(64);
-        });
-
-        // === SMS OTP MFA (#215) ===
-        modelBuilder.Entity<SmsOtpToken>(e =>
-        {
-            e.HasIndex(t => t.UserId);
-            e.HasIndex(t => t.ExpiresAtUtc);
-            e.Property(t => t.HashedCode).HasMaxLength(64);
-            e.Property(t => t.RequestedFromIp).HasMaxLength(64);
-        });
-
-        // === Session Tagging & Annotation (#216) ===
-        modelBuilder.Entity<SessionAnnotation>(e =>
-        {
-            e.HasIndex(a => a.SessionId);
-            e.HasIndex(a => a.CreatedAtUtc);
-            e.Property(a => a.AuthorUsername).HasMaxLength(256);
-            e.Property(a => a.Note).HasMaxLength(4000);
-        });
-
-        // === Cloud PAM (#37) ===
-        modelBuilder.Entity<CloudAccount>(e =>
-        {
-            e.Property(a => a.Name).HasMaxLength(256);
-            e.Property(a => a.Provider).HasMaxLength(16);
-            e.Property(a => a.AccountIdentifier).HasMaxLength(256);
-            e.Property(a => a.Region).HasMaxLength(64);
-            e.HasIndex(a => a.Provider);
-            e.HasMany(a => a.Resources).WithOne(r => r.CloudAccount).HasForeignKey(r => r.CloudAccountId).OnDelete(DeleteBehavior.Cascade);
-        });
-        modelBuilder.Entity<CloudResource>(e =>
-        {
-            e.Property(r => r.Name).HasMaxLength(256);
-            e.Property(r => r.Provider).HasMaxLength(16);
-            e.Property(r => r.NativeId).HasMaxLength(1024);
-            e.Property(r => r.ResourceType).HasMaxLength(64);
-            e.Property(r => r.Region).HasMaxLength(64);
-            e.Property(r => r.Status).HasMaxLength(64);
-            e.Property(r => r.IpAddress).HasMaxLength(45);
-            e.HasIndex(r => new { r.Provider, r.ResourceType });
-            e.HasIndex(r => r.CloudAccountId);
-        });
-        modelBuilder.Entity<CloudJitRequest>(e =>
-        {
-            e.Property(j => j.RequestedByUsername).HasMaxLength(256);
-            e.Property(j => j.Permission).HasMaxLength(64);
-            e.Property(j => j.Status).HasMaxLength(32);
-            e.Property(j => j.TicketNumber).HasMaxLength(128);
-            e.HasIndex(j => j.Status);
-            e.HasIndex(j => j.RequestedAtUtc);
-            e.HasOne(j => j.CloudResource).WithMany(r => r.JitRequests).HasForeignKey(j => j.CloudResourceId).OnDelete(DeleteBehavior.Restrict);
-        });
-
-        // === Certificate Lifecycle Management (#191) ===
-        modelBuilder.Entity<ManagedCertificate>(e =>
-        {
-            e.HasIndex(c => c.Thumbprint).IsUnique();
-            e.HasIndex(c => c.NotAfter);
-            e.Property(c => c.SubjectCN).HasMaxLength(512);
-            e.Property(c => c.Thumbprint).HasMaxLength(128);
-            e.Property(c => c.SerialNumber).HasMaxLength(128);
-            e.Property(c => c.Issuer).HasMaxLength(1024);
-            e.Property(c => c.Source).HasMaxLength(32);
-            e.Property(c => c.KeyAlgorithm).HasMaxLength(32);
-        });
-
-        modelBuilder.Entity<ThreatIndicator>(e =>
-        {
-            e.HasIndex(t => new { t.IndicatorType, t.Value }).IsUnique();
-            e.HasIndex(t => t.ExpiresAtUtc);
-            e.Property(t => t.IndicatorType).HasMaxLength(16);
-            e.Property(t => t.Value).HasMaxLength(512);
-            e.Property(t => t.Source).HasMaxLength(64);
-        });
-
-        modelBuilder.Entity<ThreatFeedConfig>(e =>
-        {
-            e.Property(t => t.Name).HasMaxLength(256);
-            e.Property(t => t.FeedUrl).HasMaxLength(1024);
-            e.Property(t => t.FeedType).HasMaxLength(32);
-        });
-
-        modelBuilder.Entity<TrustedDevice>(e =>
-        {
-            e.HasIndex(t => new { t.UserId, t.DeviceFingerprint }).IsUnique();
-            e.Property(t => t.DeviceFingerprint).HasMaxLength(64);
-            e.Property(t => t.DeviceName).HasMaxLength(256);
-            e.Property(t => t.UserAgent).HasMaxLength(1024);
-        });
-
-        // === Access Assignment ===
-        modelBuilder.Entity<AccessAssignment>(e =>
-        {
-            e.HasIndex(a => new { a.PrincipalType, a.PrincipalId });
-            e.HasIndex(a => new { a.TargetType, a.TargetId });
-            e.HasIndex(a => a.CredentialId);
-        });
-
-        // === Session Observer Log (#214) ===
-        modelBuilder.Entity<SessionObserverLog>(e =>
-        {
-            e.HasIndex(o => o.SessionId);
-            e.HasIndex(o => o.ObserverUserId);
-            e.Property(o => o.ObserverUsername).HasMaxLength(256);
-        });
-
-        // === Assigned Credential (Kron PAM model) ===
-        modelBuilder.Entity<AssignedCredential>(e =>
-        {
-            e.Property(a => a.Notes).HasMaxLength(1024);
-            e.HasOne(a => a.Credential).WithMany().HasForeignKey(a => a.CredentialId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(a => a.DeviceGroup).WithMany().HasForeignKey(a => a.DeviceGroupId).OnDelete(DeleteBehavior.SetNull);
-            e.HasIndex(a => a.CredentialId);
-            e.HasIndex(a => a.PrincipalId);
-            // Partial unique index: DeviceGroupId IS NOT NULL
-            e.HasIndex(a => new { a.CredentialId, a.PrincipalType, a.PrincipalId, a.DeviceGroupId })
-             .IsUnique()
-             .HasFilter("[DeviceGroupId] IS NOT NULL");
-            // Partial unique index: DeviceGroupId IS NULL
-            e.HasIndex(a => new { a.CredentialId, a.PrincipalType, a.PrincipalId })
-             .IsUnique()
-             .HasFilter("[DeviceGroupId] IS NULL");
-        });
-
-        // === Device Realm (Kron PAM model) ===
-        modelBuilder.Entity<DeviceRealm>(e =>
-        {
-            e.Property(r => r.Name).HasMaxLength(256);
-            e.Property(r => r.Description).HasMaxLength(1024);
-            e.HasIndex(r => r.Name).IsUnique();
-            e.HasMany(r => r.UserGroups).WithOne(rg => rg.DeviceRealm).HasForeignKey(rg => rg.DeviceRealmId).OnDelete(DeleteBehavior.Cascade);
-            e.HasMany(r => r.DeviceGroups).WithOne(rg => rg.DeviceRealm).HasForeignKey(rg => rg.DeviceRealmId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<DeviceRealmUserGroup>(e =>
-        {
-            e.HasKey(rg => new { rg.DeviceRealmId, rg.UserGroupId });
-            e.HasOne(rg => rg.UserGroup).WithMany().HasForeignKey(rg => rg.UserGroupId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<DeviceRealmDeviceGroup>(e =>
-        {
-            e.HasKey(rg => new { rg.DeviceRealmId, rg.DeviceGroupId });
-            e.HasOne(rg => rg.DeviceGroup).WithMany().HasForeignKey(rg => rg.DeviceGroupId).OnDelete(DeleteBehavior.Cascade);
-        });
-
-        // === Command Filter Policy (#231) ===
-        modelBuilder.Entity<CommandFilterPolicy>(e =>
-        {
-            e.Property(p => p.Name).HasMaxLength(256);
-            e.Property(p => p.Description).HasMaxLength(1024);
-            e.Property(p => p.Mode).HasConversion<byte>();
-            e.HasMany(p => p.Rules).WithOne().HasForeignKey(r => r.PolicyId).OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(p => p.IsEnabled);
-        });
-
-        modelBuilder.Entity<CommandFilterPolicyRule>(e =>
-        {
-            e.Property(r => r.Pattern).HasMaxLength(512);
-            e.Property(r => r.Action).HasMaxLength(32);
-            e.Property(r => r.Justification).HasMaxLength(1024);
-            e.HasIndex(r => r.PolicyId);
-        });
-
-        // Seed built-in data
-        modelBuilder.Entity<Role>().HasData(SeedData.GetRoles());
-        modelBuilder.Entity<Permission>().HasData(SeedData.GetPermissions());
-        modelBuilder.Entity<RolePermission>().HasData(SeedData.GetRolePermissions());
-    }
-
-    public override Task<int> SaveChangesAsync(CancellationToken ct = default)
-    {
-        // Auto-set audit fields
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
-        {
-            if (entry.State == EntityState.Modified)
-                entry.Entity.UpdatedAtUtc = DateTime.UtcNow;
-        }
-        return base.SaveChangesAsync(ct);
+        base.OnModelCreating(model);
+        // All configuration is handled by conventions + data annotations on entities.
     }
 }
