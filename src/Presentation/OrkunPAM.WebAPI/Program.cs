@@ -516,6 +516,8 @@ try
     api.MapCommandFilterPolicyEndpoints();
     api.MapSessionComplianceEndpoints();
     api.MapRotationScriptEndpoints();
+    api.MapScreenCaptureEndpoints();
+    api.MapCredentialTemplateEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

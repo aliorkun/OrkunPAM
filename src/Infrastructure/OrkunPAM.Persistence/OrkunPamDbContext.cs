@@ -171,6 +171,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CommandFilterPolicy> CommandFilterPolicies => Set<CommandFilterPolicy>();
     public DbSet<CommandFilterPolicyRule> CommandFilterPolicyRules => Set<CommandFilterPolicyRule>();
 
+    // === Credential Templates (#248) ===
+    public DbSet<CredentialTemplate> CredentialTemplates => Set<CredentialTemplate>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -302,15 +305,6 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasKey(cl => cl.Id);
             e.Property(cl => cl.Id).ValueGeneratedOnAdd();
             e.HasIndex(cl => cl.SessionId);
-        });
-
-        modelBuilder.Entity<ScreenCaptureFrame>(e =>
-        {
-            e.HasKey(f => f.Id);
-            e.Property(f => f.Id).ValueGeneratedOnAdd();
-            e.HasIndex(f => f.SessionId);
-            e.HasIndex(f => new { f.SessionId, f.FrameIndex }).IsUnique();
-            e.Property(f => f.SessionType).HasMaxLength(50).HasDefaultValue("Unknown");
         });
 
         // === Crypto ===
@@ -648,6 +642,20 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(r => r.Action).HasMaxLength(32);
             e.Property(r => r.Justification).HasMaxLength(1024);
             e.HasIndex(r => r.PolicyId);
+        });
+
+        // === Credential Templates (#248) ===
+        modelBuilder.Entity<CredentialTemplate>(e =>
+        {
+            e.Property(t => t.Name).HasMaxLength(120).IsRequired();
+            e.Property(t => t.Description).HasMaxLength(500);
+            e.Property(t => t.DeviceType).HasMaxLength(80).IsRequired();
+            e.Property(t => t.DefaultUsername).HasMaxLength(120);
+            e.Property(t => t.CredentialKind).HasMaxLength(40).HasDefaultValue("Linux");
+            e.Property(t => t.Notes).HasMaxLength(1000);
+            e.Property(t => t.RotationPeriodDays).HasDefaultValue(90);
+            e.Property(t => t.PasswordMinLength).HasDefaultValue(16);
+            e.HasIndex(t => t.Name).IsUnique();
         });
 
         // Seed built-in data
