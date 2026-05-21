@@ -35,6 +35,8 @@ public class Credential : AuditableEntity
     public bool IsTakenOver { get; set; }
     public Guid? RotationPolicyId { get; set; }
     public RotationPolicy? RotationPolicy { get; set; }
+    public Guid? RotationScriptId { get; set; }
+    public RotationScript? RotationScript { get; set; }
     public DateTime? LastRotatedAtUtc { get; set; }
     public DateTime? NextRotationAtUtc { get; set; }
     public Guid? CheckedOutByUserId { get; set; }
@@ -108,6 +110,20 @@ public class PasswordHistory
     public DateTime ChangedAtUtc { get; set; } = DateTime.UtcNow;
     public Guid? ChangedBy { get; set; }
     public PasswordChangeReason ChangeReason { get; set; }
+}
+
+public class RotationScript : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string DeviceType { get; set; } = string.Empty;
+    public RotationScriptType ScriptType { get; set; } = RotationScriptType.PowerShell;
+    public string ScriptContent { get; set; } = string.Empty;
+    public string? TestScriptContent { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public Guid? CredentialId { get; set; }
+    public Credential? Credential { get; set; }
+    public Guid? DeviceGroupId { get; set; }
 }
 
 public class RotationPolicy : AuditableEntity
