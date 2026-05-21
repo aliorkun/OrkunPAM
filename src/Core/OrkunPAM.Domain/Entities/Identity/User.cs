@@ -32,6 +32,9 @@ public class User : SoftDeletableEntity
     public bool IsOrphaned { get; set; }
     public DateTime? OrphanedDetectedAtUtc { get; set; }
 
+    // API Key service accounts (#250)
+    public bool IsServiceAccount { get; set; }
+
     // Vendor user fields (#186)
     public UserType UserType { get; set; } = UserType.Regular;
     public Guid? VendorSponsorUserId { get; set; }

@@ -21,6 +21,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
 {
     // Identity
     public DbSet<User> Users => Set<User>();
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<Group> Groups => Set<Group>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
@@ -654,6 +655,20 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(p => p.Description).HasMaxLength(1024);
             e.HasIndex(p => p.IsEnabled);
             e.HasIndex(p => p.DeviceGroupId);
+        });
+
+        // === API Keys (#250) ===
+        modelBuilder.Entity<ApiKey>(e =>
+        {
+            e.Property(k => k.Name).HasMaxLength(256).IsRequired();
+            e.Property(k => k.Description).HasMaxLength(1024);
+            e.Property(k => k.Prefix).HasMaxLength(16).IsRequired();
+            e.HasOne(k => k.ServiceAccountUser).WithMany().HasForeignKey(k => k.ServiceAccountUserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(k => k.Prefix).IsUnique();
+            e.HasIndex(k => k.ServiceAccountUserId);
+            e.HasIndex(k => k.IsActive);
+            e.Property(k => k.UsageCount).HasDefaultValue(0L);
+            e.Property(k => k.IsActive).HasDefaultValue(true);
         });
 
         // === Credential Templates (#248) ===

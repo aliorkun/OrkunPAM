@@ -415,6 +415,7 @@ try
     app.UseCors();
     app.UseRateLimiter();
     app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
+    app.UseMiddleware<ApiKeyAuthMiddleware>(); // #250 — before UseAuthentication
     app.UseAuthentication();
     app.UseAuthorization();
 
@@ -518,6 +519,7 @@ try
     api.MapRotationScriptEndpoints();
     api.MapScreenCaptureEndpoints();
     api.MapPeripheralPolicyEndpoints();
+    api.MapApiKeyEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
