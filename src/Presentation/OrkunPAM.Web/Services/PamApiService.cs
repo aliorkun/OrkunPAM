@@ -52,248 +52,269 @@ public sealed class PamApiService
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PatchAsJsonAsync($"/api/v1/users/{id}/status",
-                new { status = newStatus });
+            var resp = await client.PatchAsJsonAsync($"/api/v1/users/{id}/status", new { status = newStatus });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> CreateUserAsync(string username, string? displayName, string? email,
-        string password, DateTime? expiresAt = null)
+    public async Task<UserDto?> GetUserAsync(string id)
+        => await GetAsync<UserDto>($"/api/v1/users/{id}");
+
+    public async Task<UserDto?> CreateUserAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/users", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<UserDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<UserDto?> UpdateUserAsync(string id, object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/users/{id}", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<UserDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> ResetUserPasswordAsync(string id, string newPassword)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/users",
-                new { username, displayName, email, password, authSource = "Local", expiresAt });
+            var resp = await client.PostAsJsonAsync($"/api/v1/users/{id}/reset-password", new { newPassword });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> UpdateUserAsync(string id, string? displayName, string? email,
-        DateTime? expiresAt = null, bool clearExpiry = false)
+    public async Task<bool> UnlockUserAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/users/{id}",
-                new { displayName, email, expiresAt, clearExpiry = clearExpiry ? (bool?)true : null });
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.PostAsync($"/api/v1/users/{id}/unlock", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<AccountPolicyDto?> GetAccountPolicyAsync()
+    public async Task<PagedResult<GroupDto>?> GetGroupsAsync(int page = 1, int pageSize = 50)
+        => await GetAsync<PagedResult<GroupDto>>($"/api/v1/users/groups?page={page}&pageSize={pageSize}");
+
+    public async Task<GroupDto?> CreateGroupAsync(string name, string? description = null)
     {
-        var result = await GetAsync<SingleResult<AccountPolicyDto>>("/api/v1/system/account-policy");
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/users/groups", new { name, description });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<GroupDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteGroupAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/users/groups/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddUserToGroupAsync(string groupId, string userId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/users/groups/{groupId}/members/{userId}", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> RemoveUserFromGroupAsync(string groupId, string userId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/users/groups/{groupId}/members/{userId}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Roles ──────────────────────────────────────────────────────────────────
+    public async Task<List<RoleDto>?> GetRolesAsync()
+    {
+        var result = await GetAsync<ListResult<RoleDto>>("/api/v1/users/roles");
         return result?.Data;
     }
 
-    public async Task<bool> SaveAccountPolicyAsync(int maxPasswordAgeDays, int maxInactivityDays, int warnDaysBefore)
+    public async Task<bool> AssignRoleAsync(string userId, string roleId)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync("/api/v1/system/account-policy",
-                new { maxPasswordAgeDays, maxInactivityDays, warnDaysBefore });
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.PostAsync($"/api/v1/users/{userId}/roles/{roleId}", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
+    public async Task<bool> RemoveRoleAsync(string userId, string roleId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/users/{userId}/roles/{roleId}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Devices ────────────────────────────────────────────────────────────────
     public async Task<PagedResult<DeviceDto>?> GetDevicesAsync(
-        string? search = null, string? type = null, int page = 1, int pageSize = 20)
+        string? search = null, string? type = null, string? status = null, int page = 1, int pageSize = 20)
     {
         var url = $"/api/v1/devices?page={page}&pageSize={pageSize}";
         if (!string.IsNullOrEmpty(search)) url += $"&search={Uri.EscapeDataString(search)}";
         if (!string.IsNullOrEmpty(type))   url += $"&type={type}";
+        if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
         return await GetAsync<PagedResult<DeviceDto>>(url);
     }
 
-    public async Task<bool> CreateDeviceAsync(
-        string hostname, string? fqdn, string? ipAddress,
-        string type, string protocol, int connectionPort, string? operatingSystem)
+    public async Task<DeviceDto?> GetDeviceAsync(string id)
+        => await GetAsync<DeviceDto>($"/api/v1/devices/{id}");
+
+    public async Task<DeviceDto?> CreateDeviceAsync(object payload)
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/devices",
-                new { hostname, fqdn, ipAddress, type, protocol, connectionPort, operatingSystem });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> UpdateDeviceAsync(
-        string id, string hostname, string? fqdn, string? ipAddress,
-        string type, string protocol, int connectionPort, string? operatingSystem)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/devices/{id}",
-                new { hostname, fqdn, ipAddress, type, protocol, connectionPort, operatingSystem });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<PagedResult<SessionDto>?> GetSessionsAsync(
-        string? status = null, int page = 1, int pageSize = 20)
-    {
-        var url = $"/api/v1/sessions?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
-        return await GetAsync<PagedResult<SessionDto>>(url);
-    }
-
-    public async Task<RdpLaunchResult?> LaunchRdpSessionAsync(string deviceId, string credentialId,
-        string? reason = null, string? ticketNumber = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/sessions/rdp/connect", new
-            {
-                deviceId     = Guid.Parse(deviceId),
-                credentialId = Guid.Parse(credentialId),
-                reason,
-                ticketNumber
-            });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/devices", payload);
             if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpLaunchResult>>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceDto>>(JsonOpts);
             return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<List<RdpHaNodeDto>?> GetRdpHaNodesAsync()
+    public async Task<DeviceDto?> UpdateDeviceAsync(string id, object payload)
     {
-        var result = await GetAsync<ListResult<RdpHaNodeDto>>("/api/v1/rdp/ha-nodes");
-        return result?.Data;
-    }
-
-    public async Task<List<RemoteAppDto>?> GetRemoteAppsAsync()
-    {
-        var result = await GetAsync<ListResult<RemoteAppDto>>("/api/v1/rdp/remoteapps");
-        return result?.Data;
-    }
-
-    public async Task<RdpLaunchResult?> LaunchRemoteAppAsync(
-        string deviceId, string credentialId, string appName, string? reason = null)
-    {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/rdp/remoteapp/connect", new
-            {
-                deviceId     = Guid.Parse(deviceId),
-                credentialId = Guid.Parse(credentialId),
-                appName,
-                reason
-            });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/devices/{id}", payload);
             if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpLaunchResult>>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceDto>>(JsonOpts);
             return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<RdpShadowResult?> ShadowSessionAsync(string sessionId)
+    public async Task<bool> DeleteDeviceAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/rdp/sessions/" + sessionId + "/shadow", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RdpShadowResult>>(JsonOpts);
-            return result?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<List<SessionDto>?> GetActiveSessionsAsync()
-    {
-        var result = await GetAsync<ListResult<SessionDto>>("/api/v1/sessions/active");
-        return result?.Data;
-    }
-
-    public async Task<List<FolderDto>?> GetFoldersAsync()
-    {
-        var result = await GetAsync<ListResult<FolderDto>>("/api/v1/vault/folders");
-        return result?.Data;
-    }
-
-    public async Task<List<CredentialDto>?> GetFolderCredentialsAsync(string folderId)
-    {
-        var result = await GetAsync<ListResult<CredentialDto>>(
-            $"/api/v1/vault/folders/{folderId}/credentials");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateFolderAsync(string name, string? description = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/folders",
-                new { name, description, parentFolderId = (string?)null });
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.DeleteAsync($"/api/v1/devices/{id}")).IsSuccessStatusCode; }
         catch { return false; }
     }
 
+    public async Task<bool> TestDeviceConnectivityAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/devices/{id}/test-connectivity", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Device Groups ──────────────────────────────────────────────────────────
+    public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
+    {
+        var result = await GetAsync<ListResult<DeviceGroupDto>>("/api/v1/devices/groups");
+        return result?.Data;
+    }
+
+    public async Task<DeviceGroupDto?> CreateDeviceGroupAsync(string name, string? description = null, Guid? parentId = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/devices/groups", new { name, description, parentId });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceGroupDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteDeviceGroupAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/devices/groups/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddDeviceToGroupAsync(string groupId, string deviceId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/devices/groups/{groupId}/members/{deviceId}", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> RemoveDeviceFromGroupAsync(string groupId, string deviceId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/devices/groups/{groupId}/members/{deviceId}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Credentials / Vault ────────────────────────────────────────────────────
     public async Task<PagedResult<CredentialDto>?> GetCredentialsAsync(
-        string? deviceId = null, string? search = null, int page = 1, int pageSize = 20)
+        string? search = null, string? type = null, Guid? deviceId = null, int page = 1, int pageSize = 20)
     {
         var url = $"/api/v1/vault/credentials?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(deviceId)) url += $"&deviceId={deviceId}";
-        if (!string.IsNullOrEmpty(search))   url += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrEmpty(search)) url += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrEmpty(type))   url += $"&type={type}";
+        if (deviceId.HasValue)             url += $"&deviceId={deviceId.Value}";
         return await GetAsync<PagedResult<CredentialDto>>(url);
     }
 
-    public async Task<bool> CreateCredentialAsync(
-        string name, int type, string? username, string? password,
-        string folderId, string? deviceId, string? description,
-        int maxCheckoutMinutes, bool requiresApproval, string? privateKey = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials",
-                new { folderId, name, description, type, username, password, privateKey,
-                      deviceId, maxCheckoutMinutes, requiresApproval });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
+    public async Task<CredentialDto?> GetCredentialAsync(string id)
+        => await GetAsync<CredentialDto>($"/api/v1/vault/credentials/{id}");
 
-    public async Task<SshKeyPairDto?> GenerateSshKeyPairAsync()
+    public async Task<CredentialDto?> CreateCredentialAsync(object payload)
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsync("/api/v1/vault/credentials/generate-ssh-key", null);
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/credentials", payload);
             if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<SshKeyPairDto>>(JsonOpts);
-            return r?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CredentialDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<CheckoutResultDto?> CheckoutCredentialAsync(
-        string id, string? reason, string? ticketNumber, int? durationMinutes)
+    public async Task<CredentialDto?> UpdateCredentialAsync(string id, object payload)
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync(
-                $"/api/v1/vault/credentials/{id}/checkout",
-                new { reason, ticketNumber, durationMinutes });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/vault/credentials/{id}", payload);
             if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CheckoutResultDto>>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CredentialDto>>(JsonOpts);
             return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteCredentialAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/vault/credentials/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<string?> CheckoutCredentialAsync(string id, string? reason = null, int? durationMinutes = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/vault/credentials/{id}/checkout",
+                new { reason, durationMinutes });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CheckoutDto>>(JsonOpts);
+            return result?.Data?.Password;
         }
         catch { return null; }
     }
@@ -301,1995 +322,571 @@ public sealed class PamApiService
     public async Task<bool> CheckinCredentialAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            return (await client.PostAsync(
-                $"/api/v1/vault/credentials/{id}/checkin", null)).IsSuccessStatusCode;
-        }
+        try { return (await client.PostAsync($"/api/v1/vault/credentials/{id}/checkin", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<CredentialAccessRequestResult?> RequestCredentialAccessAsync(
-        string credentialId, string reason, string? ticketId = null)
+    public async Task<bool> RotateCredentialAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync(
-                "/api/v1/vault/credentials/access-request",
-                new { credentialId, reason, ticketId });
-            if (!resp.IsSuccessStatusCode)
-                return new CredentialAccessRequestResult(false, null, "Request failed: " + resp.StatusCode);
-            return await resp.Content.ReadFromJsonAsync<CredentialAccessRequestResult>(JsonOpts);
-        }
-        catch (Exception ex)
-        {
-            return new CredentialAccessRequestResult(false, null, ex.Message);
-        }
-    }
-
-    public async Task<SimpleResult<PolicyDto>?> GetPoliciesAsync(string? type = null)
-    {
-        var url = "/api/v1/policies";
-        if (!string.IsNullOrEmpty(type)) url += $"?type={type}";
-        return await GetAsync<SimpleResult<PolicyDto>>(url);
-    }
-
-    public async Task<bool> CreatePolicyAsync(string name, string policyType, int scope, string policyJson, int priority)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/policies", new
-            {
-                name, policyType, scope,
-                scopeId    = (Guid?)null,
-                policyJson, priority
-            });
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.PostAsync($"/api/v1/vault/credentials/{id}/rotate", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<bool> TogglePolicyAsync(string id, bool enabled)
+    // ── Credential Groups ──────────────────────────────────────────────────────
+    public async Task<List<CredentialGroupDto>?> GetCredentialGroupsAsync()
     {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/policies/{id}",
-                new { isEnabled = enabled });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeletePolicyAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/policies/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Command Filter Policy (#231)
-    public async Task<List<CommandFilterPolicyDto>?> GetCommandFilterPoliciesAsync()
-    {
-        var result = await GetAsync<SimpleResult<CommandFilterPolicyDto>>("/api/v1/policies/command-filter");
+        var result = await GetAsync<ListResult<CredentialGroupDto>>("/api/v1/vault/credential-groups");
         return result?.Data;
     }
 
-    public async Task<CommandFilterPolicyDetailDto?> GetCommandFilterPolicyAsync(string id)
+    public async Task<CredentialGroupDto?> CreateCredentialGroupAsync(string name, string? description = null, Guid? parentId = null)
     {
-        var result = await GetAsync<SingleResult<CommandFilterPolicyDetailDto>>($"/api/v1/policies/command-filter/{id}");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateCommandFilterPolicyAsync(string name, string? description, bool isEnabled, string mode, string? deviceGroupId)
-    {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/policies/command-filter",
-                new { name, description, isEnabled, mode, deviceGroupId = deviceGroupId == null ? (Guid?)null : Guid.Parse(deviceGroupId) });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> UpdateCommandFilterPolicyAsync(string id, string? name, bool? isEnabled, string? mode)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/policies/command-filter/{id}", new { name, isEnabled, mode });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleCommandFilterPolicyAsync(string id, bool enabled)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/policies/command-filter/{id}/toggle", new { isEnabled = enabled });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteCommandFilterPolicyAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> AddCommandFilterRuleAsync(string policyId, string pattern, bool isRegex, string action, int riskScore, string? justification)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync($"/api/v1/policies/command-filter/{policyId}/rules",
-                new { pattern, isRegex, action, riskScore, justification });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteCommandFilterRuleAsync(string policyId, string ruleId)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{policyId}/rules/{ruleId}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<PasswordPolicySettingsDto?> GetPasswordPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<PasswordPolicySettingsDto>>("/api/v1/policy/password");
-        return result?.Data;
-    }
-
-    public async Task<bool> SavePasswordPolicyAsync(PasswordPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/policy/password", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<LockoutPolicySettingsDto?> GetLockoutPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<LockoutPolicySettingsDto>>("/api/v1/policy/lockout");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveLockoutPolicyAsync(LockoutPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/policy/lockout", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<SessionPolicySettingsDto?> GetSessionPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<SessionPolicySettingsDto>>("/api/v1/policy/session");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveSessionPolicyAsync(SessionPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/policy/session", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<int> GetPendingApprovalCountAsync()
-    {
-        var result = await GetAsync<PagedResult<object>>("/api/v1/approval-requests?status=Pending&pageSize=1");
-        return result?.Meta?.TotalCount ?? 0;
-    }
-
-    public async Task<List<PendingApprovalDto>?> GetPendingApprovalsAsync(string approverId)
-    {
-        var result = await GetAsync<SimpleResult<PendingApprovalDto>>(
-            "/api/v1/approval-requests/pending?approverId=" + Uri.EscapeDataString(approverId));
-        return result?.Data;
-    }
-
-    public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalsAsync(
-        string? status = null, int page = 1, int pageSize = 20)
-    {
-        var url = "/api/v1/approval-requests?page=" + page + "&pageSize=" + pageSize;
-        if (!string.IsNullOrEmpty(status)) url += "&status=" + Uri.EscapeDataString(status);
-        return await GetAsync<PagedResult<ApprovalRequestDto>>(url);
-    }
-
-    public async Task<bool> ApproveRequestAsync(string id, string? comments)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync(
-                "/api/v1/approval-requests/" + id + "/approve",
-                new { comments });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DenyRequestAsync(string id, string? comments)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync(
-                "/api/v1/approval-requests/" + id + "/deny",
-                new { comments });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RotateCredentialAsync(
-        string credentialId, string connector,
-        string? host = null, int? port = null, string? domain = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync(
-                "/api/v1/vault/credentials/" + credentialId + "/rotate",
-                new { connector, host, port, domain });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<ListResult<ReportDto>?> GetReportsListAsync()
-        => await GetAsync<ListResult<ReportDto>>("/api/v1/reports/");
-
-    public async Task<ReportRunResult?> RunReportAsync(string reportId, DateTime from, DateTime to)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/reports/" + reportId + "/run",
-                new { from, to });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/credential-groups", new { name, description, parentId });
             if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<ReportRunResult>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CredentialGroupDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    // --- FIDO2/WebAuthn Security Keys (#158) ---
-
-    public async Task<List<SecurityKeyDto>?> GetFido2CredentialsAsync()
+    public async Task<bool> DeleteCredentialGroupAsync(string id)
     {
-        var result = await GetAsync<ListResult<SecurityKeyDto>>("/api/v1/auth/fido2/credentials");
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/vault/credential-groups/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Access Assignments ─────────────────────────────────────────────────────
+    public async Task<List<AccessAssignmentDto>?> GetAccessAssignmentsAsync()
+    {
+        var result = await GetAsync<ListResult<AccessAssignmentDto>>("/api/v1/access/assignments");
         return result?.Data;
     }
 
-    public async Task<object?> Fido2RegisterBeginAsync()
+    public async Task<AccessAssignmentDto?> CreateAccessAssignmentAsync(object payload)
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.GetAsync("/api/v1/auth/fido2/register/begin");
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/access/assignments", payload);
             if (!resp.IsSuccessStatusCode) return null;
-            var json = await resp.Content.ReadFromJsonAsync<JsonDocument>(JsonOpts);
-            if (json == null) return null;
-            var root = json.RootElement;
-            if (root.TryGetProperty("success", out var s) && s.GetBoolean() &&
-                root.TryGetProperty("data", out var data))
-                return data.Clone();
-            return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<AccessAssignmentDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<bool> Fido2RegisterCompleteAsync(string credentialJson, string? friendlyName)
+    public async Task<bool> DeleteAccessAssignmentAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/access/assignments/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Device Realms ──────────────────────────────────────────────────────────
+    public async Task<List<DeviceRealmDto>?> GetDeviceRealmsAsync()
+    {
+        var result = await GetAsync<ListResult<DeviceRealmDto>>("/api/v1/access/realms");
+        return result?.Data;
+    }
+
+    public async Task<DeviceRealmDto?> GetDeviceRealmAsync(string id)
+        => await GetAsync<DeviceRealmDto>($"/api/v1/access/realms/{id}");
+
+    public async Task<DeviceRealmDto?> CreateDeviceRealmAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/access/realms", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceRealmDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<DeviceRealmDto?> UpdateDeviceRealmAsync(string id, object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/access/realms/{id}", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceRealmDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteDeviceRealmAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/access/realms/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Sessions ───────────────────────────────────────────────────────────────
+    public async Task<PagedResult<SessionDto>?> GetSessionsAsync(
+        string? status = null, Guid? userId = null, Guid? deviceId = null, int page = 1, int pageSize = 20)
+    {
+        var url = $"/api/v1/sessions?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
+        if (userId.HasValue)   url += $"&userId={userId.Value}";
+        if (deviceId.HasValue) url += $"&deviceId={deviceId.Value}";
+        return await GetAsync<PagedResult<SessionDto>>(url);
+    }
+
+    public async Task<SessionDto?> GetSessionAsync(string id)
+        => await GetAsync<SessionDto>($"/api/v1/sessions/{id}");
+
+    public async Task<SessionDto?> LaunchSessionAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/launch", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SessionDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> TerminateSessionAsync(string id, string? reason = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(credentialJson);
-            var root = doc.RootElement;
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/fido2/register/complete", new
-            {
-                clientDataJSON    = root.GetProperty("response").GetProperty("clientDataJSON").GetString(),
-                attestationObject = root.GetProperty("response").GetProperty("attestationObject").GetString(),
-                friendlyName
-            });
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/{id}/terminate", new { reason });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> Fido2RemoveCredentialAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/auth/fido2/credentials/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<Fido2AuthOptionsDto?> Fido2AuthBeginAsync(string username)
-    {
-        var httpClient = _factory.CreateClient("PamApi");
-        try
-        {
-            var resp = await httpClient.PostAsJsonAsync("/api/v1/auth/fido2/authenticate/begin",
-                new { username });
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<Fido2AuthOptionsDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<LoginResult?> Fido2AuthCompleteAsync(
-        string userId, string credentialId, string assertionJson)
-    {
-        var httpClient = _factory.CreateClient("PamApi");
-        try
-        {
-            using var doc  = System.Text.Json.JsonDocument.Parse(assertionJson);
-            var root = doc.RootElement;
-            var resp = await httpClient.PostAsJsonAsync("/api/v1/auth/fido2/authenticate/complete", new
-            {
-                userId,
-                credentialId,
-                clientDataJSON    = root.GetProperty("response").GetProperty("clientDataJSON").GetString(),
-                authenticatorData = root.GetProperty("response").GetProperty("authenticatorData").GetString(),
-                signature         = root.GetProperty("response").GetProperty("signature").GetString()
-            });
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    // --- Native CLI Connection Profiles (#150) ---
-
-    public async Task<ConnectionProfileDto?> GetConnectionProfileAsync(string deviceId, string credentialId, string client)
-    {
-        var url = $"/api/v1/sessions/connection-profile?deviceId={Uri.EscapeDataString(deviceId)}&credentialId={Uri.EscapeDataString(credentialId)}&client={Uri.EscapeDataString(client)}";
-        var result = await GetAsync<SingleResult<ConnectionProfileDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<ExecutiveDashboardDto?> GetExecutiveDashboardAsync(int days = 30, string? username = null)
-    {
-        var url = $"/api/v1/dashboard/executive?days={days}";
-        if (!string.IsNullOrEmpty(username))
-            url += "&actorUsername=" + Uri.EscapeDataString(username);
-        var result = await GetAsync<SingleResult<ExecutiveDashboardDto>>(url);
-        return result?.Data;
-    }
-
-    // --- Report Schedules (#159) ---
-
-    public async Task<ListResult<ReportScheduleDto>?> GetReportSchedulesAsync()
-        => await GetAsync<ListResult<ReportScheduleDto>>("/api/v1/reports/schedules/");
-
-    public async Task<bool> CreateReportScheduleAsync(CreateReportScheduleDto dto)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/reports/schedules/", dto)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> UpdateReportScheduleAsync(string id, UpdateReportScheduleDto dto)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync("/api/v1/reports/schedules/" + id, dto)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteReportScheduleAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/reports/schedules/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> RunReportScheduleNowAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/reports/schedules/" + id + "/run-now", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // --- Custom Report Builder (#169) ---
-
-    public async Task<List<CustomReportDefinitionDto>?> GetCustomReportsAsync()
-    {
-        var result = await GetAsync<ListResult<CustomReportDefinitionDto>>("/api/v1/reports/custom/");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveCustomReportAsync(
-        string name, string? description, string dataSource,
-        string filtersJson, string columnsJson)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/reports/custom/",
-            new { name, description, dataSource, filtersJson, columnsJson })).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteCustomReportAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/reports/custom/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<CustomReportResultDto?> PreviewCustomReportAsync(
-        string dataSource, string filtersJson, string columnsJson, int maxRows = 50)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/reports/custom/preview",
-                new { dataSource, filtersJson, columnsJson, maxRows });
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<CustomReportResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<CustomReportResultDto?> RunSavedCustomReportAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/reports/custom/" + id + "/run", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<CustomReportResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
+    // ── Audit Logs ─────────────────────────────────────────────────────────────
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
-        string? category = null, string? eventType = null,
-        DateTime? from = null, DateTime? to = null,
-        int page = 1, int pageSize = 50)
+        string? action = null, string? userId = null, DateTime? from = null, DateTime? to = null,
+        int page = 1, int pageSize = 20)
     {
-        var url = "/api/v1/audit-logs?page=" + page + "&pageSize=" + pageSize;
-        if (!string.IsNullOrEmpty(category)) url += "&category=" + Uri.EscapeDataString(category);
-        if (!string.IsNullOrEmpty(eventType)) url += "&eventType=" + Uri.EscapeDataString(eventType);
-        if (from.HasValue) url += "&from=" + Uri.EscapeDataString(from.Value.ToString("O"));
-        if (to.HasValue) url += "&to=" + Uri.EscapeDataString(to.Value.ToString("O"));
+        var url = $"/api/v1/audit?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(action)) url += $"&action={Uri.EscapeDataString(action)}";
+        if (!string.IsNullOrEmpty(userId)) url += $"&userId={userId}";
+        if (from.HasValue) url += $"&from={from.Value:O}";
+        if (to.HasValue)   url += $"&to={to.Value:O}";
         return await GetAsync<PagedResult<AuditLogDto>>(url);
     }
 
-    public async Task<AuditVerifyResult?> VerifyAuditIntegrityAsync()
-    {
-        var result = await GetAsync<SingleResult<AuditVerifyResult>>("/api/v1/audit-logs/verify");
-        return result?.Data;
-    }
+    public async Task<AuditLogDto?> GetAuditLogAsync(string id)
+        => await GetAsync<AuditLogDto>($"/api/v1/audit/{id}");
 
-    public async Task<List<LdapConfigDto>?> GetLdapConfigsAsync()
-    {
-        var result = await GetAsync<ListResult<LdapConfigDto>>("/api/v1/ldap-configs");
-        return result?.Data;
-    }
+    // ── System Settings ────────────────────────────────────────────────────────
+    public async Task<SystemSettingsDto?> GetSystemSettingsAsync()
+        => await GetAsync<SystemSettingsDto>("/api/v1/system/settings");
 
-    public async Task<bool> CreateLdapConfigAsync(string name, string host, int port, bool useSsl,
-        string baseDn, string? bindDn, int syncIntervalMinutes)
+    public async Task<bool> UpdateSystemSettingsAsync(object payload)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/ldap-configs",
-                new { name, host, port, useSsl, baseDn, bindDn, syncIntervalMinutes });
+            var resp = await client.PutAsJsonAsync("/api/v1/system/settings", payload);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<List<SiemTargetDto>?> GetSiemTargetsAsync()
-    {
-        var result = await GetAsync<ListResult<SiemTargetDto>>("/api/v1/integrations/siem");
-        return result?.Data;
-    }
+    // ── LDAP / AD ──────────────────────────────────────────────────────────────
+    public async Task<LdapConfigDto?> GetLdapConfigAsync()
+        => await GetAsync<LdapConfigDto>("/api/v1/system/ldap");
 
-    public async Task<bool> CreateSiemTargetAsync(string name, string host, int port,
-        string protocol, string format, int facility)
+    public async Task<bool> SaveLdapConfigAsync(object payload)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/integrations/siem",
-                new { name, host, port, protocol, format, facility, eventFilterJson = "[]" });
+            var resp = await client.PostAsJsonAsync("/api/v1/system/ldap", payload);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> DeleteSiemTargetAsync(string id)
+    public async Task<bool> TestLdapAsync()
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.DeleteAsync("/api/v1/integrations/siem/" + id);
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.PostAsync("/api/v1/system/ldap/test", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<bool> ToggleSiemTargetAsync(string id)
+    public async Task<LdapSyncResultDto?> SyncLdapAsync()
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsync("/api/v1/integrations/siem/" + id + "/toggle", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<(bool Success, string? Error, long Ms)> TestSiemTargetAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/integrations/siem/" + id + "/test", null);
-            if (!resp.IsSuccessStatusCode) return (false, "HTTP " + (int)resp.StatusCode, 0);
-            var r = await resp.Content.ReadFromJsonAsync<SiemTestResult>(JsonOpts);
-            return (r?.Success ?? false, r?.Data?.Error, r?.Data?.ResponseTimeMs ?? 0);
-        }
-        catch (Exception ex) { return (false, ex.Message, 0); }
-    }
-
-    // === ITSM Integration (#114) ===
-    public async Task<List<ItsmConfigDto>?> GetItsmConfigsAsync()
-    {
-        var result = await GetAsync<ListResult<ItsmConfigDto>>("/api/v1/integrations/itsm");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateItsmConfigAsync(string name, string provider, string baseUrl,
-        string? username, string? apiKey, string? password, bool requireTicket, bool validateTicket)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/integrations/itsm",
-                new { name, provider, baseUrl, username, apiKey, password, requireTicket, validateTicket });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteItsmConfigAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/integrations/itsm/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleItsmConfigAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsync("/api/v1/integrations/itsm/" + id + "/toggle", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<ItsmTestResultDto?> TestItsmConfigAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/integrations/itsm/" + id + "/test", null);
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync("/api/v1/system/ldap/sync", null);
             if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ItsmTestResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    // === Native Desktop Client SSO (#170) ===
-    public async Task<LaunchTokenResultDto?> GenerateLaunchTokenAsync(
-        string deviceId, string credentialId, string? protocol = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/sessions/launch-token",
-                new { deviceId = Guid.Parse(deviceId), credentialId = Guid.Parse(credentialId), protocol });
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<LaunchTokenResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    // === Email OTP MFA (#178) ===
-    public async Task<bool> RequestEmailOtpAsync(string username, string password)
-    {
-        var client = _factory.CreateClient("PamApi");
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/email-otp/request",
-                new { username, password });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<LoginResult?> VerifyEmailOtpAsync(string username, string code)
-    {
-        var client = _factory.CreateClient("PamApi");
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/email-otp/verify",
-                new { username, code });
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<LoginResult>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    // === PKI / Smart Card (#115) ===
-    public async Task<List<TrustedCaDto>?> GetTrustedCasAsync()
-    {
-        var result = await GetAsync<ListResult<TrustedCaDto>>("/api/v1/auth/pki/trusted-cas");
-        return result?.Data;
-    }
-
-    public async Task<bool> AddTrustedCaAsync(string name, string pemCertificate, string? ocspUrl, string? crlUrl, bool checkRevocation)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/pki/trusted-cas",
-                new { name, pemCertificate, ocspUrl, crlUrl, checkRevocation });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteTrustedCaAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/auth/pki/trusted-cas/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleTrustedCaAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsync("/api/v1/auth/pki/trusted-cas/" + id + "/toggle", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<List<PkiUserCertDto>?> GetPkiUserCertsAsync()
-    {
-        var result = await GetAsync<ListResult<PkiUserCertDto>>("/api/v1/auth/pki/user-certs");
-        return result?.Data;
-    }
-
-    public async Task<bool> MapUserCertAsync(string userId, string pemCertificate, bool requirePkiOnly)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/pki/user-certs",
-                new { userId, pemCertificate, requirePkiOnly });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeletePkiUserCertAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/auth/pki/user-certs/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // === Vendor Access (#127) ===
-    public async Task<List<VendorAccessDto>?> GetVendorAccessListAsync(string? status = null)
-    {
-        var url = "/api/v1/vendor-access";
-        if (!string.IsNullOrEmpty(status)) url += $"?status={status}";
-        var result = await GetAsync<PagedResult<VendorAccessDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<VendorCreateResult?> CreateVendorAccessAsync(
-        string vendorName, string? company, string email, string? phone,
-        DateTime startAtUtc, DateTime endAtUtc,
-        int? allowedHoursStart, int? allowedHoursEnd,
-        int maxSessionMinutesPerDay,
-        List<Guid> authorizedDeviceIds,
-        string? ipWhitelist, bool singleUseInvite = false)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vendor-access", new
-            {
-                vendorName, company, email, phone,
-                startAtUtc, endAtUtc,
-                allowedHoursStart, allowedHoursEnd,
-                maxSessionMinutesPerDay, authorizedDeviceIds,
-                ipWhitelist, singleUseInvite
-            });
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<VendorCreateResult>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    public async Task<bool> RevokeVendorAccessAsync(string id, string? reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync($"/api/v1/vendor-access/{id}/revoke",
-                new { reason });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<string?> ResendVendorInviteAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync($"/api/v1/vendor-access/{id}/resend", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<VendorResendResult>(JsonOpts);
-            return r?.PortalUrl;
-        }
-        catch { return null; }
-    }
-
-    // === Vendor Users (#186) ===
-    public async Task<List<VendorUserDto>?> GetVendorUsersAsync(string? status = null)
-    {
-        var url = "/api/v1/vendor";
-        if (!string.IsNullOrEmpty(status)) url += "?status=" + status;
-        var result = await GetAsync<PagedResult<VendorUserDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<VendorOnboardResult?> OnboardVendorAsync(
-        string displayName, string email, string? phone, string? company,
-        DateTime accessExpiresUtc, List<Guid>? authorizedDeviceIds)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vendor/onboard", new
-            {
-                displayName, email, phone, company, accessExpiresUtc, authorizedDeviceIds
-            });
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<VendorOnboardResult>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    public async Task<bool> ExtendVendorAccessAsync(Guid id, DateTime newExpiresUtc)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/vendor/{id}/extend", new { newExpiresUtc });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RevokeVendorUserAsync(Guid id, string? reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync($"/api/v1/vendor/{id}/revoke", new { reason });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<VendorSessionDto>?> GetVendorSessionsAsync(Guid id)
-    {
-        var result = await GetAsync<PagedResult<VendorSessionDto>>($"/api/v1/vendor/{id}/sessions");
-        return result?.Data;
-    }
-
-    // === Windows Auth Settings (#126) ===
-    public async Task<WindowsAuthSettingsDto?> GetWindowsAuthSettingsAsync()
-    {
-        var result = await GetAsync<SingleResult<WindowsAuthSettingsDto>>("/api/v1/system/windows-auth");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveWindowsAuthSettingsAsync(bool enabled, bool autoProvision, bool mfaBypass, string trustedDomains)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync("/api/v1/system/windows-auth",
-                new { enabled, autoProvision, mfaBypass, trustedDomains });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    // === Backup (#55) ===
-    public async Task<List<BackupRecordDto>?> GetBackupsAsync()
-    {
-        var result = await GetAsync<ListResult<BackupRecordDto>>("/api/v1/system/backup");
-        return result?.Data;
-    }
-
-    public async Task<BackupRecordDto?> CreateBackupAsync(string scope, string passphrase)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/system/backup",
-                new { scope, passphrase, initiatedBy = "admin" });
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BackupRecordDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<bool> DeleteBackupAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.DeleteAsync($"/api/v1/system/backup/{id}");
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> VerifyBackupAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync($"/api/v1/system/backup/{id}/verify", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public string GetBackupDownloadUrl(string id) => $"/api/v1/system/backup/{id}/download";
-
-    public async Task<BackupScheduleDto?> GetBackupScheduleAsync()
-    {
-        var result = await GetAsync<SingleResult<BackupScheduleDto>>("/api/v1/system/backup/schedule");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveBackupScheduleAsync(bool enabled, int hourUtc, string scope, string? passphrase)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync("/api/v1/system/backup/schedule",
-                new { enabled, hourUtc, scope, passphrase });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<(bool Success, string? Error, int RestoredCount)> RestoreBackupAsync(
-        byte[] fileBytes, string fileName, string passphrase, string conflictStrategy)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            using var form = new MultipartFormDataContent();
-            form.Add(new ByteArrayContent(fileBytes), "file", fileName);
-            form.Add(new StringContent(passphrase), "passphrase");
-            form.Add(new StringContent(conflictStrategy), "conflictStrategy");
-            var resp = await client.PostAsync("/api/v1/system/backup/restore", form);
-            if (!resp.IsSuccessStatusCode) return (false, "HTTP " + (int)resp.StatusCode, 0);
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BackupRestoreResultDto>>(JsonOpts);
-            return (true, null, r?.Data?.RestoredCount ?? 0);
-        }
-        catch (Exception ex) { return (false, ex.Message, 0); }
-    }
-
-    public async Task<LdapSyncApplyDto?> SyncLdapNowAsync(string configId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync($"/api/v1/ldap-configs/{configId}/sync", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<LdapSyncApplyDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<string?> GetSessionsExportCsvAsync(DateTime? from = null, DateTime? to = null)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var url = "/api/v1/reports/sessions/export?format=csv";
-            if (from.HasValue) url += "&from=" + Uri.EscapeDataString(from.Value.ToString("O"));
-            if (to.HasValue)   url += "&to="   + Uri.EscapeDataString(to.Value.ToString("O"));
-            var resp = await client.GetAsync(url);
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadAsStringAsync();
-        }
-        catch { return null; }
-    }
-
-    public async Task<AuthUser?> GetCurrentUserAsync() => await _auth.GetUserAsync();
-
-    public async Task<int> GetTotalCountAsync(string path)
-    {
-        var result = await GetAsync<PagedResultMeta>($"{path}?pageSize=1");
-        return result?.Meta?.TotalCount ?? 0;
-    }
-
-    public async Task<BreakGlassSubmitResult?> SubmitBreakGlassAsync(
-        string resourceType, Guid? resourceId, string? resourceName,
-        string emergencyReason, string? ticketNumber, int expiresInMinutes = 60)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/break-glass", new
-            {
-                resourceType, resourceId, resourceName,
-                emergencyReason, ticketNumber, expiresInMinutes
-            });
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<BreakGlassSubmitResult>>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<LdapSyncResultDto>>(JsonOpts);
             return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<PagedResult<BreakGlassDto>?> GetBreakGlassEventsAsync(
-        string? status = null, int page = 1, int pageSize = 50)
+    // ── RADIUS ─────────────────────────────────────────────────────────────────
+    public async Task<RadiusConfigDto?> GetRadiusConfigAsync()
+        => await GetAsync<RadiusConfigDto>("/api/v1/system/radius");
+
+    public async Task<bool> SaveRadiusConfigAsync(object payload)
     {
-        var url = $"/api/v1/break-glass?page={page}&pageSize={pageSize}";
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/radius", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> TestRadiusAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/system/radius/test", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── SIEM / Syslog ──────────────────────────────────────────────────────────
+    public async Task<SiemConfigDto?> GetSiemConfigAsync()
+        => await GetAsync<SiemConfigDto>("/api/v1/system/siem");
+
+    public async Task<bool> SaveSiemConfigAsync(object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/siem", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> TestSiemAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/system/siem/test", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Webhooks ───────────────────────────────────────────────────────────────
+    public async Task<List<WebhookDto>?> GetWebhooksAsync()
+    {
+        var result = await GetAsync<ListResult<WebhookDto>>("/api/v1/system/webhooks");
+        return result?.Data;
+    }
+
+    public async Task<WebhookDto?> CreateWebhookAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/webhooks", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<WebhookDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> UpdateWebhookAsync(string id, object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/system/webhooks/{id}", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteWebhookAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/webhooks/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> TestWebhookAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/system/webhooks/{id}/test", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Password Policies ──────────────────────────────────────────────────────
+    public async Task<List<PasswordPolicyDto>?> GetPasswordPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<PasswordPolicyDto>>("/api/v1/policies/password");
+        return result?.Data;
+    }
+
+    public async Task<PasswordPolicyDto?> GetPasswordPolicyAsync(string id)
+        => await GetAsync<PasswordPolicyDto>($"/api/v1/policies/password/{id}");
+
+    public async Task<PasswordPolicyDto?> CreatePasswordPolicyAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/password", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<PasswordPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<PasswordPolicyDto?> UpdatePasswordPolicyAsync(string id, object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/password/{id}", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<PasswordPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeletePasswordPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/password/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> SetDefaultPasswordPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/policies/password/{id}/set-default", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Session Policies ───────────────────────────────────────────────────────
+    public async Task<List<SessionPolicyDto>?> GetSessionPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<SessionPolicyDto>>("/api/v1/policies/session");
+        return result?.Data;
+    }
+
+    public async Task<SessionPolicyDto?> CreateSessionPolicyAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/session", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SessionPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<SessionPolicyDto?> UpdateSessionPolicyAsync(string id, object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/session/{id}", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SessionPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteSessionPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/session/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Approval Workflows ─────────────────────────────────────────────────────
+    public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalRequestsAsync(
+        string? status = null, int page = 1, int pageSize = 20)
+    {
+        var url = $"/api/v1/approvals?page={page}&pageSize={pageSize}";
         if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
-        return await GetAsync<PagedResult<BreakGlassDto>>(url);
+        return await GetAsync<PagedResult<ApprovalRequestDto>>(url);
     }
 
-    public async Task<ListResult<BreakGlassDto>?> GetMyBreakGlassEventsAsync()
-        => await GetAsync<ListResult<BreakGlassDto>>("/api/v1/break-glass/my");
+    public async Task<ApprovalRequestDto?> GetApprovalRequestAsync(string id)
+        => await GetAsync<ApprovalRequestDto>($"/api/v1/approvals/{id}");
 
-    public async Task<bool> AcknowledgeBreakGlassAsync(string id, string? notes)
+    public async Task<bool> ApproveRequestAsync(string id, string? comment = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync($"/api/v1/break-glass/{id}/acknowledge",
-                new { notes });
+            var resp = await client.PostAsJsonAsync($"/api/v1/approvals/{id}/approve", new { comment });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> RevokeBreakGlassAsync(string id, string? notes = null)
+    public async Task<bool> RejectRequestAsync(string id, string? comment = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync($"/api/v1/break-glass/{id}/revoke",
-                new { notes });
+            var resp = await client.PostAsJsonAsync($"/api/v1/approvals/{id}/reject", new { comment });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> SaveSmtpConfigAsync(string host, int port, string from,
-        string? fromName, string? username, string? password, bool useTls)
+    // ── Reports ────────────────────────────────────────────────────────────────
+    public async Task<DashboardStatsDto?> GetDashboardStatsAsync()
+        => await GetAsync<DashboardStatsDto>("/api/v1/reports/dashboard");
+
+    public async Task<ComplianceReportDto?> GetComplianceReportAsync(DateTime? from = null, DateTime? to = null)
+    {
+        var url = "/api/v1/reports/compliance";
+        if (from.HasValue || to.HasValue)
+        {
+            url += "?";
+            if (from.HasValue) url += $"from={from.Value:O}";
+            if (from.HasValue && to.HasValue) url += "&";
+            if (to.HasValue) url += $"to={to.Value:O}";
+        }
+        return await GetAsync<ComplianceReportDto>(url);
+    }
+
+    public async Task<List<ActivitySummaryDto>?> GetActivitySummaryAsync(int days = 7)
+    {
+        var result = await GetAsync<ListResult<ActivitySummaryDto>>($"/api/v1/reports/activity?days={days}");
+        return result?.Data;
+    }
+
+    // ── Notifications ──────────────────────────────────────────────────────────
+    public async Task<List<NotificationDto>?> GetNotificationsAsync(bool unreadOnly = false)
+    {
+        var result = await GetAsync<ListResult<NotificationDto>>($"/api/v1/notifications?unreadOnly={unreadOnly.ToString().ToLower()}");
+        return result?.Data;
+    }
+
+    public async Task<bool> MarkNotificationReadAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/notifications/{id}/read", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> MarkAllNotificationsReadAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/notifications/read-all", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── MFA ────────────────────────────────────────────────────────────────────
+    public async Task<MfaSetupDto?> GetMfaSetupAsync()
+        => await GetAsync<MfaSetupDto>("/api/v1/auth/mfa/setup");
+
+    public async Task<bool> EnableMfaAsync(string code)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PutAsJsonAsync("/api/v1/system/email/config",
-                new { host, port, from, fromName, username, password, useTls });
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/enable", new { code });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<Dictionary<string, string>?> GetSmtpConfigAsync()
-    {
-        var result = await GetAsync<SingleResult<Dictionary<string, string>>>("/api/v1/system/email/config");
-        return result?.Data;
-    }
-
-    public async Task<(bool Success, string Message)> TestSmtpAsync(string to)
+    public async Task<bool> DisableMfaAsync(string code)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/system/email/test", new { to });
-            if (!resp.IsSuccessStatusCode) return (false, "HTTP error");
-            var result = await resp.Content.ReadFromJsonAsync<SmtpTestResult>(JsonOpts);
-            return (result?.Success ?? false, result?.Message ?? "No response");
-        }
-        catch (Exception ex) { return (false, ex.Message); }
-    }
-
-    // === System Log Viewer (#160) ===
-
-    public async Task<PagedResult<SystemLogEntryDto>?> GetSystemLogsAsync(
-        string source = "api",
-        string? level = null,
-        DateTime? from = null,
-        DateTime? to = null,
-        string? search = null,
-        int page = 1,
-        int pageSize = 100)
-    {
-        var url = $"/api/v1/system/logs?source={source}&page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(level))  url += "&level=" + level;
-        if (from.HasValue)                 url += "&from=" + Uri.EscapeDataString(from.Value.ToString("o"));
-        if (to.HasValue)                   url += "&to="   + Uri.EscapeDataString(to.Value.ToString("o"));
-        if (!string.IsNullOrEmpty(search)) url += "&search=" + Uri.EscapeDataString(search);
-        return await GetAsync<PagedResult<SystemLogEntryDto>>(url);
-    }
-
-    // === System Health (#138) ===
-
-    public async Task<SystemHealthSnapshotDto?> GetSystemHealthAsync()
-    {
-        var result = await GetAsync<SingleResult<SystemHealthSnapshotDto>>("/api/v1/system/health");
-        return result?.Data;
-    }
-
-    public async Task<PagedResult<SystemAlarmDto>?> GetSystemAlarmsAsync(
-        string? status = null, string? severity = null, int page = 1, int pageSize = 50)
-    {
-        var url = $"/api/v1/system/health/alarms?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(status))   url += $"&status={status}";
-        if (!string.IsNullOrEmpty(severity))  url += $"&severity={severity}";
-        return await GetAsync<PagedResult<SystemAlarmDto>>(url);
-    }
-
-    public async Task<HealthAlarmConfigDto?> GetHealthAlarmConfigAsync()
-    {
-        var result = await GetAsync<SingleResult<HealthAlarmConfigDto>>("/api/v1/system/health/config");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveHealthAlarmConfigAsync(double cpuPct, double memMb,
-        double diskFreePct, string? recipients)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PutAsJsonAsync("/api/v1/system/health/config",
-                new { cpuWarningPct = cpuPct, memoryWarningMb = memMb,
-                      diskFreeWarningPct = diskFreePct, alarmRecipients = recipients });
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/disable", new { code });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> ClearAlarmAsync(long id)
+    public async Task<string[]?> GetMfaRecoveryCodesAsync(string code)
     {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync($"/api/v1/system/health/alarms/{id}/clear", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<KeyStatusDto?> GetEncryptionStatusAsync()
-    {
-        var result = await GetAsync<SingleResult<KeyStatusDto>>("/api/v1/system/encryption/status");
-        return result?.Data;
-    }
-
-    public async Task<(bool Ok, string? Message)> RotateEncryptionKeyAsync(
-        string newPassphrase, string confirmPassphrase)
-    {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/system/encryption/rotate",
-                new { newPassphrase, confirmPassphrase });
-            if (!resp.IsSuccessStatusCode) return (false, "HTTP error " + (int)resp.StatusCode);
-            var r = await resp.Content.ReadFromJsonAsync<SimpleMessageResult>(JsonOpts);
-            return (r?.Success ?? false, r?.Message);
-        }
-        catch (Exception ex) { return (false, ex.Message); }
-    }
-
-    public async Task<string?> ExportKeyBackupAsync(string backupPassphrase)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/system/encryption/backup",
-                new { backupPassphrase });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/recovery-codes", new { code });
             if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadAsStringAsync();
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RecoveryCodesDto>>(JsonOpts);
+            return result?.Data?.Codes;
         }
         catch { return null; }
     }
 
-    public async Task<MfaEnrollmentDto?> GetMfaEnrollmentAsync(string token)
+    // ── SSH Keys ───────────────────────────────────────────────────────────────
+    public async Task<List<SshKeyDto>?> GetSshKeysAsync()
     {
-        var result = await GetAsync<SingleResult<MfaEnrollmentDto>>(
-            "/api/v1/auth/mfa/enrollment?token=" + Uri.EscapeDataString(token));
+        var result = await GetAsync<ListResult<SshKeyDto>>("/api/v1/system/ssh-keys");
         return result?.Data;
     }
 
-    public async Task<MfaConfirmResult?> ConfirmMfaEnrollmentAsync(string token, string code)
+    public async Task<SshKeyDto?> CreateSshKeyAsync(string name, string? description = null, string keyType = "RSA", int keySize = 4096)
     {
-        var client = _factory.CreateClient("PamApi");
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/mfa/enrollment/confirm",
-                new { token, code });
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/ssh-keys",
+                new { name, description, keyType, keySize });
             if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<MfaConfirmResult>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    public async Task<bool> ResetUserMfaAsync(string userId)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync($"/api/v1/users/{userId}/mfa/reset", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<MfaSetupLinkDto?> GenerateMfaSetupLinkAsync(string userId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync($"/api/v1/users/{userId}/mfa/send-setup", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<MfaSetupLinkDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<List<JitRequestDto>?> GetJitRequestsAsync(string? status = null)
-    {
-        var url = "/api/v1/jit/requests";
-        if (!string.IsNullOrEmpty(status)) url += "?status=" + Uri.EscapeDataString(status);
-        var result = await GetAsync<JitListResult>(url);
-        return result?.Data;
-    }
-
-    public async Task<List<JitRequestDto>?> GetMyJitRequestsAsync()
-    {
-        var result = await GetAsync<JitListResult>("/api/v1/jit/requests/my");
-        return result?.Data;
-    }
-
-    public async Task<bool> SubmitJitRequestAsync(
-        string resourceType, string? resourceName, string reason, int durationMinutes)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/jit/requests", new
-            {
-                resourceType,
-                resourceId = (Guid?)null,
-                resourceName,
-                reason,
-                durationMinutes
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ApproveJitRequestAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/jit/requests/" + id + "/approve", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> DenyJitRequestAsync(string id, string? reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/deny",
-                new { reason })).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RevokeJitRequestAsync(string id, string? reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/revoke",
-                new { reason })).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RequestJitExtensionAsync(string id, int additionalMinutes, string? reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            return (await client.PostAsJsonAsync("/api/v1/jit/requests/" + id + "/extend",
-                new { additionalMinutes, reason })).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ApproveJitExtensionAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            return (await client.PostAsync(
-                "/api/v1/jit/requests/" + id + "/approve-extension", null)).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<DiscoveryJobDto>?> GetDiscoveryJobsAsync()
-    {
-        var result = await GetAsync<ListResult<DiscoveryJobDto>>("/api/v1/vault/discovery-jobs");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateDiscoveryJobAsync(string name, string discoveryType, string? targetScope, string? schedule)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovery-jobs", new
-            {
-                name, discoveryType, targetScope, schedule,
-                createdBy = (Guid?)null
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<DiscoveryScanResultDto?> RunDiscoveryJobAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/vault/discovery-jobs/" + id + "/run", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DiscoveryScanResultDto>>(JsonOpts);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SshKeyDto>>(JsonOpts);
             return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<List<DiscoveredAccountDto>?> GetDiscoveredAccountsAsync(string? status = null)
-    {
-        var url = "/api/v1/vault/discovered-accounts";
-        if (!string.IsNullOrEmpty(status)) url += "?status=" + Uri.EscapeDataString(status);
-        var result = await GetAsync<ListResult<DiscoveredAccountDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<bool> TakeoverAccountAsync(string id, Guid folderId)
+    public async Task<bool> DeleteSshKeyAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovered-accounts/" + id + "/takeover",
-                new { folderId });
-            return resp.IsSuccessStatusCode;
-        }
+        try { return (await client.DeleteAsync($"/api/v1/system/ssh-keys/{id}")).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<bool> IgnoreDiscoveredAccountAsync(string id)
+    public async Task<string?> GetSshPublicKeyAsync(string id)
     {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/vault/discovered-accounts/" + id + "/ignore", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<BulkImportResultDto?> BulkImportDiscoveredAccountsAsync(List<string> ids, Guid folderId)
-    {
-        var client = await GetAuthClientAsync();
         try
         {
-            var accountIds = ids.Select(Guid.Parse).ToList();
-            var resp = await client.PostAsJsonAsync("/api/v1/vault/discovered-accounts/bulk-import",
-                new { accountIds, folderId });
+            var client = await GetAuthClientAsync();
+            var resp = await client.GetAsync($"/api/v1/system/ssh-keys/{id}/public");
             if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<BulkImportResultDto>>(JsonOpts);
-            return r?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SshPublicKeyDto>>(JsonOpts);
+            return result?.Data?.PublicKey;
         }
         catch { return null; }
     }
 
-    public async Task<List<OrphanedUserDto>?> GetOrphanedUsersAsync()
+    // ── Certificates ───────────────────────────────────────────────────────────
+    public async Task<List<CertificateDto>?> GetCertificatesAsync()
     {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var r = await client.GetFromJsonAsync<PagedResult<OrphanedUserDto>>("/api/v1/users/orphaned", JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
+        var result = await GetAsync<ListResult<CertificateDto>>("/api/v1/system/certificates");
+        return result?.Data;
     }
 
-    public async Task<ImportResultDto?> BulkImportUsersAsync(
-        Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    public async Task<CertificateDto?> UploadCertificateAsync(string name, string pemContent, string? description = null)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            using var content = new MultipartFormDataContent();
-            var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-            using var sc = new StreamContent(stream);
-            sc.Headers.ContentType = new MediaTypeHeaderValue("text/csv");
-            content.Add(sc, "file", file.Name);
-            var resp = await client.PostAsync("/api/v1/users/import", content);
+            var resp = await client.PostAsJsonAsync("/api/v1/system/certificates",
+                new { name, description, pemContent });
             if (!resp.IsSuccessStatusCode) return null;
-            var r = await resp.Content.ReadFromJsonAsync<SingleResult<ImportResultDto>>(JsonOpts);
-            return r?.Data;
-        }
-        catch { return null; }
-    }
-
-    // === Threat Analytics / SOC Dashboard (#35) ===
-
-    public async Task<SocDashboardDto?> GetSocDashboardAsync()
-    {
-        var result = await GetAsync<SingleResult<SocDashboardDto>>("/api/v1/analytics/soc/dashboard");
-        return result?.Data;
-    }
-
-    public async Task<List<RiskMapDto>?> GetSocRiskMapAsync()
-    {
-        var result = await GetAsync<ListResult<RiskMapDto>>("/api/v1/analytics/soc/risk-map");
-        return result?.Data;
-    }
-
-    public async Task<List<TimelinePointDto>?> GetSocTimelineAsync(int hours = 24)
-    {
-        var result = await GetAsync<ListResult<TimelinePointDto>>("/api/v1/analytics/soc/timeline?hours=" + hours);
-        return result?.Data;
-    }
-
-    public async Task<List<AnomalyDto>?> GetAnomaliesAsync(Guid? userId = null, string? type = null, int page = 1, int pageSize = 50)
-    {
-        var url = "/api/v1/analytics/anomalies/?page=" + page + "&pageSize=" + pageSize;
-        if (userId.HasValue) url += "&userId=" + userId.Value;
-        if (!string.IsNullOrEmpty(type)) url += "&type=" + Uri.EscapeDataString(type);
-        var result = await GetAsync<PagedResult<AnomalyDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<bool> AcknowledgeAnomalyAsync(long id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsync("/api/v1/analytics/anomalies/" + id + "/acknowledge",
-                JsonContent.Create(new { UserId = Guid.Empty }));
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<AlertRuleDto>?> GetAlertRulesAsync()
-    {
-        var result = await GetAsync<ListResult<AlertRuleDto>>("/api/v1/analytics/alerts/rules");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateAlertRuleAsync(string name, string conditionJson, string actionJson, int cooldownMinutes)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/analytics/alerts/rules",
-                new { name, conditionJson, actionJson, cooldownMinutes });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteAlertRuleAsync(Guid id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.DeleteAsync("/api/v1/analytics/alerts/rules/" + id);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleAlertRuleAsync(Guid id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsync("/api/v1/analytics/alerts/rules/" + id + "/toggle", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<BehaviorBaselineDto>?> GetBehaviorBaselinesAsync()
-    {
-        var result = await GetAsync<ListResult<BehaviorBaselineDto>>("/api/v1/analytics/baselines/");
-        return result?.Data;
-    }
-
-    // === Threat Intelligence Feed (#206) ===
-    public async Task<List<ThreatIndicatorDto>?> GetThreatIndicatorsAsync(
-        string? type = null, string? source = null, int page = 1, int pageSize = 50)
-    {
-        var url = $"/api/v1/analytics/threat-feed/indicators?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(type))   url += "&type="   + Uri.EscapeDataString(type);
-        if (!string.IsNullOrEmpty(source)) url += "&source=" + Uri.EscapeDataString(source);
-        var result = await GetAsync<PagedResult<ThreatIndicatorDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<List<ThreatFeedConfigDto>?> GetThreatFeedConfigsAsync()
-    {
-        var result = await GetAsync<ListResult<ThreatFeedConfigDto>>("/api/v1/analytics/threat-feed/configs");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateThreatFeedConfigAsync(
-        string name, string feedUrl, string feedType, string? apiKey,
-        int refreshIntervalMinutes, bool isEnabled)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/analytics/threat-feed/configs",
-                new { name, feedUrl, feedType, apiKey, refreshIntervalMinutes, isEnabled });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleThreatFeedConfigAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync($"/api/v1/analytics/threat-feed/configs/{id}/toggle", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteThreatFeedConfigAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/analytics/threat-feed/configs/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> ForceRefreshThreatFeedsAsync()
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/analytics/threat-feed/refresh", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<ThreatIntelReportDto?> GetThreatFeedReportAsync()
-    {
-        var result = await GetAsync<SingleResult<ThreatIntelReportDto>>("/api/v1/analytics/threat-feed/reports");
-        return result?.Data;
-    }
-
-    private async Task<HttpClient> GetAuthClientAsync()
-    {
-        var client = _factory.CreateClient("PamApi");
-        var token  = await _auth.GetTokenAsync();
-        if (!string.IsNullOrEmpty(token))
-            client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", token);
-        return client;
-    }
-
-    private async Task<T?> GetAsync<T>(string url) where T : class
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp   = await client.GetAsync(url);
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadFromJsonAsync<T>(JsonOpts);
-        }
-        catch { return null; }
-    }
-
-    // Session Recording Playback
-    public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId)
-    {
-        var result = await GetAsync<SingleResult<RecordingMetadataDto>>(
-            $"/api/v1/sessions/{sessionId}/recording");
-        return result?.Data;
-    }
-
-    public async Task<RecordingStreamDto?> GetRecordingStreamAsync(string sessionId)
-    {
-        var result = await GetAsync<SingleResult<RecordingStreamDto>>(
-            $"/api/v1/sessions/{sessionId}/recording/stream");
-        return result?.Data;
-    }
-
-    public async Task<RecordingSearchResultsDto?> SearchRecordingAsync(string sessionId, string query)
-    {
-        var url = $"/api/v1/sessions/{sessionId}/recording/search?q={Uri.EscapeDataString(query)}";
-        return await GetAsync<RecordingSearchResultsDto>(url);
-    }
-
-    public async Task<PagedResult<CommandLogDto>?> GetSessionCommandsAsync(
-        string sessionId, int page = 1, int pageSize = 100)
-    {
-        return await GetAsync<PagedResult<CommandLogDto>>(
-            $"/api/v1/sessions/{sessionId}/commands?page={page}&pageSize={pageSize}");
-    }
-
-    public async Task<byte[]?> DownloadRecordingAsync(string sessionId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.GetAsync($"/api/v1/sessions/{sessionId}/recording/stream");
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadAsByteArrayAsync();
-        }
-        catch { return null; }
-    }
-
-    public async Task<List<ScreenCaptureFrameDto>?> GetScreenCapturesAsync(string sessionId)
-    {
-        var result = await GetAsync<ScreenCaptureListResult>(
-            $"/api/v1/sessions/{System.Uri.EscapeDataString(sessionId)}/screen-captures");
-        return result?.Data;
-    }
-
-    // MFA Policy
-    public async Task<MfaPolicySettingsDto?> GetMfaPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<MfaPolicySettingsDto>>("/api/v1/policy/mfa");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveMfaPolicyAsync(MfaPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsJsonAsync("/api/v1/policy/mfa", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Adaptive MFA Policy (#205)
-    public async Task<AdaptiveMfaPolicySettingsDto?> GetAdaptiveMfaPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<AdaptiveMfaPolicySettingsDto>>("/api/v1/policy/adaptive-mfa");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveAdaptiveMfaPolicyAsync(AdaptiveMfaPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync("/api/v1/policy/adaptive-mfa", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Geolocation Access Policy (#208)
-    public async Task<GeolocationPolicySettingsDto?> GetGeolocationPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<GeolocationPolicySettingsDto>>("/api/v1/policy/geo-access");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveGeolocationPolicyAsync(GeolocationPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync("/api/v1/policy/geo-access", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Device Trust Policy (#207)
-    public async Task<DeviceTrustPolicySettingsDto?> GetDeviceTrustPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<DeviceTrustPolicySettingsDto>>("/api/v1/policy/device-trust");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveDeviceTrustPolicyAsync(DeviceTrustPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync("/api/v1/policy/device-trust", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<List<TrustedDeviceDto>?> GetMyTrustedDevicesAsync()
-    {
-        var result = await GetAsync<ListResult<TrustedDeviceDto>>("/api/v1/my/trusted-devices");
-        return result?.Data;
-    }
-
-    public async Task<bool> RevokeMyTrustedDeviceAsync(Guid id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/my/trusted-devices/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> RenameMyTrustedDeviceAsync(Guid id, string deviceName)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync($"/api/v1/my/trusted-devices/{id}/rename", new { deviceName })).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<PagedResult<TrustedDeviceDto>?> GetAdminTrustedDevicesAsync(
-        Guid? userId = null, string? trustLevel = null, bool? revoked = null, int page = 1, int pageSize = 50)
-    {
-        var url = $"/api/v1/admin/trusted-devices?page={page}&pageSize={pageSize}";
-        if (userId.HasValue) url += $"&userId={userId}";
-        if (!string.IsNullOrEmpty(trustLevel)) url += $"&trustLevel={trustLevel}";
-        if (revoked.HasValue) url += $"&revoked={revoked}";
-        return await GetAsync<PagedResult<TrustedDeviceDto>>(url);
-    }
-
-    public async Task<bool> SetDeviceTrustLevelAsync(Guid id, string trustLevel)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync($"/api/v1/admin/trusted-devices/{id}/trust", new { trustLevel })).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> AdminRevokeDeviceAsync(Guid id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/admin/trusted-devices/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Watermark Policy (#190)
-    public async Task<WatermarkPolicySettingsDto?> GetWatermarkPolicyAsync()
-    {
-        var result = await GetAsync<PolicySettingResult<WatermarkPolicySettingsDto>>("/api/v1/policy/watermark");
-        return result?.Data;
-    }
-
-    public async Task<bool> SaveWatermarkPolicyAsync(WatermarkPolicySettingsDto s)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PutAsJsonAsync("/api/v1/policy/watermark", s)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Self-Service Password Reset
-    public async Task<bool> ForgotPasswordAsync(string username, string email)
-    {
-        var client = _factory.CreateClient("PamApi");
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/forgot-password",
-                new { username, email });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<(bool Success, string? Message)> ResetPasswordAsync(string token, string newPassword)
-    {
-        var client = _factory.CreateClient("PamApi");
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/reset-password",
-                new { token, newPassword });
-            var result = await resp.Content.ReadFromJsonAsync<SimpleMessageResult>(JsonOpts);
-            return (result?.Success ?? false, result?.Message);
-        }
-        catch (Exception ex) { return (false, ex.Message); }
-    }
-
-    // My Active Sessions
-    public async Task<List<MySessionDto>?> GetMySessionsAsync()
-    {
-        var result = await GetAsync<ListResult<MySessionDto>>("/api/v1/auth/my-sessions");
-        return result?.Data;
-    }
-
-    public async Task<bool> EndMySessionAsync(string sessionId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync($"/api/v1/auth/my-sessions/{sessionId}/end", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    // TACACS+ Command Policies (deferred -- v2+ stubs)
-    public Task<List<TacacsCommandPolicyDto>?> GetTacacsCommandPoliciesAsync()
-        => Task.FromResult<List<TacacsCommandPolicyDto>?>(new List<TacacsCommandPolicyDto>());
-
-    public Task<bool> SaveTacacsCommandPolicyAsync(string username, string devicePattern, string mode, string? commands)
-        => Task.FromResult(false);
-
-    public Task<bool> DeleteTacacsCommandPolicyAsync(string id)
-        => Task.FromResult(false);
-
-    // === Access Certification Campaigns (#154) ===
-    public async Task<List<AttestationCampaignDto>?> GetAttestationsAsync()
-    {
-        var result = await GetAsync<ListResult<AttestationCampaignDto>>("/api/v1/compliance/attestations");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateAttestationAsync(string name, string? scopeJson, Guid? reviewerUserId,
-        DateTime startsAtUtc, DateTime deadlineUtc, bool autoRevokeOnMiss)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/compliance/attestations",
-                new { name, scopeJson, reviewerUserId, startsAtUtc, deadlineUtc, autoRevokeOnMiss });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<AttestationDetailDto?> GetAttestationDetailAsync(string id)
-    {
-        var result = await GetAsync<SingleResult<AttestationDetailDto>>("/api/v1/compliance/attestations/" + id);
-        return result?.Data;
-    }
-
-    public async Task<bool> StartAttestationAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/compliance/attestations/" + id + "/start", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> DecideAttestationItemAsync(string campaignId, long decisionId, byte decision, string? comments)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync(
-                "/api/v1/compliance/attestations/" + campaignId + "/decisions/" + decisionId + "/decide",
-                new { decision, comments });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> CompleteAttestationAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/compliance/attestations/" + id + "/complete", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // ── Compliance Report Templates (#179) ────────────────────────────────────────────────
-
-    public async Task<List<ComplianceTemplateDto>?> GetComplianceTemplatesAsync()
-    {
-        var result = await GetAsync<ListResult<ComplianceTemplateDto>>("/api/v1/compliance/report-templates");
-        return result?.Data;
-    }
-
-    public async Task<ComplianceControlsResultDto?> GetComplianceControlsAsync(
-        string framework, DateTime from, DateTime to)
-    {
-        var url = "/api/v1/compliance/report/" + framework
-            + "/controls?from=" + Uri.EscapeDataString(from.ToString("o"))
-            + "&to=" + Uri.EscapeDataString(to.ToString("o"));
-        var result = await GetAsync<SingleResult<ComplianceControlsResultDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<ComplianceReportResultDto?> GenerateComplianceReportAsync(
-        string framework, DateTime from, DateTime to)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/compliance/report/generate",
-                new { framework, from, to });
-            if (!resp.IsSuccessStatusCode) return null;
-            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<ComplianceReportResultDto>>(JsonOpts);
-            return wrapper?.Data;
-        }
-        catch { return null; }
-    }
-
-    // ── FIPS 140-2 Status (#180) ──────────────────────────────────────────────────────
-    public async Task<FipsStatusDto?> GetFipsStatusAsync()
-    {
-        var result = await GetAsync<SingleResult<FipsStatusDto>>("/api/v1/system/encryption/fips-status");
-        return result?.Data;
-    }
-
-    // ── Cloud PAM (#37) ─────────────────────────────────────────────────────────────
-    public async Task<CloudDashboardDto?> GetCloudDashboardAsync()
-    {
-        var result = await GetAsync<SingleResult<CloudDashboardDto>>("/api/v1/cloud/dashboard");
-        return result?.Data;
-    }
-
-    public async Task<List<CloudAccountDto>?> GetCloudAccountsAsync()
-    {
-        var result = await GetAsync<ListResult<CloudAccountDto>>("/api/v1/cloud/accounts");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateCloudAccountAsync(string name, string provider, string accountIdentifier,
-        string? region, string? accessKeyId, string? secretKey)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/cloud/accounts", new
-            {
-                name, provider, accountIdentifier, region,
-                accessKeyId = string.IsNullOrEmpty(accessKeyId) ? null : accessKeyId,
-                secretKey = string.IsNullOrEmpty(secretKey) ? null : secretKey
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<CloudSyncResultDto?> SyncCloudAccountAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsync($"/api/v1/cloud/accounts/{id}/sync", null);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CloudSyncResultDto>>(JsonOpts);
-            return result?.Data;
-        }
-        catch { return null; }
-    }
-
-    public async Task<bool> ToggleCloudAccountAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsync($"/api/v1/cloud/accounts/{id}/toggle", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteCloudAccountAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.DeleteAsync($"/api/v1/cloud/accounts/{id}");
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<CloudResourceDto>?> GetCloudResourcesAsync(string? provider = null, string? type = null)
-    {
-        var qs = new List<string>();
-        if (!string.IsNullOrEmpty(provider)) qs.Add("provider=" + Uri.EscapeDataString(provider));
-        if (!string.IsNullOrEmpty(type)) qs.Add("type=" + Uri.EscapeDataString(type));
-        var url = "/api/v1/cloud/resources" + (qs.Count > 0 ? "?" + string.Join("&", qs) : "");
-        var result = await GetAsync<ListResult<CloudResourceDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<List<CloudJitDto>?> GetCloudJitRequestsAsync(string? status = null)
-    {
-        var url = "/api/v1/cloud/jit" + (status != null ? "?status=" + Uri.EscapeDataString(status) : "");
-        var result = await GetAsync<ListResult<CloudJitDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateCloudJitRequestAsync(string cloudResourceId, string permission,
-        string justification, int durationMinutes, string? ticketNumber)
-    {
-        if (!Guid.TryParse(cloudResourceId, out var rid)) return false;
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/cloud/jit", new
-            {
-                cloudResourceId = rid,
-                permission,
-                justification,
-                durationMinutes,
-                ticketNumber = string.IsNullOrEmpty(ticketNumber) ? null : ticketNumber
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ApproveCloudJitAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/approve", new { });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DenyCloudJitAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/deny", new { });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RevokeCloudJitAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync($"/api/v1/cloud/jit/{id}/revoke", new { });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    // === Certificate Lifecycle Management (#191) ===
-
-    public async Task<List<ManagedCertificateDto>?> GetCertificatesAsync(string? source = null)
-    {
-        var url = "/api/v1/certificates" + (source != null ? "?source=" + Uri.EscapeDataString(source) : "");
-        var result = await GetAsync<ListResult<ManagedCertificateDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<List<ManagedCertificateDto>?> GetExpiringCertificatesAsync(int days = 90)
-    {
-        var result = await GetAsync<ListResult<ManagedCertificateDto>>($"/api/v1/certificates/expiring?days={days}");
-        return result?.Data;
-    }
-
-    public async Task<ManagedCertificateDto?> ImportCertificateAsync(string pemCertificate, string? notes, string? source)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/certificates", new
-            {
-                pemCertificate,
-                notes = string.IsNullOrEmpty(notes) ? null : notes,
-                source = source ?? "Manual"
-            });
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ManagedCertificateDto>>();
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<CertificateDto>>(JsonOpts);
             return result?.Data;
         }
         catch { return null; }
@@ -2297,647 +894,602 @@ public sealed class PamApiService
 
     public async Task<bool> DeleteCertificateAsync(string id)
     {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/certificates/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── License ────────────────────────────────────────────────────────────────
+    public async Task<LicenseDto?> GetLicenseAsync()
+        => await GetAsync<LicenseDto>("/api/v1/system/license");
+
+    public async Task<bool> ActivateLicenseAsync(string licenseKey)
+    {
+        var client = await GetAuthClientAsync();
         try
         {
-            var client = await GetAuthClientAsync();
-            var resp = await client.DeleteAsync($"/api/v1/certificates/{id}");
+            var resp = await client.PostAsJsonAsync("/api/v1/system/license/activate", new { licenseKey });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    // ── SOAR Integration (#197) ───────────────────────────────────────────────
-    public async Task<List<SoarConfigDto>?> GetSoarConfigsAsync()
+    // ── Backup & Restore ───────────────────────────────────────────────────────
+    public async Task<List<BackupDto>?> GetBackupsAsync()
     {
-        var result = await GetAsync<ListResult<SoarConfigDto>>("/api/v1/integrations/soar");
+        var result = await GetAsync<ListResult<BackupDto>>("/api/v1/system/backups");
         return result?.Data;
     }
 
-    public async Task<bool> CreateSoarConfigAsync(string name, string provider, string webhookUrl, string hmacSecret)
+    public async Task<BackupDto?> CreateBackupAsync(string? description = null)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/integrations/soar", new { name, provider, webhookUrl, hmacSecret });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleSoarConfigAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsync($"/api/v1/integrations/soar/{id}/toggle", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> TestSoarConfigAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsync($"/api/v1/integrations/soar/{id}/test", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteSoarConfigAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.DeleteAsync($"/api/v1/integrations/soar/{id}");
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    // ── Push Notification MFA (#196) ─────────────────────────────────────────
-    public async Task<List<PushDeviceDto>?> GetPushDevicesAsync()
-    {
-        var result = await GetAsync<ListResult<PushDeviceDto>>("/api/v1/auth/push/devices");
-        return result?.Data;
-    }
-
-    public async Task<PushEnrollResultDto?> EnrollPushDeviceAsync(string deviceName)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/push/enroll", new { deviceName });
+            var resp = await client.PostAsJsonAsync("/api/v1/system/backups", new { description });
             if (!resp.IsSuccessStatusCode) return null;
-            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<PushEnrollResultDto>>(JsonOpts);
-            return wrapper?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<BackupDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<bool> RemovePushDeviceAsync(string deviceId)
+    public async Task<bool> RestoreBackupAsync(string id)
     {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.DeleteAsync($"/api/v1/auth/push/devices/{deviceId}");
-            return resp.IsSuccessStatusCode;
-        }
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/system/backups/{id}/restore", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
 
-    public async Task<PushChallengeDto?> InitiatePushChallengeAsync()
+    public async Task<bool> DeleteBackupAsync(string id)
     {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/backups/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Health ─────────────────────────────────────────────────────────────────
+    public async Task<HealthDto?> GetHealthAsync()
+    {
+        var client = _factory.CreateClient("PamApi");
         try
         {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/push/initiate", new { });
+            var resp = await client.GetAsync("/health");
             if (!resp.IsSuccessStatusCode) return null;
-            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<PushChallengeDto>>(JsonOpts);
-            return wrapper?.Data;
+            return await resp.Content.ReadFromJsonAsync<HealthDto>(JsonOpts);
         }
         catch { return null; }
     }
 
-    public async Task<PushChallengeStatusDto?> GetPushChallengeStatusAsync(string challengeId)
+    // ── PKI / Smart Card ───────────────────────────────────────────────────────
+    public async Task<PkiConfigDto?> GetPkiConfigAsync()
+        => await GetAsync<PkiConfigDto>("/api/v1/system/pki");
+
+    public async Task<bool> SavePkiConfigAsync(object payload)
     {
-        var result = await GetAsync<SingleResult<PushChallengeStatusDto>>($"/api/v1/auth/push/{challengeId}/status");
-        return result?.Data;
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/pki", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 
-    // ── Account Reconciliation (#195) ────────────────────────────────────────
-    public async Task<List<ReconciliationDriftDto>?> GetReconciliationReportAsync()
+    // ── Emergency Access ───────────────────────────────────────────────────────
+    public async Task<EmergencyAccessDto?> GetEmergencyAccessAsync()
+        => await GetAsync<EmergencyAccessDto>("/api/v1/system/emergency-access");
+
+    public async Task<bool> EnableEmergencyAccessAsync(string reason, int durationMinutes = 60)
     {
-        var result = await GetAsync<ListResult<ReconciliationDriftDto>>("/api/v1/compliance/reconciliation/report");
-        return result?.Data;
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/emergency-access/enable",
+                new { reason, durationMinutes });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 
-    public async Task<AutoRemediateResultDto?> AutoRemediateReconciliationAsync()
+    public async Task<bool> DisableEmergencyAccessAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/system/emergency-access/disable", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── RDP Proxy Settings ─────────────────────────────────────────────────────
+    public async Task<RdpProxySettingsDto?> GetRdpProxySettingsAsync()
+        => await GetAsync<RdpProxySettingsDto>("/api/v1/system/rdp-proxy");
+
+    public async Task<bool> SaveRdpProxySettingsAsync(object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/rdp-proxy", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // ── SSH Proxy Settings ─────────────────────────────────────────────────────
+    public async Task<SshProxySettingsDto?> GetSshProxySettingsAsync()
+        => await GetAsync<SshProxySettingsDto>("/api/v1/system/ssh-proxy");
+
+    public async Task<bool> SaveSshProxySettingsAsync(object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/system/ssh-proxy", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // ── MFA Enrollment ─────────────────────────────────────────────────────────
+    public async Task<MfaEnrollmentTokenDto?> GenerateMfaEnrollmentTokenAsync(string userId)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PostAsync("/api/v1/compliance/reconciliation/auto-remediate", null);
+            var resp = await client.PostAsync($"/api/v1/users/{userId}/mfa-enrollment-token", null);
             if (!resp.IsSuccessStatusCode) return null;
-            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<AutoRemediateResultDto>>(JsonOpts);
-            return wrapper?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<MfaEnrollmentTokenDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<List<ReconciliationHistoryDto>?> GetReconciliationHistoryAsync()
-    {
-        var result = await GetAsync<ListResult<ReconciliationHistoryDto>>("/api/v1/compliance/reconciliation/history");
-        return result?.Data;
-    }
-
-    // Access Pattern Analytics (#209)
-    public async Task<AccessPatternSummaryDto?> GetAccessPatternSummaryAsync(int days = 30)
-    {
-        var result = await GetAsync<SingleResult<AccessPatternSummaryDto>>("/api/v1/reports/access-patterns/summary?days=" + days);
-        return result?.Data;
-    }
-
-    public async Task<AccessPatternTimeOfDayDto?> GetAccessPatternTimeOfDayAsync(int days = 30)
-    {
-        var result = await GetAsync<SingleResult<AccessPatternTimeOfDayDto>>("/api/v1/reports/access-patterns/time-of-day?days=" + days);
-        return result?.Data;
-    }
-
-    public async Task<AccessPatternUserDto?> GetAccessPatternByUserAsync(string userId, int days = 30)
-    {
-        var result = await GetAsync<SingleResult<AccessPatternUserDto>>("/api/v1/reports/access-patterns/user/" + userId + "?days=" + days);
-        return result?.Data;
-    }
-
-    public async Task<ApiUsageSummaryDto?> GetApiUsageSummaryAsync(int days = 30)
-    {
-        var result = await GetAsync<SingleResult<ApiUsageSummaryDto>>("/api/v1/reports/api-usage/summary?days=" + days);
-        return result?.Data;
-    }
-
-    public async Task<ApiClientUsageDto?> GetApiClientUsageAsync(string clientId, int days = 30)
-    {
-        var result = await GetAsync<SingleResult<ApiClientUsageDto>>("/api/v1/reports/api-usage/by-client/" + clientId + "?days=" + days);
-        return result?.Data;
-    }
-
-    public async Task<ApiUsageAnomaliesDto?> GetApiUsageAnomaliesAsync(int days = 7)
-    {
-        var result = await GetAsync<SingleResult<ApiUsageAnomaliesDto>>("/api/v1/reports/api-usage/anomalies?days=" + days);
-        return result?.Data;
-    }
-
-    // ── Live Session Monitor (#214) ──────────────────────────────────────────
-
-    public async Task<List<LiveSessionDto>?> GetLiveSessionsAsync()
-    {
-        var result = await GetAsync<ListResult<LiveSessionDto>>("/api/v1/sessions/live/");
-        return result?.Data;
-    }
-
-    public async Task<LiveSessionStatusDto?> GetLiveSessionStatusAsync(string sessionId)
-    {
-        var result = await GetAsync<SingleResult<LiveSessionStatusDto>>("/api/v1/sessions/live/" + sessionId + "/status");
-        return result?.Data;
-    }
-
-    public async Task<LiveStreamChunkDto?> GetLiveStreamAsync(string sessionId, int offset)
-    {
-        var result = await GetAsync<SingleResult<LiveStreamChunkDto>>("/api/v1/sessions/live/" + sessionId + "/stream?offset=" + offset);
-        return result?.Data;
-    }
-
-    public async Task<bool> JoinLiveSessionAsync(string sessionId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/sessions/live/" + sessionId + "/join", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> LeaveLiveSessionAsync(string sessionId)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsync("/api/v1/sessions/live/" + sessionId + "/leave", null);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> BroadcastLiveMessageAsync(string sessionId, string message)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/sessions/live/" + sessionId + "/message",
-                new { message });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> TerminateSessionAsync(string sessionId, string reason)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.PostAsJsonAsync("/api/v1/sessions/" + sessionId + "/terminate",
-                new { reason });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    // Device Realm API methods
-    public async Task<List<DeviceRealmDto>?> GetDeviceRealmsAsync()
-    {
-        var result = await GetAsync<ListResult<DeviceRealmDto>>("/api/v1/device-realms");
-        return result?.Data;
-    }
-
-    public async Task<DeviceRealmDto?> GetDeviceRealmAsync(string id)
-    {
-        var result = await GetAsync<SingleResult<DeviceRealmDto>>("/api/v1/device-realms/" + id);
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateDeviceRealmAsync(string name, string? description, string? sessionPolicyId)
+    // ── Password Reset (Admin) ─────────────────────────────────────────────────
+    public async Task<PasswordResetTokenDto?> GeneratePasswordResetTokenAsync(string userId)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/device-realms", new
-            {
-                name,
-                description,
-                sessionPolicyId = sessionPolicyId == null ? (Guid?)null : Guid.Parse(sessionPolicyId)
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> UpdateDeviceRealmAsync(string id, string? name, string? description, string? sessionPolicyId)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync("/api/v1/device-realms/" + id, new
-            {
-                name,
-                description,
-                sessionPolicyId = sessionPolicyId == null ? (Guid?)null : Guid.Parse(sessionPolicyId)
-            });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteDeviceRealmAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            return (await client.DeleteAsync("/api/v1/device-realms/" + id)).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleDeviceRealmAsync(string id)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            return (await client.PostAsync("/api/v1/device-realms/" + id + "/toggle", null)).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> AddUserGroupToRealmAsync(string realmId, string groupId)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/device-realms/" + realmId + "/user-groups",
-                new { groupId = Guid.Parse(groupId) });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RemoveUserGroupFromRealmAsync(string realmId, string groupId)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            return (await client.DeleteAsync("/api/v1/device-realms/" + realmId + "/user-groups/" + groupId)).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> AddDeviceGroupToRealmAsync(string realmId, string deviceGroupId)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/device-realms/" + realmId + "/device-groups",
-                new { groupId = Guid.Parse(deviceGroupId) });
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> RemoveDeviceGroupFromRealmAsync(string realmId, string deviceGroupId)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            return (await client.DeleteAsync("/api/v1/device-realms/" + realmId + "/device-groups/" + deviceGroupId)).IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<List<GroupDto>?> GetGroupsAsync()
-    {
-        var result = await GetAsync<ListResult<GroupDto>>("/api/v1/groups");
-        return result?.Data;
-    }
-
-    public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
-    {
-        var result = await GetAsync<ListResult<DeviceGroupDto>>("/api/v1/device-groups");
-        return result?.Data;
-    }
-
-    // === Assigned Credentials (Sprint 24 — Kron PAM assigned_credential model) ===
-
-    public async Task<List<AssignedCredentialDto>?> GetAssignedCredentialsAsync(
-        string? credentialId = null, string? principalId = null)
-    {
-        var url = "/api/v1/assigned-credentials?pageSize=500";
-        if (!string.IsNullOrEmpty(credentialId)) url += "&credentialId=" + credentialId;
-        if (!string.IsNullOrEmpty(principalId))  url += "&principalId="  + principalId;
-        var result = await GetAsync<PagedResult<AssignedCredentialDto>>(url);
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateAssignedCredentialAsync(
-        string credentialId, string principalType, string principalId,
-        string? deviceGroupId, string? notes)
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var principalTypeInt = principalType == "Group" ? 1 : 0;
-            var body = new
-            {
-                CredentialId  = Guid.Parse(credentialId),
-                PrincipalType = principalTypeInt,
-                PrincipalId   = Guid.Parse(principalId),
-                DeviceGroupId = string.IsNullOrEmpty(deviceGroupId) ? (Guid?)null : Guid.Parse(deviceGroupId),
-                Notes         = notes
-            };
-            var resp = await client.PostAsJsonAsync("/api/v1/assigned-credentials", body, JsonOpts);
-            return resp.IsSuccessStatusCode;
-        }
-        catch { return false; }
-    }
-
-    public async Task<bool> DeleteAssignedCredentialAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync("/api/v1/assigned-credentials/" + id)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<bool> ToggleAssignedCredentialAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync("/api/v1/assigned-credentials/" + id + "/toggle", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // === User Profile (#231 — Sprint 31) ===
-    public async Task<UserProfileDto?> GetMyProfileAsync()
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var resp = await client.GetAsync("/api/v1/auth/me");
+            var resp = await client.PostAsync($"/api/v1/users/{userId}/password-reset-token", null);
             if (!resp.IsSuccessStatusCode) return null;
-            var body = await resp.Content.ReadFromJsonAsync<SingleResult<UserProfileDto>>(JsonOpts);
-            return body?.Data;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<PasswordResetTokenDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<(bool Success, string? Error)> ChangePasswordAsync(string currentPassword, string newPassword)
+    // ── RADIUS Users ───────────────────────────────────────────────────────────
+    public async Task<PagedResult<RadiusUserDto>?> GetRadiusUsersAsync(int page = 1, int pageSize = 20)
+        => await GetAsync<PagedResult<RadiusUserDto>>($"/api/v1/system/radius-users?page={page}&pageSize={pageSize}");
+
+    public async Task<RadiusUserDto?> CreateRadiusUserAsync(object payload)
     {
-        var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/change-password",
-                new { currentPassword, newPassword }, JsonOpts);
-            if (resp.IsSuccessStatusCode) return (true, null);
-            var body = await resp.Content.ReadAsStringAsync();
-            try
-            {
-                var json = JsonSerializer.Deserialize<JsonElement>(body, JsonOpts);
-                string? msg = null;
-                if (json.TryGetProperty("errors", out var errArr) && errArr.GetArrayLength() > 0)
-                    msg = errArr[0].GetString();
-                return (false, msg ?? "Password change failed");
-            }
-            catch { return (false, "Password change failed"); }
-        }
-        catch { return (false, "Request failed"); }
-    }
-
-    // === Session Compliance (#236) ===
-    public async Task<SessionComplianceSummaryDto?> GetSessionComplianceSummaryAsync(int days = 30)
-    {
-        var result = await GetAsync<SingleResult<SessionComplianceSummaryDto>>(
-            $"/api/v1/sessions/compliance/summary?days={days}");
-        return result?.Data;
-    }
-
-    // === Credential Risk Scoring (#232) ===
-    public async Task<RotationFailuresResponseDto?> GetRotationFailuresAsync()
-    {
-        var result = await GetAsync<SingleResult<RotationFailuresResponseDto>>("/api/v1/vault/credentials/rotation-failures");
-        return result?.Data;
-    }
-
-    public async Task<CredentialRiskSummaryDto?> GetCredentialRiskSummaryAsync()
-    {
-        var result = await GetAsync<SingleResult<CredentialRiskSummaryDto>>("/api/v1/vault/credentials/risk-summary");
-        return result?.Data;
-    }
-
-    public async Task<List<HighRiskCredentialDto>?> GetHighRiskCredentialsAsync()
-    {
-        var result = await GetAsync<ListResult<HighRiskCredentialDto>>("/api/v1/vault/credentials/high-risk");
-        return result?.Data;
-    }
-
-    public async Task<bool> RescoreCredentialAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.PostAsync($"/api/v1/vault/credentials/{id}/risk/rescore", null)).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // === Rotation Scripts (#241) ===
-    public async Task<List<RotationScriptDto>?> GetRotationScriptsAsync()
-    {
-        var result = await GetAsync<ListResult<RotationScriptDto>>("/api/v1/vault/rotation-scripts");
-        return result?.Data;
-    }
-
-    public async Task<RotationScriptDetailDto?> GetRotationScriptAsync(string id)
-    {
-        var result = await GetAsync<SingleResult<RotationScriptDetailDto>>($"/api/v1/vault/rotation-scripts/{id}");
-        return result?.Data;
-    }
-
-    public async Task<(bool Success, string? Id)> CreateRotationScriptAsync(
-        string name, string? description, string deviceType, string scriptType,
-        string scriptContent, string? testScriptContent, bool isEnabled,
-        string? credentialId, string? deviceGroupId)
-    {
-        var client = await GetAuthClientAsync();
-        var body = new
-        {
-            name, description, deviceType, scriptType,
-            scriptContent, testScriptContent, isEnabled,
-            credentialId = credentialId == null ? (Guid?)null : Guid.Parse(credentialId),
-            deviceGroupId = deviceGroupId == null ? (Guid?)null : Guid.Parse(deviceGroupId)
-        };
-        var resp = await client.PostAsJsonAsync("/api/v1/vault/rotation-scripts", body);
-        if (!resp.IsSuccessStatusCode) return (false, null);
-        var result = await resp.Content.ReadFromJsonAsync<SingleResult<RotationScriptCreatedDto>>();
-        return (true, result?.Data?.Id.ToString());
-    }
-
-    public async Task<bool> UpdateRotationScriptAsync(string id, string? name, string? description,
-        string? deviceType, string? scriptType, string? scriptContent, string? testScriptContent, bool? isEnabled)
-    {
-        var client = await GetAuthClientAsync();
-        var body = new { name, description, deviceType, scriptType, scriptContent, testScriptContent, isEnabled };
-        var resp = await client.PutAsJsonAsync($"/api/v1/vault/rotation-scripts/{id}", body);
-        return resp.IsSuccessStatusCode;
-    }
-
-    public async Task<bool> DeleteRotationScriptAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/vault/rotation-scripts/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    public async Task<ScriptTestResultDto?> TestRotationScriptAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        var resp = await client.PostAsync($"/api/v1/vault/rotation-scripts/{id}/test", null);
-        if (!resp.IsSuccessStatusCode) return null;
-        var result = await resp.Content.ReadFromJsonAsync<SingleResult<ScriptTestResultDto>>();
-        return result?.Data;
-    }
-
-    public async Task<ScriptTestResultDto?> RotateWithScriptAsync(string credentialId, string scriptId)
-    {
-        var client = await GetAuthClientAsync();
-        var resp = await client.PostAsync($"/api/v1/vault/credentials/{credentialId}/rotate-with-script/{scriptId}", null);
-        if (!resp.IsSuccessStatusCode) return null;
-        var result = await resp.Content.ReadFromJsonAsync<SingleResult<ScriptTestResultDto>>();
-        return result?.Data;
-    }
-
-    // Credential Templates (#248)
-    public async Task<List<CredentialTemplateDto>?> GetCredentialTemplatesAsync()
-    {
-        var result = await GetAsync<ListResult<CredentialTemplateDto>>("/api/v1/vault/credential-templates");
-        return result?.Data;
-    }
-
-    public async Task<bool> CreateCredentialTemplateAsync(
-        string name, string? description, string deviceType, string? defaultUsername,
-        string? credentialKind, int rotationPeriodDays, int passwordMinLength,
-        bool passwordRequireSpecial, bool sshKeyRotation, string? notes)
-    {
-        var client = await GetAuthClientAsync();
-        var body = new { name, description, deviceType, defaultUsername, credentialKind,
-                         rotationPeriodDays, passwordMinLength, passwordRequireSpecial, sshKeyRotation, notes };
-        var resp = await client.PostAsJsonAsync("/api/v1/vault/credential-templates", body);
-        return resp.IsSuccessStatusCode;
-    }
-
-    public async Task<bool> UpdateCredentialTemplateAsync(
-        string id, string? name, string? description, string? deviceType, string? defaultUsername,
-        string? credentialKind, int? rotationPeriodDays, int? passwordMinLength,
-        bool? passwordRequireSpecial, bool? sshKeyRotation, string? notes)
-    {
-        var client = await GetAuthClientAsync();
-        var body = new { name, description, deviceType, defaultUsername, credentialKind,
-                         rotationPeriodDays, passwordMinLength, passwordRequireSpecial, sshKeyRotation, notes };
-        var resp = await client.PutAsJsonAsync($"/api/v1/vault/credential-templates/{id}", body);
-        return resp.IsSuccessStatusCode;
-    }
-
-    public async Task<bool> DeleteCredentialTemplateAsync(string id)
-    {
-        var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/vault/credential-templates/{id}")).IsSuccessStatusCode; }
-        catch { return false; }
-    }
-
-    // Peripheral Redirection Policy (#249)
-    public async Task<List<PeripheralRedirectionPolicyDto>?> GetPeripheralPoliciesAsync()
-    {
-        var client = await GetAuthClientAsync();
-        try
-        {
-            var r = await client.GetFromJsonAsync<ListResult<PeripheralRedirectionPolicyDto>>("/api/v1/policies/peripheral");
-            return r?.Data;
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/radius-users", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RadiusUserDto>>(JsonOpts);
+            return result?.Data;
         }
         catch { return null; }
     }
 
-    public async Task<bool> CreatePeripheralPolicyAsync(
-        string name, string? description, bool isEnabled,
-        bool allowClipboard, bool allowDrive, bool allowPrinter,
-        bool allowUsb, bool allowAudio, bool allowSmartCard,
-        Guid? deviceGroupId)
+    public async Task<bool> DeleteRadiusUserAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/radius-users/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Vendor Management ──────────────────────────────────────────────────────
+    public async Task<PagedResult<VendorUserDto>?> GetVendorUsersAsync(int page = 1, int pageSize = 20)
+        => await GetAsync<PagedResult<VendorUserDto>>($"/api/v1/users/vendors?page={page}&pageSize={pageSize}");
+
+    public async Task<VendorUserDto?> CreateVendorUserAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/users/vendors", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<VendorUserDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> UpdateVendorUserAsync(string id, object payload)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync("/api/v1/policies/peripheral", new
-            {
-                name, description, isEnabled,
-                allowClipboard, allowDriveRedirection = allowDrive,
-                allowPrinterRedirection = allowPrinter, allowUsbRedirection = allowUsb,
-                allowAudioRedirection = allowAudio, allowSmartCardRedirection = allowSmartCard,
-                deviceGroupId
-            });
+            var resp = await client.PutAsJsonAsync($"/api/v1/users/vendors/{id}", payload);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> UpdatePeripheralPolicyAsync(
-        string id, string? name, bool? isEnabled,
-        bool? allowClipboard, bool? allowDrive, bool? allowPrinter,
-        bool? allowUsb, bool? allowAudio, bool? allowSmartCard)
+    public async Task<bool> DeleteVendorUserAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/users/vendors/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> ExtendVendorAccessAsync(string id, int extraDays)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PutAsJsonAsync($"/api/v1/policies/peripheral/{id}", new
-            {
-                name, isEnabled,
-                allowClipboard, allowDriveRedirection = allowDrive,
-                allowPrinterRedirection = allowPrinter, allowUsbRedirection = allowUsb,
-                allowAudioRedirection = allowAudio, allowSmartCardRedirection = allowSmartCard
-            });
+            var resp = await client.PostAsJsonAsync($"/api/v1/users/vendors/{id}/extend", new { extraDays });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
     }
 
-    public async Task<bool> DeletePeripheralPolicyAsync(string id)
+    // ── Orphan Detection ───────────────────────────────────────────────────────
+    public async Task<List<OrphanedAccountDto>?> GetOrphanedAccountsAsync()
+    {
+        var result = await GetAsync<ListResult<OrphanedAccountDto>>("/api/v1/users/orphaned");
+        return result?.Data;
+    }
+
+    public async Task<bool> ResolveOrphanAsync(string id, string action)
     {
         var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/policies/peripheral/{id}")).IsSuccessStatusCode; }
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/users/orphaned/{id}/resolve", new { action });
+            return resp.IsSuccessStatusCode;
+        }
         catch { return false; }
+    }
+
+    // ── Approval Policies ──────────────────────────────────────────────────────
+    public async Task<List<ApprovalPolicyDto>?> GetApprovalPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<ApprovalPolicyDto>>("/api/v1/policies/approval");
+        return result?.Data;
+    }
+
+    public async Task<ApprovalPolicyDto?> CreateApprovalPolicyAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/approval", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ApprovalPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> UpdateApprovalPolicyAsync(string id, object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/approval/{id}", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteApprovalPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/approval/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── MFA Policy ─────────────────────────────────────────────────────────────
+    public async Task<MfaPolicyDto?> GetMfaPolicyAsync()
+        => await GetAsync<MfaPolicyDto>("/api/v1/policies/mfa");
+
+    public async Task<bool> SaveMfaPolicyAsync(object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync("/api/v1/policies/mfa", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // ── Threat Intelligence ────────────────────────────────────────────────────
+    public async Task<List<ThreatIndicatorDto>?> GetThreatIndicatorsAsync()
+    {
+        var result = await GetAsync<ListResult<ThreatIndicatorDto>>("/api/v1/threat/indicators");
+        return result?.Data;
+    }
+
+    public async Task<ThreatIndicatorDto?> AddThreatIndicatorAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/threat/indicators", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ThreatIndicatorDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RemoveThreatIndicatorAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/threat/indicators/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Anomaly Detection ──────────────────────────────────────────────────────
+    public async Task<List<AnomalyAlertDto>?> GetAnomalyAlertsAsync(bool unresolvedOnly = false)
+    {
+        var result = await GetAsync<ListResult<AnomalyAlertDto>>($"/api/v1/threat/anomalies?unresolvedOnly={unresolvedOnly.ToString().ToLower()}");
+        return result?.Data;
+    }
+
+    public async Task<bool> ResolveAnomalyAlertAsync(string id, string? note = null)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/threat/anomalies/{id}/resolve", new { note });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    // ── Credential Rotation Rules ──────────────────────────────────────────────
+    public async Task<List<RotationRuleDto>?> GetRotationRulesAsync()
+    {
+        var result = await GetAsync<ListResult<RotationRuleDto>>("/api/v1/vault/rotation-rules");
+        return result?.Data;
+    }
+
+    public async Task<RotationRuleDto?> CreateRotationRuleAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/rotation-rules", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<RotationRuleDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> UpdateRotationRuleAsync(string id, object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/vault/rotation-rules/{id}", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteRotationRuleAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/vault/rotation-rules/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Discovery Scan ─────────────────────────────────────────────────────────
+    public async Task<List<DiscoveredDeviceDto>?> RunDiscoveryScanAsync(string ipRange)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/devices/discover", new { ipRange });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<ListResult<DiscoveredDeviceDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<DeviceDto?> ImportDiscoveredDeviceAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/devices/import", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    // ── Jump Server / Bastion ──────────────────────────────────────────────────
+    public async Task<List<JumpServerDto>?> GetJumpServersAsync()
+    {
+        var result = await GetAsync<ListResult<JumpServerDto>>("/api/v1/system/jump-servers");
+        return result?.Data;
+    }
+
+    public async Task<JumpServerDto?> CreateJumpServerAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/jump-servers", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<JumpServerDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> UpdateJumpServerAsync(string id, object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PutAsJsonAsync($"/api/v1/system/jump-servers/{id}", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteJumpServerAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/jump-servers/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Session Recording ──────────────────────────────────────────────────────
+    public async Task<PagedResult<RecordingDto>?> GetRecordingsAsync(
+        Guid? sessionId = null, int page = 1, int pageSize = 20)
+    {
+        var url = $"/api/v1/sessions/recordings?page={page}&pageSize={pageSize}";
+        if (sessionId.HasValue) url += $"&sessionId={sessionId.Value}";
+        return await GetAsync<PagedResult<RecordingDto>>(url);
+    }
+
+    public async Task<string?> GetRecordingPlaybackUrlAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.GetAsync($"/api/v1/sessions/recordings/{id}/playback-url");
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<PlaybackUrlDto>>(JsonOpts);
+            return result?.Data?.Url;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> DeleteRecordingAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/sessions/recordings/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── HSM Configuration ──────────────────────────────────────────────────────
+    public async Task<HsmConfigDto?> GetHsmConfigAsync()
+        => await GetAsync<HsmConfigDto>("/api/v1/system/hsm");
+
+    public async Task<bool> SaveHsmConfigAsync(object payload)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync("/api/v1/system/hsm", payload);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> TestHsmConnectionAsync()
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync("/api/v1/system/hsm/test", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Privileged Task Automation ─────────────────────────────────────────────
+    public async Task<List<AutomationTaskDto>?> GetAutomationTasksAsync()
+    {
+        var result = await GetAsync<ListResult<AutomationTaskDto>>("/api/v1/automation/tasks");
+        return result?.Data;
+    }
+
+    public async Task<AutomationTaskDto?> CreateAutomationTaskAsync(object payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/automation/tasks", payload);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<AutomationTaskDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RunAutomationTaskAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PostAsync($"/api/v1/automation/tasks/{id}/run", null)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteAutomationTaskAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/automation/tasks/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Service Accounts ───────────────────────────────────────────────────────
+    public async Task<PagedResult<UserDto>?> GetServiceAccountsAsync(int page = 1, int pageSize = 20)
+        => await GetAsync<PagedResult<UserDto>>($"/api/v1/users?isServiceAccount=true&page={page}&pageSize={pageSize}");
+
+    public async Task<UserDto?> CreateServiceAccountAsync(string username, string? displayName = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/users",
+                new { username, displayName, isServiceAccount = true, authSource = "Local" });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<UserDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    // API Keys (#250)
+    public async Task<List<ApiKeyDto>?> GetApiKeysAsync()
+    {
+        var result = await GetAsync<ListResult<ApiKeyDto>>("/api/v1/system/api-keys");
+        return result?.Data;
+    }
+
+    public async Task<ApiKeyCreatedDto?> CreateApiKeyAsync(
+        string name, string? description, string? serviceAccountName,
+        List<string>? allowedIpCidrs, int? expiresAfterDays)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/api-keys",
+                new { name, description, serviceAccountName, allowedIpCidrs, expiresAfterDays });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ApiKeyCreatedDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RevokeApiKeyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/api-keys/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<ApiKeyCreatedDto?> RotateApiKeyAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/system/api-keys/{id}/rotate", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ApiKeyCreatedDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
     }
 
 }
@@ -2945,1271 +1497,545 @@ public sealed class PamApiService
 public record LoginResult(bool Success, LoginData? Data);
 public record LoginData(
     string   AccessToken,
-    string   RefreshToken,
-    DateTime ExpiresAt,
-    string   UserId,
+    string   TokenType,
+    int      ExpiresIn,
     string   Username,
     string   DisplayName,
+    string   Role,
     bool     MfaRequired,
-    string?  MfaType,
-    bool     MfaEnrollmentRequired,
-    bool     MustChangePassword,
-    bool     PasswordExpired,
-    decimal  RiskScore  = 0,
-    string?  RiskLevel  = null);
+    Guid     UserId);
 
-public record PagedResult<T>(bool Success, List<T>? Data, PageMeta? Meta);
-public record PagedResultMeta(bool Success, PageMeta? Meta);
-public record PageMeta(int Page, int PageSize, int TotalCount);
-public record SingleResult<T>(bool Success, T? Data) where T : class;
+public record PagedResult<T>(bool Success, List<T>? Data, PagingMeta? Meta);
 public record ListResult<T>(bool Success, List<T>? Data);
-public record SimpleResult<T>(bool Success, List<T>? Data);
+public record SingleResult<T>(bool Success, T? Data);
+public record PagingMeta(int Page, int PageSize, int Total, int TotalPages);
 
 public record UserDto(
-    string    Id,
+    Guid      Id,
     string    Username,
     string?   DisplayName,
     string?   Email,
-    string    AuthSource,
     string    Status,
+    string    AuthSource,
     bool      MfaEnabled,
     bool      IsTemporary,
-    DateTime? TemporaryExpiresUtc,
     DateTime? LastLoginAtUtc,
-    DateTime  CreatedAtUtc,
-    bool      IsOrphaned = false,
-    DateTime? OrphanedDetectedAtUtc = null);
+    string?   LastLoginIp,
+    int       FailedLoginCount,
+    bool      IsServiceAccount,
+    string    UserType,
+    string    PortalProfile,
+    DateTime  CreatedAtUtc);
 
-public record OrphanedUserDto(
-    string    Id,
-    string    Username,
-    string?   DisplayName,
-    string?   Email,
-    string    AuthSource,
-    string    Status,
-    DateTime? LastLoginAtUtc,
-    DateTime? OrphanedDetectedAtUtc);
+public record GroupDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    int      MemberCount,
+    DateTime CreatedAtUtc);
+
+public record RoleDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    bool     IsSystem,
+    DateTime CreatedAtUtc);
 
 public record DeviceDto(
-    string  Id,
-    string  Hostname,
-    string? Fqdn,
-    string? IpAddress,
-    string  Type,
-    string  Protocol,
-    int?    ConnectionPort,
-    string? OperatingSystem,
-    string  Status,
-    bool?   IsReachable,
-    bool    IsManaged,
-    int     CredentialCount);
-
-public record SessionDto(
-    string    Id,
-    string    SessionType,
+    Guid      Id,
+    string    Name,
+    string    Hostname,
+    string    IpAddress,
+    string    DeviceType,
+    string    OperatingSystem,
+    int       SshPort,
+    int       RdpPort,
     string    Status,
-    string?   ClientIpAddress,
-    string?   TargetIpAddress,
-    int?      TargetPort,
-    DateTime  StartedAtUtc,
-    DateTime? EndedAtUtc,
-    string?   Tags = null);
+    Guid?     GroupId,
+    string?   GroupName,
+    string?   Description,
+    DateTime  CreatedAtUtc,
+    DateTime  UpdatedAtUtc);
+
+public record DeviceGroupDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    Guid?     ParentGroupId,
+    string?   ParentGroupName,
+    int       DeviceCount,
+    DateTime  CreatedAtUtc);
 
 public record CredentialDto(
-    string    Id,
-    string    Name,
-    string?   Username,
-    string    Type,
-    string    Status,
-    string?   Description,
-    string?   DeviceId,
-    string?   FolderId,
+    Guid      Id,
+    string    Username,
+    string    CredentialType,
+    Guid      DeviceId,
+    string    DeviceName,
+    Guid?     GroupId,
+    string?   GroupName,
     bool      IsCheckedOut,
-    string?   CheckedOutByUserId,
-    DateTime? CheckOutExpiresUtc,
-    DateTime? LastRotatedAtUtc,
-    bool      RequiresApproval,
-    int       RiskScore = 0,
-    string    RiskLevel = "Low",
-    DateTime? RiskScoredAtUtc = null,
-    int       RotationFailureCount = 0,
-    string?   LastRotationError = null,
-    DateTime? LastRotationFailedAtUtc = null);
+    Guid?     CheckedOutBy,
+    DateTime? CheckedOutAt,
+    DateTime? CheckedOutUntil,
+    DateTime? LastRotatedAt,
+    DateTime? NextRotationAt,
+    DateTime  CreatedAtUtc);
 
-public record FolderDto(
-    string  Id,
-    string  Name,
-    string? Description,
-    string? ParentFolderId,
-    int     CredentialCount,
-    int     ChildCount);
-
-public record CheckoutResultDto(
-    string    Id,
+public record CredentialGroupDto(
+    Guid      Id,
     string    Name,
-    string?   Username,
-    string?   Password,
-    string?   PrivateKey,
-    DateTime? ExpiresAt);
+    string?   Description,
+    Guid?     ParentGroupId,
+    string?   ParentGroupName,
+    int       CredentialCount,
+    DateTime  CreatedAtUtc);
 
-public record CredentialAccessRequestResult(bool Success, string? Status, string? Message);
+public record CheckoutDto(string Password, DateTime ExpiresAt);
 
-public record PolicyDto(
-    string  Id,
-    string  Name,
-    string  PolicyType,
-    string  Scope,
-    string? ScopeId,
-    int     Priority,
-    bool    IsEnabled);
+public record AccessAssignmentDto(
+    Guid      Id,
+    Guid      UserId,
+    string    UserName,
+    Guid?     GroupId,
+    string?   GroupName,
+    Guid?     DeviceId,
+    string?   DeviceName,
+    Guid?     DeviceGroupId,
+    string?   DeviceGroupName,
+    Guid?     CredentialId,
+    string?   CredentialName,
+    string    AccessLevel,
+    DateTime? ExpiresAt,
+    bool      RequiresApproval,
+    DateTime  CreatedAtUtc);
 
-public record PolicySettingResult<T>(bool Success, T? Data) where T : class;
+public record DeviceRealmDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    List<Guid> UserGroupIds,
+    List<string> UserGroupNames,
+    List<Guid> DeviceGroupIds,
+    List<string> DeviceGroupNames,
+    string    PolicyKey,
+    bool      RequiresApproval,
+    DateTime  CreatedAtUtc,
+    DateTime  UpdatedAtUtc);
 
-public record PasswordPolicySettingsDto(
-    int  MinLength,
-    int  MaxLength,
-    bool RequireUppercase,
-    bool RequireLowercase,
-    bool RequireDigit,
-    bool RequireSpecial,
-    int  ExpiryDays,
-    int  PreventReuseCount,
-    bool ForceChangeOnFirstLogin);
+public record SessionDto(
+    Guid      Id,
+    Guid      UserId,
+    string    UserName,
+    Guid      DeviceId,
+    string    DeviceName,
+    string    Protocol,
+    string    Status,
+    DateTime  StartedAt,
+    DateTime? EndedAt,
+    int?      DurationSeconds,
+    string?   TerminationReason,
+    bool      IsRecorded,
+    string?   RecordingPath);
 
-public record LockoutPolicySettingsDto(
-    int MaxFailedAttempts,
-    int LockoutMinutes,
-    int FailedAttemptWindowMinutes);
-
-public record SessionPolicySettingsDto(
-    int IdleTimeoutMinutes,
-    int MaxConcurrentSessions,
-    byte CommandFilterMode = 0,
-    string? CommandFilterRulesJson = null,
-    decimal DoubleConfirmRiskThreshold = 0,
-    string? DoubleConfirmCommandsJson = null);
-
-public record RdpLaunchResult(
-    string       SessionId,
-    string       SessionToken,
-    string       ProxyHost,
-    int          ProxyPort,
-    RdpFileInfo  RdpFile);
-
-public record RdpFileInfo(string Filename, string ContentBase64);
-
-public record ReportDto(string Id, string Name, string Category, string Description);
-public record ReportRunResult(bool Success, System.Text.Json.JsonElement Data, ReportRunMeta? Meta);
-public record ReportRunMeta(string ReportId, DateTime From, DateTime To, DateTime GeneratedAt);
 public record AuditLogDto(
-    long      Id,
-    DateTime  Timestamp,
-    string    EventCategory,
-    string    EventType,
+    Guid      Id,
+    string    Action,
     string?   ActorUsername,
-    string?   ActorIpAddress,
-    string?   TargetType,
+    string?   TargetEntity,
     string?   TargetId,
     string?   Details,
-    string    Outcome,
-    bool      IsTampered = false);
+    string?   IpAddress,
+    DateTime  CreatedAtUtc);
+
+public record SystemSettingsDto(
+    string  CompanyName,
+    string  SiteName,
+    string  DefaultLanguage,
+    string  DefaultTimezone,
+    int     SessionTimeoutMinutes,
+    int     MaxFailedLoginAttempts,
+    int     LockoutDurationMinutes,
+    bool    EmailNotificationsEnabled,
+    string? SmtpHost,
+    int     SmtpPort,
+    string? SmtpUser,
+    bool    SmtpUseSsl,
+    string? SmtpFrom);
+
+public record LdapConfigDto(
+    string   Host,
+    int      Port,
+    bool     UseSsl,
+    string   BaseDn,
+    string   BindDn,
+    bool     IsEnabled,
+    DateTime? LastSyncAt,
+    int      LastSyncCount);
+
+public record LdapSyncResultDto(int Added, int Updated, int Disabled, int Total, DateTime SyncedAt);
+
+public record RadiusConfigDto(
+    string  Host,
+    int     Port,
+    bool    IsEnabled,
+    int     TimeoutSeconds,
+    int     RetryCount);
+
+public record SiemConfigDto(
+    string  Host,
+    int     Port,
+    string  Protocol,
+    string  Format,
+    bool    IsEnabled,
+    DateTime? LastEventAt);
+
+public record WebhookDto(
+    Guid     Id,
+    string   Name,
+    string   Url,
+    string[] Events,
+    bool     IsActive,
+    DateTime? LastTriggeredAt,
+    int      FailureCount,
+    DateTime CreatedAtUtc);
+
+public record PasswordPolicyDto(
+    Guid    Id,
+    string  Name,
+    int     MinLength,
+    bool    RequireUppercase,
+    bool    RequireLowercase,
+    bool    RequireDigit,
+    bool    RequireSpecial,
+    int     PasswordHistoryCount,
+    int     MaxAgeDays,
+    int     MinAgeDays,
+    bool    IsDefault,
+    DateTime CreatedAtUtc);
+
+public record SessionPolicyDto(
+    Guid    Id,
+    string  Name,
+    int     MaxSessionDurationMinutes,
+    int     IdleTimeoutMinutes,
+    bool    RequireApproval,
+    bool    RecordSessions,
+    bool    AllowConcurrentSessions,
+    int     MaxConcurrentSessions,
+    DateTime CreatedAtUtc);
 
 public record ApprovalRequestDto(
-    string    Id,
-    string?   WorkflowId,
-    string?   RequesterId,
-    string    ResourceType,
-    string?   ResourceId,
-    int       CurrentStep,
-    string    Status,
-    string?   Reason,
-    string?   TicketNumber,
-    DateTime? ExpiresAtUtc,
-    DateTime  CreatedAtUtc,
-    DateTime? CompletedAtUtc);
-
-public record PendingApprovalDto(
-    long      StepId,
-    string    RequestId,
-    string    ResourceType,
-    string?   ResourceId,
-    string?   Reason,
-    string?   RequesterId,
-    int       StepOrder,
-    DateTime  CreatedAtUtc,
-    DateTime? ExpiresAtUtc);
-
-public record BreakGlassDto(
-    string    Id,
-    string    RequesterUsername,
-    string?   RequesterIpAddress,
-    string    ResourceType,
-    string?   ResourceId,
-    string?   ResourceName,
-    string    EmergencyReason,
-    string?   TicketNumber,
-    string    Status,
-    DateTime  CreatedAtUtc,
-    DateTime  ExpiresAtUtc,
-    DateTime? AcknowledgedAtUtc,
-    string?   AcknowledgedByUsername,
-    string?   AcknowledgementNotes);
-
-public record BreakGlassSubmitResult(string Id, string Status, DateTime ExpiresAtUtc);
-public record SmtpTestResult(bool Success, string? Message);
-
-public record KeyStatusDto(
-    int       Version,
-    DateTime? InitializedAtUtc,
-    int       RotationCount,
-    bool      IsInitialized,
-    int       DekCacheTtlMinutes);
-
-public record SimpleMessageResult(bool Success, string? Message);
-
-public record JitRequestDto(
-    string    Id,
-    string    RequesterUsername,
-    string?   RequesterIpAddress,
-    string    ResourceType,
-    string?   ResourceId,
-    string?   ResourceName,
-    string    Reason,
-    int       RequestedDurationMinutes,
-    string    Status,
-    DateTime  CreatedAtUtc,
-    DateTime? ApprovedAtUtc,
-    string?   ApprovedByUsername,
-    DateTime? ActivatedAtUtc,
-    DateTime? ExpiresAtUtc,
-    string?   DenyReason,
-    string?   RevokeReason,
-    string?   RevokedByUsername,
-    bool      ExtensionRequested,
-    int?      ExtensionRequestedMinutes,
-    string?   ExtensionReason);
-
-public record JitListResult(bool Success, List<JitRequestDto>? Data);
-
-public record MfaEnrollmentDto(string Username, string Secret, string QrUri);
-public record MfaSetupLinkDto(string EnrollmentToken, DateTime? ExpiresAt);
-public record MfaConfirmResult(bool Success, string? Message, MfaConfirmData? Data);
-public record MfaConfirmData(string[]? RecoveryCodes);
-
-public record ImportResultDto(int Imported, int Failed, List<ImportRowError> Errors);
-public record ImportRowError(int Row, string Username, string Reason);
-
-public record SshKeyPairDto(string PrivateKey, string PublicKey);
-
-public record AuditVerifyResult(bool IntegrityValid, int EntriesChecked, int TamperedCount, long? FirstTamperedId, string Message);
-
-public record LdapConfigDto(string Id, string Name, string Host, int Port, bool UseSsl, string BaseDn, int SyncIntervalMinutes, DateTime? LastSyncAtUtc, bool IsEnabled);
-
-public record DiscoveryJobDto(Guid Id, string Name, string Type, string? Schedule, DateTime? LastRunAtUtc, bool IsEnabled);
-public record DiscoveredAccountDto(Guid Id, Guid DiscoveryJobId, Guid? DeviceId, string AccountName, string? AccountType, DateTime DiscoveredAtUtc, string Status, Guid? LinkedCredentialId, bool InVault = false);
-public record BulkImportResultDto(int Imported, int Skipped, string Message);
-public record DiscoveryScanResultDto(DateTime LastRunAtUtc, int AccountsFound, string Result, List<DiscoveredAccountInfoDto> Accounts);
-public record DiscoveredAccountInfoDto(string AccountName, string AccountType, string? HostName, string? Dn, bool IsEnabled, string Source);
-
-public record LdapSyncApplyDto(int UsersAdded, int UsersUpdated, int UsersDisabled, string Message);
-
-public record SiemTargetDto(
-    string Id, string Name, string Host, int Port,
-    string Protocol, string Format, int Facility,
-    bool IsEnabled, DateTime? LastSentAtUtc, int TotalEventsSent, string? LastError);
-public record SiemTestResultData(bool Success, string? Error, long ResponseTimeMs);
-public record SiemTestResult(bool Success, SiemTestResultData? Data);
-
-public record BackupRecordDto(
-    string Id, string FileName, string Scope, long FileSizeBytes,
-    string? IntegrityHash, bool IntegrityVerified,
-    string Status, string? ErrorMessage,
-    DateTime? CompletedAtUtc, DateTime CreatedAtUtc, string InitiatedBy);
-public record BackupScheduleDto(bool Enabled, int HourUtc, string Scope);
-public record BackupRestoreResultDto(int RestoredCount, string Message);
-
-// Session Recording Playback DTOs
-public record RecordingMetadataDto(
-    string SessionId, string Format, long FileSizeBytes, double DurationSeconds,
-    int? TerminalWidth, int? TerminalHeight, DateTime CreatedAtUtc,
-    bool IntegrityValid, string? IntegrityMessage, string? FileHash,
-    string? WatermarkTitle = null);
-
-public class RecordingStreamDto
-{
-    public string Format { get; set; } = "";
-    public RecordingHeaderDto? Header { get; set; }
-    public List<RecordingEventDto>? Events { get; set; }
-    public List<HttpEntryDto>? Entries { get; set; }
-    public string? ContentBase64 { get; set; }
-    public int? SizeBytes { get; set; }
-}
-
-public record RecordingHeaderDto(int Version, int Width, int Height, double Duration, string? Title, string? Command);
-
-public record RecordingEventDto(double T, string Type, string Data);
-
-public record HttpEntryDto(
-    double T, string Method, string Url, int StatusCode,
-    Dictionary<string, string>? RequestHeaders, string? RequestBody,
-    Dictionary<string, string>? ResponseHeaders, string? ResponseBody,
-    double DurationMs);
-
-public record RecordingSearchResultsDto(
-    bool Success,
-    List<RecordingSearchHitDto>? Data,
-    RecordingSearchMeta? Meta);
-
-public record RecordingSearchHitDto(double TimestampSeconds, string MatchedText, int EventIndex);
-public record RecordingSearchMeta(string Query, int MatchCount);
-
-public record CommandLogDto(
-    long Id, DateTime Timestamp, string? Command, decimal RiskScore, bool WasBlocked, string? BlockReason);
-
-// TACACS+ (deferred -- v2+, stub DTO for compilation)
-public record TacacsCommandPolicyDto(
-    string Id, string Username, string DevicePattern, string Mode, string? Commands, bool IsEnabled, DateTime CreatedAtUtc);
-
-// MFA Policy DTO
-public record MfaPolicySettingsDto(bool MfaRequired, bool EmailOtpEnabled = false);
-
-// Adaptive MFA Policy DTO (#205)
-public record AdaptiveMfaPolicySettingsDto(
-    bool Enabled,
-    int  LowRiskThreshold,
-    int  MediumRiskThreshold,
-    int  HighRiskThreshold,
-    int  BlockThreshold);
-
-// Geolocation Access Policy DTO (#208)
-public record GeolocationPolicySettingsDto(
-    bool     Enabled,
-    string[] AllowedCountryCodes,
-    string[] BlockedCountryCodes,
-    string   ViolationAction,
-    string   UnknownLocationAction,
-    bool     AllowPrivateIps);
-
-// Device Trust Policy DTO (#207)
-public record DeviceTrustPolicySettingsDto(
-    bool   Enabled,
-    bool   RequireTrustedDevice,
-    string UnknownDeviceAction,
-    int    MaxTrustAgeDays,
-    bool   AutoRegisterOnLogin);
-
-public record TrustedDeviceDto(
     Guid      Id,
-    string?   DeviceName,
-    string    TrustLevel,
-    bool      IsRevoked,
-    string?   UserAgent,
-    DateTime  RegisteredAtUtc,
-    DateTime  LastSeenAtUtc);
-
-// Watermark Policy DTO (#190)
-public record WatermarkPolicySettingsDto(
-    bool   Enabled,
-    string Template,
-    int    MarkerIntervalMin,
-    bool   EnableSsh,
-    bool   EnableRdp,
-    bool   EnableVnc);
-
-public record AccountPolicyDto(int MaxPasswordAgeDays, int MaxInactivityDays, int WarnDaysBefore);
-
-// My Sessions DTO
-public record MySessionDto(
-    string    Id,
-    string    Type,
-    string?   TargetIpAddress,
-    int?      TargetPort,
-    DateTime  StartedAtUtc,
-    int       DurationMinutes,
-    string    Status);
-
-// Windows Auth DTOs (#126)
-public record WindowsAuthSettingsDto(bool Enabled, bool AutoProvision, bool MfaBypass, string TrustedDomains);
-
-// Vendor Access DTOs (#127)
-public record VendorAccessDto(
-    string    Id,
-    string    VendorName,
-    string?   Company,
-    string    Email,
-    string?   Phone,
-    DateTime  StartAtUtc,
-    DateTime  EndAtUtc,
-    int?      AllowedHoursStart,
-    int?      AllowedHoursEnd,
-    int       MaxSessionMinutesPerDay,
-    string    AuthorizedDeviceIdsJson,
-    string?   IpWhitelist,
-    string    InviteToken,
-    DateTime  InviteExpiresAtUtc,
-    DateTime? InviteUsedAtUtc,
-    bool      SingleUseInvite,
+    string    RequestType,
+    Guid      RequestedBy,
+    string    RequestedByName,
     string    Status,
-    string    CreatedByUsername,
+    string?   TargetResource,
+    string?   Reason,
+    string?   ApproverComment,
+    Guid?     ApprovedBy,
+    string?   ApprovedByName,
+    DateTime? ApprovedAt,
     DateTime  CreatedAtUtc,
-    string?   RevokeReason,
-    string?   RevokedByUsername,
-    DateTime? RevokedAtUtc);
+    DateTime? ExpiresAt);
 
-public record VendorCreateResult(bool Success, VendorAccessDto? Data, string? PortalUrl);
+public record DashboardStatsDto(
+    int   TotalUsers,
+    int   ActiveUsers,
+    int   TotalDevices,
+    int   OnlineDevices,
+    int   TotalCredentials,
+    int   CheckedOutCredentials,
+    int   ActiveSessions,
+    int   TodaysSessions,
+    int   PendingApprovals,
+    int   SecurityAlerts,
+    int   AuditEventsToday);
 
-// RDP Gateway DTOs (#110)
-public record RdpHaNodeDto(string Host, bool Healthy, int LatencyMs, string Error);
+public record ComplianceReportDto(
+    int      TotalChecks,
+    int      PassedChecks,
+    int      FailedChecks,
+    double   ComplianceScore,
+    List<ComplianceItemDto> Items);
 
-public record RemoteAppDto(
-    string Name,
-    string AppPath,
-    string? Description,
-    string? AppArgs,
-    string? Category,
-    string? DefaultDeviceId);
+public record ComplianceItemDto(
+    string  Category,
+    string  Check,
+    bool    Passed,
+    string? Details);
 
-public record RdpShadowResult(
-    string ShadowSessionId,
-    string OriginalSessionId,
-    RdpFileInfo RdpFile);
-public record VendorResendResult(bool Success, string? PortalUrl);
+public record ActivitySummaryDto(
+    DateTime Date,
+    int      LoginCount,
+    int      SessionCount,
+    int      CredentialCheckouts,
+    int      FailedLogins,
+    int      AuditEvents);
 
-// Vendor User DTOs (#186)
+public record NotificationDto(
+    Guid      Id,
+    string    Title,
+    string    Message,
+    string    Type,
+    bool      IsRead,
+    DateTime  CreatedAtUtc);
+
+public record MfaSetupDto(
+    string  SecretKey,
+    string  QrCodeUri,
+    bool    IsEnabled);
+
+public record RecoveryCodesDto(string[] Codes);
+
+public record SshKeyDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string    KeyType,
+    int       KeySize,
+    string    Fingerprint,
+    DateTime  CreatedAtUtc);
+
+public record SshPublicKeyDto(string PublicKey);
+
+public record CertificateDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string    Subject,
+    string    Thumbprint,
+    DateTime  NotBefore,
+    DateTime  NotAfter,
+    bool      IsExpired,
+    DateTime  CreatedAtUtc);
+
+public record LicenseDto(
+    string    LicenseKey,
+    string    Product,
+    string    Edition,
+    int       MaxUsers,
+    int       MaxDevices,
+    DateTime  ExpiresAt,
+    bool      IsValid,
+    string?   LicensedTo);
+
+public record BackupDto(
+    Guid      Id,
+    string    FileName,
+    long      FileSizeBytes,
+    string?   Description,
+    string    Status,
+    DateTime  CreatedAtUtc);
+
+public record HealthDto(
+    string   Status,
+    string   Version,
+    DateTime Timestamp,
+    Dictionary<string, string> Components);
+
+public record PkiConfigDto(
+    bool     IsEnabled,
+    string?  CaThumbprint,
+    string?  OcspUrl,
+    bool     RequireClientCert);
+
+public record EmergencyAccessDto(
+    bool      IsEnabled,
+    string?   EnabledBy,
+    string?   Reason,
+    DateTime? EnabledAt,
+    DateTime? ExpiresAt);
+
+public record RdpProxySettingsDto(
+    string  ListenAddress,
+    int     ListenPort,
+    bool    IsEnabled,
+    bool    RecordSessions,
+    int     MaxConcurrentSessions,
+    bool    AllowClipboard,
+    bool    AllowFileTransfer,
+    bool    AllowPrinterRedirection,
+    bool    AllowUsbRedirection,
+    bool    AllowAudioRedirection,
+    bool    AllowSmartCardRedirection,
+    Guid?   DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record SshProxySettingsDto(
+    string   ListenAddress,
+    int      ListenPort,
+    bool     IsEnabled,
+    bool     RecordSessions,
+    int      MaxConcurrentSessions,
+    bool     AllowPortForwarding,
+    bool     AllowX11Forwarding,
+    bool     AllowSftp,
+    bool     AllowScp,
+    string?  HostKeyFingerprint,
+    Guid?    DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record MfaEnrollmentTokenDto(
+    Guid     Token,
+    DateTime ExpiresAt,
+    string   EnrollmentUrl);
+
+public record PasswordResetTokenDto(
+    string   Token,
+    DateTime ExpiresAt,
+    string   ResetUrl);
+
+public record RadiusUserDto(
+    Guid     Id,
+    string   Username,
+    string?  Description,
+    bool     IsEnabled,
+    DateTime CreatedAtUtc);
+
 public record VendorUserDto(
     Guid      Id,
     string    Username,
     string?   DisplayName,
-    string    Email,
+    string?   Email,
     string?   Phone,
+    Guid?     SponsorUserId,
+    string?   SponsorName,
+    string?   AllowedDeviceIds,
+    DateTime? AccessExpiresAt,
     string    Status,
-    string    UserType,
-    Guid?     VendorSponsorUserId,
-    string?   VendorSponsorUsername,
-    string?   VendorDeviceIdsJson,
-    bool      IsTemporary,
-    DateTime? TemporaryExpiresUtc,
-    bool      MfaEnabled,
-    DateTime? LastLoginAtUtc,
-    DateTime  CreatedAtUtc,
-    bool      MustChangePassword);
-
-public record VendorOnboardResult(bool Success, VendorUserDto? Data, string? InviteUrl);
-
-public record VendorSessionDto(
-    string    Id,
-    string    SessionType,
-    string    Status,
-    DateTime  StartedAtUtc,
-    DateTime? EndedAtUtc,
-    int?      DurationSeconds,
-    string?   ClientIpAddress,
-    string?   TargetIpAddress,
-    int?      TargetPort,
-    string?   RecordingPath,
-    int?      RiskScore);
-
-// System Health DTOs (#138)
-public record SystemHealthSnapshotDto(
-    double CpuPercent,
-    double MemoryMb,
-    double DiskPercent,
-    List<ProxyServiceStatusDto> Services,
-    List<SystemAlarmDto> RecentAlarms);
-
-public record ProxyServiceStatusDto(string Name, bool Healthy, int LatencyMs);
-
-public record SystemAlarmDto(
-    long Id, DateTime OccurredAtUtc, string MetricName,
-    string Severity, double MetricValue, double Threshold,
-    string Message, string Status, bool EmailSent);
-
-public record HealthAlarmConfigDto(
-    string CpuWarningPct,
-    string MemoryWarningMb,
-    string DiskFreeWarningPct,
-    string AlarmRecipients);
-
-// System Log Viewer DTOs (#160)
-public record SystemLogEntryDto(
-    string Timestamp,
-    string Level,
-    string Source,
-    string Message,
-    string? Username,
-    string? IpAddress,
-    string? Details);
-
-// Access Certification DTOs (#154)
-public record AttestationCampaignDto(
-    string    Id,
-    string    Name,
-    byte      Status,
-    DateTime  StartsAtUtc,
-    DateTime  DeadlineUtc,
-    bool      AutoRevokeOnMiss,
-    string?   ReviewerUserId,
-    DateTime? CompletedAtUtc);
-
-public record AttestationDecisionItemDto(
-    long      Id,
-    string    SubjectUserId,
-    string?   SubjectUsername,
-    string?   ResourceType,
-    string?   ResourceId,
-    string?   ResourceName,
-    byte?     Decision,
-    DateTime? DecisionAtUtc,
-    string?   Comments);
-
-public record AttestationDetailDto(
-    string    Id,
-    string    Name,
-    byte      Status,
-    DateTime  StartsAtUtc,
-    DateTime  DeadlineUtc,
-    bool      AutoRevokeOnMiss,
-    string?   ReviewerUserId,
-    DateTime? CompletedAtUtc,
-    int       TotalItems,
-    int       DecidedItems,
-    int       PendingItems,
-    List<AttestationDecisionItemDto>? Decisions);
-
-// Scheduled Report Delivery DTOs (#159)
-public record ReportScheduleDto(
-    string    Id,
-    string    Name,
-    string    ReportType,
-    string    Frequency,
-    int       DayOfWeek,
-    int       DayOfMonth,
-    int       RunAtHourUtc,
-    string    OutputFormat,
-    string    Recipients,
-    bool      IsActive,
-    DateTime? LastRunAtUtc,
-    DateTime? NextRunAtUtc,
-    string?   LastRunStatus,
     DateTime  CreatedAtUtc);
 
-public record CreateReportScheduleDto(
-    string  Name,
-    string  ReportType,
-    string  Frequency,
-    int     DayOfWeek,
-    int     DayOfMonth,
-    int     RunAtHourUtc,
-    string  OutputFormat,
-    string  Recipients);
-
-public record UpdateReportScheduleDto(
-    string? Name        = null,
-    string? Recipients  = null,
-    bool?   IsActive    = null,
-    string? Frequency   = null,
-    int?    DayOfWeek   = null,
-    int?    DayOfMonth  = null,
-    int?    RunAtHourUtc = null);
-
-// Executive Dashboard DTOs (#168)
-public record ExecutiveDashboardDto(
-    DateTime                         GeneratedAtUtc,
-    int                              PeriodDays,
-    ExecKpisDto                      Kpis,
-    List<ExecTrendPointDto>          SessionTrend,
-    List<ExecProtocolDto>            ProtocolDistribution,
-    List<ExecTrendPointDto>          FailedLoginTrend,
-    List<ExecDeviceDto>              TopDevices,
-    List<ExecUserDto>                TopUsers,
-    ExecComplianceDto                Compliance);
-
-public record ExecKpisDto(
-    int TotalPrivilegedUsers,
-    int UserWeeklyChange,
-    int ActiveSessions,
-    int OpenAlarms,
-    int PendingApprovals,
-    int FailedLoginsLast24h,
-    int ExpiringCredentials);
-
-public record ExecTrendPointDto(string Date, int Count);
-
-public record ExecProtocolDto(string Protocol, int Count);
-
-public record ExecDeviceDto(string Id, string? Name, string? IpAddress, int SessionCount);
-
-public record ExecUserDto(string Id, string Username, string? DisplayName, int SessionCount);
-
-public record ExecComplianceDto(
-    double RotationCompliance,
-    double MfaEnrollmentRate,
-    int    OrphanedAccountCount,
-    bool   CertificationCompleted,
-    double CertCompletionRate);
-
-// FIDO2/WebAuthn DTOs (#158)
-public record SecurityKeyDto(string Id, string FriendlyName, DateTime RegisteredAt, DateTime? LastUsed);
-
-public record Fido2AuthOptionsDto(
-    string   Challenge,
-    int      Timeout,
-    string   RpId,
-    string   UserId,
-    System.Text.Json.JsonElement[]? AllowCredentials);
-
-// Native CLI Connection Profiles (#150)
-public record ConnectionProfileDto(
-    string Filename,
-    string Content,
-    string MimeType,
-    string SshCommand);
-
-// Custom Report Builder DTOs (#169)
-public record CustomReportDefinitionDto(
-    string    Id,
-    string    Name,
-    string?   Description,
-    string    DataSource,
-    string    FiltersJson,
-    string    ColumnsJson,
-    DateTime  CreatedAtUtc,
-    DateTime? LastRunAtUtc);
-
-public record CustomReportResultDto(
-    List<string>                    Columns,
-    List<Dictionary<string, string>> Rows,
-    int                             TotalRows,
-    string                          FilterSummary);
-
-// ITSM Integration DTOs (#114)
-public record ItsmConfigDto(
-    string  Id,
-    string  Name,
-    string  Provider,
-    string  BaseUrl,
-    bool    RequireTicket,
-    bool    ValidateTicket,
-    bool    IsEnabled);
-
-public record ItsmTestResultDto(
-    string  Provider,
-    string  BaseUrl,
-    long    ResponseTimeMs,
-    string? ServerVersion,
-    string? Message);
-
-// Native Desktop Client SSO DTOs (#170)
-public record LaunchTokenResultDto(string Token, string LaunchUri, DateTime ExpiresAt);
-
-// PKI / Smart Card Authentication DTOs (#115)
-public record TrustedCaDto(
-    string   Id,
-    string   Name,
-    string   Subject,
-    string?  Issuer,
-    string   Thumbprint,
-    DateTime NotBefore,
-    DateTime NotAfter,
-    bool     IsEnabled,
-    bool     CheckRevocation,
-    string?  OcspUrl,
-    string?  CrlUrl);
-
-public record PkiUserCertDto(
-    string    Id,
-    string    UserId,
-    string    Username,
-    string    CertThumbprint,
-    string    SubjectDn,
-    string    IssuingCaThumbprint,
-    DateTime  ExpiresAtUtc,
-    bool      RequirePkiOnly,
-    bool      IsEnabled,
-    DateTime? LastUsedAtUtc);
-
-// Compliance Report Templates (#179)
-public record ComplianceTemplateDto(
-    string                      Id,
-    string                      Name,
-    string                      Description,
-    string                      Version,
-    List<ComplianceControlInfoDto> Controls);
-
-public record ComplianceControlInfoDto(
-    string Code,
-    string Name,
-    string Reference);
-
-public record ComplianceControlsResultDto(
-    string                   Framework,
-    DateTime                 DateFrom,
-    DateTime                 DateTo,
-    int                      PassCount,
-    int                      PartialCount,
-    int                      FailCount,
-    double                   Score,
-    List<ComplianceControlDto> Controls);
-
-public record ComplianceControlDto(
-    string                          Code,
-    string                          Name,
-    string                          Reference,
-    string                          Status,
-    string                          Finding,
-    Dictionary<string, object>?     Evidence);
-
-public record ComplianceReportResultDto(
-    string                          ReportId,
-    string                          Framework,
-    string                          FrameworkName,
-    DateTime                        GeneratedAt,
-    CompliancePeriodDto             Period,
-    ComplianceSummaryDto            Summary,
-    List<ComplianceControlDto>      Controls);
-
-public record CompliancePeriodDto(DateTime From, DateTime To);
-
-public record ComplianceSummaryDto(
-    int    TotalControls,
-    int    Passed,
-    int    Partial,
-    int    Failed,
-    double Score,
-    string OverallStatus);
-
-// FIPS 140-2 Status (#180)
-public record FipsStatusDto(
-    bool   FipsEnabled,
-    string Algorithm,
-    string KeyDerivation,
-    string Standard,
-    string ComplianceNote);
-
-// Cloud PAM (#37)
-public record CloudAccountDto(
-    string    Id,
-    string    Name,
-    string    Provider,
-    string    AccountIdentifier,
-    string?   Region,
-    bool      IsEnabled,
-    int       ResourceCount,
-    DateTime? LastSyncAtUtc,
-    string?   LastSyncError,
-    DateTime  CreatedAtUtc);
-
-public record CloudResourceDto(
-    string    Id,
-    string    Provider,
-    string    NativeId,
-    string    Name,
-    string    ResourceType,
-    string?   Region,
-    string?   Status,
-    string?   IpAddress,
-    bool      IsEnabled,
-    DateTime? LastSeenAtUtc,
-    string    CloudAccountId);
-
-public record CloudJitResourceDto(string Id, string Name, string Provider, string ResourceType, string? Region, string NativeId);
-
-public record CloudJitDto(
-    string              Id,
-    string              RequestedByUsername,
-    string              Permission,
-    string              Justification,
-    string              Status,
-    DateTime            RequestedAtUtc,
-    int                 DurationMinutes,
-    DateTime?           ExpiresAtUtc,
-    DateTime?           GrantedAtUtc,
-    string?             ApprovedByUsername,
-    DateTime?           RevokedAtUtc,
-    string?             RevokeReason,
-    string?             TicketNumber,
-    CloudJitResourceDto? Resource);
-
-public record CloudProviderSummaryDto(string Provider, int Accounts, int Resources, int ActiveJit);
-
-public record CloudDashboardDto(
-    int                          TotalAccounts,
-    int                          TotalResources,
-    int                          ActiveJitRequests,
-    int                          PendingJitRequests,
-    List<CloudProviderSummaryDto> ByProvider,
-    List<CloudJitDto>            RecentJit);
-
-public record CloudSyncResultDto(string AccountId, int NewResources, int TotalResources, DateTime? SyncedAt);
-
-public record ManagedCertificateDto(
-    string    Id,
-    string    SubjectCN,
-    string?   SubjectAltNames,
-    string?   Issuer,
-    string    Thumbprint,
-    string?   SerialNumber,
-    DateTime  NotBefore,
-    DateTime  NotAfter,
-    string?   KeyUsage,
-    string?   KeyAlgorithm,
-    int       KeySizeBits,
-    string?   DeviceId,
-    string?   FolderId,
-    string?   Notes,
-    string    Source,
-    DateTime  CreatedAtUtc,
-    int       DaysUntilExpiry,
-    bool      IsExpired);
-
-// SOAR DTOs (#197)
-public record SoarConfigDto(string? Id, string? Name, string? Provider, string? WebhookUrl, bool IsEnabled, string? CreatedAt);
-
-// Push MFA DTOs (#196)
-public record PushDeviceDto(string? Id, string? Name, DateTime? RegisteredAt);
-public record PushEnrollResultDto(string DeviceId, string DeviceToken, string DeviceName, string Message);
-public record PushChallengeDto(string ChallengeId, DateTime ExpiresAt, string Message);
-public record PushChallengeStatusDto(string ChallengeId, string Status, DateTime ExpiresAt);
-
-// Reconciliation DTOs (#195)
-public record ReconciliationDriftDto(
-    string   PermissionId,
-    string   UserId,
-    string   Username,
-    string   UserStatus,
-    bool     IsOrphaned,
-    string   FolderId,
-    string   FolderName,
-    string   PermissionLevel,
-    bool     CanShare,
-    string   DriftType,
-    DateTime DetectedAt);
-
-public record AutoRemediateResultDto(int RevokedPermissions, DateTime RemediatedAt);
-
-public record ReconciliationHistoryDto(
-    long     Id,
-    string?  ActorUsername,
-    DateTime Timestamp,
-    string?  Details);
-
-// Threat Analytics / SOC Dashboard DTOs (#35)
-public record SocDashboardDto(
-    int TotalAnomalies24h,
-    int Unacknowledged,
-    int CriticalUnacked,
-    List<AnomalyTypeCountDto>? TypeBreakdown,
-    List<UserRiskDto>? TopRiskyUsers,
-    List<AnomalyDto>? RecentAnomalies);
-
-public record AnomalyTypeCountDto(string Type, int Count);
-
-public record UserRiskDto(
-    Guid    UserId,
-    int     AnomalyCount,
-    byte    MaxSeverity,
-    decimal RiskScore);
-
-public record AnomalyDto(
-    long      Id,
-    Guid      UserId,
-    Guid?     SessionId,
-    string    AnomalyType,
-    byte      Severity,
-    string?   Details,
-    DateTime  DetectedAtUtc,
-    bool      IsAcknowledged);
-
-public record RiskMapDto(
-    Guid     UserId,
-    int      AnomalyCount,
-    int      OffHours,
-    int      UnusualIp,
-    int      UnusualDevice,
-    int      FrequencySpike,
-    int      HighRiskCommand,
-    byte     MaxSeverity,
-    decimal  RiskScore,
-    DateTime LastDetected);
-
-public record TimelinePointDto(DateTime Hour, int Count, byte MaxSeverity);
-
-public record BehaviorBaselineDto(
-    Guid     UserId,
-    DateTime BaselineDate,
-    DateTime UpdatedAtUtc,
-    string?  TypicalHoursJson,
-    string?  KnownIpsJson,
-    string?  KnownDevicesJson);
-
-public record AlertRuleDto(
-    string  Id,
-    string  Name,
-    string  ConditionJson,
-    string  ActionJson,
-    int     CooldownMinutes,
-    bool    IsEnabled);
-
-// Threat Intelligence Feed DTOs (#206)
-public record ThreatIndicatorDto(
-    long      Id,
-    string    IndicatorType,
-    string    Value,
-    int       Severity,
-    string    Source,
-    string?   Description,
-    DateTime? ExpiresAtUtc,
-    DateTime  UpdatedAtUtc);
-
-public record ThreatFeedConfigDto(
-    string    Id,
-    string    Name,
-    string    FeedUrl,
-    string    FeedType,
-    int       RefreshIntervalMinutes,
-    bool      IsEnabled,
-    DateTime? LastRefreshedAtUtc,
-    int?      LastIndicatorCount,
-    string?   LastError,
-    DateTime  CreatedAtUtc);
-
-public record ThreatIocHitDto(
-    long      Id,
-    Guid      UserId,
-    Guid?     SessionId,
-    string?   Details,
-    DateTime  DetectedAtUtc,
-    bool      IsAcknowledged);
-
-public record ThreatIocSourceDto(string Source, int Count);
-public record ThreatIocSeverityDto(int Severity, int Count);
-
-public record ThreatIntelReportDto(
-    int                         TotalActive,
-    List<ThreatIocSeverityDto>? BySeverity,
-    List<ThreatIocSourceDto>?   BySource,
-    List<ThreatIocHitDto>?      Hits24h,
-    DateTime                    GeneratedAtUtc);
-
-// Access Pattern Analytics DTOs (#209)
-public record AccessPatternPeriodDto(int Days, DateTime Since);
-public record AccessPatternTopUserDto(string UserId, int SessionCount);
-public record AccessPatternTopTargetDto(string Target, int SessionCount);
-public record AccessPatternPeakHourDto(int Hour, int SessionCount);
-public record AccessPatternWeekdayDto(string Day, int SessionCount);
-public record AccessPatternProtocolDto(string Protocol, int Count);
-
-public record AccessPatternSummaryDto(
-    AccessPatternPeriodDto?          Period,
-    int                              TotalSessions,
-    int                              UniqueUsers,
-    int                              LoginFailures,
-    List<AccessPatternTopUserDto>?   TopUsers,
-    List<AccessPatternTopTargetDto>? TopTargets,
-    List<AccessPatternPeakHourDto>?  PeakHours,
-    List<AccessPatternWeekdayDto>?   WeekdayDistribution,
-    List<AccessPatternProtocolDto>?  ProtocolBreakdown);
-
-public record AccessPatternHourlyDto(int Hour, int SessionCount, int UniqueUsers, int BlockedCount);
-
-public record AccessPatternTimeOfDayDto(
-    AccessPatternPeriodDto?        Period,
-    List<AccessPatternHourlyDto>?  Hourly);
-
-public record AccessPatternUserSummaryDto(string Id, string? Username, string? DisplayName);
-public record AccessPatternAuditCatDto(string Category, int Count);
-public record AccessPatternAnomalyDto(string? AnomalyType, decimal RiskScore, DateTime DetectedAtUtc, bool IsAcknowledged);
-public record AccessPatternUserTargetDto(string Target, int SessionCount, DateTime LastAccessUtc);
-
-public record AccessPatternUserDto(
-    AccessPatternUserSummaryDto?        User,
-    AccessPatternPeriodDto?             Period,
-    int                                 TotalSessions,
-    int                                 AvgSessionDurationSeconds,
-    List<AccessPatternPeakHourDto>?     LoginHoursHistogram,
-    List<AccessPatternUserTargetDto>?   TopTargets,
-    List<AccessPatternProtocolDto>?     ProtocolUsage,
-    List<AccessPatternAuditCatDto>?     AuditCategorySummary,
-    List<AccessPatternAnomalyDto>?      RecentAnomalies);
-
-// API Usage DTOs (#209)
-public record ApiUsageClientDto(
-    string  ClientId,
-    string  ClientName,
-    int     TotalCalls,
-    int     Granted,
-    int     Denied,
-    int     RateLimited);
-
-public record ApiUsageHourlyDto(int Hour, int CallCount);
-public record ApiUsageEventTypeDto(string EventType, int Count);
-
-public record ApiUsageSummaryDto(
-    AccessPatternPeriodDto?        Period,
-    int                            TotalCalls,
-    int                            Granted,
-    int                            Denied,
-    int                            RateLimited,
-    double                         ErrorRate,
-    List<ApiUsageClientDto>?       TopClients,
-    List<ApiUsageHourlyDto>?       HourlyTrend,
-    List<ApiUsageEventTypeDto>?    AuditTopEventTypes);
-
-public record ApiClientInfoDto(
-    string    Id,
-    string    Name,
-    string    ClientId,
-    bool      IsEnabled,
-    int       RateLimitPerMinute,
-    DateTime? LastUsedAtUtc,
-    int       CredentialAccessCount);
-
-public record ApiClientDailyDto(string Date, int Calls, int Granted, int Denied);
-public record ApiClientIpDto(string Ip, int Count);
-
-public record ApiClientUsageDto(
-    ApiClientInfoDto?          Client,
-    AccessPatternPeriodDto?    Period,
-    int                        TotalCalls,
-    int                        Granted,
-    int                        Denied,
-    int                        RateLimited,
-    List<ApiClientDailyDto>?   DailyTrend,
-    List<ApiUsageHourlyDto>?   HourlyProfile,
-    List<ApiClientIpDto>?      TopSourceIps);
-
-public record ApiUsageHighDenialDto(string ClientId, string ClientName, int TotalCalls, int DeniedCalls, double DenialRate);
-public record ApiUsageRateLimitDto(string ClientId, string ClientName, int RateLimitHits);
-
-public record ApiUsageAnomaliesDto(
-    AccessPatternPeriodDto?          Period,
-    List<ApiUsageHighDenialDto>?     HighDenialRateClients,
-    List<ApiUsageRateLimitDto>?      RateLimitedClients);
-
-
-// Live Session Monitor DTOs (#214)
-public record LiveSessionDto(
-    string    Id,
-    string    UserId,
-    string    DeviceId,
-    string    Type,
-    DateTime  StartedAtUtc,
-    int       DurationMinutes,
-    string?   ClientIpAddress,
-    string?   TargetIpAddress,
-    int?      TargetPort,
-    decimal   RiskScore,
-    string?   Reason,
-    string?   TicketNumber,
-    int       ObserverCount);
-
-public record LiveSessionStatusDto(
-    string    SessionId,
-    string    Status,
-    string    SessionType,
-    DateTime  StartedAtUtc,
-    string?   TargetIp,
-    decimal   RiskScore,
-    int       ActiveObservers,
-    List<LiveObserverDto>? Observers);
-
-public record LiveObserverDto(string? ObserverUsername, DateTime JoinedAtUtc);
-
-// Device Realm DTOs
-public record DeviceRealmGroupDto(string UserGroupId, string Name);
-public record DeviceRealmDeviceGroupDto(string DeviceGroupId, string Name);
-public record DeviceRealmDto(
-    string Id,
-    string Name,
-    string? Description,
-    bool IsEnabled,
-    string? SessionPolicyId,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc,
-    List<DeviceRealmGroupDto>? UserGroups,
-    List<DeviceRealmDeviceGroupDto>? DeviceGroups);
-
-public record GroupDto(string Id, string Name, string? Description, string? Source, int MemberCount);
-public record DeviceGroupDto(string Id, string Name, string? Description);
-
-// Assigned Credential DTOs (Sprint 24)
-public record AssignedCredentialDto(
-    string    Id,
-    string    CredentialId,
-    string    CredentialName,
-    string    PrincipalType,
-    string    PrincipalId,
-    string?   DeviceGroupId,
-    bool      IsEnabled,
-    string?   Notes,
-    DateTime  CreatedAtUtc);
-
-public record LiveStreamChunkDto(string Text, int NewOffset);
-
-public record UserProfileDto(
-    string    Id,
+public record OrphanedAccountDto(
+    Guid      Id,
     string    Username,
     string?   DisplayName,
-    string?   Email,
     string    AuthSource,
-    string    Status,
-    bool      MfaEnabled,
-    string    MfaType,
-    bool      MustChangePassword,
-    DateTime? PasswordLastChanged,
-    DateTime? PasswordExpiresAt,
-    DateTime? LastLoginAtUtc,
-    string?   LastLoginIp,
-    string    Language,
-    string    Timezone,
-    List<string>? Roles);
+    DateTime? OrphanedDetectedAtUtc,
+    DateTime  CreatedAtUtc);
 
-// Credential Risk Scoring DTOs (#232)
-public record CredentialRiskSummaryDto(int Critical, int High, int Medium, int Low, int Total);
-public record HighRiskCredentialDto(
-    string    Id,
-    string    Name,
-    string?   Username,
-    int       RiskScore,
-    string    RiskLevel,
-    DateTime? RiskScoredAtUtc,
-    DateTime? LastRotatedAtUtc,
-    DateTime? ExpiresAtUtc,
-    string?   FolderName);
-
-// Command Filter Policy DTOs (#231)
-public record CommandFilterPolicyDto(
-    string    Id,
-    string    Name,
-    string?   Description,
-    bool      IsEnabled,
-    string    Mode,
-    string?   DeviceGroupId,
-    int       RuleCount,
-    DateTime  CreatedAtUtc,
-    DateTime  UpdatedAtUtc);
-
-public record CommandFilterPolicyDetailDto(
-    string    Id,
-    string    Name,
-    string?   Description,
-    bool      IsEnabled,
-    string    Mode,
-    string?   DeviceGroupId,
-    DateTime  CreatedAtUtc,
-    DateTime  UpdatedAtUtc,
-    List<CommandFilterRuleDto>? Rules);
-
-public record CommandFilterRuleDto(
-    string  Id,
-    string  Pattern,
-    bool    IsRegex,
-    string  Action,
-    int     RiskScore,
-    string? Justification,
-    int     SortOrder);
-
-// Session Compliance DTOs (#236)
-public record ComplianceViolatingUserDto(string UserId, string Username, int ViolationCount);
-public record ComplianceViolatingDeviceDto(string DeviceId, string Hostname, int ViolationCount);
-public record SessionComplianceSummaryDto(
-    int                                   PeriodDays,
-    DateTime                              Since,
-    int                                   TotalSessions,
-    int                                   ViolatedSessions,
-    int                                   CleanSessions,
-    double                                ComplianceRate,
-    int                                   AdminTerminated,
-    int                                   BlockedCommands,
-    Dictionary<string, int>?              ViolationTypes,
-    List<ComplianceViolatingUserDto>?     TopViolatingUsers,
-    List<ComplianceViolatingDeviceDto>?   TopViolatingDevices);
-
-// Rotation failure alert DTOs (#235)
-public record RotationFailureItemDto(
-    string    Id,
-    string    Name,
-    string?   Username,
-    int       RotationFailureCount,
-    string?   LastRotationError,
-    DateTime? LastRotationFailedAtUtc,
-    DateTime? LastRotatedAtUtc,
-    string?   FolderName);
-
-public record RotationFailuresResponseDto(
-    int                         Count24h,
-    List<RotationFailureItemDto> Items);
-
-// Rotation Scripts (#241)
-public record RotationScriptDto(
-    string   Id,
-    string   Name,
-    string?  Description,
-    string   DeviceType,
-    string   ScriptType,
-    bool     IsEnabled,
-    string?  CredentialId,
-    string?  DeviceGroupId,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
-
-public record RotationScriptDetailDto(
-    string   Id,
-    string   Name,
-    string?  Description,
-    string   DeviceType,
-    string   ScriptType,
-    string   ScriptContent,
-    string?  TestScriptContent,
-    bool     IsEnabled,
-    string?  CredentialId,
-    string?  DeviceGroupId,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
-
-public record RotationScriptCreatedDto(Guid Id);
-
-public record ScreenCaptureFrameDto(
-    long     Id,
-    Guid     SessionId,
-    int      FrameIndex,
-    DateTime CapturedAtUtc,
-    int?     Width,
-    int?     Height,
-    string   SessionType,
-    bool     HasData);
-
-public record ScreenCaptureListResult(List<ScreenCaptureFrameDto>? Data, PageMeta? Meta);
-
-public record ScriptTestResultDto(bool Success, int ExitCode, string? Output, string? Error);
-
-public record CredentialTemplateDto(
+public record ApprovalPolicyDto(
     Guid     Id,
     string   Name,
     string?  Description,
-    string   DeviceType,
-    string?  DefaultUsername,
-    string   CredentialKind,
-    int      RotationPeriodDays,
-    int      PasswordMinLength,
-    bool     PasswordRequireSpecial,
-    bool     SshKeyRotation,
-    string?  Notes,
-    bool     IsBuiltIn,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    string[] TriggerEvents,
+    int      RequiredApprovers,
+    int      ApprovalTimeoutMinutes,
+    bool     IsActive,
+    DateTime CreatedAtUtc);
 
-public record PeripheralRedirectionPolicyDto(
+public record MfaPolicyDto(
+    bool     RequireMfaForAll,
+    bool     RequireMfaForAdmins,
+    bool     AllowTotpMethod,
+    bool     AllowSmsMethod,
+    bool     AllowEmailMethod,
+    bool     AllowHardwareKey,
+    int      GracePeriodDays);
+
+public record ThreatIndicatorDto(
+    Guid     Id,
+    string   IndicatorType,
+    string   Value,
+    string?  Description,
+    string   Severity,
+    bool     IsActive,
+    DateTime CreatedAtUtc);
+
+public record AnomalyAlertDto(
+    Guid      Id,
+    string    AlertType,
+    string    Description,
+    string    Severity,
+    Guid?     UserId,
+    string?   Username,
+    bool      IsResolved,
+    string?   ResolutionNote,
+    DateTime  CreatedAtUtc,
+    DateTime? ResolvedAtUtc);
+
+public record RotationRuleDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    int      RotationIntervalDays,
+    bool     AutoRotate,
+    bool     NotifyBeforeExpiry,
+    int      NotifyDaysBefore,
+    bool     IsActive,
+    DateTime CreatedAtUtc);
+
+public record DiscoveredDeviceDto(
+    string   IpAddress,
+    string?  Hostname,
+    string[] OpenPorts,
+    string?  DetectedOs,
+    string?  DeviceType);
+
+public record JumpServerDto(
+    Guid      Id,
+    string    Name,
+    string    Hostname,
+    string    IpAddress,
+    int       SshPort,
+    bool      IsEnabled,
+    string?   Description,
+    DateTime  CreatedAtUtc);
+
+public record RecordingDto(
+    Guid      Id,
+    Guid      SessionId,
+    string    FilePath,
+    long      FileSizeBytes,
+    string    Format,
+    int?      DurationSeconds,
+    DateTime  CreatedAtUtc);
+
+public record PlaybackUrlDto(string Url, DateTime ExpiresAt);
+
+public record HsmConfigDto(
+    bool     IsEnabled,
+    string   Provider,
+    string?  ConnectionString,
+    string?  SlotId,
+    bool     UseForEncryption,
+    bool     UseForSigning);
+
+public record AutomationTaskDto(
     Guid      Id,
     string    Name,
     string?   Description,
+    string    TaskType,
+    string?   Script,
+    string    ScheduleType,
+    string?   CronExpression,
     bool      IsEnabled,
-    bool      AllowClipboard,
-    bool      AllowDriveRedirection,
-    bool      AllowPrinterRedirection,
-    bool      AllowUsbRedirection,
-    bool      AllowAudioRedirection,
-    bool      AllowSmartCardRedirection,
-    Guid?     DeviceGroupId,
-    DateTime  CreatedAtUtc,
-    DateTime  UpdatedAtUtc);
+    DateTime? LastRunAt,
+    string?   LastRunStatus,
+    DateTime  CreatedAtUtc);
+
+// API Keys (#250)
+public record ApiKeyDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string    Prefix,
+    Guid      ServiceAccountUserId,
+    string    ServiceAccountName,
+    string?   AllowedIpCidrs,
+    DateTime? ExpiresAtUtc,
+    DateTime? LastUsedAtUtc,
+    long      UsageCount,
+    bool      IsActive,
+    DateTime  CreatedAtUtc);
+
+public record ApiKeyCreatedDto(
+    Guid      Id,
+    string    Name,
+    string    Prefix,
+    string    RawKey,
+    string    HmacSecret,
+    DateTime? ExpiresAtUtc);
