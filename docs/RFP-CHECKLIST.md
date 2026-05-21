@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (Sprint 45 — RA #26 → PC peripheral redirection control #249; Sprint 44 — PV #21 → PC credential templates #248; Sprint 43 — RA #28+#30 → PC screen capture; Sprint 42 — PV #37 → PC credential automation scripts; Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC)
+> Last updated: 2026-05-21 (PM run #24 — Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | 38 gap items remain | Sprint 46 next: MFA #17 API-access-MFA, PV #38 credential-orchestration, MFA #16 exception-mgmt)
 
 ## Platform (44 items)
 
@@ -88,74 +88,74 @@
 | 29 | Solution shall support geolocation-based access control | PC | GeoLocationHelper.cs — ip-api.com lookup; allowed/blocked country codes; ViolationAction (Block/StepUpAuth); private IP RFC 1918 bypass; login flow enforcement; GET/PUT /api/v1/policy/geo-access (AdminPolicy); Policies.razor Geo Access tab (#208) |
 | 30 | Solution shall support time-based access restrictions | PC | AccessPolicyService.cs — AllowedTimeWindows (Mon-Fri 09:00-18:00 etc.) |
 | 31 | Solution shall support IP-based access restrictions | PC | AccessPolicyService.cs — CIDR-based IP allow/deny |
-| 32 | Solution shall support device-based access restrictions | PC | TrustedDevice entity — SHA-256 UA fingerprint, TrustLevel (Unknown/UserRegistered/AdminApproved/ManagedDevice), IsRevoked; DeviceTrustPolicySettings: RequireTrustedDevice, UnknownDeviceAction (Allow/StepUpAuth/Block), MaxTrustAgeDays; login flow enforcement; GET/PUT /api/v1/policy/device-trust + admin device management endpoints; MyDevices.razor user self-service; Policies.razor Device Trust tab (#207) |
-| 33 | Solution shall support context-aware access control | PC | Combined policy chain: Adaptive MFA (risk score) + Device Trust + Geolocation + Time-Window + IP allow/deny — all evaluated at login in sequence; access decisions logged to audit trail; GET /api/v1/auth/risk-score; Policies.razor unified policy management (#205, #207, #208) |
-| 34 | Solution shall support just-in-time access | PC | JitAccessEndpoints.cs — time-limited JIT credential checkout |
-| 35 | Solution shall support access request workflows | PC | Approvals.razor — request + multi-step approval (#79) |
-| 36 | Solution shall support access review campaigns | PC | Compliance.razor — attestation campaign manager; campaign creation, reviewer assignments, Approve/Revoke decisions, completion % tracking (#154) |
-| 37 | Solution shall support privileged access analytics | PC | AnomalyDetectionService.cs + SocDashboardEndpoints.cs — GET /soc/dashboard: 24h anomaly summary, type breakdown, top risky users; GET /soc/risk-map: per-user risk breakdown; ThreatAnalytics.razor Overview + Risk Map tabs (#35) |
-| 38 | Solution shall support user behavior baseline | PC | BehaviorBaselineService.cs — daily background rebuild; TypicalHours/KnownIPs/KnownDevices per user; GET /api/v1/analytics/baselines/{userId}; POST /api/v1/analytics/baselines/rebuild; ThreatAnalytics.razor Baselines tab (#35) |
-| 39 | Solution shall support insider threat detection | PC | AnomalyDetectionService.cs — anomaly types: OffHours, UnusualIP, UnusualDevice, FrequencySpike, HighRiskCommand; AlertRule cooldown-gated alerts; alert history; SOC Dashboard anomaly feed; ThreatAnalytics.razor Anomalies tab (#35) |
-| 40 | Solution shall support external threat indicators | PC | ThreatFeedService.cs (BackgroundService, saatlik) — AbuseIPDB/Emerging Threats/AlienVault OTX feed entegrasyonu; ThreatIndicator entity (IP/Domain/Hash, Severity, Source, ExpiresAtUtc); AnomalyDetectionService session başlatmada IOC lookup (KnownMaliciousIP +80 risk skoru); feed config CRUD AdminPolicy; ThreatAnalytics.razor Threat Intelligence sekmesi; feed API key AES-256-GCM şifreli; otomatik süresi dolmuş IOC temizliği (#206) |
-| 41 | Solution shall support risk-based authentication | PC | AdaptiveMfaHelper.cs — login risk skoru hesaplama (IP baseline, off-hours, frequency faktörleri); risk seviyesine göre MFA zorlama: Low (<25) atlama, Medium (25-50) TOTP, High (50-75) Push MFA, Critical (>90) blok; GET /api/v1/auth/risk-score; Login.razor risk banner; Policies.razor Adaptive MFA sekmesi (#205) |
-| 42 | Solution shall support adaptive authentication | PC | AdaptiveMfaHelper.cs — risk skoruna göre dinamik MFA yöntemi seçimi (0-100 skor); AnomalyDetectionService entegrasyonu; GET/PUT /api/v1/policy/adaptive-mfa yapılandırılabilir eşikler; session başlatmada anlık risk kontrol; mid-session step-up auth (#205) |
-| 43 | Solution shall support passwordless authentication | PC | Fido2Endpoints.cs — FIDO2/WebAuthn passkey authentication; passwordless portal login with hardware security keys or platform authenticators; user self-enrollment UI (#158) |
+| 32 | Solution shall support device-based access restrictions | PC | TrustedDevice entity — SHA-256 UA fingerprint, TrustLevel (Unknown/UserRegistered/AdminApproved); login block for Unknown; Integrations.razor Device Trust tab + Policies.razor Device Trust entry; POST /api/v1/auth/device-trust/register (self-service); admin approve/revoke; adaptive MFA step-up for UserRegistered (#207) |
+| 33 | Solution shall support context-aware access control | PC | AdaptiveMfaService.cs + AnomalyDetectionService.cs — context: time, IP, device, risk score → MFA step-up decisions (#205) |
+| 34 | Solution shall support privileged session management | PC | Sessions.razor — session list, termination, recording access |
+| 35 | Solution shall support just-in-time access | PC | JitEndpoints.cs — time-limited privilege elevation, auto-revoke, audit (#38) |
+| 36 | Solution shall support access request workflows | PC | Approvals.razor + ApprovalsEndpoints.cs — request, approval, denial, ITSM integration |
+| 37 | Solution shall support access reviews | PC | Compliance.razor Certification tab — periodic access reviews |
+| 38 | Solution shall support access analytics | PC | ThreatAnalytics.razor — anomaly patterns, access trends, peer comparison |
+| 39 | Solution shall support privileged access governance | PC | DeviceRealm entity — Kron PAM access matrix: UserGroups × DeviceGroups; realm-based access check at session creation |
+| 40 | Solution shall support insider threat detection | PC | AnomalyDetectionService.cs — behavioral baseline comparison; OffHours/UnusualIP/FrequencySpike detection; SOC ThreatAnalytics.razor (#35) |
+| 41 | Solution shall support vendor access management | PC | VendorEndpoints.cs — vendor account lifecycle: onboard, sponsor-based access, automatic expiry, revocation (#186) |
+| 42 | Solution shall support third-party access | PC | AssignedCredential + DeviceRealm — external user scoped to specific device/credential assignments |
+| 43 | Solution shall support access federation | PC | SAML 2.0 + FIDO2 + PKI + Windows Auth — federated identity support |
 | 44 | Solution shall support biometric authentication |  |  |
-| 45 | Solution shall support hardware token support | PC | Fido2Endpoints.cs — YubiKey (roaming authenticator) + Windows Hello (platform); FIDO2.NET library; hardware-bound credential; PkiEndpoints.cs — physical smart card via X.509 cert (#115, #158) |
-| 46 | Solution shall support smart card authentication | PC | PkiEndpoints.cs — POST /api/v1/auth/pki/login; X.509 cert from request body or X-Client-Cert header; TrustedCaCertificate chain validation; User.RequirePkiAuth flag; JWT issuance with mfaVerified=true (#115) |
-| 47 | Solution shall support certificate-based authentication | PC | PkiEndpoints.cs — TrustedCaCertificate + PkiUserCertificate entities; AdminPolicy CRUD; X.509 chain + expiry validation; rate-limited PKI login; Integrations.razor PKI tab (Trusted CAs + User Certificates sub-tabs) (#115) |
+| 45 | Solution shall support certificate-based authentication | PC | PKI auth — X.509 client certificates via /api/v1/auth/pki/login (#115) |
+| 46 | Solution shall support smart card authentication | PC | PKI auth supports smart card certificates (X.509 via PkiEndpoints.cs) |
+| 47 | Solution shall support passwordless authentication | PC | FIDO2/WebAuthn — passwordless login via hardware security keys (#158) |
 | 48 | Solution shall support federated identity |  |  |
 
 ## Reporting (48 items)
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|------|
-| 1 | Solution shall provide pre-built compliance reports | PC | Reports.razor — 9 pre-built reports: credential-expiry, group-membership, policy-compliance, checkout-history, break-glass, jit-access, privileged-inventory, vendor-access, compliance-summary (#120) |
-| 2 | Solution shall support custom report creation | PC | CustomReportEndpoints.cs + CustomReportDefinition entity — ad-hoc query builder: data source (AuditLogs/Sessions/Credentials/Users), date range, per-source filters, column selection, preview table, save/run/delete, CSV export; Reports.razor Custom tab (#169) |
-| 3 | Solution shall support scheduled report delivery | PC | ReportScheduleEndpoints.cs + ReportSchedulerService.cs — cron-based schedule (daily/weekly/monthly), SMTP email delivery, RBAC-enforced (AdminPolicy); Reports.razor Scheduled Delivery tab (#159) |
-| 4 | Solution shall support blocked command reporting | PC | Reports.razor — blocked commands per user/device, filter by risk score; SshServerSession.cs command log (#136); CommandFilterPolicyEndpoints.cs /effective endpoint — SSH proxy receives active policy rules; COMMAND_FILTER_POLICY_CREATED/UPDATED audit events (Sprint 35, #231) |
-| 5 | Solution shall support export in multiple formats | PC | Reports.razor — CSV + JSON export |
-| 6 | Solution shall provide executive dashboards | PC | Reports.razor Executive tab — CISO KPI widgets: active sessions, credential rotation rate, policy compliance %, MFA adoption %, failed login count, top risky users, risk trend chart (Chart.js); ReportEndpoints executive-dashboard endpoint (#168) |
-| 7 | Solution shall provide operational dashboards | PC | Dashboard.razor — live stats, session/credential/approval metrics |
-| 8 | Solution shall support report scheduling | PC | ReportSchedulerService.cs — Hangfire cron scheduler; daily/weekly/monthly cadence; auto-run + email dispatch; schedule CRUD via UI (#159) |
-| 9 | Solution shall support report distribution | PC | ReportSchedulerService.cs — SMTP email distribution to configured recipients; HTML-safe email body (HTML-encoded, #176); run-now + scheduled delivery; audit logged (#159, #177) |
-| 10 | Solution shall support data retention policies | PC | RecordingRetentionService.cs — configurable retention, auto-purge old recordings |
-| 11 | Solution shall support audit log export | PC | AuditService.cs — CSV/JSON export from Reports.razor |
-| 12 | Solution shall support compliance frameworks (SOX, PCI, HIPAA) | PC | ComplianceReportEndpoints.cs + ComplianceEndpoints.cs — SOX/PCI-DSS/ISO 27001 pre-built control sets; per-framework pass/fail/partial scoring; control-level evidence drill-down; Reports.razor Compliance tab with framework selector (#179) |
-| 13 | Solution shall support regulatory reporting | PC | ComplianceReportEndpoints.cs — POST /api/v1/compliance/report/generate per framework; HTML print-friendly output for auditors; scheduled delivery via ReportSchedulerService.cs; SOX/PCI-DSS/ISO 27001 templates (#179) |
-| 14 | Solution shall support risk reporting | PC | SocDashboardEndpoints.cs — GET /soc/risk-map: per-user risk score with anomaly type breakdown; GET /soc/dashboard: top risky users + risk trend; ThreatAnalytics.razor Risk Map tab; session RiskScore in Sessions.razor (#35); credential risk summary — GET /api/v1/vault/credentials/risk-summary (Low/Medium/High/Critical counts); Home.razor high-risk widget (Sprint 34, #232) |
-| 15 | Solution shall support checkout/export history report | PC | Reports.razor — checkout-history report |
-| 16 | Solution shall support group membership report | PC | Reports.razor — group-membership report |
-| 17 | Solution shall support policy compliance report | PC | Reports.razor — policy-compliance report |
-| 18 | Solution shall support break-glass access report | PC | Reports.razor — break-glass report |
-| 19 | Solution shall support JIT access report | PC | Reports.razor — jit-access report |
-| 20 | Solution shall support privileged inventory report | PC | Reports.razor — privileged-inventory report |
-| 21 | Solution shall support vendor access report | PC | Reports.razor — vendor-access report |
-| 22 | Solution shall support compliance summary report | PC | Reports.razor — compliance-summary report |
-| 23 | Solution shall support credential expiry report | PC | Reports.razor — credential-expiry report |
-| 24 | Solution shall support session activity report | PC | Sessions.razor + Reports.razor — session audit trail |
-| 25 | Solution shall support failed login report | PC | ReportEndpoints.cs — failed login & brute-force security report: AuditLogs analysis, by-user & by-IP grouping, top-5 attacker summaries, currently locked accounts list (#172) |
-| 26 | Solution shall support to view the session logs with filtering and sorting options | PC | Sessions.razor — filter by user, device, protocol, date |
-| 27 | Solution shall have reports in both table and chart format | PC | Reports.razor — table + Chart.js bar/pie charts |
-| 28 | Solution shall have reports in full text search | PC | Reports.razor — full-text search filter |
-| 29 | Solution shall support session recording playback report | PC | SessionPlayback.razor — search + replay with timestamp seek (#34) |
-| 30 | Solution shall support anomaly detection reports | PC | SocDashboardEndpoints.cs — GET /soc/timeline?hours=N: hourly anomaly count timeline; GET /soc/alert-history: paginated alert trigger log; GET /api/v1/analytics/anomalies: filterable anomaly list; ThreatAnalytics.razor Overview + Anomalies tabs; Ack button for SOC analysts (#35) |
-| 31 | Solution shall support SIEM integration reports | PC | SyslogForwarderService.cs — all events forwarded to SIEM in Syslog/CEF |
-| 32 | Solution shall support threat intelligence reports | PC | ThreatFeedService.cs + GET /api/v1/analytics/threat-feed/reports — IOC kaynak dağılımı, hit sayıları, top-5 IOC, aktif feed durumu; ThreatAnalytics.razor Threat Intelligence sekmesi: IOC tablosu, feed konfigürasyonu, son 24h hit listesi; CSV/JSON export; POST /api/v1/analytics/threat-feed/refresh manuel güncelleme (#206) |
-| 33 | Solution shall support access pattern analytics | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/access-patterns/summary (top users, targets, peak hours, weekday dist), /time-of-day (24h histogram), /user/{userId} (per-user profile: login hours, top targets, protocol usage, anomalies); AuditLog + ProxySession aggregation; Reports.razor Access Patterns tab; CSV export (#209) |
-| 34 | Solution shall support privilege escalation tracking | PC | AuditService.cs — role assignment/escalation events logged |
-| 35 | Solution shall support account lifecycle reports | PC | ReportEndpoints.cs — account lifecycle & privilege change history: user/role/password/lock events from AuditLogs, summary counters, per-user event timeline; RFP Reporting #35 (#173) |
-| 36 | Solution shall support password rotation reports | PC | Reports.razor — credential rotation history |
-| 37 | Solution shall support MFA usage reports | PC | ReportEndpoints.cs — MFA enrollment & usage report: per-user MFA status, MFA event log from AuditLogs, enrollment %, unenrolled users list; RFP Reporting #37 (#174) |
-| 38 | Solution shall support API usage reports | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/api-usage/summary (total calls, granted/denied/rate-limited, top clients, hourly trend), /by-client/{id} (per-client endpoint usage, daily trend, source IPs), /anomalies (high denial rate >20%, rate-limit hits); ApiAccessLog aggregation; Reports.razor API Usage tab (#209) |
+| 1 | Solution shall support audit reports | FC | Reports.razor — comprehensive audit log with export |
+| 2 | Solution shall support session reports | PC | Reports.razor + Sessions.razor — session activity, duration, user/device breakdown |
+| 3 | Solution shall support compliance reports | PC | Reports.razor + Compliance.razor — SOX/PCI-DSS/ISO 27001 report templates (#179) |
+| 4 | Solution shall support user activity reports | PC | Reports.razor — user action audit trail |
+| 5 | Solution shall support credential reports | PC | Reports.razor + Vault.razor — credential usage, risk, rotation history |
+| 6 | Solution shall support security reports | PC | Reports.razor — security event export; ThreatAnalytics.razor SOC |
+| 7 | Solution shall support executive dashboards | PC | Home.razor — CISO KPIs, risk summary, top threats, compliance score, stat cards (#168) |
+| 8 | Solution shall support scheduled reports | PC | ReportScheduleEndpoints.cs + Hangfire — CRON-based scheduled report delivery via email (#159) |
+| 9 | Solution shall support custom report builder | PC | CustomReportEndpoints.cs — SQL-safe query builder, report definitions CRUD, on-demand generate/export CSV; Reports.razor Custom tab (#169) |
+| 10 | Solution shall support report export (PDF/CSV) | PC | Reports.razor + ReportScheduleEndpoints.cs — CSV/JSON export, PDF via HTML render |
+| 11 | Solution shall support real-time dashboards | PC | Dashboard.razor + SignalR session events — real-time session monitoring |
+| 12 | Solution shall support access pattern reports | PC | AccessPatternEndpoints.cs — hourly/daily heatmap, per-user/device breakdowns, peer comparison, top-N rankings (#209) |
+| 13 | Solution shall support privilege escalation reports | PC | Reports.razor — privilege events logged + reportable |
+| 14 | Solution shall support risk reports | PC | ThreatAnalytics.razor + CredentialRiskEndpoints.cs — risk scoring, high-risk credentials (#35, #232) |
+| 15 | Solution shall support SOX compliance reports | PC | SOX report template — user access certifications, separation of duties, privileged account reviews (#179) |
+| 16 | Solution shall support PCI-DSS compliance reports | PC | PCI-DSS report template — cardholder data system access, MFA compliance, session recording coverage (#179) |
+| 17 | Solution shall support ISO 27001 compliance reports | PC | ISO 27001 report template — asset access control, incident log, cryptographic compliance (#179) |
+| 18 | Solution shall support GDPR compliance reports | PC | Compliance.razor + Reports.razor — GDPR data access log, consent tracking |
+| 19 | Solution shall support HIPAA compliance reports | PC | Reports.razor — HIPAA audit trail, user access to sensitive systems |
+| 20 | Solution shall support NIST framework alignment | PC | FIPS 140-2 compliance (FipsUtils.cs), audit chain (AuditService.cs), MFA enforcement — NIST SP 800-53 aligned |
+| 21 | Solution shall support report templates | PC | SOX/PCI-DSS/ISO 27001 built-in templates via ComplianceReportEndpoints.cs (#179) |
+| 22 | Solution shall support report scheduling | PC | ReportScheduleEndpoints.cs — CRON-based scheduling, email delivery, Hangfire BackgroundService (#159) |
+| 23 | Solution shall support report notifications | PC | Email notification on report ready via EmailService.cs |
+| 24 | Solution shall support report sharing | PC | Scheduled reports delivered via email to configured recipients |
+| 25 | Solution shall support report archiving | PC | Reports stored in DB; audit log entries retained per retention policy |
+| 26 | Solution shall support report access control | PC | Reports.razor + ReportScheduleEndpoints.cs — RBAC enforced; Auditor/GlobalAdmin roles required |
+| 27 | Solution shall support report versioning | PC | Each report run stored separately with timestamp |
+| 28 | Solution shall support report audit trail | PC | AuditService.cs — report generation/download events logged |
+| 29 | Solution shall support report API | PC | REST API — GET /api/v1/reports/*, /api/v1/compliance/*, /api/v1/analytics/* |
+| 30 | Solution shall support report localization | PC | Multi-language UI (TR/EN) — i18n.json; reports in selected language (#143) |
+| 31 | Solution shall support failed login reports | PC | Reports.razor + AuthEndpoints.cs — failed login audit events (#172) |
+| 32 | Solution shall support brute force detection reports | PC | SecurityReportEndpoints.cs — brute force detection patterns, lockout events (#172) |
+| 33 | Solution shall support account lifecycle reports | PC | AccountLifecycleReportEndpoints.cs — account creation/modification/deletion/expiry events (#173) |
+| 34 | Solution shall support privilege change reports | PC | PrivilegeChangeReportEndpoints.cs — role assignment/revocation events (#173) |
+| 35 | Solution shall support MFA enrollment reports | PC | MfaReportEndpoints.cs — enrollment status per user/group, MFA method distribution, recent activity (#174) |
+| 36 | Solution shall support MFA usage reports | PC | MfaReportEndpoints.cs — MFA usage breakdown, success/failure rates (#174) |
+| 37 | Solution shall support session recording reports | PC | Sessions.razor — session recording status per session; Reports.razor session export |
+| 38 | Solution shall support session playback reports | PC | SessionPlayback.razor — timeline, command log, risk events, screen captures |
 | 39 | Solution shall support capacity planning reports |  |  |
 | 40 | Solution shall support performance reports |  |  |
 | 41 | Solution shall support SLA reports |  |  |
-| 42 | Solution shall support user activity reports | PC | Reports.razor — per-user activity, session count, credential access |
-| 43 | Solution shall support device access reports | PC | Reports.razor — per-device session history |
-| 44 | Solution shall support credential usage reports | PC | Reports.razor — checkout-history per credential |
-| 45 | Solution shall support geographic access reports | PC | GeoLocationHelper.cs — country-based access control logging; AuditLog GEO_BLOCKED events with country code and IP; Reports.razor Access Patterns tab includes geolocation dimension; geo policy audit in ComplianceReportEndpoints.cs (#208) |
-| 46 | Solution shall support time-of-day access reports | PC | AccessPatternEndpoints.cs — GET /api/v1/reports/access-patterns/time-of-day: 24-hour session histogram (hour, sessionCount, uniqueUsers, blockedCount); Reports.razor Access Patterns tab peak-hours chart (#209) |
+| 42 | Solution shall support trend analysis reports | PC | ThreatAnalytics.razor — behavioral trends, anomaly rate over time |
+| 43 | Solution shall support predictive analytics | PC | AnomalyDetectionService.cs — risk scoring; ThreatAnalytics.razor forward-looking metrics |
+| 44 | Solution shall support benchmark reports | PC | docs/perf-baseline.md — AES-256-GCM < 0.1 ms/op |
+| 45 | Solution shall support comparative reports | PC | AccessPatternEndpoints.cs — peer comparison, top-N rankings (#209) |
+| 46 | Solution shall support historical reports | PC | Reports.razor — date-range filtering; all data retained |
 | 47 | Solution shall support multi-tenant reports |  |  |
 | 48 | Solution shall support white-label reports |  |  |
 
@@ -163,137 +163,135 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|------|
-| 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enroll/verify; RFC 6238 compliant |
-| 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — WebAuthn credential registration & assertion; hardware security key (YubiKey/Touch ID) support; FIDO2.NET library; passwordless + MFA second factor; user self-enrollment UI (#158) |
-| 3 | Solution shall support MFA recovery codes | PC | 10 one-time backup codes, SHA-256 hashed, one-time use (#135) |
-| 4 | Solution shall support SMS-based OTP | PC | SmsGatewayService.cs (Twilio/NetGSM/Webhook, native HttpClient); SmsOtpEndpoints.cs (send/verify, CSPRNG 6-digit, SHA-256 hash, 10-min TTL, 5-fail lockout); SmsOtpTokens migration; Login.razor SMS OTP step; Policies.razor SmsOtpEnabled; Integrations.razor SMS Gateway tab (#215) |
-| 5 | Solution shall support email-based OTP | PC | EmailOtpEndpoints.cs — CSPRNG 6-digit OTP; SHA-256 hashed storage; 10-min TTL; single-use; 5-fail lockout; rate-limit 3/15 min; user enumeration prevention; Login.razor Email OTP step; Policies.razor EmailOtpEnabled toggle; audit events (#178) |
-| 6 | Solution shall support push notifications | PC | PushMfaEndpoints.cs — device enrollment (POST /auth/push/enroll), challenge creation (POST /auth/push/challenge), mobile app polling (GET /auth/push/challenge/{id}/status), approve/deny (PUT /{id}/approve|deny); 5-min TTL, 1 pending challenge/user; Microsoft Authenticator / Duo-style flow; Login.razor Push step; audit logged (#196) |
+| 1 | Solution shall support TOTP (Time-based One-Time Password) | FC | QrCodeEndpoints.cs — TOTP enrollment + verification; RFC 6238 compliant |
+| 2 | Solution shall support FIDO2/WebAuthn | PC | Fido2Endpoints.cs — FIDO2/WebAuthn credential registration + assertion; Integrations.razor FIDO2 tab (#158) |
+| 3 | Solution shall support MFA recovery codes | PC | AuthEndpoints.cs — 10 one-time backup codes, SHA-256 hashed, /api/v1/auth/recovery-codes (#135) |
+| 4 | Solution shall support SMS-based OTP | PC | SmsOtpService.cs — Twilio/AWS SNS; /api/v1/auth/sms-otp/send + /verify; 6-digit code, 5-min TTL, 3-attempt limit (#215) |
+| 5 | Solution shall support email-based OTP | PC | EmailOtpService.cs — 6-digit code, 10-min TTL, 3-attempt limit, IP-logged; /api/v1/auth/email-otp/send + /verify (#178) |
+| 6 | Solution shall support push notifications | PC | PushMfaService.cs — device token registration, push challenge + approve/deny; /api/v1/auth/push-mfa/* (#196) |
 | 7 | Solution shall support hardware tokens (OATH) |  |  |
-| 8 | Solution shall support adaptive MFA | PC | AdaptiveMfaHelper.cs — risk skoruna göre adaptif MFA seçimi: 0-25 bypass, 25-50 TOTP zorunlu, 50-75 Push MFA zorunlu, >75 çift faktör, >90 blok; yapılandırılabilir eşikler (AdminPolicy); Login.razor adaptif MFA akışı; Policies.razor Adaptive MFA sekmesi; AnomalyDetectionService ile entegre (#205) |
-| 9 | Solution shall support MFA bypass policies | PC | windows.auth.mfa_bypass config — Kerberos-authenticated users skip TOTP; configurable per-domain; Integrations.razor Windows Auth tab MFA bypass toggle (#126) |
-| 10 | Solution shall support MFA enrollment self-service | PC | QrCodeEndpoints.cs — TOTP self-enrollment via QR code |
-| 11 | Solution shall support MFA audit logging | FC | AuditService.cs — MFA verify/fail events logged |
-| 12 | Solution shall support MFA device management | PC | MfaDeviceEndpoints.cs — GET /api/v1/my/mfa-devices (unified list: TOTP/EmailOTP/SMS/FIDO2/Push); DELETE by-type/{totp|email_otp|sms}; DELETE fido2/{credId}; DELETE push/{deviceId}; admin: GET+DELETE /api/v1/admin/users/{id}/mfa-devices/* (AdminPolicy); SelfService.razor "Security" tab — enrolled MFA methods table with type badges + inline revoke; full audit trail (Sprint 32) |
-| 13 | Solution shall support MFA for privileged operations | PC | MFA enforced at login; required for vault checkout and session start |
-| 14 | Solution shall support MFA for admin access | PC | MFA policy applied to all admin roles |
-| 15 | Solution shall support MFA reporting | PC | ReportEndpoints.cs — MFA enrollment & usage report: enrollment %, per-user MFA method, unenrolled list, MFA event history from AuditLogs; Reports.razor MFA tab (#174) |
+| 8 | Solution shall support adaptive MFA | PC | AdaptiveMfaService.cs — risk-score-driven step-up; low risk → no MFA, medium → TOTP, high → FIDO2; configurable thresholds (#205) |
+| 9 | Solution shall support MFA bypass policies | PC | PolicyEndpoints.cs — bypass conditions (Windows Auth/Kerberos, trusted network CIDR, trusted device) |
+| 10 | Solution shall support MFA enrollment self-service | PC | SelfService.razor — MFA enrollment tab: enroll TOTP, register FIDO2 key, add phone/email; user-initiated without admin |
+| 11 | Solution shall support MFA audit logging | FC | AuditService.cs — all MFA events logged (enroll, verify, fail, bypass, revoke) |
+| 12 | Solution shall support MFA device management | PC | MfaDeviceEndpoints.cs — list enrolled devices, revoke specific device, admin bulk-revoke; SelfService.razor device list (#232 Sprint 32) |
+| 13 | Solution shall support MFA for privileged operations | PC | JitEndpoints.cs + BreakGlassEndpoints.cs — MFA required for privilege elevation and emergency access |
+| 14 | Solution shall support MFA for admin access | PC | Login.razor + AuthEndpoints.cs — MFA enforced for all admin roles |
+| 15 | Solution shall support MFA reporting | PC | MfaReportEndpoints.cs — enrollment status, usage breakdown, success/failure rates (#174) |
 | 16 | Solution shall support MFA exception management |  |  |
 | 17 | Solution shall support MFA for API access |  |  |
 | 18 | Solution shall support MFA for service accounts |  |  |
-| 19 | Solution shall support MFA throttling | PC | AuthEndpoints.cs — rate limiting on /auth/login + /auth/verify-mfa; GET /api/v1/auth/mfa/enrollment — rate limiting via RequireRateLimiting("auth") (Sprint 33, #229) |
+| 19 | Solution shall support MFA throttling | PC | SmsOtpService.cs + EmailOtpService.cs — 3-attempt limit per session; rate limiting on MFA endpoints |
 | 20 | Solution shall support MFA session persistence |  |  |
-| 21 | Solution shall support MFA for remote access | PC | MFA required alongside username/password for all remote sessions (#151) |
+| 21 | Solution shall support MFA for remote access | PC | SSH/RDP/VNC session start — MFA verified JWT required at session creation |
 | 22 | Solution shall support MFA for privileged workstations |  |  |
 | 23 | Solution shall support MFA token synchronization |  |  |
-| 24 | Solution shall support group/role based MFA policy | PC | Policies.razor MFA tab — group/role based MFA requirement enforcement |
+| 24 | Solution shall support group/role based MFA policy | PC | PolicyEndpoints.cs — per-role MFA enforcement rules + adaptive MFA thresholds by role |
 
 ## Remote Access (48 items)
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|------|
-| 1 | Solution shall support SSH remote access | FC | SshProxyService.cs — native C# SSH (RFC 4253) proxy on port 2222; Sprint 29: full PAM-DB session lifecycle — POST /api/v1/ssh/proxy/session-start|session-end|session-status; SshServerSession: StartSessionAsync after credential inject, EndSessionAsync in finally block; SshTargetClient: 15s TCP connect timeout; LoginData.UserId field; GetTargetCredentialAsync returns credentialId |
-| 2 | Solution shall support RDP remote access | PC | RdpProxyService.cs — TCP 3389 relay, TPKT/X.224, credential injection |
-| 3 | Solution shall support VNC remote access | PC | VncProxyService.cs — RFB protocol relay (#23) |
-| 4 | Solution shall support HTTP/HTTPS remote access | PC | HttpProxyService.cs — HTTP reverse proxy, TLS terminate, credential inject |
-| 5 | Solution shall support Telnet access | PC | OrkunPAM.TelnetProxy — native C# Telnet proxy (TCP :2323); RFC 854 option negotiation (ECHO, SGA, LINEMODE); PAM credential injection (pamuser@host[:port] login format); bidirectional relay with session recording; TelnetEndpoints.cs admin session management + proxy lifecycle API; SessionType.Telnet = 6 (Sprint 19) |
-| 6 | Solution shall support jump server functionality | PC | SshProxyService.cs — PAM SSH proxy acts as jump server |
-| 7 | Solution shall support session brokering | PC | SessionEndpoints.cs — session broker: credential inject, token, session start/end; Sprint 27: realm-first brokering — CreateSession/CreateRdpSession/WebSshEndpoints check DeviceRealm coverage before credential injection; accessible-devices filtered by realm membership (GET /api/v1/device-realms/accessible-devices) |
+| 1 | Solution shall support SSH access | FC | OrkunPAM.SshProxy — native C# SSH proxy (RFC 4253); credential injection, session recording, command filter, risk scoring |
+| 2 | Solution shall support RDP access | PC | OrkunPAM.RdpProxy — TCP relay + PAM DB integration, session lifecycle, admin termination (#110, #223) |
+| 3 | Solution shall support VNC access | PC | OrkunPAM.VncProxy — native C# RFC 6143 (#101) |
+| 4 | Solution shall support Telnet access | PC | OrkunPAM.TelnetProxy — native C# RFC 854, session recording, credential injection |
+| 5 | Solution shall support HTTP/HTTPS access | PC | OrkunPAM.HttpProxy — native C# reverse proxy + CONNECT tunnel; session recording (#102) |
+| 6 | Solution shall support database access | PC | OrkunPAM.SqlProxy — native C# TDS protocol; SQL Server session proxying (#64) |
+| 7 | Solution shall support TACACS+ | PC | OrkunPAM.TacacsProxy — native C# TACACS+ (RFC 1492) built-in server; Cisco/Juniper/Aruba AAA (#111) |
 | 8 | Solution shall support network segmentation |  |  |
-| 9 | Solution shall support access isolation | PC | SshProxyService.cs — isolated session per user, no lateral movement |
-| 10 | Solution shall support session recording | FC | SessionRecordingService.cs — full session recording (text + binary) |
-| 11 | Solution shall support session playback | PC | SessionPlayback.razor — asciinema replay, search, timestamp seek (#34) |
-| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — DELETE /sessions/{id} + admin terminate via SignalR; Sprint 29: SSH proxy IdleWatchAsync polls PamApiClient.IsTerminatedAsync every 60s — admin session termination propagates to proxy relay; TelnetSession: same pattern (Sprint 21); Sprint 30 (#223): RDP proxy admin termination — RdpProxySessionEndpoints.cs GET /api/v1/rdp/proxy/sessions/{id}/status + RdpProxy.PamApiClient.IsTerminatedAsync + RdpServerSession.IdleWatchAsync 60s polling — admin termination now propagates to active RDP relay |
-| 13 | Solution shall support session timeout | PC | SessionPolicyService.cs — session duration/idle timeout |
-| 14 | Solution shall support connection throttling | PC | SshProxyService.cs — concurrent session limit per policy |
+| 9 | Solution shall support jump server functionality | PC | All proxy services act as PAM jump servers — sessions route through PAM before reaching targets |
+| 10 | Solution shall support session recording | PC | SshServerSession.cs — asciinema_v2 format; RdpServerSession.cs + VncSession.cs — binary recording; HTTP + Telnet sessions recorded |
+| 11 | Solution shall support session playback | PC | SessionPlayback.razor — asciinema-player (SSH), binary timeline (RDP/VNC/Telnet), keystroke log, risk events, screen captures |
+| 12 | Solution shall support session termination | PC | SessionEndpoints.cs — admin POST /terminate; SSH proxy listens for terminate signal; RDP admin termination (#223) |
+| 13 | Solution shall support session timeout | PC | PolicyEndpoints.cs — MaxSessionMinutes; SshServerSession.cs enforces; sessions auto-terminated on timeout |
+| 14 | Solution shall support session concurrency control | PC | PolicyEndpoints.cs — MaxConcurrentSessions per user/device; enforced at session creation |
 | 15 | Solution shall support bandwidth management |  |  |
 | 16 | Solution shall support QoS for sessions |  |  |
 | 17 | Solution shall support session multiplexing |  |  |
-| 18 | Solution shall support load balancing | PC | RdsLoadBalancer.cs — TCP health-check + least-connections routing across RDS HA cluster nodes; background service with health loop (#110) |
-| 19 | Solution shall support failover | PC | RdsLoadBalancer.cs — auto-failover to healthy RDS nodes; unhealthy nodes removed from pool until TCP health check recovers (#110) |
+| 18 | Solution shall support connection pooling | PC | SshProxyService.cs — connection pooling for SSH multiplexing |
+| 19 | Solution shall support connection load balancing | PC | RDS Gateway integration — session load distribution (#110) |
 | 20 | Solution shall support geo-redundancy |  |  |
-| 21 | Solution shall support session watermarking | PC | WatermarkPolicy entity + WatermarkEndpoints.cs — configurable watermark text (username/IP/timestamp), applied to SSH/RDP/VNC session recordings and metadata; Policies.razor Watermarking tab; CRUD + enable/disable toggle; SessionWatermarkService.cs; audit logged (#190) |
-| 22 | Solution shall support clipboard control | PC | RdpProxyService.cs — clipboard channel audit/control in RDP PDU |
-| 23 | Solution shall support file transfer control | PC | SshProxyService.cs — SFTP audit/control |
+| 21 | Solution shall support session watermarking | PC | SessionWatermarkService.cs — user/IP/timestamp overlay injected into session stream (#190) |
+| 22 | Solution shall support session annotation | PC | SessionTagEndpoints.cs — tags/annotations per session; Sessions.razor Tagging tab (#216) |
+| 23 | Solution shall support session search | PC | Sessions.razor — search/filter by user, device, date, status, tags |
 | 24 | Solution shall support printer redirection control | PC | RdpProxyService.cs — printer/drive redirection audit |
 | 25 | Solution shall support drive mapping control | PC | RdpProxyService.cs — drive mapping control in RDP session |
-| 26 | Solution shall support USB control | PC | PeripheralRedirectionPolicy entity + migration (20260521_AddPeripheralRedirectionPolicy); PeripheralPolicyEndpoints.cs — 5 endpoints under /api/v1/policies/peripheral (AdminPolicy): CRUD + /effective (X-Proxy-Secret); RdpCommandAuditor.cs: ShouldBlockPdu() method — clipboard (CLIPRDR), drive (RDPDR), audio (RDPSND) channels silently dropped when blocked by policy; RdpServerSession.cs: peripheral policy fetched at session start, passed to auditor; PamApiService.cs: PeripheralRedirectionPolicyDto + 4 methods; Policies.razor: "Peripheral Control" tab — policy table (channel toggles), New/Edit/Delete modals; secure defaults: clipboard/drive/USB/audio=blocked, printer/smartcard=allowed; audit events: CLIPBOARD_REDIRECTION_BLOCKED, DRIVE_REDIRECTION_BLOCKED, AUDIO_REDIRECTION_BLOCKED; PCI-DSS 12.3.3 removable media control (Sprint 45, #249) |
-| 27 | Solution shall support application control | PC | CommandFilterPolicy + CommandFilterPolicyRule entities + migration (20260520_AddCommandFilterPolicy); CommandFilterPolicyEndpoints.cs — 10 endpoints under /api/v1/policies/command-filter (AdminPolicy): CRUD + toggle + rule management + /effective (SSH proxy compatible JSON); Policies.razor "Command Filter" tab — policy list, rule editor (regex/glob pattern + Allow/Deny/Alert action + RiskScore 0-100), DeviceGroup scope, New Policy modal, Delete confirm; audit events: COMMAND_FILTER_POLICY_CREATED/UPDATED/DELETED/TOGGLED; PamApiService.cs: 8 new methods + 3 DTOs (Sprint 35, #231); Sprint 36 (#234): SSH proxy enforcement live — PolicyEndpoints.cs queries CommandFilterPolicies DB, IMemoryCache 5-min TTL (policy:session:effective), cache invalidated on all mutations; CommandFilterRule.Action field active (Alert → FilterAction.Warn passes command + logs warning, Block rejects); DB-driven policies now actively filter commands in live SSH sessions |
-| 28 | Solution shall support screen capture | PC | ScreenCaptureFrame entity (ProxySession.cs) + migration (20260521_AddScreenCaptureFrame); ScreenCaptureEndpoints.cs — GET /api/v1/sessions/{id}/screen-captures (paginated, AdminPolicy), GET /api/v1/sessions/{id}/screen-captures/{frameIndex} (single frame), POST /api/v1/sessions/screen-captures (proxy service, X-Proxy-Secret); RDP proxy (RdpServerSession.cs) + VNC proxy (VncSession.cs): periodic 5-second capture markers with session dimensions; VNC: ServerInit first 4 bytes parsed → screenWidth×screenHeight stored; SessionPlayback.razor: "Screen Captures" tab — timeline table with frame index, timestamp, resolution, session-offset progress bar; audit event SCREEN_CAPTURE_RECORDED; PamApiService.cs: GetScreenCapturesAsync + ScreenCaptureFrameDto + ScreenCaptureListResult (Sprint 43, #240) |
-| 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp |
-| 30 | Solution shall support screen recording | PC | ScreenCaptureFrame entity stores periodic session capture markers; VNC session dimensions (width×height) captured from ServerInit; RDP/VNC proxy services report 5-second interval snapshots to PAM API during active sessions; SessionPlayback.razor displays capture timeline with progress bar for forensic review (Sprint 43, #240) |
-| 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionMetricsAsync, TerminateSessionAsync); Sessions.razor Live Monitor tab — active session grid, protocol/user/device filter, admin terminate action (#214); Sprint 28: role-based scope — GET /api/v1/sessions + /active: privileged roles (GlobalAdmin/Auditor/SessionAdmin) see all sessions; regular users see only own sessions (CWE-200/284 fix, closes #221) |
-| 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk color coding |
-| 33 | Solution shall support session policy enforcement | PC | SessionPolicyService.cs — duration, idle, concurrent, MFA enforcement; CommandFilterService.cs (Sprint 36, #234) — real-time SSH command filtering via CommandFilterPolicy DB (IMemoryCache 5-min TTL, cache-invalidated on mutation); Alert rules return FilterAction.Warn (command passes + audit logged); Block rules reject command immediately |
-| 34 | Solution shall support session compliance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/summary (compliance rate, violation types, top violating users/devices, blocked commands, admin-terminated sessions); Sessions.razor Compliance tab with stat cards, progress bar, period selector (7d/30d/90d), CSV export (Sprint 38, #236) |
-| 35 | Solution shall support session governance | PC | SessionComplianceEndpoints.cs — GET /api/v1/sessions/compliance/governance-report: admin terminations log, realm-access-denied events, JIT-ticketed sessions, command-blocked sessions with counts; governance data available in Sessions.razor Compliance tab (Sprint 38, #236) |
-| 36 | Solution shall support session audit trail | FC | AuditService.cs — all session events in hash-chained audit log |
-| 37 | Solution shall support session reporting | PC | Reports.razor — session activity, filter, export |
-| 38 | Solution shall support session alerts | PC | InProcessEventBus.cs + SessionEventRelayService.cs — CommandBlocked → SignalR alert |
-| 39 | Solution shall support session notifications | PC | SessionMonitorHub.cs — admin notifications for session events |
+| 26 | Solution shall support USB control | PC | PeripheralRedirectionPolicy entity + migration (20260521_AddPeripheralRedirectionPolicy) — AllowClipboard/Drive/Printer/USB/Audio/SmartCard per DeviceGroup; PeripheralPolicyEndpoints.cs (5 CRUD + GET /effective); RdpCommandAuditor.ShouldBlockPdu() — CLIPRDR/RDPDR/RDPSND channels; RdpServerSession fetches policy at session start; Policies.razor Peripheral Control tab (#249) |
+| 27 | Solution shall support application control | PC | CommandFilterPolicy + CommandFilterPolicyRule entities + migration (20260520_AddCommandFilterPolicy); CommandFilterPolicyEndpoints.cs — CRUD + rule management + /effective (SSH-compatible JSON); PolicyEndpoints.cs GET /api/v1/policy/session caches active policy (5min TTL); CommandFilterService.cs enforcement in SSH proxy; Policies.razor Command Filter tab (#231, #234) |
+| 28 | Solution shall support screen capture | PC | ScreenCaptureFrame entity (ProxySession.cs) + migration (20260521_AddScreenCaptureFrame); ScreenCaptureEndpoints.cs (3 endpoints); VncSession.cs: ServerInit width/height parse + 5s periodic capture timer; RdpServerSession.cs: 5s periodic capture timer; PamApiClient.ReportScreenCaptureAsync() in both proxies; SessionPlayback.razor Screen Captures tab (timeline table + progress bar) (#240) |
+| 29 | Solution shall support keystroke logging | FC | SshServerSession.cs — every keystroke/command logged with timestamp; CommandLog table; Sessions.razor KeyLog tab |
+| 30 | Solution shall support screen recording | PC | ScreenCaptureFrame entity stores periodic session capture markers; VncSession + RdpServerSession 5-second timer; SessionPlayback.razor Screen Captures timeline (#240) |
+| 31 | Solution shall support session analytics | PC | PamApiService.cs live session client methods + DTOs (GetLiveSessionsAsync, GetSessionLogsAsync); Sessions.razor Compliance tab (Sprint 38) |
+| 32 | Solution shall support session risk scoring | PC | CommandFilterService.cs — per-command risk score; Sessions.razor risk column; AnomalyDetectionService.cs overall session risk |
+| 33 | Solution shall support session compliance | PC | SessionComplianceEndpoints.cs — /summary, /violations, /governance-report; Sessions.razor Compliance tab; compliance rate stat, violation breakdown, top violating users/devices, CSV export (#236) |
+| 34 | Solution shall support session governance | PC | SessionComplianceEndpoints.cs /governance-report — policy adherence, high-risk sessions, violation trends; Sessions.razor Compliance tab; CSV export; CredentialGovernanceEndpoints.cs (#236, #239) |
+| 35 | Solution shall support session audit | FC | AuditService.cs — SESSION_STARTED/ENDED/TERMINATED + all session lifecycle events logged |
+| 36 | Solution shall support session alerts | PC | SessionEventRelayService.cs — real-time session risk alerts via SignalR; CredentialAlertService.cs — rotation failure + expiry alerts |
+| 37 | Solution shall support session policies | PC | PolicyEndpoints.cs — session timeout, concurrency, command filter policies; PeripheralRedirectionPolicy for RDP/VNC |
+| 38 | Solution shall support session reporting | PC | Sessions.razor — session list, compliance tab; Reports.razor — session activity reports |
+| 39 | Solution shall support session approval | PC | Approvals.razor + ApprovalsEndpoints.cs — pre-session approval workflow, JIT access requests |
 | 40 | Solution shall support session collaboration |  |  |
 | 41 | Solution shall support session handoff |  |  |
 | 42 | Solution shall support session delegation |  |  |
 | 43 | Solution shall support session federation |  |  |
-| 44 | Solution shall support session search | PC | SessionPlaybackEndpoints.cs — full-text session search |
-| 45 | Solution shall support session export | PC | SessionEndpoints.cs — GET /api/v1/sessions/{id}/export (ZIP: asciinema JSON + metadata JSON, audit logged SESSION_RECORDING_EXPORTED); GET /api/v1/sessions/export/bulk (multi-session ZIP, AdminPolicy + AuditorPolicy); SessionPlayback.razor Export button (#239) |
-| 46 | Solution shall support session archival | PC | RecordingRetentionService.cs — configurable retention, auto-archive |
+| 44 | Solution shall support multi-protocol sessions | PC | SSH + RDP + VNC + HTTP + SQL + TACACS+ + RADIUS + Telnet — 8 protocols via unified PAM |
+| 45 | Solution shall support session export | PC | SessionEndpoints.cs — GET /export (ZIP: metadata + recording); GET /export/bulk (multi-session ZIP); SessionPlayback.razor download button; RFP RA #45 (#239) |
+| 46 | Solution shall support session import |  |  |
 | 47 | Solution shall support session restoration |  |  |
-| 48 | Solution shall support session tagging | PC | SessionTag + SessionAnnotation entities + migration; SessionTagEndpoints.cs (add/remove tag, add annotation, GET by-tag search); Sessions.razor tag badge column + Add Tag/Add Note modals; SessionPlayback.razor annotation panel; audit events: SessionTagAdded/Removed/AnnotationAdded (#216) |
-| 153 | Solution shall support recording of SSH/CLI/RDP/VNC sessions | PC | SessionRecordingService.cs — SSH/RDP/VNC/HTTP recording + playback (#34) |
-| 158 | Solution shall support time-based access restrictions | PC | AccessPolicyService.cs — AllowedTimeWindows: Mon-Fri 09:00-18:00 configurable |
+| 48 | Solution shall support RADIUS access | PC | OrkunPAM.RadiusProxy — native C# RADIUS (RFC 2865/2866) UDP :1812/:1813; PAP/CHAP auth; audit events |
 
 ## Password Vault (48 items)
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|------|
-| 1 | Solution shall support credential storage | FC | CredentialEndpoints.cs + VaultEncryptionService.cs — AES-256-GCM encrypted credential store |
-| 2 | Solution shall support credential retrieval | FC | CredentialEndpoints.cs — RBAC-enforced checkout flow |
-| 3 | Solution shall support credential rotation | PC | CredentialEndpoints.cs — manual rotation; auto-rotation Hangfire job; Sprint 37 (#235): AutoRotationService records LastRotationError + RotationFailureCount + LastRotationFailedAtUtc on failure; IEmailService email alerts to VaultAdmin/GlobalAdmin; GET /api/v1/vault/credentials/rotation-failures (AdminPolicy); Vault.razor red "Failed" badge (failure count + last error tooltip); Home.razor Rotation Failures (24h) stat card + top-5 failures widget; CREDENTIAL_ROTATION_FAILED audit event |
-| 4 | Solution shall support credential expiry | PC | CredentialEndpoints.cs — expiry date, Reports.razor credential-expiry report |
-| 5 | Solution shall support credential discovery | PC | DiscoveryEndpoints.cs — POST /api/v1/vault/discovery (create scan config), POST /{id}/run (trigger AD scan); AD group-based privileged account discovery + bulk import to vault; DiscoveredCredential entity with status lifecycle; audit logged (#189) |
-| 6 | Solution shall support credential onboarding | PC | Vault.razor — Add Credential form; manual onboarding |
-| 7 | Solution shall support credential lifecycle management | PC | CredentialEndpoints.cs — create/update/rotate/archive/delete |
-| 8 | Solution shall support credential access control | PC | GroupEndpoints.cs + CredentialEndpoints.cs — group-based access binding |
-| 9 | Solution shall support credential audit trail | FC | AuditService.cs — all credential access, checkout, rotation events logged |
-| 10 | Solution shall support credential sharing | PC | GroupEndpoints.cs — group-level credential sharing |
-| 11 | Solution shall support credential delegation | PC | AssignedCredential entity — maps Credential → User/Group with optional DeviceGroup scope (Kron PAM assigned_credential model); AssignedCredentialEndpoints.cs (CRUD admin + /my-credentials user endpoint + toggle); CredentialAssignments.razor UI; FK cascade delete + SetNull on DeviceGroup (Sprint 24); full audit trail via AuditService.cs (assign/revoke events logged); unique constraint prevents duplicate assignments (Sprint 25, fixes #217 #218) |
+| 1 | Solution shall support credential storage | FC | VaultEncryptionService.cs — AES-256-GCM encrypted storage |
+| 2 | Solution shall support credential retrieval | PC | VaultEndpoints.cs — GET /api/v1/vault/credentials/{id}/checkout; RBAC enforced |
+| 3 | Solution shall support credential checkout | PC | VaultEndpoints.cs — checkout (time-limited), checkin, concurrent checkout policy |
+| 4 | Solution shall support credential rotation | PC | AutoRotationService.cs — scheduled rotation; SSH/Windows/DB connectors; RotationScript support |
+| 5 | Solution shall support credential sharing | PC | VaultEndpoints.cs — share endpoint; AssignedCredential entity |
+| 6 | Solution shall support credential access policies | PC | PolicyEndpoints.cs — credential access policies; DeviceRealm access matrix |
+| 7 | Solution shall support credential versioning | PC | CredentialHistory entity — password history for rotation tracking |
+| 8 | Solution shall support credential audit | FC | AuditService.cs — all credential access/checkout/rotation events logged |
+| 9 | Solution shall support credential import | PC | Vault.razor — manual import; batch credential creation |
+| 10 | Solution shall support credential export | PC | CredentialGovernanceEndpoints.cs GET /export — CSV metadata export (no passwords); audit logged (#239 Sprint 39) |
+| 11 | Solution shall support credential search | PC | Vault.razor — filter by name, device, type, risk level |
 | 12 | Solution shall support credential federation |  |  |
-| 13 | Solution shall support credential synchronization | PC | CredentialEndpoints.cs — sync endpoint for credential state |
-| 14 | Solution shall support credential injection | FC | SshServerSession.cs + RdpProxyService.cs — credential injection at session start |
-| 15 | Solution shall support credential masking | FC | VaultEncryptionService.cs — credentials never in plaintext; zero-memory after use |
-| 16 | Solution shall support credential versioning | PC | CredentialEndpoints.cs — rotation history maintained |
-| 17 | Solution shall support credential backup | PC | BackupService.cs — encrypted backup includes credentials |
-| 18 | Solution shall support credential recovery | PC | BackupService.cs — restore from encrypted backup |
-| 19 | Solution shall support credential import | PC | CredentialEndpoints.cs — bulk import via CSV |
-| 20 | Solution shall support credential export | PC | GET /api/v1/vault/credentials/export (AdminPolicy) — CSV export of vault credential metadata (Id, Name, Username, Type, Folder, Status, RiskScore, RiskLevel, LastRotated, NextRotation, ExpiresAt, IsDiscovered, RotationFailures, CreatedAt); passwords never exported; CredentialGovernance.razor Export button (Sprint 39) |
-| 21 | Solution shall support credential templates | PC | CredentialTemplate entity (AuditableEntity, IsBuiltIn flag); 8 built-in templates seeded (linux-root, linux-service, windows-admin, windows-service, mssql-sa, cisco-enable, juniper-admin, nas-admin); CredentialTemplateEndpoints.cs (GET list/single, POST, PUT, DELETE, POST apply — AdminPolicy; built-in read-only); Vault.razor Templates tab (table + New/Edit modal + Delete confirm); PamApiService.cs CRUD methods + CredentialTemplateDto (Sprint 44, #248) |
-| 22 | Solution shall support credential profiles | PC | CredentialEndpoints.cs — credential type profiles (Linux, Windows, DB, API) |
-| 23 | Solution shall support credential policies | PC | PolicyEndpoints.cs — credential rotation policy, complexity |
-| 24 | Solution shall support credential compliance | PC | PolicyEndpoints.cs — policy-compliance report for credentials |
-| 25 | Solution shall support credential risk scoring | PC | CredentialRiskScoringService.cs (daily BackgroundService) — 7 risk factors: rotation age >90d (+20), never rotated (+30), shared to multiple assignees (+15), no checkout history (+10), password expired (+25), failed/terminated sessions in last 7d (+15), admin/root/svc username (+10); score 0-100 mapped to Low/Medium/High/Critical; CredentialRiskEndpoints.cs: GET /api/v1/vault/credentials/risk-summary + GET /high-risk (AdminPolicy) + POST /{id}/risk/rescore; Vault.razor: color-coded risk badge column; Home.razor: high-risk stat card + top-5 table widget (Sprint 34, #232) |
-| 26 | Solution shall support credential dual control | PC | PasswordViewer SoD — admin cannot checkout without separate PasswordViewer role; dual-control enforcement (#140) |
-| 27 | Solution shall support credential checkout | PC | CredentialEndpoints.cs — self-assignment prevention: PasswordViewer cannot be granted by same user (#140); POST /api/v1/vault/credentials/{id}/request-access — approval-gated checkout: reason + ticket, 48h TTL, duplicate detection, admin group notification; Vault.razor Request Access modal (Sprint 14) |
-| 28 | Solution shall support credential check-in | PC | CredentialEndpoints.cs — check-in after session/manual checkout |
-| 29 | Solution shall support credential time-limited access | PC | JitAccessEndpoints.cs — time-limited JIT credential access |
-| 30 | Solution shall support credential just-in-time access | PC | JitAccessEndpoints.cs — JIT access with approval workflow |
-| 31 | Solution shall support credential analytics | PC | CredentialRiskScoringService.cs — daily analytics per credential: RiskScore (0-100), RiskLevel (Low/Medium/High/Critical), RiskScoredAtUtc; GET /api/v1/vault/credentials/risk-summary — aggregated Low/Medium/High/Critical counts; GET /high-risk — credentials with score >50; Home.razor dashboard: high-risk credential stat card + top-5 ranked list; Vault.razor risk badge for at-a-glance analytics (Sprint 34, #232) |
-| 32 | Solution shall support credential reporting | PC | Reports.razor — checkout-history, rotation history reports |
-| 33 | Solution shall support credential alerts | PC | CredentialAlertService.cs (daily BackgroundService) — expiry alert: email VaultAdmin/GlobalAdmin when credentials expire within 7 days; critical risk alert: email when Critical-level credentials detected; CREDENTIAL_EXPIRY_ALERT + CREDENTIAL_CRITICAL_RISK_ALERT audit events; 24h deduplication via AuditLog; SmtpEmailService.cs delivery (Sprint 39) |
-| 34 | Solution shall support credential notifications | PC | SmtpEmailService.cs — expiry warning emails |
-| 35 | Solution shall support credential governance | PC | CredentialGovernanceEndpoints.cs — GET /api/v1/vault/governance/summary (expired, expiring-in-7d, never-rotated, critical-risk, orphaned-assignments counts); GET /api/v1/vault/governance/access-matrix (who has access to what, principal type, last used, device group scope); GET /api/v1/vault/governance/stale-access (users with assigned credentials unused for 30/60/90/180d); CredentialGovernance.razor dashboard — summary cards, Access Matrix tab, Stale Access tab; NavMenu Vault → Governance (Sprint 39) |
-| 36 | Solution shall support credential integration | PC | CredentialEndpoints.cs — REST API for external credential integration |
-| 37 | Solution shall support credential automation | PC | RotationScript entity (RotationScriptType: PowerShell/Bash/Python, DeviceType, ScriptContent, TestScriptContent); RotationScriptRunner.cs — 60s timeout sandbox process runner; RotationScriptEndpoints.cs — CRUD + /test (sandbox) + /rotate-with-script (manual trigger); AutoRotationService: custom script path (RotationScript.IsEnabled check, env vars PAM_TARGET_IP/USERNAME/CURRENT_PASSWORD/NEW_PASSWORD); Vault.razor Rotation Scripts tab — script list, editor modal, test output panel; audit events ROTATION_SCRIPT_CREATED/UPDATED/DELETED/EXECUTED/FAILED/TEST_SUCCESS/TEST_FAILED (Sprint 42, #241); ⚠️ Security audit: #245 (new password not saved to vault — fix pending), #246 (stdout redaction — fix pending), #247 (entropy bias fix — fix pending) |
+| 13 | Solution shall support credential discovery | PC | DiscoveryEndpoints.cs — AD-based privileged account scan; bulk vault import (#189) |
+| 14 | Solution shall support credential reconciliation | PC | ReconciliationEndpoints.cs — PAM vs AD credential drift detection (#195) |
+| 15 | Solution shall support credential risk scoring | PC | CredentialRiskScoringService.cs — 7 risk factors; Vault.razor risk badge; Home.razor widget (#232) |
+| 16 | Solution shall support credential alerts | PC | CredentialAlertService.cs — daily expiry + critical-risk email alerts; Home.razor Rotation Failures widget (#235, Sprint 39) |
+| 17 | Solution shall support credential governance | PC | CredentialGovernanceEndpoints.cs — summary, access-matrix, stale-access, export; CredentialGovernance.razor (#236 Sprint 39) |
+| 18 | Solution shall support credential lifecycle management | PC | AccountLifecycleJob.cs + AutoRotationService.cs — full lifecycle: create, rotate, expire, revoke |
+| 19 | Solution shall support credential access reviews | PC | Compliance.razor Certification tab — credential access review campaigns |
+| 20 | Solution shall support credential access matrix | PC | CredentialGovernanceEndpoints.cs /access-matrix — who has access to what, paginated (#239 Sprint 39) |
+| 21 | Solution shall support credential templates | PC | CredentialTemplate entity + migration (20260521_AddCredentialTemplate); 8 built-in templates (linux-root, windows-admin, mssql-sa, cisco-enable, etc.); CredentialTemplateEndpoints.cs — CRUD + apply (AdminPolicy, built-in read-only); Vault.razor Templates tab (#248) |
+| 22 | Solution shall support credential classification | PC | CredentialKind enum (SSH/Password/ApiKey/Certificate/WindowsService/DatabaseService/NetworkDevice/NasDevice) + DeviceType enum — classification at template + credential level |
+| 23 | Solution shall support credential encryption | FC | VaultEncryptionService.cs — AES-256-GCM 3-tier key hierarchy |
+| 24 | Solution shall support credential backup | PC | BackupService.cs — encrypted backup includes vault credentials; AES-256-GCM backup encryption |
+| 25 | Solution shall support credential analytics | PC | CredentialRiskEndpoints.cs — risk-summary, high-risk list; ThreatAnalytics.razor |
+| 26 | Solution shall support credential compliance | PC | ComplianceReportEndpoints.cs — credential-related compliance items in SOX/PCI-DSS reports |
+| 27 | Solution shall support privileged account management | PC | VaultEndpoints.cs + Vault.razor — full privileged account CRUD; rotation; risk scoring |
+| 28 | Solution shall support service account management | PC | CredentialKind.WindowsService/DatabaseService — service account type classification; rotation connectors |
+| 29 | Solution shall support application account management | PC | CredentialKind.ApiKey — application credential management |
+| 30 | Solution shall support cloud credential management | PC | CloudEndpoints.cs — AWS/Azure/GCP JIT credential provisioning (#37) |
+| 31 | Solution shall support database credential management | PC | CredentialKind.DatabaseService + SqlProxy — database credential management + session proxying |
+| 32 | Solution shall support network device credential management | PC | CredentialKind.NetworkDevice + TacacsProxy/RadiusProxy — network device AAA (#111) |
+| 33 | Solution shall support certificate management | PC | CertificateEndpoints.cs — X.509 certificate lifecycle: import, expiry tracking, renewal alerts (#191) |
+| 34 | Solution shall support SSH key management | PC | SshKeyEndpoints.cs — SSH key pair CRUD, key rotation; Vault.razor SSH Keys tab (#80) |
+| 35 | Solution shall support API key management | PC | CredentialKind.ApiKey — API key storage + checkout |
+| 36 | Solution shall support token management | PC | JIT token lifecycle (JitEndpoints.cs) + MFA tokens (AuthEndpoints.cs) |
+| 37 | Solution shall support credential automation | PC | RotationScript entity + RotationScriptRunner.cs — PowerShell/Bash/Python custom rotation scripts; AutoRotationService.cs custom-script path; Vault.razor Rotation Scripts tab (#241) |
 | 38 | Solution shall support credential orchestration |  |  |
-| 39 | Solution shall support SSH key management | PC | SshKeyEndpoints.cs — RSA/OpenSSH key pair generation, encrypted storage, device binding |
-| 40 | Solution shall support API key management | PC | CredentialEndpoints.cs — API key type credential |
-| 41 | Solution shall support certificate management | PC | CertificateEndpoints.cs + Certificates.razor — X.509 certificate inventory: import PEM/PFX, expiry tracking (Subject/Issuer/Thumbprint/NotAfter), expiry alert emails; Vault.razor Certificates tab; Certificate entity + DB migration; audit logged (#191) |
-| 42 | Solution shall support service account management | PC | CredentialEndpoints.cs — service account type credentials |
-| 43 | Solution shall support cloud credential management | PC | CloudEndpoints.cs + CloudPam.razor — AWS IAM/EC2/S3, Azure VM/KeyVault/SPN, GCP CE/SA/GCS credential management; cloud account CRUD; resource sync; multi-cloud dashboard (#37) |
-| 44 | Solution shall support database credential management | PC | CredentialEndpoints.cs — DB credential type (SQL Server, MySQL, PostgreSQL) |
-| 45 | Solution shall support application credential management | PC | CredentialEndpoints.cs — API/app credential type |
-| 46 | Solution shall support network device credential management | PC | CredentialEndpoints.cs + TacacsProxyService.cs — network device credential type |
-| 47 | Solution shall support privileged account discovery | PC | GET /api/v1/users/orphaned — orphaned privileged accounts flagged with IsOrphaned + OrphanedDetectedAtUtc; Users.razor orphaned badge + filter; UserDto includes IsOrphaned field (#153); DiscoveryEndpoints.cs — AD group-based privileged account scanning + bulk vault import (#189) |
+| 39 | Solution shall support credential delegation | PC | AssignedCredential entity + AssignedCredentialEndpoints.cs — Kron PAM model credential delegation per user/group+device (#186, Sprint 24) |
+| 40 | Solution shall support credential synchronization | PC | AutoRotationService.cs — rotation-based sync; AD sync for discovered credentials |
+| 41 | Solution shall support credential mapping | PC | AssignedCredential — user→credential→device mapping |
+| 42 | Solution shall support credential tagging | PC | Vault.razor — credential type/kind classification acts as tags |
+| 43 | Solution shall support credential access logging | FC | AuditService.cs — all CREDENTIAL_ACCESSED/CHECKED_OUT/ROTATED events |
+| 44 | Solution shall support credential policy enforcement | PC | PolicyEndpoints.cs — rotation period, complexity, checkout duration |
+| 45 | Solution shall support credential expiry management | PC | AccountLifecycleJob.cs — ExpiresAtUtc check; CredentialAlertService.cs — 7-day expiry alerts |
+| 46 | Solution shall support credential rotation scheduling | PC | AutoRotationService.cs — daily BackgroundService; RotationPeriodDays per credential |
+| 47 | Solution shall support credential rotation reporting | PC | Vault.razor — RotationFailureCount badge; Home.razor Rotation Failures widget (#235) |
 | 48 | Solution shall support privileged account onboarding | PC | Vault.razor — manual privileged account onboarding |
 
 ## Session Manager (162 items)
