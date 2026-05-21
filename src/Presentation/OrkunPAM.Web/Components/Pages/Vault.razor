@@ -25,3 +25,1550 @@
     <button class="pam-tab @(_tab=="rotation-scripts"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("rotation-scripts"))">Rotation Scripts</button>
     <button class="pam-tab @(_tab=="templates"?"pam-tab-active":"")"         @onclick="@(() => SwitchTab("templates"))">Templates</button>
 </div>
+
+@if (_tab == "credentials")
+{
+
+@if (_error != null)
+{
+    <div class="pam-alert pam-alert-danger">@_error</div>
+}
+
+@if (_checkoutBlocked)
+{
+    <div class="pam-alert" style="background:#fff3cd;border-color:#ffc107;color:#856404;margin-bottom:1rem">
+        <strong>Separation of Duties:</strong> Your administrator role does not allow direct password viewing (RFP Vault §26).
+        To checkout credentials, another admin must assign you the <code>PasswordViewer</code> role.
+    </div>
+}
+
+<div class="pam-card pam-vault-layout">
+    <!-- Folder Sidebar -->
+    <aside class="pam-vault-sidebar">
+        <div class="pam-vault-folder-item @(_selectedFolderId == null ? "active" : "")"
+             @onclick="@(() => SelectFolderAsync(null))">
+            <span>📁</span>
+            <span class="pam-vault-folder-name">All Credentials</span>
+            @if (_allTotal > 0)
+            {
+                <span class="pam-vault-folder-count">@_allTotal</span>
+            }
+        </div>
+
+        @if (_folders != null)
+        {
+            @foreach (var root in _folders.Where(f => f.ParentFolderId == null).OrderBy(f => f.Name))
+            {
+                <div class="pam-vault-folder-item @(_selectedFolderId == root.Id ? "active" : "")"
+                     @onclick="@(() => SelectFolderAsync(root.Id))">
+                    <span>📁</span>
+                    <span class="pam-vault-folder-name">@root.Name</span>
+                    <span class="pam-vault-folder-count">@root.CredentialCount</span>
+                </div>
+                @foreach (var child in _folders.Where(f => f.ParentFolderId == root.Id).OrderBy(f => f.Name))
+                {
+                    <div class="pam-vault-folder-item child @(_selectedFolderId == child.Id ? "active" : "")"
+                         @onclick="@(() => SelectFolderAsync(child.Id))">
+                        <span>📁</span>
+                        <span class="pam-vault-folder-name">@child.Name</span>
+                        <span class="pam-vault-folder-count">@child.CredentialCount</span>
+                    </div>
+                }
+            }
+        }
+
+        <div style="padding:8px">
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" style="width:100%" @onclick="OpenFolderModal">+ New Folder</button>
+        </div>
+    </aside>
+
+    <!-- Credential Table -->
+    <div class="pam-vault-main">
+        <div class="pam-vault-search-bar">
+            <input class="pam-input pam-search" type="search" placeholder="Search credentials…"
+                   @bind="_search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+            <button class="pam-btn pam-btn-secondary" @onclick="LoadAsync">Search</button>
+        </div>
+
+        <div class="pam-card-body p-0">
+            @if (_loading)
+            {
+                <div class="pam-loading-text p-4">Loading credentials…</div>
+            }
+            else if (_creds == null || _creds.Count == 0)
+            {
+                <div class="pam-empty p-4">No credentials in this vault location.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Type</th>
+                            <th>Risk</th>
+                            <th>Status</th>
+                            <th>Checkout Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _creds)
+                        {
+                            var isCheckedOut = c.IsCheckedOut || c.CheckedOutByUserId != null;
+                            var isMyCheckout = c.CheckedOutByUserId != null
+                                && c.CheckedOutByUserId == _currentUserId;
+                            <tr>
+                                <td>
+                                    <strong>@c.Name</strong>
+                                    @if (c.RequiresApproval)
+                                    {
+                                        <span class="pam-badge pam-badge-secondary" style="margin-left:6px" title="Requires approval">✋</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(c.Description))
+                                    {
+                                        <div class="pam-sub-text">@c.Description</div>
+                                    }
+                                </td>
+                                <td>@(c.Username ?? "—")</td>
+                                <td><span class="pam-badge">@c.Type</span></td>
+                                <td>
+                                    @{
+                                        var riskColor = c.RiskLevel switch {
+                                            "Critical" => "#6b21a8",
+                                            "High"     => "#dc2626",
+                                            "Medium"   => "#d97706",
+                                            _          => "#16a34a"
+                                        };
+                                    }
+                                    <span class="pam-badge" style="background:@riskColor;color:white;font-size:0.72em"
+                                          title="Risk score: @c.RiskScore">@c.RiskLevel</span>
+                                </td>
+                                <td>
+                                    @if (isCheckedOut)
+                                    {
+                                        <span class="pam-status pam-status-warning">Checked Out</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pam-status @(c.Status == "Active" ? "pam-status-active" : "pam-status-done")">@c.Status</span>
+                                    }
+                                    @if (c.RotationFailureCount > 0)
+                                    {
+                                        <span class="pam-badge" style="background:#dc2626;color:white;font-size:0.7em;margin-left:4px"
+                                              title="@("Rotation failed " + c.RotationFailureCount + "x — " + (c.LastRotationError ?? "unknown error"))">Failed</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (isCheckedOut && c.CheckOutExpiresUtc.HasValue)
+                                    {
+                                        var expired = c.CheckOutExpiresUtc.Value < DateTime.UtcNow;
+                                        <span class="@(expired ? "pam-status pam-status-error" : "")">
+                                            @c.CheckOutExpiresUtc.Value.ToLocalTime().ToString("MM/dd HH:mm")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @:—
+                                    }
+                                </td>
+                                <td>
+                                    <div class="pam-actions">
+                                        @if (!isCheckedOut)
+                                        {
+                                            @if (_checkoutBlocked)
+                                            {
+                                                <button class="pam-btn-icon" disabled
+                                                        title="Separation of Duties: Admin role cannot view passwords. Ask another admin to assign the 'PasswordViewer' role to you."
+                                                        style="opacity:0.4;cursor:not-allowed">↗</button>
+                                            }
+                                            else
+                                            {
+                                                @if (c.RequiresApproval)
+                                                {
+                                                    <button class="pam-btn-icon" title="Request access approval"
+                                                            @onclick="@(() => OpenRequestAccess(c.Id, c.Name))">&#x1F4CB;</button>
+                                                }
+                                                <button class="pam-btn-icon" title="Checkout credential"
+                                                        @onclick="@(() => OpenCheckout(c.Id, c.Name))">&#x2197;</button>
+                                            }
+                                        }
+                                        @if (isMyCheckout)
+                                        {
+                                            <button class="pam-btn-icon" title="Check in"
+                                                    @onclick="@(() => CheckinAsync(c.Id))">&#x2199;</button>
+                                        }
+                                        @if (c.Type == "UserPassword")
+                                        {
+                                            <button class="pam-btn-icon pam-btn-rotate" title="Rotate password"
+                                                    @onclick="@(() => OpenRotateModal(c.Id, c.Name))">&#x21BB;</button>
+                                        }
+                                        @if (!string.IsNullOrEmpty(c.DeviceId))
+                                        {
+                                            <button class="pam-btn-icon pam-btn-connect" title="SSH connect"
+                                                    @onclick='@(() => Nav.NavigateTo("/connect?deviceId=" + c.DeviceId))'>&#x2328;</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                @if (_meta != null && _meta.TotalCount > _pageSize)
+                {
+                    <div class="pam-pagination">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page == 1)" @onclick="PrevPage">← Prev</button>
+                        <span class="pam-page-info">
+                            Page @_page of @TotalPages — @_meta.TotalCount credentials
+                        </span>
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                disabled="@(_page >= TotalPages)" @onclick="NextPage">Next →</button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+} <!-- end @if (_tab == "credentials") -->
+
+@if (_tab == "rotation-scripts")
+{
+    <div class="pam-card" style="padding:1.5rem">
+        @if (_rsError != null)
+        {
+            <div class="pam-alert pam-alert-danger">@_rsError</div>
+        }
+        @if (_rsSuccess != null)
+        {
+            <div class="pam-alert" style="background:#d1fae5;border-color:#6ee7b7;color:#065f46">@_rsSuccess</div>
+        }
+
+        @if (_rsLoading)
+        {
+            <div class="pam-loading-text">Loading rotation scripts…</div>
+        }
+        else if (_scripts == null || _scripts.Count == 0)
+        {
+            <div class="pam-empty">No rotation scripts defined. Create one to automate credential rotation for custom device types.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Device Type</th>
+                        <th>Script Type</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _scripts)
+                    {
+                        <tr>
+                            <td><strong>@s.Name</strong>
+                                @if (!string.IsNullOrEmpty(s.Description))
+                                {
+                                    <div style="font-size:0.75rem;color:#6b7280">@s.Description</div>
+                                }
+                            </td>
+                            <td>@s.DeviceType</td>
+                            <td><span class="pam-badge" style="background:#eff6ff;color:#1d4ed8">@s.ScriptType</span></td>
+                            <td>
+                                @if (s.IsEnabled)
+                                {
+                                    <span class="pam-badge pam-badge-success">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-badge pam-badge-neutral">Disabled</span>
+                                }
+                            </td>
+                            <td style="white-space:nowrap">@s.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                <div style="display:flex;gap:4px">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => OpenEditScriptModal(s.Id))">Edit</button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => RunTestScript(s.Id, s.Name))">Test</button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => ConfirmDeleteScript(s.Id, s.Name))">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <!-- Test Output Panel -->
+    @if (_rsTestOutput != null)
+    {
+        <div class="pam-card" style="margin-top:1rem;padding:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <strong>Test Output — @_rsTestScriptName</strong>
+                <span class="pam-badge @(_rsTestSuccess ? "pam-badge-success" : "pam-badge-danger")">
+                    @(_rsTestSuccess ? "PASSED" : "FAILED") (exit @_rsTestExitCode)
+                </span>
+            </div>
+            <pre style="background:#1e1e1e;color:#d4d4d4;padding:1rem;border-radius:4px;font-size:0.75rem;overflow:auto;max-height:300px;white-space:pre-wrap">@_rsTestOutput</pre>
+            @if (!string.IsNullOrEmpty(_rsTestError))
+            {
+                <pre style="background:#1e1e1e;color:#f87171;padding:0.5rem 1rem;border-radius:4px;font-size:0.75rem;overflow:auto;max-height:150px;white-space:pre-wrap">STDERR: @_rsTestError</pre>
+            }
+        </div>
+    }
+}
+
+<!-- Checkout Modal -->
+@if (_showCheckout)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showCheckout = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Checkout — @_coCredName</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showCheckout = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_coError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_coError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Reason</label>
+                    <input class="pam-input w-100-input" @bind="_coReason"
+                           placeholder="e.g. Planned maintenance — INC-1234" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Ticket Number</label>
+                    <input class="pam-input w-100-input" @bind="_coTicket"
+                           placeholder="e.g. INC-1234 or CHG-5678" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Duration (minutes)</label>
+                    <input class="pam-input" style="width:120px" type="number"
+                           min="1" max="1440" @bind="_coDuration" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showCheckout = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitCheckoutAsync" disabled="@_coSaving">
+                    @if (_coSaving) { <span class="pam-spinner-sm"></span> }
+                    Checkout
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Request Access Modal -->
+@if (_showRequestAccess)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showRequestAccess = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Request Access — @_raCredName</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showRequestAccess = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_raError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_raError</div>
+                }
+                @if (_raSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success">@_raSuccess</div>
+                }
+                @if (_raSuccess == null)
+                {
+                    <div class="pam-alert pam-alert-warning" style="margin-bottom:12px">
+                        This credential requires approval before checkout. Submit a request and an administrator will grant access.
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Reason <span style="color:var(--pam-danger)">*</span></label>
+                        <input class="pam-input w-100-input" @bind="_raReason"
+                               placeholder="e.g. Planned maintenance — INC-1234" />
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Ticket Number</label>
+                        <input class="pam-input w-100-input" @bind="_raTicket"
+                               placeholder="e.g. INC-1234 or CHG-5678" />
+                    </div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRequestAccess = false)">Close</button>
+                @if (_raSuccess == null)
+                {
+                    <button class="pam-btn pam-btn-primary" @onclick="SubmitRequestAccessAsync" disabled="@_raSaving">
+                        @if (_raSaving) { <span class="pam-spinner-sm"></span> }
+                        Submit Request
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Password Reveal Modal -->
+@if (_showReveal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseReveal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Credential Revealed — @_revealName</h3>
+                <button class="pam-close-btn" @onclick="CloseReveal">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <div class="pam-alert pam-alert-warning">
+                    Copy this credential now. It will be cleared when you close this dialog.
+                </div>
+                @if (_revealUser != null)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Username</label>
+                        <div class="pam-reveal-field">@_revealUser</div>
+                    </div>
+                }
+                @if (_revealPrivKey != null)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Private Key (PEM)</label>
+                        <textarea class="pam-input w-100-input" rows="8" readonly
+                                  style="font-size:0.75em;font-family:monospace">@(new string(_revealPrivKey))</textarea>
+                    </div>
+                }
+                else
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Password</label>
+                        <div class="pam-reveal-box">
+                            @if (_passVisible)
+                            {
+                                <div class="pam-reveal-password">@(_revealPass != null ? new string(_revealPass) : "")</div>
+                            }
+                            else
+                            {
+                                <div class="pam-reveal-password pam-reveal-masked">••••••••••••••••</div>
+                            }
+                            <button class="pam-btn pam-btn-secondary pam-btn-sm" style="align-self:flex-start"
+                                    @onclick="@(() => _passVisible = !_passVisible)">
+                                @(_passVisible ? "Hide" : "Reveal")
+                            </button>
+                        </div>
+                    </div>
+                }
+                @if (_revealExpiry.HasValue)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Checkout expires</label>
+                        <div>@_revealExpiry.Value.ToString("MM/dd/yyyy HH:mm")</div>
+                    </div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="CloseReveal">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Add Credential Modal -->
+@if (_showAdd)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showAdd = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Add Credential</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showAdd = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_addError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_addError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input w-100-input" @bind="_addName" placeholder="e.g. prod-server root" />
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Type *</label>
+                        <select class="pam-input" style="width:100%" @bind="_addType">
+                            <option value="0">User Password</option>
+                            <option value="1">SSH Key</option>
+                            <option value="2">API Key</option>
+                            <option value="3">Certificate</option>
+                            <option value="4">Connection String</option>
+                            <option value="5">Custom</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Folder *</label>
+                        <select class="pam-input" style="width:100%" @bind="_addFolderId">
+                            @if (_folders != null)
+                            {
+                                @foreach (var f in _folders.OrderBy(f => f.Name))
+                                {
+                                    <option value="@f.Id">@f.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Username</label>
+                    <input class="pam-input w-100-input" @bind="_addUsername" placeholder="e.g. root, admin, sa" />
+                </div>
+                @if (_addType != 1)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Password</label>
+                        <input class="pam-input w-100-input" type="password" @bind="_addPassword" />
+                    </div>
+                }
+                @if (_addType == 1)
+                {
+                    <div class="pam-form-group">
+                        <label class="pam-label">Private Key (PEM)</label>
+                        <textarea class="pam-input w-100-input" rows="6" @bind="_addPrivateKey"
+                                  style="font-size:0.75em;font-family:monospace"
+                                  placeholder="Paste RSA private key PEM, or click Generate below"></textarea>
+                    </div>
+                    <div class="pam-form-group">
+                        <button class="pam-btn pam-btn-secondary pam-btn-sm" type="button"
+                                @onclick="GenerateKeyPairAsync" disabled="@_genSaving">
+                            @if (_genSaving) { <span class="pam-spinner-sm"></span> }
+                            Generate RSA 4096 Key Pair
+                        </button>
+                    </div>
+                    @if (_genPubKey != null)
+                    {
+                        <div class="pam-form-group">
+                            <label class="pam-label" style="color:#059669">Public Key — copy to ~/.ssh/authorized_keys on target</label>
+                            <textarea class="pam-input w-100-input" rows="3" readonly
+                                      style="font-size:0.75em;font-family:monospace">@_genPubKey</textarea>
+                        </div>
+                    }
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_addDesc" placeholder="Optional description" />
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Max Checkout (min)</label>
+                        <input class="pam-input" style="width:100%" type="number" min="1" @bind="_addMaxMins" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1; justify-content:flex-end; margin-top:28px">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px">
+                            <input type="checkbox" @bind="_addApproval" /> Requires Approval
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showAdd = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAddAsync" disabled="@_addSaving">
+                    @if (_addSaving) { <span class="pam-spinner-sm"></span> }
+                    Add Credential
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Rotate Password Modal -->
+@if (_showRotate)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showRotate = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Rotate Password — @_rotCredName</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showRotate = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_rotError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_rotError</div>
+                }
+                @if (_rotSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success">@_rotSuccess</div>
+                }
+                <div class="pam-alert pam-alert-warning">
+                    A new random password will be generated and pushed to the target system.
+                    The vault will be updated automatically on success.
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Connector *</label>
+                    <select class="pam-input" style="width:100%" @bind="_rotConnector">
+                        <option value="Ssh">SSH (Linux/Unix)</option>
+                        <option value="WinRm">WinRM (Windows Local Admin)</option>
+                        <option value="Ldap">LDAP / Active Directory</option>
+                        <option value="SqlServer">SQL Server</option>
+                        <option value="MySql">MySQL</option>
+                        <option value="PostgreSql">PostgreSQL</option>
+                    </select>
+                </div>
+                <div class="pam-form-row">
+                    <div class="pam-form-group" style="flex:2">
+                        <label class="pam-label">Host (leave blank to use device)</label>
+                        <input class="pam-input" style="width:100%" @bind="_rotHost"
+                               placeholder="192.168.1.10 or server.domain.com" />
+                    </div>
+                    <div class="pam-form-group" style="flex:1">
+                        <label class="pam-label">Port</label>
+                        <input class="pam-input" style="width:100%" type="number"
+                               min="1" max="65535" @bind="_rotPort" placeholder="default" />
+                    </div>
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Domain (for LDAP/AD only)</label>
+                    <input class="pam-input" style="width:100%" @bind="_rotDomain"
+                           placeholder="e.g. corp.example.com" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showRotate = false)">Cancel</button>
+                <button class="pam-btn pam-btn-warning" @onclick="SubmitRotateAsync" disabled="@_rotSaving">
+                    @if (_rotSaving) { <span class="pam-spinner-sm"></span> }
+                    Rotate Password
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Create Folder Modal -->
+@if (_showFolderModal)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showFolderModal = false)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Create Folder</h3>
+                <button class="pam-close-btn" @onclick="@(() => _showFolderModal = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_folderError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_folderError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Folder Name *</label>
+                    <input class="pam-input w-100-input" @bind="_folderName" placeholder="e.g. Production Servers" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_folderDesc" placeholder="Optional" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showFolderModal = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitFolderAsync" disabled="@_folderSaving">
+                    @if (_folderSaving) { <span class="pam-spinner-sm"></span> }
+                    Create Folder
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- New / Edit Rotation Script Modal -->
+@if (_showScriptModal)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showScriptModal = false)">
+        <div class="pam-modal" style="width:640px;max-width:96vw" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>@(_editScriptId == null ? "New Rotation Script" : "Edit Rotation Script")</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showScriptModal = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_rsModalError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_rsModalError</div>
+                }
+                <div class="pam-form-row">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input" @bind="_rsName" placeholder="e.g. Cisco IOS Rotation" />
+                </div>
+                <div class="pam-form-row">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input" @bind="_rsDesc" placeholder="Optional description" />
+                </div>
+                <div class="pam-form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                    <div>
+                        <label class="pam-label">Device Type</label>
+                        <input class="pam-input" @bind="_rsDeviceType" placeholder="e.g. CiscoIOS, WebApp, Custom" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Script Type</label>
+                        <select class="pam-select" @bind="_rsScriptType">
+                            <option value="PowerShell">PowerShell</option>
+                            <option value="Bash">Bash</option>
+                            <option value="Python">Python</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pam-form-row">
+                    <label class="pam-label">Rotation Script *</label>
+                    <div style="font-size:0.75rem;color:#6b7280;margin-bottom:4px">
+                        Available variables: <code>$PAM_TARGET_IP</code>, <code>$PAM_USERNAME</code>,
+                        <code>$PAM_CURRENT_PASSWORD</code>, <code>$PAM_NEW_PASSWORD</code>
+                    </div>
+                    <textarea class="pam-input" rows="8" style="font-family:monospace;font-size:0.8rem"
+                              @bind="_rsContent" placeholder="# Rotation script here..."></textarea>
+                </div>
+                <div class="pam-form-row">
+                    <label class="pam-label">Test Script (optional — used for sandbox test runs)</label>
+                    <textarea class="pam-input" rows="4" style="font-family:monospace;font-size:0.8rem"
+                              @bind="_rsTestContent" placeholder="# Lightweight test that verifies connectivity without changing credentials..."></textarea>
+                </div>
+                <div class="pam-form-row">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <input type="checkbox" @bind="_rsIsEnabled" />
+                        <span class="pam-label" style="margin:0">Enabled</span>
+                    </label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showScriptModal = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitScriptAsync" disabled="@_rsModalSaving">
+                    @if (_rsModalSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_editScriptId == null ? "Create Script" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Script Confirm Modal -->
+@if (_showDeleteScript)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showDeleteScript = false)">
+        <div class="pam-modal" style="width:420px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>Delete Rotation Script</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showDeleteScript = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete script <strong>@_deleteScriptName</strong>? Any credentials linked to this script will be unlinked (their rotation policy will fall back to the standard connector).</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showDeleteScript = false)">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="DeleteScriptAsync" disabled="@_rsModalSaving">
+                    @if (_rsModalSaving) { <span class="pam-spinner-sm"></span> }
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ===== Credential Templates Tab ===== -->
+@if (_tab == "templates")
+{
+    <div class="pam-card" style="padding:1.5rem">
+        @if (_tmplError != null)
+        {
+            <div class="pam-alert pam-alert-danger">@_tmplError</div>
+        }
+        @if (_tmplSuccess != null)
+        {
+            <div class="pam-alert" style="background:#d1fae5;border-color:#6ee7b7;color:#065f46">@_tmplSuccess</div>
+        }
+
+        @if (_tmplLoading)
+        {
+            <div class="pam-loading-text">Loading templates…</div>
+        }
+        else if (_templates == null || _templates.Count == 0)
+        {
+            <div class="pam-empty">No credential templates found.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Device Type</th>
+                        <th>Kind</th>
+                        <th>Rotation</th>
+                        <th>Username</th>
+                        <th>Type</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _templates)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@t.Name</strong>
+                                @if (!string.IsNullOrEmpty(t.Description))
+                                {
+                                    <div style="font-size:0.75rem;color:#6b7280">@t.Description</div>
+                                }
+                            </td>
+                            <td>@t.DeviceType</td>
+                            <td><span class="pam-badge" style="background:#eff6ff;color:#1d4ed8">@t.CredentialKind</span></td>
+                            <td>@t.RotationPeriodDays days</td>
+                            <td style="font-family:monospace;font-size:0.85rem">@(t.DefaultUsername ?? "—")</td>
+                            <td>
+                                @if (t.IsBuiltIn)
+                                {
+                                    <span class="pam-badge" style="background:#f3f4f6;color:#374151">Built-in</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-badge pam-badge-success">Custom</span>
+                                }
+                            </td>
+                            <td>
+                                <div style="display:flex;gap:4px">
+                                    @if (!t.IsBuiltIn)
+                                    {
+                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                @onclick="@(() => OpenEditTemplateModal(t))">Edit</button>
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => ConfirmDeleteTemplate(t.Id, t.Name))">Delete</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+<!-- New/Edit Template Modal -->
+@if (_showTemplateModal)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showTemplateModal = false)">
+        <div class="pam-modal" style="width:520px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_editTemplateId == null ? "New Template" : "Edit Template")</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showTemplateModal = false)">×</button>
+            </div>
+            <div class="pam-modal-body" style="display:flex;flex-direction:column;gap:1rem">
+                @if (_tmplModalError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_tmplModalError</div>
+                }
+                <div>
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input" @bind="_tmplName" placeholder="e.g. linux-root-custom" />
+                </div>
+                <div>
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input" @bind="_tmplDescription" placeholder="Short description" />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                    <div>
+                        <label class="pam-label">Device Type *</label>
+                        <input class="pam-input" @bind="_tmplDeviceType" placeholder="e.g. Linux, Windows, Cisco" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Credential Kind</label>
+                        <select class="pam-input pam-select" @bind="_tmplCredentialKind">
+                            <option value="Linux">Linux</option>
+                            <option value="Windows">Windows</option>
+                            <option value="DB">Database</option>
+                            <option value="Network">Network</option>
+                            <option value="NAS">NAS</option>
+                            <option value="API">API</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                    <div>
+                        <label class="pam-label">Default Username</label>
+                        <input class="pam-input" @bind="_tmplDefaultUsername" placeholder="e.g. root, admin" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Rotation Period (days)</label>
+                        <input class="pam-input" type="number" min="1" max="365" @bind="_tmplRotationPeriodDays" />
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                    <div>
+                        <label class="pam-label">Min Password Length</label>
+                        <input class="pam-input" type="number" min="8" max="64" @bind="_tmplPasswordMinLength" />
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.5rem;padding-top:1.5rem">
+                        <input type="checkbox" @bind="_tmplPasswordRequireSpecial" id="tmpl-special" />
+                        <label for="tmpl-special">Require special chars</label>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                    <input type="checkbox" @bind="_tmplSshKeyRotation" id="tmpl-ssh" />
+                    <label for="tmpl-ssh">SSH key rotation</label>
+                </div>
+                <div>
+                    <label class="pam-label">Notes</label>
+                    <textarea class="pam-input" rows="2" @bind="_tmplNotes" placeholder="Optional notes"></textarea>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showTemplateModal = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SaveTemplateAsync" disabled="@_tmplModalSaving">
+                    @if (_tmplModalSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_editTemplateId == null ? "Create Template" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Template Confirm Modal -->
+@if (_showDeleteTemplate)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _showDeleteTemplate = false)">
+        <div class="pam-modal" style="width:400px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3>Delete Template</h3>
+                <button class="pam-modal-close" @onclick="@(() => _showDeleteTemplate = false)">×</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete template <strong>@_deleteTemplateName</strong>? This cannot be undone.</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showDeleteTemplate = false)">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="DeleteTemplateAsync" disabled="@_tmplModalSaving">
+                    @if (_tmplModalSaving) { <span class="pam-spinner-sm"></span> }
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CredentialDto>? _creds;
+    private List<FolderDto>?     _folders;
+    private PageMeta?            _meta;
+    private bool                 _loading  = true;
+    private string?              _error;
+    private string               _search   = "";
+    private string?              _selectedFolderId;
+    private string?              _currentUserId;
+    private int                  _allTotal;
+    private int                  _page     = 1;
+    private const int            _pageSize = 20;
+    // SoD (RFP Vault #26): admin without PasswordViewer cannot checkout passwords
+    private bool                 _checkoutBlocked;
+
+    // Create Folder modal
+    private bool    _showFolderModal;
+    private string  _folderName  = "";
+    private string  _folderDesc  = "";
+    private bool    _folderSaving;
+    private string? _folderError;
+
+    // Checkout modal
+    private bool    _showCheckout;
+    private string? _coCredId;
+    private string? _coCredName;
+    private string  _coReason   = "";
+    private string  _coTicket   = "";
+    private int     _coDuration = 60;
+    private bool    _coSaving;
+    private string? _coError;
+
+    // Request Access modal
+    private bool    _showRequestAccess;
+    private string? _raCredId;
+    private string? _raCredName;
+    private string  _raReason  = "";
+    private string  _raTicket  = "";
+    private bool    _raSaving;
+    private string? _raError;
+    private string? _raSuccess;
+
+    // Password reveal modal
+    private bool      _showReveal;
+    private string?   _revealName;
+    private string?   _revealUser;
+    private char[]?   _revealPass;
+    private char[]?   _revealPrivKey;
+    private DateTime? _revealExpiry;
+    private bool      _passVisible;
+
+    // Add Credential modal
+    private bool    _showAdd;
+    private string  _addName       = "";
+    private int     _addType       = 0;
+    private string  _addFolderId   = "";
+    private string  _addUsername   = "";
+    private string  _addPassword   = "";
+    private string  _addPrivateKey = "";
+    private string  _addDesc       = "";
+    private int     _addMaxMins    = 60;
+    private bool    _addApproval;
+    private bool    _addSaving;
+    private string? _addError;
+    private string? _genPubKey;
+    private bool    _genSaving;
+
+    // Rotate Password modal
+    private bool    _showRotate;
+    private string? _rotCredId;
+    private string? _rotCredName;
+    private string  _rotConnector = "Ssh";
+    private string  _rotHost      = "";
+    private int?    _rotPort;
+    private string  _rotDomain    = "";
+    private bool    _rotSaving;
+    private string? _rotError;
+    private string? _rotSuccess;
+
+    // Tab
+    private string _tab = "credentials";
+
+    // Rotation Scripts tab state
+    private List<RotationScriptDto>? _scripts;
+    private bool                     _rsLoading;
+    private string?                  _rsError;
+    private string?                  _rsSuccess;
+
+    // Rotation Script modal
+    private bool    _showScriptModal;
+    private string? _editScriptId;
+    private string  _rsName        = "";
+    private string  _rsDesc        = "";
+    private string  _rsDeviceType  = "Custom";
+    private string  _rsScriptType  = "PowerShell";
+    private string  _rsContent     = "";
+    private string  _rsTestContent = "";
+    private bool    _rsIsEnabled   = true;
+    private bool    _rsModalSaving;
+    private string? _rsModalError;
+
+    // Delete script modal
+    private bool    _showDeleteScript;
+    private string? _deleteScriptId;
+    private string? _deleteScriptName;
+
+    // Test output panel
+    private bool    _rsTestSuccess;
+    private int     _rsTestExitCode;
+    private string? _rsTestOutput;
+    private string? _rsTestError;
+    private string? _rsTestScriptName;
+
+    private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
+
+    private async Task SwitchTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "rotation-scripts" && _scripts == null)
+            await LoadScriptsAsync();
+        if (tab == "templates" && _templates == null)
+            await LoadTemplatesAsync();
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var user = await Api.GetCurrentUserAsync();
+        _currentUserId = user?.UserId;
+        if (user != null)
+        {
+            var isAdmin = user.Roles.Contains("GlobalAdmin") || user.Roles.Contains("VaultAdmin");
+            var hasPasswordViewer = user.Roles.Contains("PasswordViewer");
+            _checkoutBlocked = isAdmin && !hasPasswordViewer;
+        }
+        await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
+    }
+
+    private async Task LoadScriptsAsync()
+    {
+        _rsLoading = true; StateHasChanged();
+        _scripts = await Api.GetRotationScriptsAsync();
+        _rsLoading = false; StateHasChanged();
+    }
+
+    private void OpenNewScriptModal()
+    {
+        _editScriptId = null;
+        _rsName = ""; _rsDesc = ""; _rsDeviceType = "Custom";
+        _rsScriptType = "PowerShell"; _rsContent = ""; _rsTestContent = "";
+        _rsIsEnabled = true; _rsModalError = null; _rsModalSaving = false;
+        _showScriptModal = true;
+    }
+
+    private async Task OpenEditScriptModal(string id)
+    {
+        var detail = await Api.GetRotationScriptAsync(id);
+        if (detail == null) { _rsError = "Failed to load script details."; return; }
+
+        _editScriptId = id;
+        _rsName        = detail.Name;
+        _rsDesc        = detail.Description ?? "";
+        _rsDeviceType  = detail.DeviceType;
+        _rsScriptType  = detail.ScriptType;
+        _rsContent     = detail.ScriptContent;
+        _rsTestContent = detail.TestScriptContent ?? "";
+        _rsIsEnabled   = detail.IsEnabled;
+        _rsModalError  = null; _rsModalSaving = false;
+        _showScriptModal = true;
+    }
+
+    private async Task SubmitScriptAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_rsName))    { _rsModalError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_rsContent)) { _rsModalError = "Script content is required."; return; }
+
+        _rsModalError = null; _rsModalSaving = true; StateHasChanged();
+
+        if (_editScriptId == null)
+        {
+            var (ok, newId) = await Api.CreateRotationScriptAsync(
+                _rsName.Trim(), _rsDesc.Trim(), _rsDeviceType.Trim(),
+                _rsScriptType, _rsContent, _rsTestContent, _rsIsEnabled, null, null);
+
+            _rsModalSaving = false;
+            if (!ok) { _rsModalError = "Failed to create script."; StateHasChanged(); return; }
+            _rsSuccess = "Script created successfully.";
+        }
+        else
+        {
+            var ok = await Api.UpdateRotationScriptAsync(
+                _editScriptId, _rsName.Trim(), _rsDesc.Trim(), _rsDeviceType.Trim(),
+                _rsScriptType, _rsContent, _rsTestContent, _rsIsEnabled);
+
+            _rsModalSaving = false;
+            if (!ok) { _rsModalError = "Failed to update script."; StateHasChanged(); return; }
+            _rsSuccess = "Script updated successfully.";
+        }
+
+        _showScriptModal = false;
+        await LoadScriptsAsync();
+    }
+
+    private void ConfirmDeleteScript(string id, string name)
+    {
+        _deleteScriptId = id; _deleteScriptName = name;
+        _showDeleteScript = true;
+    }
+
+    private async Task DeleteScriptAsync()
+    {
+        if (_deleteScriptId == null) return;
+        _rsModalSaving = true; StateHasChanged();
+
+        var ok = await Api.DeleteRotationScriptAsync(_deleteScriptId);
+        _rsModalSaving = false;
+        _showDeleteScript = false;
+
+        if (!ok) { _rsError = "Failed to delete script."; StateHasChanged(); return; }
+
+        _rsSuccess = "Script deleted.";
+        await LoadScriptsAsync();
+    }
+
+    private async Task RunTestScript(string id, string name)
+    {
+        _rsTestOutput = null; _rsTestError = null; _rsSuccess = null; _rsError = null;
+        _rsTestScriptName = name;
+        StateHasChanged();
+
+        var result = await Api.TestRotationScriptAsync(id);
+        if (result == null) { _rsError = "Test request failed."; StateHasChanged(); return; }
+
+        _rsTestSuccess  = result.Success;
+        _rsTestExitCode = result.ExitCode;
+        _rsTestOutput   = result.Output;
+        _rsTestError    = result.Error;
+        StateHasChanged();
+    }
+
+    private async Task LoadFoldersAsync()
+    {
+        _folders = await Api.GetFoldersAsync();
+        if (_folders != null && string.IsNullOrEmpty(_addFolderId))
+            _addFolderId = _folders.FirstOrDefault()?.Id ?? "";
+        StateHasChanged();
+    }
+
+    private void OpenFolderModal()
+    {
+        _folderName = ""; _folderDesc = "";
+        _folderError = null; _folderSaving = false;
+        _showFolderModal = true;
+    }
+
+    private async Task SubmitFolderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_folderName))
+        {
+            _folderError = "Folder name is required.";
+            return;
+        }
+        _folderSaving = true; _folderError = null; StateHasChanged();
+
+        var ok = await Api.CreateFolderAsync(_folderName.Trim(), _folderDesc.Trim());
+        _folderSaving = false;
+        if (!ok)
+        {
+            _folderError = "Failed to create folder.";
+            StateHasChanged();
+            return;
+        }
+        _showFolderModal = false;
+        await LoadFoldersAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true; _error = null; StateHasChanged();
+
+        if (_selectedFolderId != null)
+        {
+            var list = await Api.GetFolderCredentialsAsync(_selectedFolderId);
+            if (list == null) _error = "Failed to load credentials.";
+            else              { _creds = list; _meta = null; }
+        }
+        else
+        {
+            var result = await Api.GetCredentialsAsync(search: _search, page: _page, pageSize: _pageSize);
+            if (result == null) _error = "Failed to load credentials.";
+            else
+            {
+                _creds    = result.Data;
+                _meta     = result.Meta;
+                _allTotal = result.Meta?.TotalCount ?? 0;
+            }
+        }
+
+        _loading = false; StateHasChanged();
+    }
+
+    private async Task SelectFolderAsync(string? folderId)
+    {
+        _selectedFolderId = folderId;
+        _page = 1; _search = "";
+        await LoadAsync();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
+    }
+
+    private void OpenCheckout(string credId, string credName)
+    {
+        _coCredId = credId; _coCredName = credName;
+        _coReason = ""; _coTicket = ""; _coDuration = 60;
+        _coError = null; _coSaving = false;
+        _showCheckout = true;
+    }
+
+    private async Task SubmitCheckoutAsync()
+    {
+        _coError = null; _coSaving = true; StateHasChanged();
+
+        var result = await Api.CheckoutCredentialAsync(
+            _coCredId!,
+            string.IsNullOrWhiteSpace(_coReason) ? null : _coReason.Trim(),
+            string.IsNullOrWhiteSpace(_coTicket) ? null : _coTicket.Trim(),
+            _coDuration);
+
+        _coSaving = false;
+
+        if (result == null)
+        {
+            _coError = "Checkout failed. The credential may already be checked out or require approval.";
+            StateHasChanged();
+            return;
+        }
+
+        _showCheckout  = false;
+        _revealName    = result.Name;
+        _revealUser    = result.Username;
+        _revealPass    = result.Password?.ToCharArray();
+        _revealPrivKey = result.PrivateKey?.ToCharArray();
+        _revealExpiry  = result.ExpiresAt?.ToLocalTime();
+        _passVisible   = false;
+        _showReveal    = true;
+
+        await LoadAsync();
+    }
+
+    private void OpenRequestAccess(string credId, string credName)
+    {
+        _raCredId = credId; _raCredName = credName;
+        _raReason = ""; _raTicket = "";
+        _raError = null; _raSuccess = null; _raSaving = false;
+        _showRequestAccess = true;
+    }
+
+    private async Task SubmitRequestAccessAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_raReason))
+        {
+            _raError = "Reason is required.";
+            return;
+        }
+        _raError = null; _raSaving = true; StateHasChanged();
+
+        var result = await Api.RequestCredentialAccessAsync(
+            _raCredId!,
+            _raReason.Trim(),
+            string.IsNullOrWhiteSpace(_raTicket) ? null : _raTicket.Trim());
+
+        _raSaving = false;
+
+        if (result == null || !result.Success)
+        {
+            _raError = result?.Message ?? "Failed to submit request. Please try again.";
+            StateHasChanged();
+            return;
+        }
+
+        _raSuccess = result.Status == "Approved"
+            ? "Access already approved — you can checkout this credential now."
+            : result.Message ?? "Access request submitted. An administrator will review it. Check the Approvals page for status.";
+        StateHasChanged();
+    }
+
+    private void CloseReveal()
+    {
+        if (_revealPass != null)
+        {
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(_revealPass.AsSpan()).Clear();
+            _revealPass = null;
+        }
+        if (_revealPrivKey != null)
+        {
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(_revealPrivKey.AsSpan()).Clear();
+            _revealPrivKey = null;
+        }
+        _showReveal  = false;
+        _passVisible = false;
+    }
+
+    private async Task CheckinAsync(string credId)
+    {
+        var ok = await Api.CheckinCredentialAsync(credId);
+        if (!ok) _error = "Checkin failed — you may not own this checkout.";
+        await LoadAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _addName = ""; _addUsername = ""; _addPassword = ""; _addDesc = "";
+        _addType = 0; _addMaxMins = 60; _addApproval = false;
+        _addPrivateKey = ""; _genPubKey = null; _genSaving = false;
+        _addFolderId = _selectedFolderId ?? _folders?.FirstOrDefault()?.Id ?? "";
+        _addError = null; _addSaving = false;
+        _showAdd = true;
+    }
+
+    private async Task SubmitAddAsync()
+    {
+        _addError = null;
+        if (string.IsNullOrWhiteSpace(_addName))     { _addError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_addFolderId)) { _addError = "Folder is required. Create a folder first."; return; }
+
+        _addSaving = true; StateHasChanged();
+
+        var ok = await Api.CreateCredentialAsync(
+            _addName.Trim(), _addType,
+            string.IsNullOrWhiteSpace(_addUsername) ? null : _addUsername.Trim(),
+            string.IsNullOrWhiteSpace(_addPassword) ? null : _addPassword,
+            _addFolderId,
+            null,
+            string.IsNullOrWhiteSpace(_addDesc) ? null : _addDesc.Trim(),
+            _addMaxMins, _addApproval,
+            string.IsNullOrWhiteSpace(_addPrivateKey) ? null : _addPrivateKey.Trim());
+
+        _addSaving = false;
+
+        if (!ok)
+        {
+            _addError = "Failed to create credential.";
+            StateHasChanged();
+            return;
+        }
+
+        _showAdd = false;
+        await Task.WhenAll(LoadFoldersAsync(), LoadAsync());
+    }
+
+    private async Task GenerateKeyPairAsync()
+    {
+        _genSaving = true; _genPubKey = null; StateHasChanged();
+        var kp = await Api.GenerateSshKeyPairAsync();
+        _genSaving = false;
+        if (kp != null)
+        {
+            _addPrivateKey = kp.PrivateKey;
+            _genPubKey     = kp.PublicKey;
+        }
+        StateHasChanged();
+    }
+
+    private void OpenRotateModal(string credId, string credName)
+    {
+        _rotCredId = credId; _rotCredName = credName;
+        _rotConnector = "Ssh"; _rotHost = ""; _rotPort = null; _rotDomain = "";
+        _rotError = null; _rotSuccess = null; _rotSaving = false;
+        _showRotate = true;
+    }
+
+    private async Task SubmitRotateAsync()
+    {
+        _rotError = null; _rotSuccess = null; _rotSaving = true; StateHasChanged();
+
+        var ok = await Api.RotateCredentialAsync(
+            _rotCredId!,
+            _rotConnector,
+            string.IsNullOrWhiteSpace(_rotHost) ? null : _rotHost.Trim(),
+            _rotPort,
+            string.IsNullOrWhiteSpace(_rotDomain) ? null : _rotDomain.Trim());
+
+        _rotSaving = false;
+
+        if (ok)
+        {
+            _rotSuccess = "Password rotated successfully. The vault has been updated.";
+            await LoadAsync();
+        }
+        else
+        {
+            _rotError = "Rotation failed. Ensure the connector settings match the target system and that the current password is correct.";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task PrevPage() { _page--; await LoadAsync(); }
+    private async Task NextPage() { _page++; await LoadAsync(); }
+
+    // ===== Credential Templates =====
+
+    private List<CredentialTemplateDto>? _templates;
+    private bool   _tmplLoading    = false;
+    private string? _tmplError     = null;
+    private string? _tmplSuccess   = null;
+
+    // Modal state
+    private bool   _showTemplateModal = false;
+    private bool   _showDeleteTemplate = false;
+    private bool   _tmplModalSaving   = false;
+    private string? _tmplModalError   = null;
+    private Guid?  _editTemplateId    = null;
+    private Guid   _deleteTemplateId;
+    private string _deleteTemplateName = "";
+
+    // Form fields
+    private string _tmplName                  = "";
+    private string _tmplDescription           = "";
+    private string _tmplDeviceType            = "";
+    private string _tmplDefaultUsername       = "";
+    private string _tmplCredentialKind        = "Linux";
+    private int    _tmplRotationPeriodDays    = 90;
+    private int    _tmplPasswordMinLength     = 16;
+    private bool   _tmplPasswordRequireSpecial = true;
+    private bool   _tmplSshKeyRotation        = false;
+    private string _tmplNotes                 = "";
+
+    private async Task LoadTemplatesAsync()
+    {
+        _tmplLoading = true; _tmplError = null; StateHasChanged();
+        _templates = await Api.GetCredentialTemplatesAsync();
+        _tmplLoading = false; StateHasChanged();
+    }
+
+    private void OpenNewTemplateModal()
+    {
+        _editTemplateId = null;
+        _tmplName = ""; _tmplDescription = ""; _tmplDeviceType = "";
+        _tmplDefaultUsername = ""; _tmplCredentialKind = "Linux";
+        _tmplRotationPeriodDays = 90; _tmplPasswordMinLength = 16;
+        _tmplPasswordRequireSpecial = true; _tmplSshKeyRotation = false;
+        _tmplNotes = ""; _tmplModalError = null; _tmplModalSaving = false;
+        _showTemplateModal = true;
+    }
+
+    private void OpenEditTemplateModal(CredentialTemplateDto t)
+    {
+        _editTemplateId = t.Id;
+        _tmplName = t.Name; _tmplDescription = t.Description ?? "";
+        _tmplDeviceType = t.DeviceType; _tmplDefaultUsername = t.DefaultUsername ?? "";
+        _tmplCredentialKind = t.CredentialKind; _tmplRotationPeriodDays = t.RotationPeriodDays;
+        _tmplPasswordMinLength = t.PasswordMinLength; _tmplPasswordRequireSpecial = t.PasswordRequireSpecial;
+        _tmplSshKeyRotation = t.SshKeyRotation; _tmplNotes = t.Notes ?? "";
+        _tmplModalError = null; _tmplModalSaving = false;
+        _showTemplateModal = true;
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_tmplName))       { _tmplModalError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_tmplDeviceType)) { _tmplModalError = "Device Type is required."; return; }
+
+        _tmplModalSaving = true; _tmplModalError = null; StateHasChanged();
+
+        bool ok;
+        if (_editTemplateId == null)
+        {
+            ok = await Api.CreateCredentialTemplateAsync(
+                _tmplName.Trim(), _tmplDescription, _tmplDeviceType.Trim(),
+                _tmplDefaultUsername, _tmplCredentialKind,
+                _tmplRotationPeriodDays, _tmplPasswordMinLength,
+                _tmplPasswordRequireSpecial, _tmplSshKeyRotation, _tmplNotes);
+        }
+        else
+        {
+            ok = await Api.UpdateCredentialTemplateAsync(
+                _editTemplateId.Value.ToString(),
+                _tmplName.Trim(), _tmplDescription, _tmplDeviceType.Trim(),
+                _tmplDefaultUsername, _tmplCredentialKind,
+                _tmplRotationPeriodDays, _tmplPasswordMinLength,
+                _tmplPasswordRequireSpecial, _tmplSshKeyRotation, _tmplNotes);
+        }
+
+        _tmplModalSaving = false;
+
+        if (ok)
+        {
+            _showTemplateModal = false;
+            _tmplSuccess = _editTemplateId == null ? "Template created." : "Template updated.";
+            await LoadTemplatesAsync();
+        }
+        else
+        {
+            _tmplModalError = "Failed to save template.";
+        }
+
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteTemplate(Guid id, string name)
+    {
+        _deleteTemplateId = id; _deleteTemplateName = name;
+        _showDeleteTemplate = true;
+    }
+
+    private async Task DeleteTemplateAsync()
+    {
+        _tmplModalSaving = true; StateHasChanged();
+        var ok = await Api.DeleteCredentialTemplateAsync(_deleteTemplateId.ToString());
+        _tmplModalSaving = false; _showDeleteTemplate = false;
+        if (ok) { _tmplSuccess = "Template deleted."; await LoadTemplatesAsync(); }
+        else    { _tmplError = "Failed to delete template."; StateHasChanged(); }
+    }
+}
