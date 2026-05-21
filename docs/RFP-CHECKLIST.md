@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (PM run #23 — security audit Sprint 42: #245 #246 #247 pending fixes; Sprint 42 — PV #37 → PC credential automation scripts; Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures)
+> Last updated: 2026-05-21 (Sprint 44 — PV #21 → PC credential templates #248; Sprint 43 — RA #28+#30 → PC screen capture; Sprint 42 — PV #37 → PC credential automation scripts; Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC)
 
 ## Platform (44 items)
 
@@ -267,7 +267,7 @@
 | 18 | Solution shall support credential recovery | PC | BackupService.cs — restore from encrypted backup |
 | 19 | Solution shall support credential import | PC | CredentialEndpoints.cs — bulk import via CSV |
 | 20 | Solution shall support credential export | PC | GET /api/v1/vault/credentials/export (AdminPolicy) — CSV export of vault credential metadata (Id, Name, Username, Type, Folder, Status, RiskScore, RiskLevel, LastRotated, NextRotation, ExpiresAt, IsDiscovered, RotationFailures, CreatedAt); passwords never exported; CredentialGovernance.razor Export button (Sprint 39) |
-| 21 | Solution shall support credential templates |  |  |
+| 21 | Solution shall support credential templates | PC | CredentialTemplate entity (AuditableEntity, IsBuiltIn flag); 8 built-in templates seeded (linux-root, linux-service, windows-admin, windows-service, mssql-sa, cisco-enable, juniper-admin, nas-admin); CredentialTemplateEndpoints.cs (GET list/single, POST, PUT, DELETE, POST apply — AdminPolicy; built-in read-only); Vault.razor Templates tab (table + New/Edit modal + Delete confirm); PamApiService.cs CRUD methods + CredentialTemplateDto (Sprint 44, #248) |
 | 22 | Solution shall support credential profiles | PC | CredentialEndpoints.cs — credential type profiles (Linux, Windows, DB, API) |
 | 23 | Solution shall support credential policies | PC | PolicyEndpoints.cs — credential rotation policy, complexity |
 | 24 | Solution shall support credential compliance | PC | PolicyEndpoints.cs — policy-compliance report for credentials |

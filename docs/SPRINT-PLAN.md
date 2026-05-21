@@ -693,9 +693,25 @@
 
 ---
 
+## Sprint 44 — Credential Templates (2026-05-21)
+**Issue:** #248 — PV #21 Credential Templates
+**Status:** COMPLETE
+
+### Implemented
+- `CredentialTemplate` entity (AuditableEntity with IsBuiltIn protection)
+- Migration `20260521_AddCredentialTemplate` with 8 built-in templates (linux-root, linux-service, windows-admin, windows-service, mssql-sa, cisco-enable, juniper-admin, nas-admin)
+- `CredentialTemplateEndpoints.cs` — GET list, GET single, POST create, PUT update, DELETE, POST apply (all with AdminPolicy; built-in templates are read-only)
+- `OrkunPamDbContext`: CredentialTemplates DbSet + EF config
+- `Program.cs`: MapCredentialTemplateEndpoints() + MapScreenCaptureEndpoints() registered
+- `PamApiService.cs`: GetCredentialTemplatesAsync, CreateCredentialTemplateAsync, UpdateCredentialTemplateAsync, DeleteCredentialTemplateAsync, CredentialTemplateDto
+- `Vault.razor`: Templates tab with table (built-in/custom badge), New/Edit modal, Delete confirm modal
+- RFP PV #21 → PC
+
+---
+
 ## Sonraki Adim
-**Sprint 43 tamamlandi.** Security fixes #245-#247 + #240 Screen Capture push'landi.
-**Siradaki:** #248 Credential Templates veya #249 RDP/VNC Peripheral Redirection Control.
+**Sprint 44 tamamlandi.** Credential Templates #248 push'landi, PV #21 → PC.
+**Siradaki:** #249 RDP/VNC Peripheral Redirection Control veya diger RFP gap items.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
