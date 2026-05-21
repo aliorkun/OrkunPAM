@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (Sprint 42 — PV #37 → PC credential automation scripts; Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures)
+> Last updated: 2026-05-21 (PM run #23 — security audit Sprint 42: #245 #246 #247 pending fixes; Sprint 42 — PV #37 → PC credential automation scripts; Sprint 41 — RA #45 → PC session export; Sprint 39 — PV #20+#33+#35 → PC; RA #34+#35 → PC; Sprint 36 — RA #27 enforcement live; Sprint 37 — PV #3 rotation failures)
 
 ## Platform (44 items)
 
@@ -283,7 +283,7 @@
 | 34 | Solution shall support credential notifications | PC | SmtpEmailService.cs — expiry warning emails |
 | 35 | Solution shall support credential governance | PC | CredentialGovernanceEndpoints.cs — GET /api/v1/vault/governance/summary (expired, expiring-in-7d, never-rotated, critical-risk, orphaned-assignments counts); GET /api/v1/vault/governance/access-matrix (who has access to what, principal type, last used, device group scope); GET /api/v1/vault/governance/stale-access (users with assigned credentials unused for 30/60/90/180d); CredentialGovernance.razor dashboard — summary cards, Access Matrix tab, Stale Access tab; NavMenu Vault → Governance (Sprint 39) |
 | 36 | Solution shall support credential integration | PC | CredentialEndpoints.cs — REST API for external credential integration |
-| 37 | Solution shall support credential automation | PC | RotationScript entity (RotationScriptType: PowerShell/Bash/Python, DeviceType, ScriptContent, TestScriptContent); RotationScriptRunner.cs — 60s timeout sandbox process runner; RotationScriptEndpoints.cs — CRUD + /test (sandbox) + /rotate-with-script (manual trigger); AutoRotationService: custom script path (RotationScript.IsEnabled check, env vars PAM_TARGET_IP/USERNAME/CURRENT_PASSWORD/NEW_PASSWORD); Vault.razor Rotation Scripts tab — script list, editor modal, test output panel; audit events ROTATION_SCRIPT_CREATED/UPDATED/DELETED/EXECUTED/FAILED/TEST_SUCCESS/TEST_FAILED (Sprint 42, #241) |
+| 37 | Solution shall support credential automation | PC | RotationScript entity (RotationScriptType: PowerShell/Bash/Python, DeviceType, ScriptContent, TestScriptContent); RotationScriptRunner.cs — 60s timeout sandbox process runner; RotationScriptEndpoints.cs — CRUD + /test (sandbox) + /rotate-with-script (manual trigger); AutoRotationService: custom script path (RotationScript.IsEnabled check, env vars PAM_TARGET_IP/USERNAME/CURRENT_PASSWORD/NEW_PASSWORD); Vault.razor Rotation Scripts tab — script list, editor modal, test output panel; audit events ROTATION_SCRIPT_CREATED/UPDATED/DELETED/EXECUTED/FAILED/TEST_SUCCESS/TEST_FAILED (Sprint 42, #241); ⚠️ Security audit: #245 (new password not saved to vault — fix pending), #246 (stdout redaction — fix pending), #247 (entropy bias fix — fix pending) |
 | 38 | Solution shall support credential orchestration |  |  |
 | 39 | Solution shall support SSH key management | PC | SshKeyEndpoints.cs — RSA/OpenSSH key pair generation, encrypted storage, device binding |
 | 40 | Solution shall support API key management | PC | CredentialEndpoints.cs — API key type credential |
