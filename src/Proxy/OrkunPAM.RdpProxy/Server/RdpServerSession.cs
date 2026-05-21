@@ -213,6 +213,24 @@ internal sealed class RdpServerSession
             {
                 var startTime = DateTimeOffset.UtcNow;
 
+                // Periodic screen-capture markers every 5 seconds
+                int rdpFrameIndex = 0;
+                using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var captureTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        while (!captureCts.Token.IsCancellationRequested)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(5), captureCts.Token);
+                            var idx = Interlocked.Increment(ref rdpFrameIndex);
+                            _ = _api.ReportScreenCaptureAsync(
+                                sessionInfo.SessionId, idx, null, null, CancellationToken.None);
+                        }
+                    }
+                    catch (OperationCanceledException) { }
+                }, captureCts.Token);
+
                 if (useTls)
                 {
                     // TLS terminated: parse PDUs, inject credentials, audit channels
@@ -226,6 +244,9 @@ internal sealed class RdpServerSession
                         sessionInfo.SessionId);
                     await RelayRawAsync(clientSide, targetSide, recorder, ct, idleTimeoutMinutes, _api, sessionInfo.SessionId);
                 }
+
+                await captureCts.CancelAsync();
+                try { await captureTask; } catch (OperationCanceledException) { }
 
                 var duration = (int)(DateTimeOffset.UtcNow - startTime).TotalSeconds;
                 _log.LogInformation("RDP session {SessionId} ended -- duration {Sec}s, recording={Path}",
