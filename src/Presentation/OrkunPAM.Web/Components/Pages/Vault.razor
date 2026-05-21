@@ -18,12 +18,17 @@
     {
         <button class="pam-btn pam-btn-primary" @onclick="OpenNewTemplateModal">+ New Template</button>
     }
+    else if (_tab == "orchestration")
+    {
+        <button class="pam-btn pam-btn-primary" @onclick="OpenNewOrchModal">+ New Orchestration Set</button>
+    }
 </div>
 
 <div class="pam-tabs" style="margin-bottom:1.5rem">
     <button class="pam-tab @(_tab=="credentials"?"pam-tab-active":"")"       @onclick="@(() => SwitchTab("credentials"))">Credentials</button>
     <button class="pam-tab @(_tab=="rotation-scripts"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("rotation-scripts"))">Rotation Scripts</button>
     <button class="pam-tab @(_tab=="templates"?"pam-tab-active":"")"         @onclick="@(() => SwitchTab("templates"))">Templates</button>
+    <button class="pam-tab @(_tab=="orchestration"?"pam-tab-active":"")"     @onclick="@(() => SwitchTab("orchestration"))">Orchestration</button>
 </div>
 
 @if (_tab == "credentials")
@@ -953,6 +958,159 @@
     </div>
 }
 
+@if (_tab == "orchestration")
+{
+@if (_orchError != null) { <div class="pam-alert pam-alert-danger">@_orchError</div> }
+@if (_orchSuccess != null) { <div class="pam-alert pam-alert-success">@_orchSuccess</div> }
+
+@if (_orchLoading)
+{
+    <div class="pam-empty-state"><span class="pam-spinner"></span> Loading...</div>
+}
+else if (_orchSets == null || !_orchSets.Any())
+{
+    <div class="pam-empty-state">No orchestration sets. Click <strong>+ New Orchestration Set</strong> to create one.</div>
+}
+else
+{
+    <div class="pam-card">
+        <table class="pam-table">
+            <thead><tr>
+                <th>Name</th><th>Mode</th><th>Members</th><th>Rollback</th><th>Last Run</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+            @foreach (var s in _orchSets)
+            {
+                <tr>
+                    <td><strong>@s.Name</strong>@if (!string.IsNullOrEmpty(s.Description)) {<br/><small class="pam-text-muted">@s.Description</small>}</td>
+                    <td>@s.ExecutionMode</td>
+                    <td>@s.MemberCount</td>
+                    <td>@(s.RollbackOnFailure ? "✔" : "—")</td>
+                    <td>@(s.LastRunAt.HasValue ? s.LastRunAt.Value.ToString("yyyy-MM-dd HH:mm") : "Never")</td>
+                    <td>
+                        @if (s.LastRunStatus == "Success")
+                        { <span class="pam-badge pam-badge-success">Success</span> }
+                        else if (s.LastRunStatus == "Failed" || s.LastRunStatus == "PartialFailure")
+                        { <span class="pam-badge pam-badge-danger">@s.LastRunStatus</span> }
+                        else if (s.LastRunStatus == "RolledBack")
+                        { <span class="pam-badge pam-badge-warning">Rolled Back</span> }
+                        else if (s.LastRunStatus != null)
+                        { <span class="pam-badge">@s.LastRunStatus</span> }
+                        else { <span class="pam-text-muted">—</span> }
+                    </td>
+                    <td>
+                        <button class="pam-btn pam-btn-sm pam-btn-primary" @onclick="@(() => RunOrchSet(s.Id.ToString(), s.Name))">▶ Run</button>
+                        <button class="pam-btn pam-btn-sm pam-btn-secondary" @onclick="@(() => ViewOrchRuns(s.Id.ToString(), s.Name))">History</button>
+                        <button class="pam-btn pam-btn-sm pam-btn-danger" @onclick="@(() => ConfirmDeleteOrch(s.Id.ToString(), s.Name))">Delete</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Run history modal -->
+@if (_showOrchRuns)
+{
+    <div class="pam-modal-backdrop">
+        <div class="pam-modal" style="max-width:760px">
+            <div class="pam-modal-header">
+                <span>Run History — @_orchRunSetName</span>
+                <button class="pam-modal-close" @onclick="@(() => _showOrchRuns = false)">✕</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_orchRuns == null)
+                { <div class="pam-empty-state"><span class="pam-spinner"></span></div> }
+                else if (!_orchRuns.Any())
+                { <div class="pam-empty-state">No runs yet.</div> }
+                else
+                {
+                    <table class="pam-table">
+                        <thead><tr><th>Started</th><th>Duration</th><th>Status</th><th>OK</th><th>Fail</th><th>Triggered By</th></tr></thead>
+                        <tbody>
+                        @foreach (var r in _orchRuns)
+                        {
+                            <tr>
+                                <td>@r.StartedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@(r.CompletedAtUtc.HasValue ? ((int)(r.CompletedAtUtc.Value - r.StartedAtUtc).TotalSeconds) + "s" : "—")</td>
+                                <td><span class="pam-badge @(r.Status == "Success" ? "pam-badge-success" : r.Status == "Failed" || r.Status == "PartialFailure" ? "pam-badge-danger" : "")">@r.Status</span></td>
+                                <td>@r.SuccessCount</td>
+                                <td>@r.FailureCount</td>
+                                <td>@r.TriggeredBy</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- New/Edit orchestration set modal -->
+@if (_showOrchModal)
+{
+    <div class="pam-modal-backdrop">
+        <div class="pam-modal" style="max-width:640px">
+            <div class="pam-modal-header">
+                <span>New Orchestration Set</span>
+                <button class="pam-modal-close" @onclick="@(() => _showOrchModal = false)">✕</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_orchModalError != null) { <div class="pam-alert pam-alert-danger">@_orchModalError</div> }
+                <div class="pam-form-group">
+                    <label>Name *</label>
+                    <input class="pam-input" @bind="_orchName" placeholder="e.g. Windows Service Accounts" />
+                </div>
+                <div class="pam-form-group">
+                    <label>Description</label>
+                    <input class="pam-input" @bind="_orchDescription" />
+                </div>
+                <div class="pam-form-group">
+                    <label>Execution Mode</label>
+                    <select class="pam-input" @bind="_orchExecutionMode">
+                        <option value="Sequential">Sequential (one by one)</option>
+                        <option value="Parallel">Parallel (all at once)</option>
+                    </select>
+                </div>
+                <div class="pam-form-group" style="display:flex;gap:2rem">
+                    <label><input type="checkbox" @bind="_orchRollback" /> Rollback on Failure</label>
+                    <label><input type="checkbox" @bind="_orchNotify" /> Email Notification on Complete</label>
+                </div>
+                <div class="pam-form-group">
+                    <label>Cron Schedule (optional, e.g. <code>0 2 * * *</code>)</label>
+                    <input class="pam-input" @bind="_orchCron" placeholder="Leave empty for manual runs only" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showOrchModal = false)">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitOrchAsync" disabled="@_orchModalSaving">
+                    @if (_orchModalSaving) { <span class="pam-spinner-sm"></span> } Create
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete orchestration set confirm -->
+@if (_showDeleteOrch)
+{
+    <div class="pam-modal-backdrop">
+        <div class="pam-modal pam-modal-sm">
+            <div class="pam-modal-header">Delete Orchestration Set</div>
+            <div class="pam-modal-body">
+                Delete <strong>@_deleteOrchName</strong>? All run history will also be deleted.
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _showDeleteOrch = false)">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="DeleteOrchAsync" disabled="@_orchModalSaving">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+}
+
 @code {
     private List<CredentialDto>? _creds;
     private List<FolderDto>?     _folders;
@@ -1066,6 +1224,27 @@
     private string? _rsTestError;
     private string? _rsTestScriptName;
 
+    // Orchestration fields
+    private List<OrchestrationSetDto>? _orchSets;
+    private List<OrchestrationRunDto>? _orchRuns;
+    private bool    _orchLoading;
+    private string? _orchError;
+    private string? _orchSuccess;
+    private bool    _showOrchModal;
+    private bool    _orchModalSaving;
+    private string? _orchModalError;
+    private string  _orchName          = "";
+    private string? _orchDescription;
+    private string  _orchExecutionMode = "Sequential";
+    private bool    _orchRollback;
+    private bool    _orchNotify;
+    private string? _orchCron;
+    private bool    _showDeleteOrch;
+    private string? _deleteOrchId;
+    private string? _deleteOrchName;
+    private bool    _showOrchRuns;
+    private string? _orchRunSetName;
+
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
     private async Task SwitchTab(string tab)
@@ -1075,6 +1254,8 @@
             await LoadScriptsAsync();
         if (tab == "templates" && _templates == null)
             await LoadTemplatesAsync();
+        if (tab == "orchestration" && _orchSets == null)
+            await LoadOrchAsync();
         StateHasChanged();
     }
 
@@ -1570,5 +1751,71 @@
         _tmplModalSaving = false; _showDeleteTemplate = false;
         if (ok) { _tmplSuccess = "Template deleted."; await LoadTemplatesAsync(); }
         else    { _tmplError = "Failed to delete template."; StateHasChanged(); }
+    }
+
+    // Orchestration methods
+    private async Task LoadOrchAsync()
+    {
+        _orchLoading = true; _orchError = null; StateHasChanged();
+        _orchSets = await Api.GetOrchestrationSetsAsync();
+        _orchLoading = false; StateHasChanged();
+    }
+
+    private void OpenNewOrchModal()
+    {
+        _orchName = ""; _orchDescription = null; _orchExecutionMode = "Sequential";
+        _orchRollback = false; _orchNotify = false; _orchCron = null;
+        _orchModalError = null; _orchModalSaving = false;
+        _showOrchModal = true;
+    }
+
+    private async Task SubmitOrchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_orchName)) { _orchModalError = "Name is required."; return; }
+        _orchModalSaving = true; _orchModalError = null; StateHasChanged();
+
+        var (ok, _) = await Api.CreateOrchestrationSetAsync(
+            _orchName.Trim(), _orchDescription, _orchExecutionMode,
+            _orchRollback, _orchNotify, _orchCron, null);
+
+        _orchModalSaving = false;
+        if (!ok) { _orchModalError = "Failed to create orchestration set."; StateHasChanged(); return; }
+
+        _orchSuccess = "Orchestration set created. Edit it to add credentials.";
+        _showOrchModal = false;
+        await LoadOrchAsync();
+    }
+
+    private async Task RunOrchSet(string id, string name)
+    {
+        _orchError = null; _orchSuccess = null; StateHasChanged();
+        var result = await Api.RunOrchestrationAsync(id);
+        if (result == null) { _orchError = "Run failed — check logs."; StateHasChanged(); return; }
+
+        _orchSuccess = $"Run complete: {result.Status} — {result.SuccessCount} succeeded, {result.FailureCount} failed.";
+        await LoadOrchAsync();
+    }
+
+    private async Task ViewOrchRuns(string id, string name)
+    {
+        _orchRunSetName = name; _orchRuns = null; _showOrchRuns = true; StateHasChanged();
+        _orchRuns = await Api.GetOrchestrationRunsAsync(id);
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteOrch(string id, string name)
+    {
+        _deleteOrchId = id; _deleteOrchName = name;
+        _showDeleteOrch = true;
+    }
+
+    private async Task DeleteOrchAsync()
+    {
+        if (_deleteOrchId == null) return;
+        _orchModalSaving = true; StateHasChanged();
+        var ok = await Api.DeleteOrchestrationSetAsync(_deleteOrchId);
+        _orchModalSaving = false; _showDeleteOrch = false;
+        if (ok) { _orchSuccess = "Deleted."; await LoadOrchAsync(); }
+        else    { _orchError = "Failed to delete."; StateHasChanged(); }
     }
 }

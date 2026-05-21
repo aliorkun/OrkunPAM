@@ -1492,6 +1492,62 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // === Credential Orchestration (#251) ===
+    public async Task<List<OrchestrationSetDto>?> GetOrchestrationSetsAsync()
+        => (await GetAsync<ListResult<OrchestrationSetDto>>("/api/v1/vault/orchestration"))?.Data;
+
+    public async Task<OrchestrationSetDetailDto?> GetOrchestrationSetAsync(string id)
+        => (await GetAsync<SingleResult<OrchestrationSetDetailDto>>($"/api/v1/vault/orchestration/{id}"))?.Data;
+
+    public async Task<(bool Ok, Guid Id)> CreateOrchestrationSetAsync(string name, string? description,
+        string executionMode, bool rollbackOnFailure, bool notifyOnComplete, string? scheduleCron, List<Guid>? credentialIds)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/vault/orchestration",
+                new { name, description, executionMode, rollbackOnFailure, notifyOnComplete, scheduleCron, credentialIds });
+            if (!resp.IsSuccessStatusCode) return (false, Guid.Empty);
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<IdDto>>(JsonOpts);
+            return (result?.Success == true, result?.Data?.Id ?? Guid.Empty);
+        }
+        catch { return (false, Guid.Empty); }
+    }
+
+    public async Task<bool> UpdateOrchestrationSetAsync(string id, string? name, string? executionMode,
+        bool? rollbackOnFailure, bool? notifyOnComplete, string? scheduleCron, List<Guid>? credentialIds)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/vault/orchestration/{id}",
+                new { name, executionMode, rollbackOnFailure, notifyOnComplete, scheduleCron, credentialIds });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteOrchestrationSetAsync(string id)
+    {
+        try { return (await (await GetAuthClientAsync()).DeleteAsync($"/api/v1/vault/orchestration/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<OrchestrationRunResultDto?> RunOrchestrationAsync(string id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/vault/orchestration/{id}/run", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            return (await resp.Content.ReadFromJsonAsync<SingleResult<OrchestrationRunResultDto>>(JsonOpts))?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<OrchestrationRunDto>?> GetOrchestrationRunsAsync(string id)
+        => (await GetAsync<ListResult<OrchestrationRunDto>>($"/api/v1/vault/orchestration/{id}/runs"))?.Data;
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2039,3 +2095,54 @@ public record ApiKeyCreatedDto(
     string    RawKey,
     string    HmacSecret,
     DateTime? ExpiresAtUtc);
+
+// Credential Orchestration DTOs (#251)
+public record OrchestrationSetDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string    ExecutionMode,
+    bool      RollbackOnFailure,
+    bool      NotifyOnComplete,
+    string?   ScheduleCron,
+    int       MemberCount,
+    string?   LastRunStatus,
+    DateTime? LastRunAt,
+    DateTime  CreatedAtUtc);
+
+public record OrchestrationMemberDto(
+    Guid   Id,
+    Guid   CredentialId,
+    string CredentialName,
+    string? CredentialUser,
+    int    ExecutionOrder);
+
+public record OrchestrationSetDetailDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string    ExecutionMode,
+    bool      RollbackOnFailure,
+    bool      NotifyOnComplete,
+    string?   ScheduleCron,
+    List<OrchestrationMemberDto> Members,
+    DateTime  CreatedAtUtc);
+
+public record OrchestrationRunResultDto(
+    Guid   RunId,
+    string Status,
+    int    SuccessCount,
+    int    FailureCount,
+    string? Log);
+
+public record OrchestrationRunDto(
+    Guid      Id,
+    DateTime  StartedAtUtc,
+    DateTime? CompletedAtUtc,
+    string    Status,
+    int       SuccessCount,
+    int       FailureCount,
+    string?   Log,
+    string    TriggeredBy);
+
+public record IdDto(Guid Id);

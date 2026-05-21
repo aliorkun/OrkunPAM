@@ -758,8 +758,49 @@
 
 ---
 
+## Sprint 47 - MFA Exceptions: Auth Flow Enforcement (#259) + HMAC ZeroMemory Fix (#260)
+**Tarih:** 2026-05-21
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #259 | [HIGH] MFA Exception enforcement missing in auth flow | security | ✅ Fix'lendi |
+| #260 | [MEDIUM] HMAC secret bytes not zeroed after vault.Encrypt() | security | ✅ Fix'lendi |
+
+**Sprint 47 Tamamlanan Bilesenler (2026-05-21):**
+- **AuthEndpoints.cs:** `using System.Net` + `using OrkunPAM.Application.Contracts` eklendi; login handler'a `IAuditService audit` inject edildi; MFA Exception check blogu eklendi — `Status == Approved && ExpiresAtUtc > now && UsageCount < MaxUsageCount && !RevokedAtUtc.HasValue`; IP CIDR restriction kontrolu; `UsageCount++`; `MFA_EXCEPTION_USED` audit log; `data = data with { MfaRequired = false }` ile bypass
+- **AuthEndpoints.cs:** `MfaCidrHelper` static class eklendi — `IsIpAllowed` + `IsInCidr` (ApiKeyAuthMiddleware'daki aynı CIDR logic)
+- **ApiKeyEndpoints.cs:** `CryptographicOperations.ZeroMemory(hmacSecret)` — create endpoint satir 98 + rotate endpoint satir 208 sonrasina eklendi (CWE-316)
+
+**Ilerleme:** 2/2 (%100) ✅
+
+---
+
+## Sprint 48 - Credential Orchestration (#251) — PV #38
+**Tarih:** 2026-05-21
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #251 | [MVP] Credential Orchestration — Multi-System Synchronized Rotation (PV #38) | MVP-VAULT | ✅ Tamamlandi |
+
+**Sprint 48 Tamamlanan Bilesenler (2026-05-21):**
+- **Enums.cs:** `OrchestrationExecutionMode` (Sequential/Parallel) + `OrchestrationRunStatus` (Pending/Running/Success/PartialFailure/RolledBack/Failed) eklendi
+- **Credential.cs:** `CredentialOrchestrationSet` + `CredentialOrchestrationMember` + `CredentialOrchestrationRun` entity'leri eklendi
+- **Migration `20260521_AddCredentialOrchestration`:** 3 tablo — CredentialOrchestrationSets, CredentialOrchestrationMembers, CredentialOrchestrationRuns
+- **DbContext:** 3 DbSet + OnModelCreating config (cascade delete, FK'lar, index'ler)
+- **CredentialOrchestrationEndpoints.cs:** 7 endpoint — GET list, POST create, GET detail, PUT update, DELETE, POST run (sequential/parallel + rollback + email), GET runs history; 6 audit event
+- **Program.cs:** `MapCredentialOrchestrationEndpoints()` kaydedildi
+- **PamApiService.cs:** `GetOrchestrationSetsAsync`, `CreateOrchestrationSetAsync`, `UpdateOrchestrationSetAsync`, `DeleteOrchestrationSetAsync`, `RunOrchestrationAsync`, `GetOrchestrationRunsAsync` + 6 DTO (OrchestrationSetDto, OrchestrationSetDetailDto, OrchestrationMemberDto, OrchestrationRunResultDto, OrchestrationRunDto, IdDto)
+- **Vault.razor:** "Orchestration" tab — set listesi, Run/History/Delete butonlari, New Set modali (mode/rollback/notify/cron), history modali (run log)
+- **RFP-CHECKLIST.md:** PV #38 → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 46 tamamlandi.** MFA for API Access #250 push'landi, MFA #17+#18 → PC.
+**Sprint 48 tamamlandi.** Credential Orchestration #251 push'landi, PV #38 → PC.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

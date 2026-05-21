@@ -181,6 +181,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === MFA Exception Management (#252) ===
     public DbSet<MfaException> MfaExceptions => Set<MfaException>();
 
+    public DbSet<CredentialOrchestrationSet>    CredentialOrchestrationSets    => Set<CredentialOrchestrationSet>();
+    public DbSet<CredentialOrchestrationMember> CredentialOrchestrationMembers => Set<CredentialOrchestrationMember>();
+    public DbSet<CredentialOrchestrationRun>    CredentialOrchestrationRuns    => Set<CredentialOrchestrationRun>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -698,6 +702,29 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(m => m.IpCidrRestriction).HasMaxLength(256);
             e.Property(m => m.AppliedMfaTypesJson).HasMaxLength(512);
             e.Property(m => m.Status).HasConversion<byte>().HasDefaultValue((byte)0);
+        });
+
+        modelBuilder.Entity<CredentialOrchestrationSet>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.ExecutionMode).HasConversion<byte>().HasDefaultValue((byte)0);
+            e.Property(x => x.ScheduleCron).HasMaxLength(100);
+            e.HasMany(x => x.Members).WithOne(m => m.Set).HasForeignKey(m => m.SetId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Runs).WithOne(r => r.Set).HasForeignKey(r => r.SetId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CredentialOrchestrationMember>(e =>
+        {
+            e.HasIndex(m => m.SetId);
+            e.HasOne(m => m.Credential).WithMany().HasForeignKey(m => m.CredentialId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CredentialOrchestrationRun>(e =>
+        {
+            e.HasIndex(r => r.SetId);
+            e.Property(r => r.Status).HasConversion<byte>().HasDefaultValue((byte)0);
+            e.HasOne(r => r.TriggeredByUser).WithMany().HasForeignKey(r => r.TriggeredByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
         });
 
         // Seed built-in data

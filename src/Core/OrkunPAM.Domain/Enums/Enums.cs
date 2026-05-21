@@ -51,6 +51,9 @@ public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
 
 public enum MfaExceptionStatus : byte { Pending = 0, Approved = 1, Denied = 2, Expired = 3, Revoked = 4 }
 
+public enum OrchestrationExecutionMode : byte { Sequential = 0, Parallel = 1 }
+public enum OrchestrationRunStatus : byte { Pending = 0, Running = 1, Success = 2, PartialFailure = 3, RolledBack = 4, Failed = 5 }
+
 public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2, Revoked = 3 }
 
 // Portal access profile — controls which UI sections/features are available

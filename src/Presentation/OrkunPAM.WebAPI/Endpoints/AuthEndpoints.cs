@@ -1,8 +1,10 @@
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
@@ -20,7 +22,7 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth").AllowAnonymous();
 
-        group.MapPost("/login", async (LoginRequest req, IAuthenticationService auth, OrkunPamDbContext db, IVaultEncryptionService? vault, HttpContext ctx) =>
+        group.MapPost("/login", async (LoginRequest req, IAuthenticationService auth, OrkunPamDbContext db, IVaultEncryptionService? vault, IAuditService audit, HttpContext ctx) =>
         {
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var result = await auth.LoginLocalAsync(req.Username, req.Password, ip);
@@ -67,6 +69,44 @@ public static class AuthEndpoints
             if (geoData == null)
                 return Results.Json(new { success = false, errors = new[] { "Login blocked: access from your location is not permitted." } }, statusCode: 403);
             data = geoData;
+
+            // MFA Exception check (#259) — approved exceptions bypass MFA step
+            if (data.MfaRequired)
+            {
+                var activeException = await db.MfaExceptions.FirstOrDefaultAsync(e =>
+                    e.UserId == data.UserId &&
+                    e.Status == MfaExceptionStatus.Approved &&
+                    e.ExpiresAtUtc > DateTime.UtcNow &&
+                    e.UsageCount < e.MaxUsageCount &&
+                    !e.RevokedAtUtc.HasValue);
+
+                if (activeException != null)
+                {
+                    var ipAllowed = true;
+                    if (!string.IsNullOrEmpty(activeException.IpCidrRestriction))
+                    {
+                        var cidrs = activeException.IpCidrRestriction
+                            .Split(',').Select(c => c.Trim())
+                            .Where(c => !string.IsNullOrEmpty(c)).ToList();
+                        if (cidrs.Count > 0)
+                        {
+                            if (IPAddress.TryParse(ip, out var clientAddr))
+                                ipAllowed = MfaCidrHelper.IsIpAllowed(clientAddr, cidrs);
+                            else
+                                ipAllowed = false;
+                        }
+                    }
+
+                    if (ipAllowed)
+                    {
+                        activeException.UsageCount++;
+                        await db.SaveChangesAsync();
+                        await audit.LogAsync("Auth", "MFA_EXCEPTION_USED", data.UserId, null, ip,
+                            "MfaException", activeException.Id.ToString(), new { data.Username });
+                        data = data with { MfaRequired = false };
+                    }
+                }
+            }
 
             return Results.Ok(new
             {
@@ -1182,5 +1222,51 @@ internal static class RecoveryCodeHelper
         if (string.IsNullOrEmpty(hashesJson)) return 0;
         try { return (JsonSerializer.Deserialize<List<string>>(hashesJson) ?? []).Count; }
         catch { return 0; }
+    }
+}
+
+internal static class MfaCidrHelper
+{
+    internal static bool IsIpAllowed(IPAddress clientIp, List<string> cidrs)
+    {
+        if (clientIp.IsIPv4MappedToIPv6)
+            clientIp = clientIp.MapToIPv4();
+
+        foreach (var cidr in cidrs)
+        {
+            var slash = cidr.IndexOf('/');
+            if (slash < 0)
+            {
+                if (IPAddress.TryParse(cidr, out var single) && single.Equals(clientIp))
+                    return true;
+                continue;
+            }
+            if (!int.TryParse(cidr[(slash + 1)..], out var prefixLen) ||
+                !IPAddress.TryParse(cidr[..slash], out var network))
+                continue;
+            if (IsInCidr(clientIp, network, prefixLen))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsInCidr(IPAddress address, IPAddress network, int prefixLen)
+    {
+        var addrBytes = address.GetAddressBytes();
+        var netBytes  = network.GetAddressBytes();
+        if (addrBytes.Length != netBytes.Length) return false;
+
+        var fullBytes = prefixLen / 8;
+        var remainder = prefixLen % 8;
+
+        for (var i = 0; i < fullBytes; i++)
+            if (addrBytes[i] != netBytes[i]) return false;
+
+        if (remainder > 0)
+        {
+            var mask = (byte)(0xFF << (8 - remainder));
+            if ((addrBytes[fullBytes] & mask) != (netBytes[fullBytes] & mask)) return false;
+        }
+        return true;
     }
 }

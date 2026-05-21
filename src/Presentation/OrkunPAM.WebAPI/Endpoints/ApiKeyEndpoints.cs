@@ -95,6 +95,7 @@ public static class ApiKeyEndpoints
 
             // Encrypt HMAC secret for storage
             var encResult = vault.Encrypt(hmacSecret, "ApiKeyHmacSecret");
+            CryptographicOperations.ZeroMemory(hmacSecret);
             if (encResult.IsFailure)
                 return Results.Problem("Failed to protect HMAC secret");
 
@@ -204,6 +205,7 @@ public static class ApiKeyEndpoints
             var hmacSecret    = RandomNumberGenerator.GetBytes(32);
             var hmacSecretB64 = Convert.ToBase64String(hmacSecret);
             var encResult     = vault.Encrypt(hmacSecret, "ApiKeyHmacSecret");
+            CryptographicOperations.ZeroMemory(hmacSecret);
             if (encResult.IsFailure)
                 return Results.Problem("Failed to protect HMAC secret");
 

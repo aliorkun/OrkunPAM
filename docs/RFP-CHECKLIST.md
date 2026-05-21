@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | PM run #25: 35 gap items remain | Sprint 48: PV #38 #251 | Sprint 49: MFA #20 #257 | Sprint 50: RA #40 #258)
+> Last updated: 2026-05-21 (Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | PM run #25: 34 gap items remain | Sprint 49: MFA #20 #257 | Sprint 50: RA #40 #258)
 
 ## Platform (44 items)
 
@@ -282,7 +282,7 @@
 | 35 | Solution shall support API key management | PC | CredentialKind.ApiKey — API key storage + checkout |
 | 36 | Solution shall support token management | PC | JIT token lifecycle (JitEndpoints.cs) + MFA tokens (AuthEndpoints.cs) |
 | 37 | Solution shall support credential automation | PC | RotationScript entity + RotationScriptRunner.cs — PowerShell/Bash/Python custom rotation scripts; AutoRotationService.cs custom-script path; Vault.razor Rotation Scripts tab (#241) |
-| 38 | Solution shall support credential orchestration |  |  |
+| 38 | Solution shall support credential orchestration | PC | CredentialOrchestrationSet/Member/Run entities + CredentialOrchestrationEndpoints.cs — sequential/parallel multi-credential rotation, rollback-on-failure, email notifications, Vault.razor Orchestration tab (#251) |
 | 39 | Solution shall support credential delegation | PC | AssignedCredential entity + AssignedCredentialEndpoints.cs — Kron PAM model credential delegation per user/group+device (#186, Sprint 24) |
 | 40 | Solution shall support credential synchronization | PC | AutoRotationService.cs — rotation-based sync; AD sync for discovered credentials |
 | 41 | Solution shall support credential mapping | PC | AssignedCredential — user→credential→device mapping |

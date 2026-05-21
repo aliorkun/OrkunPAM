@@ -1,5 +1,6 @@
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.SharedKernel;
+using OrkunPAM.Domain.Entities.Identity;
 
 namespace OrkunPAM.Domain.Entities.Vault;
 
@@ -160,4 +161,40 @@ public class CredentialShare : Entity
     public DateTime? ExpiresAtUtc { get; set; }
     public int? MaxUseCount { get; set; }
     public int UseCount { get; set; }
+}
+
+// Credential Orchestration — multi-system synchronized rotation (#251)
+public class CredentialOrchestrationSet : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public OrchestrationExecutionMode ExecutionMode { get; set; } = OrchestrationExecutionMode.Sequential;
+    public bool RollbackOnFailure { get; set; }
+    public bool NotifyOnComplete { get; set; }
+    public string? ScheduleCron { get; set; }
+    public ICollection<CredentialOrchestrationMember> Members { get; set; } = new List<CredentialOrchestrationMember>();
+    public ICollection<CredentialOrchestrationRun>    Runs    { get; set; } = new List<CredentialOrchestrationRun>();
+}
+
+public class CredentialOrchestrationMember : Entity
+{
+    public Guid SetId { get; set; }
+    public CredentialOrchestrationSet Set { get; set; } = null!;
+    public Guid CredentialId { get; set; }
+    public Credential Credential { get; set; } = null!;
+    public int ExecutionOrder { get; set; }
+}
+
+public class CredentialOrchestrationRun : Entity
+{
+    public Guid SetId { get; set; }
+    public CredentialOrchestrationSet Set { get; set; } = null!;
+    public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAtUtc { get; set; }
+    public OrchestrationRunStatus Status { get; set; } = OrchestrationRunStatus.Pending;
+    public string? Log { get; set; }
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    public Guid? TriggeredByUserId { get; set; }
+    public User? TriggeredByUser { get; set; }
 }
