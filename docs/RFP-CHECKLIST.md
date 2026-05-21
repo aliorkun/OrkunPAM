@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (PM run #24 — Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | 38 gap items remain | Sprint 46 next: MFA #17 API-access-MFA, PV #38 credential-orchestration, MFA #16 exception-mgmt)
+> Last updated: 2026-05-21 (Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | 36 gap items remain | Sprint 47 next: PV #38 credential-orchestration, MFA #16 exception-mgmt)
 
 ## Platform (44 items)
 
@@ -179,8 +179,8 @@
 | 14 | Solution shall support MFA for admin access | PC | Login.razor + AuthEndpoints.cs — MFA enforced for all admin roles |
 | 15 | Solution shall support MFA reporting | PC | MfaReportEndpoints.cs — enrollment status, usage breakdown, success/failure rates (#174) |
 | 16 | Solution shall support MFA exception management |  |  |
-| 17 | Solution shall support MFA for API access |  |  |
-| 18 | Solution shall support MFA for service accounts |  |  |
+| 17 | Solution shall support MFA for API access | PC | ApiKeyEndpoints.cs — HMAC-SHA256 signed API keys; X-Api-Key + X-Timestamp + X-Signature headers; ±5 min replay protection; IP CIDR restriction; usage audit log; ApiKeyAuthMiddleware injects JWT before UseAuthentication (#250) |
+| 18 | Solution shall support MFA for service accounts | PC | ApiKey entity — IsServiceAccount flag on User; service accounts use HMAC-signed API key instead of interactive MFA; ReadOnly role assigned; one-time key+HMAC secret returned on creation (#250) |
 | 19 | Solution shall support MFA throttling | PC | SmsOtpService.cs + EmailOtpService.cs — 3-attempt limit per session; rate limiting on MFA endpoints |
 | 20 | Solution shall support MFA session persistence |  |  |
 | 21 | Solution shall support MFA for remote access | PC | SSH/RDP/VNC session start — MFA verified JWT required at session creation |

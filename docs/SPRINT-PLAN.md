@@ -734,8 +734,32 @@
 
 ---
 
+## Sprint 46 — API Key Authentication for Service Accounts (#250) ✅ TAMAMLANDI
+**Tarih:** 2026-05-21
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #250 | [MVP] MFA for API Access — Service Account API Key + HMAC-Timestamp Binding (MFA #17, #18) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 46 Tamamlanan Bilesenler (2026-05-21):**
+- **ApiKey entity:** Name, Prefix, KeyHash (SHA-256), HmacSecretEnc (AES-encrypted 32-byte HMAC secret), ServiceAccountUserId FK, AllowedIpCidrsJson, ExpiresAtUtc, UsageCount, IsActive
+- **User.IsServiceAccount flag:** Added to User entity — service accounts skip interactive MFA
+- **Migration `20260521_AddApiKey`:** ApiKeys table + Users.IsServiceAccount column + 3 indexes
+- **DbContext:** ApiKeys DbSet + EF Core configuration (unique prefix index, cascade delete)
+- **ApiKeyAuthMiddleware.cs:** Runs before UseAuthentication — X-Api-Key + X-Timestamp + X-Signature validation; SHA-256 key hash verify (constant-time); HMAC-SHA256 signature verify; ±5 min timestamp tolerance; replay attack protection via IMemoryCache nonce; IP CIDR restriction; injects short-lived JWT (5 min) for the service account user
+- **ApiKeyEndpoints.cs:** 5 endpoints — GET list, POST create (returns one-time raw key + HMAC secret), GET single, DELETE revoke, POST rotate; 3 audit events (API_KEY_CREATED/REVOKED/ROTATED); AdminPolicy protected
+- **Program.cs:** `app.UseMiddleware<ApiKeyAuthMiddleware>()` before UseAuthentication + `api.MapApiKeyEndpoints()` registered
+- **PamApiService.cs:** `GetApiKeysAsync`, `CreateApiKeyAsync`, `RevokeApiKeyAsync`, `RotateApiKeyAsync` + `ApiKeyDto` + `ApiKeyCreatedDto`
+- **Integrations.razor:** "API Keys" tab — create form, one-time key material display panel (warn banner), key table (prefix/status/usage/expiry) + Rotate/Revoke actions
+- **RFP-CHECKLIST.md:** MFA #17 → PC, MFA #18 → PC
+
+**Ilerleme:** 9/9 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 45 tamamlandi.** Peripheral Redirection Control #249 push'landi, RA #26 → PC.
+**Sprint 46 tamamlandi.** MFA for API Access #250 push'landi, MFA #17+#18 → PC.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
