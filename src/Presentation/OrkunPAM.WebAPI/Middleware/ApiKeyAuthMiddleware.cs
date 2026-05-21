@@ -7,7 +7,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Cryptography;
+using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 
 namespace OrkunPAM.WebAPI.Middleware;
@@ -18,7 +20,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
 
     public async Task InvokeAsync(HttpContext context, OrkunPamDbContext db,
         IVaultEncryptionService vault, RsaSecurityKey signingKey,
-        IConfiguration config, IMemoryCache cache)
+        IConfiguration config, IMemoryCache cache, IAuditService audit)
     {
         if (!context.Request.Headers.TryGetValue("X-Api-Key", out var apiKeyHeader) ||
             !context.Request.Headers.TryGetValue("X-Timestamp", out var tsHeader) ||
@@ -27,6 +29,9 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
             await next(context);
             return;
         }
+
+        var clientIp = context.Connection.RemoteIpAddress;
+        var ipStr    = clientIp?.ToString() ?? "unknown";
 
         var keyValue = apiKeyHeader.ToString();
         var dotIdx   = keyValue.IndexOf('.');
@@ -47,7 +52,12 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
         // Replay attack protection — nonce cached for 2× tolerance window
         var nonceKey = "apikey-nonce:" + signature;
         if (cache.TryGetValue(nonceKey, out _))
-        { await WriteError(context, 401, "Replay attack detected"); return; }
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_REPLAY_DETECTED", null, null, ipStr,
+                "ApiKeyPrefix", prefix, new { prefix }, AuditOutcome.Failure);
+            await WriteError(context, 401, "Replay attack detected");
+            return;
+        }
 
         var apiKey = await db.ApiKeys
             .Include(k => k.ServiceAccountUser)
@@ -58,40 +68,60 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
         if (apiKey == null) { await WriteError(context, 401, "Invalid API key"); return; }
 
         if (apiKey.ExpiresAtUtc.HasValue && apiKey.ExpiresAtUtc.Value < DateTime.UtcNow)
-        { await WriteError(context, 401, "API key expired"); return; }
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_EXPIRED", apiKey.ServiceAccountUserId, null, ipStr,
+                "ApiKey", apiKey.Id.ToString(), new { apiKey.Prefix }, AuditOutcome.Failure);
+            await WriteError(context, 401, "API key expired");
+            return;
+        }
 
         // Verify key hash (constant-time)
         var rawKeyHash = SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
         if (!CryptographicOperations.FixedTimeEquals(rawKeyHash, apiKey.KeyHash))
         { await WriteError(context, 401, "Invalid API key"); return; }
 
-        // Decrypt HMAC secret and verify signature
+        // Decrypt HMAC secret, verify signature, then zero secret bytes immediately (#255)
         var hmacResult = vault.Decrypt(apiKey.HmacSecretEnc);
         if (hmacResult.IsFailure) { await WriteError(context, 500, "Failed to process API key"); return; }
 
-        var payload     = $"{context.Request.Method}\n{context.Request.Path}\n{timestamp}";
-        var expectedSig = ComputeHmac(hmacResult.Value, payload);
-
-        byte[] expectedSigBytes;
-        byte[] providedSigBytes;
+        var hmacSecret = hmacResult.Value;
+        var sigOk      = false;
         try
         {
-            expectedSigBytes = Convert.FromBase64String(expectedSig);
-            providedSigBytes = Convert.FromBase64String(signature);
+            var payload   = $"{context.Request.Method}\n{context.Request.Path}\n{timestamp}";
+            var expectSig = ComputeHmac(hmacSecret, payload);
+            try
+            {
+                var expectedBytes = Convert.FromBase64String(expectSig);
+                var providedBytes = Convert.FromBase64String(signature);
+                sigOk = CryptographicOperations.FixedTimeEquals(expectedBytes, providedBytes);
+            }
+            catch { /* bad base64 → sigOk stays false */ }
         }
-        catch
-        { await WriteError(context, 401, "Invalid signature encoding"); return; }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(hmacSecret);
+        }
 
-        if (!CryptographicOperations.FixedTimeEquals(expectedSigBytes, providedSigBytes))
-        { await WriteError(context, 401, "Invalid signature"); return; }
+        if (!sigOk)
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_INVALID_SIGNATURE", apiKey.ServiceAccountUserId, null, ipStr,
+                "ApiKey", apiKey.Id.ToString(), new { apiKey.Prefix }, AuditOutcome.Failure);
+            await WriteError(context, 401, "Invalid signature");
+            return;
+        }
 
-        // IP CIDR restriction
+        // IP CIDR restriction (#256 audit)
         if (!string.IsNullOrEmpty(apiKey.AllowedIpCidrsJson))
         {
-            var cidrs     = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedIpCidrsJson) ?? [];
-            var clientIp  = context.Connection.RemoteIpAddress;
-            if (clientIp != null && cidrs.Count > 0 && !IsIpAllowed(clientIp, cidrs))
-            { await WriteError(context, 403, "IP address not allowed"); return; }
+            var cidrs = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedIpCidrsJson) ?? [];
+            if (cidrs.Count > 0 && (clientIp == null || !IsIpAllowed(clientIp, cidrs)))
+            {
+                await audit.LogAsync("ApiKey", "API_KEY_IP_REJECTED", apiKey.ServiceAccountUserId, null, ipStr,
+                    "ApiKey", apiKey.Id.ToString(), new { apiKey.Prefix, clientIp = ipStr }, AuditOutcome.Denied);
+                await WriteError(context, 403, "IP address not allowed");
+                return;
+            }
         }
 
         // Mark nonce used
@@ -118,6 +148,14 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
             new("auth_method", "ApiKey")
         };
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+
+        // Enforce scope restrictions — add scope claim to JWT (#254)
+        if (!string.IsNullOrEmpty(apiKey.AllowedScopesJson))
+        {
+            var scopes = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedScopesJson) ?? [];
+            if (scopes.Count > 0)
+                claims.Add(new Claim("scope", string.Join(" ", scopes)));
+        }
 
         var issuer   = config["Jwt:Issuer"]   ?? "OrkunPAM";
         var audience = config["Jwt:Audience"] ?? "OrkunPAM";

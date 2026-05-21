@@ -34,6 +34,7 @@ public static class ApiKeyEndpoints
                     serviceAccountUserId = k.ServiceAccountUserId,
                     serviceAccountName   = k.ServiceAccountUser.Username,
                     allowedIpCidrs       = k.AllowedIpCidrsJson,
+                    allowedScopes        = k.AllowedScopesJson,
                     expiresAtUtc         = k.ExpiresAtUtc,
                     lastUsedAtUtc        = k.LastUsedAtUtc,
                     usageCount           = k.UsageCount,
@@ -111,6 +112,8 @@ public static class ApiKeyEndpoints
                 ServiceAccountUserId = saUser.Id,
                 AllowedIpCidrsJson   = req.AllowedIpCidrs?.Count > 0
                     ? JsonSerializer.Serialize(req.AllowedIpCidrs) : null,
+                AllowedScopesJson    = req.AllowedScopes?.Count > 0
+                    ? JsonSerializer.Serialize(req.AllowedScopes) : null,
                 ExpiresAtUtc         = expiresAt,
                 IsActive             = true
             };
@@ -155,6 +158,7 @@ public static class ApiKeyEndpoints
                     serviceAccountUserId = k.ServiceAccountUserId,
                     serviceAccountName   = k.ServiceAccountUser.Username,
                     allowedIpCidrs       = k.AllowedIpCidrsJson,
+                    allowedScopes        = k.AllowedScopesJson,
                     expiresAtUtc         = k.ExpiresAtUtc,
                     lastUsedAtUtc        = k.LastUsedAtUtc,
                     usageCount           = k.UsageCount,
@@ -241,4 +245,5 @@ public record CreateApiKeyRequest(
     string?        Description,
     string?        ServiceAccountName,
     List<string>?  AllowedIpCidrs,
+    List<string>?  AllowedScopes,
     int?           ExpiresAfterDays);
