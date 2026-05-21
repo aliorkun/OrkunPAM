@@ -178,6 +178,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === Peripheral Redirection Policy (#249) ===
     public DbSet<PeripheralRedirectionPolicy> PeripheralRedirectionPolicies => Set<PeripheralRedirectionPolicy>();
 
+    // === MFA Exception Management (#252) ===
+    public DbSet<MfaException> MfaExceptions => Set<MfaException>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -683,6 +686,18 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(t => t.RotationPeriodDays).HasDefaultValue(90);
             e.Property(t => t.PasswordMinLength).HasDefaultValue(16);
             e.HasIndex(t => t.Name).IsUnique();
+        });
+
+        // === MFA Exception Management (#252) ===
+        modelBuilder.Entity<MfaException>(e =>
+        {
+            e.HasIndex(m => m.UserId);
+            e.HasIndex(m => m.Status);
+            e.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(m => m.Reason).HasMaxLength(2048);
+            e.Property(m => m.IpCidrRestriction).HasMaxLength(256);
+            e.Property(m => m.AppliedMfaTypesJson).HasMaxLength(512);
+            e.Property(m => m.Status).HasConversion<byte>().HasDefaultValue((byte)0);
         });
 
         // Seed built-in data
