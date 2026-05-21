@@ -49,6 +49,8 @@ public enum RotationScriptType : byte { PowerShell = 0, Bash = 1, Python = 2 }
 
 public enum KeyStatus : byte { Active = 0, DecryptOnly = 1, Retired = 2 }
 
+public enum MfaExceptionStatus : byte { Pending = 0, Approved = 1, Denied = 2, Expired = 3, Revoked = 4 }
+
 public enum BreakGlassStatus : byte { Active = 0, Acknowledged = 1, Expired = 2, Revoked = 3 }
 
 // Portal access profile — controls which UI sections/features are available

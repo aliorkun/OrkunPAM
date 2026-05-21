@@ -520,6 +520,7 @@ try
     api.MapScreenCaptureEndpoints();
     api.MapPeripheralPolicyEndpoints();
     api.MapApiKeyEndpoints();
+    api.MapMfaExceptionEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");
