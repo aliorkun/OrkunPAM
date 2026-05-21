@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | 35 gap items remain | Sprint 48 next: PV #38 credential-orchestration)
+> Last updated: 2026-05-21 (Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | PM run #25: 35 gap items remain | Sprint 48: PV #38 #251 | Sprint 49: MFA #20 #257 | Sprint 50: RA #40 #258)
 
 ## Platform (44 items)
 
