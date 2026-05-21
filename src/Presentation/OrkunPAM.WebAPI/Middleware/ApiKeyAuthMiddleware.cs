@@ -45,7 +45,12 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (Math.Abs(now - timestamp) > TimestampToleranceSec)
-        { await WriteError(context, 401, "Request timestamp out of range"); return; }
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_TIMESTAMP_INVALID", null, null, ipStr,
+                "ApiKeyPrefix", prefix, new { prefix, timestamp }, AuditOutcome.Failure);
+            await WriteError(context, 401, "Request timestamp out of range");
+            return;
+        }
 
         var signature = sigHeader.ToString();
 
@@ -65,7 +70,13 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
                     .ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(k => k.Prefix == prefix && k.IsActive, context.RequestAborted);
 
-        if (apiKey == null) { await WriteError(context, 401, "Invalid API key"); return; }
+        if (apiKey == null)
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_NOT_FOUND", null, null, ipStr,
+                "ApiKeyPrefix", prefix, new { prefix }, AuditOutcome.Failure);
+            await WriteError(context, 401, "Invalid API key");
+            return;
+        }
 
         if (apiKey.ExpiresAtUtc.HasValue && apiKey.ExpiresAtUtc.Value < DateTime.UtcNow)
         {
@@ -78,7 +89,12 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
         // Verify key hash (constant-time)
         var rawKeyHash = SHA256.HashData(Encoding.UTF8.GetBytes(rawKey));
         if (!CryptographicOperations.FixedTimeEquals(rawKeyHash, apiKey.KeyHash))
-        { await WriteError(context, 401, "Invalid API key"); return; }
+        {
+            await audit.LogAsync("ApiKey", "API_KEY_INVALID_SECRET", apiKey.ServiceAccountUserId, null, ipStr,
+                "ApiKey", apiKey.Id.ToString(), new { apiKey.Prefix }, AuditOutcome.Failure);
+            await WriteError(context, 401, "Invalid API key");
+            return;
+        }
 
         // Decrypt HMAC secret, verify signature, then zero secret bytes immediately (#255)
         var hmacResult = vault.Decrypt(apiKey.HmacSecretEnc);
@@ -149,12 +165,24 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
         };
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
-        // Enforce scope restrictions — add scope claim to JWT (#254)
+        // Scopes: inject into JWT and enforce against this request (#254)
+        List<string> allowedScopes = [];
         if (!string.IsNullOrEmpty(apiKey.AllowedScopesJson))
+            allowedScopes = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedScopesJson) ?? [];
+
+        if (allowedScopes.Count > 0)
         {
-            var scopes = JsonSerializer.Deserialize<List<string>>(apiKey.AllowedScopesJson) ?? [];
-            if (scopes.Count > 0)
-                claims.Add(new Claim("scope", string.Join(" ", scopes)));
+            claims.Add(new Claim("scope", string.Join(" ", allowedScopes)));
+
+            if (!IsRequestAllowedByScopes(context.Request, allowedScopes))
+            {
+                await audit.LogAsync("ApiKey", "API_KEY_SCOPE_VIOLATION", user.Id, null, ipStr,
+                    "ApiKey", apiKey.Id.ToString(),
+                    new { apiKey.Prefix, path = context.Request.Path.Value, method = context.Request.Method },
+                    AuditOutcome.Denied);
+                await WriteError(context, 403, "Request not permitted by API key scope");
+                return;
+            }
         }
 
         var issuer   = config["Jwt:Issuer"]   ?? "OrkunPAM";
@@ -220,6 +248,32 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
             if ((addrBytes[fullBytes] & mask) != (netBytes[fullBytes] & mask)) return false;
         }
         return true;
+    }
+
+    // Scope format: "resource:read" or "resource:write" or "admin"
+    // resource maps to /api/v1/{resource}/ path prefix
+    private static bool IsRequestAllowedByScopes(HttpRequest request, List<string> scopes)
+    {
+        if (scopes.Contains("admin")) return true;
+
+        var path   = request.Path.Value?.ToLowerInvariant() ?? "";
+        var method = request.Method.ToUpperInvariant();
+        var isRead = method is "GET" or "HEAD" or "OPTIONS";
+
+        foreach (var scope in scopes)
+        {
+            var colon = scope.IndexOf(':');
+            if (colon < 0) continue;
+            var resource     = scope[..colon];
+            var access       = scope[(colon + 1)..];
+            var resourcePath = $"/api/v1/{resource}";
+
+            if (!path.StartsWith(resourcePath + "/") && path != resourcePath) continue;
+
+            if (access == "read"  && isRead) return true;
+            if (access == "write") return true; // write implies read + mutate
+        }
+        return false;
     }
 
     private static async Task WriteError(HttpContext context, int status, string message)
