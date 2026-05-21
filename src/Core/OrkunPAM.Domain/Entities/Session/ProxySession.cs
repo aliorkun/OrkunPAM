@@ -97,3 +97,19 @@ public class CommandFilterPolicyRule
     public string? Justification { get; set; }
     public int SortOrder { get; set; }
 }
+
+/// <summary>
+/// A periodic screen-capture snapshot taken during an RDP or VNC session.
+/// DataBase64 is null when actual pixel capture is not available (TCP-relay mode).
+/// </summary>
+public class ScreenCaptureFrame
+{
+    public long Id { get; set; }
+    public Guid SessionId { get; set; }
+    public DateTime CapturedAtUtc { get; set; } = DateTime.UtcNow;
+    public int FrameIndex { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public string? DataBase64 { get; set; }
+    public string SessionType { get; set; } = "Unknown";
+}
