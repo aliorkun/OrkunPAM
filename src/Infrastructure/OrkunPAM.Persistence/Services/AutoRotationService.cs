@@ -118,6 +118,7 @@ public sealed class AutoRotationService : BackgroundService
 
         var credential = await db.Credentials
             .Include(c => c.RotationPolicy)
+            .Include(c => c.RotationScript)
             .FirstOrDefaultAsync(c => c.Id == credentialId, ct);
 
         if (credential == null)
@@ -150,6 +151,60 @@ public sealed class AutoRotationService : BackgroundService
             }
 
             var device = deviceCredential.Device;
+
+            // If credential has a custom rotation script, use it instead of the standard connector
+            if (credential.RotationScript != null && credential.RotationScript.IsEnabled)
+            {
+                var scriptResult = await RotationScriptRunner.RunAsync(
+                    credential.RotationScript.ScriptType,
+                    credential.RotationScript.ScriptContent,
+                    isTest: false,
+                    env: new Dictionary<string, string>
+                    {
+                        ["PAM_TARGET_IP"]        = device.IpAddress ?? device.Hostname ?? "",
+                        ["PAM_CURRENT_PASSWORD"] = "[REDACTED]",
+                        ["PAM_NEW_PASSWORD"]     = orchestrator.GeneratePassword(),
+                        ["PAM_USERNAME"]         = credential.Username ?? ""
+                    },
+                    ct: ct);
+
+                if (scriptResult.Success)
+                {
+                    credential.LastRotatedAtUtc  = DateTime.UtcNow;
+                    credential.NextRotationAtUtc = DateTime.UtcNow.AddDays(
+                        credential.RotationPolicy?.IntervalDays ?? policy.IntervalDays);
+                    credential.Status = CredentialStatus.Active;
+                    await db.SaveChangesAsync(ct);
+
+                    await audit.LogAsync("AutoRotation", "ROTATION_SCRIPT_EXECUTED", null, "auto-rotation", "127.0.0.1",
+                        "Credential", credentialId.ToString(),
+                        new { credential.Name, DeviceHostname = device.Hostname, ScriptName = credential.RotationScript.Name },
+                        AuditOutcome.Success, ct);
+
+                    _logger.LogInformation("AutoRotation (custom script) succeeded for '{Name}' on {Host}",
+                        credential.Name, device.Hostname);
+                }
+                else
+                {
+                    credential.Status = CredentialStatus.Active;
+                    credential.LastRotationError     = scriptResult.Error?[..Math.Min(scriptResult.Error.Length, 512)];
+                    credential.RotationFailureCount++;
+                    credential.LastRotationFailedAtUtc = DateTime.UtcNow;
+                    await db.SaveChangesAsync(ct);
+
+                    await audit.LogAsync("AutoRotation", "ROTATION_SCRIPT_FAILED", null, "auto-rotation", "127.0.0.1",
+                        "Credential", credentialId.ToString(),
+                        new { credential.Name, DeviceHostname = device.Hostname, ScriptName = credential.RotationScript.Name, Error = scriptResult.Error },
+                        AuditOutcome.Failure, ct);
+
+                    _logger.LogWarning("AutoRotation (custom script) failed for '{Name}': {Error}",
+                        credential.Name, scriptResult.Error);
+
+                    await NotifyRotationFailureAsync(emailService, db, credential, device.Hostname, scriptResult.Error ?? "Script failed", ct);
+                }
+                return;
+            }
+
             var connector = credential.RotationPolicy?.ConnectorType
                 ?? PasswordRotationOrchestrator.ResolveConnector(device.DeviceType, device.ConnectionProtocol);
 

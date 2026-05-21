@@ -644,9 +644,35 @@
 
 ---
 
+## Sprint 42 - Credential Automation Scripts (RFP PV #37)
+**Tarih:** 2026-05-21 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|------|
+| #241 | [MVP] Credential Automation Scripts — Custom Rotation Handlers | MVP-VAULT | ✅ Tamamlandi |
+
+**Sprint 42 Tamamlanan Bilesenler (2026-05-21):**
+- **RotationScriptType enum:** PowerShell/Bash/Python — `Enums.cs`'e eklendi
+- **RotationScript entity:** Name, DeviceType, ScriptType, ScriptContent, TestScriptContent, IsEnabled, CredentialId/DeviceGroupId FK — `Credential.cs`'e eklendi
+- **Credential.cs:** `RotationScriptId` + `RotationScript?` nav prop eklendi
+- **Migration `20260521_AddRotationScript`:** RotationScripts tablosu + Credentials.RotationScriptId FK + indexler
+- **DbContext:** `RotationScripts` DbSet eklendi
+- **RotationScriptRunner.cs (Persistence/Services):** Static sandbox runner — 60s timeout, temp file, env vars, stdout/stderr truncation
+- **RotationScriptEndpoints.cs (WebAPI/Endpoints):** 6 endpoint — CRUD + /test + /rotate-with-script (AdminPolicy); 7 audit events
+- **Program.cs:** `MapRotationScriptEndpoints()` kaydedildi
+- **AutoRotationService.cs:** RotationScript check — credential'a custom script baglysa script path kullanir; env vars: PAM_TARGET_IP/USERNAME/CURRENT_PASSWORD/NEW_PASSWORD
+- **PamApiService.cs:** 6 yeni method + RotationScriptDto/RotationScriptDetailDto/RotationScriptCreatedDto/ScriptTestResultDto
+- **Vault.razor:** "Rotation Scripts" tab — script listesi, New Script modal (editor + testScriptContent), test output panel; SwitchTab() + 12 yeni field + 5 yeni method
+- **RFP-CHECKLIST.md:** PV #37 → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 41 tamamlandi.** Session Recording Export push'landi, #239 kapatildi.
-**Siradaki:** #241 Credential Automation Scripts, #240 Visual Screen Capture.
+**Sprint 42 tamamlandi.** #241 Credential Automation Scripts push'landi.
+**Siradaki:** #240 Visual Screen Capture for RDP/VNC Sessions.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

@@ -39,6 +39,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CredentialPermission> CredentialPermissions => Set<CredentialPermission>();
     public DbSet<PasswordHistory> PasswordHistories => Set<PasswordHistory>();
     public DbSet<RotationPolicy> RotationPolicies => Set<RotationPolicy>();
+    public DbSet<RotationScript> RotationScripts => Set<RotationScript>();
     public DbSet<CheckOutHistory> CheckOutHistories => Set<CheckOutHistory>();
     public DbSet<CredentialShare> CredentialShares => Set<CredentialShare>();
 

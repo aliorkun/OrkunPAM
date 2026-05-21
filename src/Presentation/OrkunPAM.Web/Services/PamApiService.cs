@@ -2768,6 +2768,72 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // === Rotation Scripts (#241) ===
+    public async Task<List<RotationScriptDto>?> GetRotationScriptsAsync()
+    {
+        var result = await GetAsync<ListResult<RotationScriptDto>>("/api/v1/vault/rotation-scripts");
+        return result?.Data;
+    }
+
+    public async Task<RotationScriptDetailDto?> GetRotationScriptAsync(string id)
+    {
+        var result = await GetAsync<SingleResult<RotationScriptDetailDto>>($"/api/v1/vault/rotation-scripts/{id}");
+        return result?.Data;
+    }
+
+    public async Task<(bool Success, string? Id)> CreateRotationScriptAsync(
+        string name, string? description, string deviceType, string scriptType,
+        string scriptContent, string? testScriptContent, bool isEnabled,
+        string? credentialId, string? deviceGroupId)
+    {
+        var client = await GetAuthClientAsync();
+        var body = new
+        {
+            name, description, deviceType, scriptType,
+            scriptContent, testScriptContent, isEnabled,
+            credentialId = credentialId == null ? (Guid?)null : Guid.Parse(credentialId),
+            deviceGroupId = deviceGroupId == null ? (Guid?)null : Guid.Parse(deviceGroupId)
+        };
+        var resp = await client.PostAsJsonAsync("/api/v1/vault/rotation-scripts", body);
+        if (!resp.IsSuccessStatusCode) return (false, null);
+        var result = await resp.Content.ReadFromJsonAsync<SingleResult<RotationScriptCreatedDto>>();
+        return (true, result?.Data?.Id.ToString());
+    }
+
+    public async Task<bool> UpdateRotationScriptAsync(string id, string? name, string? description,
+        string? deviceType, string? scriptType, string? scriptContent, string? testScriptContent, bool? isEnabled)
+    {
+        var client = await GetAuthClientAsync();
+        var body = new { name, description, deviceType, scriptType, scriptContent, testScriptContent, isEnabled };
+        var resp = await client.PutAsJsonAsync($"/api/v1/vault/rotation-scripts/{id}", body);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DeleteRotationScriptAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/vault/rotation-scripts/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<ScriptTestResultDto?> TestRotationScriptAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        var resp = await client.PostAsync($"/api/v1/vault/rotation-scripts/{id}/test", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        var result = await resp.Content.ReadFromJsonAsync<SingleResult<ScriptTestResultDto>>();
+        return result?.Data;
+    }
+
+    public async Task<ScriptTestResultDto?> RotateWithScriptAsync(string credentialId, string scriptId)
+    {
+        var client = await GetAuthClientAsync();
+        var resp = await client.PostAsync($"/api/v1/vault/credentials/{credentialId}/rotate-with-script/{scriptId}", null);
+        if (!resp.IsSuccessStatusCode) return null;
+        var result = await resp.Content.ReadFromJsonAsync<SingleResult<ScriptTestResultDto>>();
+        return result?.Data;
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -3967,3 +4033,34 @@ public record RotationFailureItemDto(
 public record RotationFailuresResponseDto(
     int                         Count24h,
     List<RotationFailureItemDto> Items);
+
+// Rotation Scripts (#241)
+public record RotationScriptDto(
+    string   Id,
+    string   Name,
+    string?  Description,
+    string   DeviceType,
+    string   ScriptType,
+    bool     IsEnabled,
+    string?  CredentialId,
+    string?  DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record RotationScriptDetailDto(
+    string   Id,
+    string   Name,
+    string?  Description,
+    string   DeviceType,
+    string   ScriptType,
+    string   ScriptContent,
+    string?  TestScriptContent,
+    bool     IsEnabled,
+    string?  CredentialId,
+    string?  DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record RotationScriptCreatedDto(Guid Id);
+
+public record ScriptTestResultDto(bool Success, int ExitCode, string? Output, string? Error);
