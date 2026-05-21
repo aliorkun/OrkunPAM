@@ -670,9 +670,32 @@
 
 ---
 
+---
+
+## Sprint 43 - Security Fixes + Visual Screen Capture (#240)
+**Tarih:** 2026-05-21 (aktif)
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #245 | [HIGH] Custom script rotation: new password never saved to vault | security | ✅ Fix'lendi |
+| #246 | [HIGH] Rotation script stdout leaking sensitive data in API response | security | ✅ Fix'lendi |
+| #247 | [HIGH] Modulo bias in password generation (CWE-331) | security | ✅ Fix'lendi |
+| #240 | [MVP] Visual Screen Capture for RDP/VNC Sessions (RA #28 + #30) | product | ✅ Tamamlandi |
+
+**Sprint 43 Tamamlanan Bilesenler (2026-05-21):**
+- **#245:** RotationScriptEndpoints.cs `rotate-with-script` endpoint: IVaultEncryptionService inject + `credential.PasswordEnc = vault.EncryptString(newPassword).Value` basarili rotasyondan sonra; AutoRotationService.cs custom-script yolunda da ayni duzeltme
+- **#246:** `rotate-with-script` basari yaniti artik `result.Output` icermiyor; `RedactSensitivePatterns()` helper: regex ile password/secret/token pattern'lari [REDACTED] ile maskeler, 2048 char limit
+- **#247:** `GeneratePassword()`: modulo bias giderildi — rejection sampling (NIST SP 800-132): `limit = 256 - (256 % chars.Length) = 248`, bias range'i atlar
+- **#240:** ScreenCaptureFrame entity (ProxySession.cs) + migration 20260521_AddScreenCaptureFrame + DbContext DbSet; ScreenCaptureEndpoints.cs (3 endpoint); Program.cs kaydı; VNC proxy (VncSession.cs): ServerInit'ten width/height parse + 5s periyodik capture timer + `_api.ReportScreenCaptureAsync()`; RDP proxy (RdpServerSession.cs): 5s periyodik capture timer; Both PamApiClients: `ReportScreenCaptureAsync()` method; SessionPlayback.razor: Screen Captures tab (timeline table + progress bar); PamApiService.cs: `GetScreenCapturesAsync()` + ScreenCaptureFrameDto; RFP-CHECKLIST.md: RA #28 → PC, RA #30 → PC
+
+**Ilerleme:** 4/4 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 42 tamamlandi.** #241 Credential Automation Scripts push'landi.
-**Siradaki:** #240 Visual Screen Capture for RDP/VNC Sessions.
+**Sprint 43 tamamlandi.** Security fixes #245-#247 + #240 Screen Capture push'landi.
+**Siradaki:** #248 Credential Templates veya #249 RDP/VNC Peripheral Redirection Control.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
