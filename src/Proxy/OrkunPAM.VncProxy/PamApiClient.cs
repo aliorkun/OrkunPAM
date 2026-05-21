@@ -159,6 +159,33 @@ internal sealed class PamApiClient
         }
     }
 
+    internal async Task ReportScreenCaptureAsync(
+        string sessionId, int frameIndex, int? width, int? height, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sessions/screen-captures");
+            req.Content = JsonContent.Create(new
+            {
+                sessionId,
+                frameIndex,
+                capturedAtUtc = DateTime.UtcNow,
+                width,
+                height,
+                dataBase64 = (string?)null,
+                sessionType = "VNC"
+            });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            await client.SendAsync(req, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Failed to report VNC screen capture for session {SessionId} frame {FrameIndex}",
+                sessionId, frameIndex);
+        }
+    }
+
     internal async Task<(int IdleTimeoutMinutes, int MaxConcurrentSessions)> GetSessionPolicyAsync(CancellationToken ct)
     {
         try

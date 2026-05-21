@@ -160,6 +160,33 @@ internal sealed class PamApiClient
         return (30, 3);
     }
 
+    internal async Task ReportScreenCaptureAsync(
+        string sessionId, int frameIndex, int? width, int? height, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/sessions/screen-captures");
+            req.Content = JsonContent.Create(new
+            {
+                sessionId,
+                frameIndex,
+                capturedAtUtc = DateTime.UtcNow,
+                width,
+                height,
+                dataBase64 = (string?)null,
+                sessionType = "RDP"
+            });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            await client.SendAsync(req, ct);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Failed to report RDP screen capture for session {SessionId} frame {FrameIndex}",
+                sessionId, frameIndex);
+        }
+    }
+
     // ---- Response DTOs ----
     private record LoginResponse(LoginData? Data);
     private record LoginData(string Token);

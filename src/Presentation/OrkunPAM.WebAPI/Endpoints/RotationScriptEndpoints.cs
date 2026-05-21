@@ -162,12 +162,16 @@ public static class RotationScriptEndpoints
                 new { script.Name, result.ExitCode },
                 result.Success ? AuditOutcome.Success : AuditOutcome.Failure);
 
-            return Results.Ok(new { success = true, data = new { result.Success, result.ExitCode, result.Output, result.Error } });
+            // Redact any credential-like values from test output before returning
+            var safeOutput = RedactSensitivePatterns(result.Output);
+            var safeError  = RedactSensitivePatterns(result.Error);
+
+            return Results.Ok(new { success = true, data = new { result.Success, result.ExitCode, Output = safeOutput, Error = safeError } });
         });
 
         // POST /credentials/{credentialId}/rotate-with-script/{scriptId} — manual trigger
         app.MapPost("/api/v1/vault/credentials/{credentialId:guid}/rotate-with-script/{scriptId:guid}",
-            async (Guid credentialId, Guid scriptId, OrkunPamDbContext db, IAuditService audit, HttpContext ctx) =>
+            async (Guid credentialId, Guid scriptId, OrkunPamDbContext db, IAuditService audit, HttpContext ctx, IVaultEncryptionService vault) =>
         {
             var credential = await db.Credentials
                 .Include(c => c.RotationPolicy)
@@ -203,6 +207,11 @@ public static class RotationScriptEndpoints
 
             if (result.Success)
             {
+                // Encrypt and persist the new password so the vault stays in sync (#245)
+                var encResult = vault.EncryptString(newPassword);
+                if (!encResult.IsFailure)
+                    credential.PasswordEnc = encResult.Value;
+
                 credential.LastRotatedAtUtc = DateTime.UtcNow;
                 credential.RotationScriptId = scriptId;
                 await db.SaveChangesAsync();
@@ -212,27 +221,51 @@ public static class RotationScriptEndpoints
                     new { credential.Name, ScriptName = script.Name, result.ExitCode },
                     AuditOutcome.Success);
 
-                return Results.Ok(new { success = true, data = new { result.Output } });
+                // Do NOT include script output — it may contain the new password (#246)
+                return Results.Ok(new { success = true });
             }
             else
             {
                 await audit.LogAsync("Vault", "ROTATION_SCRIPT_FAILED", null, actor, "127.0.0.1",
                     "Credential", credentialId.ToString(),
-                    new { credential.Name, ScriptName = script.Name, result.ExitCode, result.Error },
+                    new { credential.Name, ScriptName = script.Name, result.ExitCode, Error = RedactSensitivePatterns(result.Error) },
                     AuditOutcome.Failure);
 
-                return Results.Ok(new { success = false, data = new { result.Output, result.Error } });
+                return Results.Ok(new { success = false, data = new { Error = RedactSensitivePatterns(result.Error) } });
             }
         }).RequireAuthorization("AdminPolicy").WithTags("Vault");
     }
 
+    // Bias-free password generation using rejection sampling (NIST SP 800-132, CWE-331)
     private static string GeneratePassword()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
-        var rng   = System.Security.Cryptography.RandomNumberGenerator.Create();
-        var bytes = new byte[24];
-        rng.GetBytes(bytes);
-        return new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
+        int limit = 256 - (256 % chars.Length); // 248 — rejects the biased tail
+        var result = new char[24];
+        int filled = 0;
+        while (filled < 24)
+        {
+            var buf = new byte[32];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(buf);
+            foreach (var b in buf)
+            {
+                if (b >= limit) continue;
+                if (filled == 24) break;
+                result[filled++] = chars[b % chars.Length];
+            }
+        }
+        return new string(result);
+    }
+
+    // Redacts credential-like patterns from script output before returning to caller
+    private static string? RedactSensitivePatterns(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var redacted = System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"(?i)(password|pass|pwd|secret|token|key|PAM_NEW_PASSWORD|PAM_CURRENT_PASSWORD)\s*[:=\s']+\s*\S+",
+            "$1=[REDACTED]");
+        return redacted.Length > 2048 ? redacted[..2048] + "…[truncated]" : redacted;
     }
 }
 

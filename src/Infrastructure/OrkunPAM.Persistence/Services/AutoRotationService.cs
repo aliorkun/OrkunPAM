@@ -155,6 +155,11 @@ public sealed class AutoRotationService : BackgroundService
             // If credential has a custom rotation script, use it instead of the standard connector
             if (credential.RotationScript != null && credential.RotationScript.IsEnabled)
             {
+                var vaultEncryption = scope.ServiceProvider.GetRequiredService<OrkunPAM.Cryptography.IVaultEncryptionService>();
+
+                // Generate password before RunAsync so we can save it after success (#245)
+                var scriptNewPassword = orchestrator.GeneratePassword();
+
                 var scriptResult = await RotationScriptRunner.RunAsync(
                     credential.RotationScript.ScriptType,
                     credential.RotationScript.ScriptContent,
@@ -163,13 +168,18 @@ public sealed class AutoRotationService : BackgroundService
                     {
                         ["PAM_TARGET_IP"]        = device.IpAddress ?? device.Hostname ?? "",
                         ["PAM_CURRENT_PASSWORD"] = "[REDACTED]",
-                        ["PAM_NEW_PASSWORD"]     = orchestrator.GeneratePassword(),
+                        ["PAM_NEW_PASSWORD"]     = scriptNewPassword,
                         ["PAM_USERNAME"]         = credential.Username ?? ""
                     },
                     ct: ct);
 
                 if (scriptResult.Success)
                 {
+                    // Persist the new password so the vault stays in sync with the target system (#245)
+                    var encResult = vaultEncryption.EncryptString(scriptNewPassword);
+                    if (!encResult.IsFailure)
+                        credential.PasswordEnc = encResult.Value;
+
                     credential.LastRotatedAtUtc  = DateTime.UtcNow;
                     credential.NextRotationAtUtc = DateTime.UtcNow.AddDays(
                         credential.RotationPolicy?.IntervalDays ?? policy.IntervalDays);

@@ -122,6 +122,15 @@ internal sealed class VncSession
         _log.LogInformation("VNC session {SessionId} established: {PamUser}→{TargetIp}:{TargetPort}",
             sessionId, pamUser, targetIp, resolvedPort);
 
+        // Extract screen dimensions from ServerInit (first 4 bytes: width 2B + height 2B, big-endian)
+        int? screenWidth  = null;
+        int? screenHeight = null;
+        if (serverInitPayload.Length >= 4)
+        {
+            screenWidth  = (serverInitPayload[0] << 8) | serverInitPayload[1];
+            screenHeight = (serverInitPayload[2] << 8) | serverInitPayload[3];
+        }
+
         using (targetClient)
         await using (var targetStream = targetClient.GetStream())
         await using (var recorder = VncSessionRecorder.Create(_opts.RecordingDirectory, sessionId, pamUser, targetHost))
@@ -140,8 +149,29 @@ internal sealed class VncSession
                 var (idleTimeoutMinutes, _) = await _api.GetSessionPolicyAsync(ct);
                 var startTime = DateTimeOffset.UtcNow;
 
+                // ── Periodic screen-capture markers every 5 seconds ─────────────────
+                int frameIndex = 0;
+                using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var captureTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        while (!captureCts.Token.IsCancellationRequested)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(5), captureCts.Token);
+                            var idx = Interlocked.Increment(ref frameIndex);
+                            _ = _api.ReportScreenCaptureAsync(
+                                sessionId, idx, screenWidth, screenHeight, CancellationToken.None);
+                        }
+                    }
+                    catch (OperationCanceledException) { }
+                }, captureCts.Token);
+
                 // ── 6. Bidirectional relay with recording ───────────────────────────
                 await RelayAsync(clientStream, targetStream, recorder, ct, idleTimeoutMinutes);
+
+                await captureCts.CancelAsync();
+                try { await captureTask; } catch (OperationCanceledException) { }
 
                 var duration = (int)(DateTimeOffset.UtcNow - startTime).TotalSeconds;
                 _log.LogInformation("VNC session {SessionId} ended — {Sec}s user={PamUser}",
@@ -174,7 +204,7 @@ internal sealed class VncSession
         long[] lastActivityTicks = [DateTime.UtcNow.Ticks];
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        // client→target: raw relay (no recording — we don’t log keystrokes by default)
+        // client→target: raw relay (no recording — we don't log keystrokes by default)
         var clientToTarget = PumpAsync(clientStream, targetStream, recorder: null, idleCts.Token, lastActivityTicks);
         // target→client: raw relay + record framebuffer updates
         var targetToClient = PumpAsync(targetStream, clientStream, recorder, idleCts.Token, lastActivityTicks);
