@@ -189,6 +189,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === OATH Hardware Tokens (#261) ===
     public DbSet<HardwareToken> HardwareTokens => Set<HardwareToken>();
 
+    // === Session Delegation (#269 RA #42) ===
+    public DbSet<SessionDelegation> SessionDelegations => Set<SessionDelegation>();
+
     public DbSet<CredentialOrchestrationSet>    CredentialOrchestrationSets    => Set<CredentialOrchestrationSet>();
     public DbSet<CredentialOrchestrationMember> CredentialOrchestrationMembers => Set<CredentialOrchestrationMember>();
     public DbSet<CredentialOrchestrationRun>    CredentialOrchestrationRuns    => Set<CredentialOrchestrationRun>();
@@ -624,6 +627,19 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasOne<ProxySession>().WithMany().HasForeignKey(h => h.SessionId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(h => h.SessionId);
             e.HasIndex(h => new { h.RequestedToUserId, h.Status });
+        });
+
+        // === Session Delegation (#269 RA #42) ===
+        modelBuilder.Entity<SessionDelegation>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.Property(d => d.DelegatorUsername).HasMaxLength(256);
+            e.Property(d => d.DelegateUsername).HasMaxLength(256);
+            e.Property(d => d.Status).HasMaxLength(32);
+            e.Property(d => d.DelegationNote).HasMaxLength(1024);
+            e.HasIndex(d => new { d.DelegateUserId, d.Status });
+            e.HasIndex(d => d.DelegatorUserId);
+            e.HasIndex(d => new { d.Status, d.ExpiresAtUtc });
         });
 
         // === Assigned Credential (Kron PAM model) ===
