@@ -32,6 +32,8 @@
             @onclick="@(() => SwitchTab("sessions"))">Sessions</button>
     <button class="pam-tab @(_activeTab == "compliance" ? "active" : "")"
             @onclick="@(() => SwitchTab("compliance"))">Compliance</button>
+    <button class="pam-tab @(_activeTab == "delegations" ? "active" : "")"
+            @onclick="@(() => SwitchTab("delegations"))">Delegations</button>
 </div>
 
 @if (_error != null)
@@ -299,6 +301,138 @@
     }
 }
 
+@* ── Delegations Tab ─────────────────────────────────────────────────────────── *@
+@if (_activeTab == "delegations")
+{
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 class="pam-section-title" style="margin:0">Session Delegations</h3>
+        <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="OpenCreateDelegationModal">
+            &#x2B; Grant Delegation
+        </button>
+    </div>
+
+    @if (_delegationLoading)
+    {
+        <div class="pam-loading-text">Loading delegations&#x2026;</div>
+    }
+    else if (_delegations == null || _delegations.Count == 0)
+    {
+        <div class="pam-empty">No session delegations found.</div>
+    }
+    else
+    {
+        <div class="pam-card">
+            <div class="pam-card-body p-0">
+                <table class="pam-table">
+                    <thead>
+                        <tr>
+                            <th>Delegator</th>
+                            <th>Delegate</th>
+                            <th>Target</th>
+                            <th>Expires</th>
+                            <th>Uses</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _delegations)
+                        {
+                            <tr>
+                                <td>@(d.DelegatorUsername ?? "—")</td>
+                                <td>@(d.DelegateUsername ?? "—")</td>
+                                <td>
+                                    @if (d.DeviceId.HasValue)
+                                    {
+                                        <span class="pam-badge pam-badge-info">Device</span>
+                                    }
+                                    else if (d.DeviceGroupId.HasValue)
+                                    {
+                                        <span class="pam-badge pam-badge-info">Group</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#888">—</span>
+                                    }
+                                </td>
+                                <td style="font-size:0.85em">@d.ExpiresAtUtc.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                <td>@d.UsageCount / @d.MaxSessionCount</td>
+                                <td>
+                                    <span class="pam-badge @DelegationStatusClass(d.Status)">@d.Status</span>
+                                </td>
+                                <td>
+                                    @if (d.Status == "Active")
+                                    {
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => RevokeDelegationAsync(d.Id))">
+                                            Revoke
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@* Grant Delegation modal *@
+@if (_showCreateDelegation)
+{
+    <div class="pam-modal-overlay" @onclick="CloseCreateDelegationModal">
+        <div class="pam-modal" style="max-width:520px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">&#x2B; Grant Session Delegation</h3>
+                <button class="pam-close-btn" @onclick="CloseCreateDelegationModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div style="margin-bottom:.75rem;font-size:0.9em;color:#aaa">
+                    Grant another admin temporary access to start sessions against a device or group.
+                    No active session is transferred — this creates a new access right.
+                </div>
+                <label class="pam-label">Delegate (target admin)</label>
+                <select class="pam-input pam-select" style="width:100%;margin-bottom:.75rem" @bind="_delegNewUserId">
+                    <option value="">— Select admin —</option>
+                    @if (_adminUsers != null)
+                    {
+                        @foreach (var u in _adminUsers)
+                        {
+                            <option value="@u.Id.ToString()">@(u.DisplayName ?? u.Username) (@u.Username)</option>
+                        }
+                    }
+                </select>
+                <label class="pam-label">Expires At (UTC)</label>
+                <input type="datetime-local" class="pam-input" style="width:100%;margin-bottom:.75rem"
+                       @bind="_delegExpires" />
+                <label class="pam-label">Max Session Uses</label>
+                <input type="number" class="pam-input" style="width:100%;margin-bottom:.75rem"
+                       min="1" max="100" @bind="_delegMaxUses" />
+                <label class="pam-label">Note (optional)</label>
+                <textarea class="pam-input" rows="2" style="width:100%;margin-bottom:.75rem" @bind="_delegNote"
+                          placeholder="e.g. Cover shift — DB maintenance only"></textarea>
+                @if (_delegError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_delegError</div>
+                }
+                @if (_delegSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success">@_delegSuccess</div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseCreateDelegationModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary"
+                        @onclick="SubmitCreateDelegationAsync"
+                        disabled="@(_delegSaving || string.IsNullOrEmpty(_delegNewUserId))">
+                    @if (_delegSaving) { <span class="pam-spinner-sm"></span> } Grant Access
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @* Tag edit modal *@
 @if (_tagSession != null)
 {
@@ -509,6 +643,18 @@
     private bool                       _annotSaving   = false;
     private string?                    _annotError;
 
+    // Delegations
+    private List<SessionDelegationDto>? _delegations;
+    private bool                        _delegationLoading   = false;
+    private bool                        _showCreateDelegation = false;
+    private string                      _delegNewUserId      = "";
+    private DateTime                    _delegExpires        = DateTime.UtcNow.AddHours(8);
+    private int                         _delegMaxUses        = 1;
+    private string                      _delegNote           = "";
+    private bool                        _delegSaving         = false;
+    private string?                     _delegError;
+    private string?                     _delegSuccess;
+
     // Handoff — send
     private SessionDto? _handoffSession;
     private List<UserDto>? _adminUsers;
@@ -539,6 +685,8 @@
         StateHasChanged();
         if (tab == "compliance" && _compliance == null)
             await LoadComplianceAsync();
+        if (tab == "delegations" && _delegations == null)
+            await LoadDelegationsAsync();
     }
 
     private async Task SetComplianceDays(int days)
@@ -773,4 +921,75 @@
         }
         StateHasChanged();
     }
+
+    // ── Delegations ───────────────────────────────────────────────────────────────
+    private async Task LoadDelegationsAsync()
+    {
+        _delegationLoading = true; StateHasChanged();
+        _delegations = await Api.GetDelegationsAsync();
+        _delegationLoading = false; StateHasChanged();
+    }
+
+    private async Task OpenCreateDelegationModal()
+    {
+        _delegNewUserId = "";
+        _delegExpires   = DateTime.UtcNow.AddHours(8);
+        _delegMaxUses   = 1;
+        _delegNote      = "";
+        _delegError     = null;
+        _delegSuccess   = null;
+        if (_adminUsers == null)
+        {
+            var users = await Api.GetUsersAsync(page: 1, pageSize: 100);
+            _adminUsers = users?.Data?.Where(u => u.Status == "Active" && !u.IsServiceAccount).ToList();
+        }
+        _showCreateDelegation = true;
+        StateHasChanged();
+    }
+
+    private void CloseCreateDelegationModal()
+    {
+        _showCreateDelegation = false;
+        StateHasChanged();
+    }
+
+    private async Task SubmitCreateDelegationAsync()
+    {
+        if (!Guid.TryParse(_delegNewUserId, out var delegateId))
+        { _delegError = "Invalid delegate user."; StateHasChanged(); return; }
+        if (_delegExpires <= DateTime.UtcNow)
+        { _delegError = "Expiry must be in the future."; StateHasChanged(); return; }
+
+        _delegSaving = true; _delegError = null; _delegSuccess = null; StateHasChanged();
+        var result = await Api.CreateDelegationAsync(
+            delegateId, null, null, null,
+            _delegExpires.ToUniversalTime(), _delegMaxUses, _delegNote.Trim());
+        _delegSaving = false;
+        if (result != null)
+        {
+            _delegSuccess = "Delegation granted successfully.";
+            await LoadDelegationsAsync();
+        }
+        else
+        {
+            _delegError = "Failed to create delegation.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task RevokeDelegationAsync(Guid id)
+    {
+        var ok = await Api.RevokeDelegationAsync(id);
+        if (ok) await LoadDelegationsAsync();
+        else { _error = "Failed to revoke delegation."; StateHasChanged(); }
+    }
+
+    private static string DelegationStatusClass(string s) => s switch
+    {
+        "Active"  => "pam-badge-success",
+        "Expired" => "pam-badge-warning",
+        "Revoked" => "pam-badge-danger",
+        "Used"    => "pam-badge-info",
+        _         => ""
+    };
 }
