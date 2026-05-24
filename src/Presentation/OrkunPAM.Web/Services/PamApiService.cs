@@ -496,6 +496,9 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    public async Task<SessionComplianceSummaryDto?> GetSessionComplianceSummaryAsync(int days = 30)
+        => await GetAsync<SessionComplianceSummaryDto>($"/api/v1/sessions/compliance/summary?days={days}");
+
     public async Task<string?> GetSessionsExportCsvAsync()
     {
         try
@@ -628,6 +631,43 @@ public sealed class PamApiService
 
     public async Task<List<PendingHandoffDto>?> GetPendingHandoffsAsync()
         => await GetAsync<List<PendingHandoffDto>>("/api/v1/sessions/handoff/pending");
+
+    // ── Session Delegation (#269 RA #42) ───────────────────────────────────────
+    public async Task<SessionDelegationDto?> CreateDelegationAsync(
+        Guid delegateUserId, Guid? deviceId, Guid? deviceGroupId, Guid? credentialId,
+        DateTime expiresAtUtc, int maxSessionCount, string? note)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/sessions/delegations", new
+            {
+                delegateUserId, deviceId, deviceGroupId, credentialId,
+                expiresAtUtc, maxSessionCount, note
+            });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SessionDelegationDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<SessionDelegationDto>?> GetDelegationsAsync()
+        => await GetAsync<List<SessionDelegationDto>>("/api/v1/sessions/delegations");
+
+    public async Task<DelegationMyDto?> GetMyDelegationsAsync()
+        => await GetAsync<DelegationMyDto>("/api/v1/sessions/delegations/my");
+
+    public async Task<bool> RevokeDelegationAsync(Guid delegationId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/sessions/delegations/{delegationId}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
 
     // ── Audit Logs ─────────────────────────────────────────────────────────────
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
@@ -2526,6 +2566,65 @@ public record PendingHandoffDto(
     DateTime RequestedAtUtc,
     DateTime ExpiresAtUtc,
     string?  TransferNotes);
+
+// Session Delegation (#269 RA #42)
+public record SessionDelegationDto(
+    Guid      Id,
+    string?   DelegatorUsername,
+    string?   DelegateUsername,
+    Guid?     DeviceId,
+    Guid?     DeviceGroupId,
+    Guid?     CredentialId,
+    DateTime  GrantedAtUtc,
+    DateTime  ExpiresAtUtc,
+    DateTime? RevokedAtUtc,
+    string    Status,
+    int       MaxSessionCount,
+    int       UsageCount,
+    string?   DelegationNote);
+
+public record ReceivedDelegationDto(
+    Guid     Id,
+    string?  DelegatorUsername,
+    Guid?    DeviceId,
+    Guid?    DeviceGroupId,
+    Guid?    CredentialId,
+    DateTime ExpiresAtUtc,
+    int      MaxSessionCount,
+    int      UsageCount,
+    string?  DelegationNote);
+
+public record GrantedDelegationDto(
+    Guid     Id,
+    string?  DelegateUsername,
+    Guid?    DeviceId,
+    Guid?    DeviceGroupId,
+    Guid?    CredentialId,
+    DateTime GrantedAtUtc,
+    DateTime ExpiresAtUtc,
+    string   Status,
+    int      MaxSessionCount,
+    int      UsageCount);
+
+public record DelegationMyDto(
+    List<ReceivedDelegationDto> Received,
+    List<GrantedDelegationDto>  Granted);
+
+// Session Compliance
+public record SessionComplianceSummaryDto(
+    int    PeriodDays,
+    int    TotalSessions,
+    int    ViolatedSessions,
+    int    CleanSessions,
+    double ComplianceRate,
+    int    AdminTerminated,
+    int    BlockedCommands,
+    Dictionary<string, int>?              ViolationTypes,
+    List<ComplianceViolatingUserDto>?     TopViolatingUsers,
+    List<ComplianceViolatingDeviceDto>?   TopViolatingDevices);
+
+public record ComplianceViolatingUserDto(Guid UserId, string Username, int ViolationCount);
+public record ComplianceViolatingDeviceDto(Guid DeviceId, string Hostname, int ViolationCount);
 
 // Hardware Tokens (#261)
 public record HardwareTokenDto(
