@@ -23,7 +23,7 @@ internal sealed class SshTargetClient : IDisposable
     private readonly int _port;
     private readonly string _username;
     private byte[] _password;
-    private readonly string? _privateKeyPem;
+    private byte[]? _privateKeyPemBytes;  // stored as UTF-8 bytes so we can ZeroMemory after auth (CWE-316)
     private readonly ILogger _log;
     private readonly string? _expectedFingerprint;
 
@@ -43,7 +43,7 @@ internal sealed class SshTargetClient : IDisposable
         _port                = port;
         _username            = username;
         _password            = password ?? [];
-        _privateKeyPem       = privateKeyPem;
+        _privateKeyPemBytes  = privateKeyPem != null ? Encoding.UTF8.GetBytes(privateKeyPem) : null;
         _log                 = log;
         _expectedFingerprint = expectedFingerprint;
     }
@@ -77,6 +77,11 @@ internal sealed class SshTargetClient : IDisposable
         await DoKeyExchangeAsync(ct);
         await DoUserAuthAsync(ct);
         CryptographicOperations.ZeroMemory(_password);
+        if (_privateKeyPemBytes != null)
+        {
+            CryptographicOperations.ZeroMemory(_privateKeyPemBytes);
+            _privateKeyPemBytes = null;
+        }
 
         _log.LogInformation("Authenticated to target {Host}:{Port} as '{User}'",
             _host, _port, _username);
@@ -254,7 +259,7 @@ internal sealed class SshTargetClient : IDisposable
         if (resp[0] != Msg.ServiceAccept)
             throw new SshException("Service ssh-userauth not accepted by target");
 
-        if (_privateKeyPem != null)
+        if (_privateKeyPemBytes != null)
             await DoPublicKeyAuthAsync(ct);
         else
             await DoPasswordAuthAsync(ct);
@@ -284,8 +289,17 @@ internal sealed class SshTargetClient : IDisposable
 
     private async Task DoPublicKeyAuthAsync(CancellationToken ct)
     {
+        // Convert stored bytes to char[] so we can zero it after ImportFromPem (CWE-316)
+        var pemChars = Encoding.UTF8.GetChars(_privateKeyPemBytes!);
         using var rsa = RSA.Create();
-        rsa.ImportFromPem(_privateKeyPem);
+        try
+        {
+            rsa.ImportFromPem(new ReadOnlySpan<char>(pemChars));
+        }
+        finally
+        {
+            Array.Clear(pemChars, 0, pemChars.Length);
+        }
 
         var pubKeyBlob = BuildRsaPublicKeyBlob(rsa);
 
@@ -812,6 +826,11 @@ internal sealed class SshTargetClient : IDisposable
     public void Dispose()
     {
         CryptographicOperations.ZeroMemory(_password);
+        if (_privateKeyPemBytes != null)
+        {
+            CryptographicOperations.ZeroMemory(_privateKeyPemBytes);
+            _privateKeyPemBytes = null;
+        }
         _conn?.DisposeAsync().AsTask().Wait(500);
         _tcp?.Dispose();
     }
