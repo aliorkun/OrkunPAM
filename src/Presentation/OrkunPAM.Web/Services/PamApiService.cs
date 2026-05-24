@@ -468,6 +468,76 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // ── Live Session (join/leave/broadcast/stream/status) ──────────────────────
+    public async Task<bool> JoinLiveSessionAsync(string sessionId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/sessions/live/{sessionId}/join", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> LeaveLiveSessionAsync(string sessionId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/sessions/live/{sessionId}/leave", null);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> BroadcastLiveMessageAsync(string sessionId, string message)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/live/{sessionId}/message", new { message });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<PagedResult<SessionCommandDto>?> GetSessionCommandsAsync(
+        string sessionId, int page = 1, int pageSize = 100)
+        => await GetAsync<PagedResult<SessionCommandDto>>(
+            $"/api/v1/sessions/{sessionId}/commands?page={page}&pageSize={pageSize}");
+
+    // ── Session Shadow ─────────────────────────────────────────────────────────
+    public async Task<ShadowStartDto?> StartShadowAsync(string sessionId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync($"/api/v1/sessions/{sessionId}/shadow", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<ShadowStartDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> StopShadowAsync(string sessionId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/sessions/{sessionId}/shadow");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<LiveStreamDto?> GetLiveStreamAsync(string sessionId, int offset)
+        => await GetAsync<LiveStreamDto>($"/api/v1/sessions/live/{sessionId}/stream?offset={offset}");
+
+    public async Task<LiveSessionStatusDto?> GetLiveSessionStatusAsync(string sessionId)
+        => await GetAsync<LiveSessionStatusDto>($"/api/v1/sessions/live/{sessionId}/status");
+
     // ── Audit Logs ─────────────────────────────────────────────────────────────
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
         string? action = null, string? userId = null, DateTime? from = null, DateTime? to = null,
@@ -1596,6 +1666,41 @@ public sealed class PamApiService
     public async Task<List<OrchestrationRunDto>?> GetOrchestrationRunsAsync(string id)
         => (await GetAsync<ListResult<OrchestrationRunDto>>($"/api/v1/vault/orchestration/{id}/runs"))?.Data;
 
+    // ── Private helpers ────────────────────────────────────────────────────────
+
+    private async Task<HttpClient> GetAuthClientAsync()
+    {
+        var client = _factory.CreateClient("PamApi");
+        var token = await _auth.GetTokenAsync();
+        if (!string.IsNullOrEmpty(token))
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    /// <summary>
+    /// GET helper: tries to deserialize the `data` sub-field of the API envelope first.
+    /// Falls back to reading the full root JSON for wrapper types (PagedResult/ListResult).
+    /// </summary>
+    private async Task<T?> GetAsync<T>(string url)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return default;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.TryGetProperty("data", out var dataProp))
+            {
+                try { return dataProp.Deserialize<T>(JsonOpts); }
+                catch { /* fall through to root deserialization */ }
+            }
+            return doc.RootElement.Deserialize<T>(JsonOpts);
+        }
+        catch { return default; }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
@@ -2211,3 +2316,34 @@ public record MfaTrustedSessionDto(
     string?   GrantedFromIp,
     DateTime  GrantedAtUtc,
     DateTime? LastUsedAtUtc);
+
+public record ShadowStartDto(
+    Guid     ShadowId,
+    Guid     SessionId,
+    string   StreamUrl,
+    string   StatusUrl,
+    string   TerminateUrl,
+    DateTime StartedAtUtc);
+
+public record LiveStreamDto(string Text, int NewOffset);
+
+public record LiveSessionStatusDto(
+    Guid     SessionId,
+    string   Status,
+    string   SessionType,
+    DateTime StartedAtUtc,
+    string?  TargetIp,
+    decimal  RiskScore,
+    int      ActiveObservers,
+    List<LiveObserverDto> Observers);
+
+public record LiveObserverDto(string? ObserverUsername, DateTime JoinedAtUtc);
+
+public record SessionCommandDto(
+    long     Id,
+    Guid     SessionId,
+    DateTime Timestamp,
+    string?  Command,
+    decimal  RiskScore,
+    bool     WasBlocked,
+    string?  BlockReason);

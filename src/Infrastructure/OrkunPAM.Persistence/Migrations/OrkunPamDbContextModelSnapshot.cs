@@ -2626,6 +2626,48 @@ namespace OrkunPAM.Persistence.Migrations
                     b.ToTable("SessionPolicies");
                 });
 
+            modelBuilder.Entity("OrkunPAM.Domain.Entities.Session.SessionShadow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ShadowByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ShadowByUsername")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ShadowIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("IX_SessionShadows_SessionId");
+
+                    b.HasIndex("SessionId", "IsActive")
+                        .HasDatabaseName("IX_SessionShadows_SessionId_IsActive");
+
+                    b.ToTable("SessionShadows");
+                });
+
             modelBuilder.Entity("OrkunPAM.Domain.Entities.System.AuditLogEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -3554,6 +3596,16 @@ namespace OrkunPAM.Persistence.Migrations
 
                     b.Navigation("Request");
                 });
+
+            modelBuilder.Entity("OrkunPAM.Domain.Entities.Session.SessionShadow", b =>
+                {
+                    b.HasOne("OrkunPAM.Domain.Entities.Session.ProxySession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
 
             modelBuilder.Entity("OrkunPAM.Domain.Entities.Aapm.ApiClient", b =>
                 {
