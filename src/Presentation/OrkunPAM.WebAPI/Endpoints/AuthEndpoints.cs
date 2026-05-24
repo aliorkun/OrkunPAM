@@ -108,6 +108,24 @@ public static class AuthEndpoints
                 }
             }
 
+            // Trusted Session check (#257) — skip MFA for recognized browsers
+            if (data.MfaRequired)
+            {
+                var trustedSession = await db.MfaTrustedSessions.FirstOrDefaultAsync(s =>
+                    s.UserId == data.UserId &&
+                    s.BrowserFingerprint == deviceFingerprint &&
+                    !s.IsRevoked &&
+                    s.TrustExpiresAtUtc > DateTime.UtcNow);
+                if (trustedSession != null)
+                {
+                    trustedSession.LastUsedAtUtc = DateTime.UtcNow;
+                    await db.SaveChangesAsync();
+                    await audit.LogAsync("Auth", "MFA_SESSION_TRUST_USED", data.UserId, null, ip,
+                        "MfaTrustedSession", trustedSession.Id.ToString(), new { data.Username });
+                    data = data with { MfaRequired = false };
+                }
+            }
+
             return Results.Ok(new
             {
                 success = true,
@@ -919,6 +937,122 @@ public static class AuthEndpoints
                 }
             });
         }).RequireAuthorization().WithTags("Auth");
+
+        // === MFA Trusted Sessions (#257) ===
+
+        // GET /api/v1/auth/mfa-trust-policy — public: max trust hours (0 = disabled)
+        app.MapGet("/api/v1/auth/mfa-trust-policy", async (OrkunPamDbContext db) =>
+        {
+            var maxHoursStr = await db.SystemConfigs
+                .Where(c => c.Key == "mfa.trust.max_hours").Select(c => c.Value).FirstOrDefaultAsync();
+            var maxHours = int.TryParse(maxHoursStr, out var h) ? h : 0;
+            return Results.Ok(new { success = true, data = new { maxHours } });
+        }).AllowAnonymous().WithTags("Auth");
+
+        // POST /api/v1/auth/trusted-sessions — register current browser as trusted
+        app.MapPost("/api/v1/auth/trusted-sessions", async (TrustSessionRequest req, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdStr, out var userId)) return Results.Unauthorized();
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var maxHoursStr = await db.SystemConfigs
+                .Where(c => c.Key == "mfa.trust.max_hours").Select(c => c.Value).FirstOrDefaultAsync();
+            if (!int.TryParse(maxHoursStr, out var maxHours) || maxHours <= 0)
+                return Results.BadRequest(new { success = false, errors = new[] { "MFA session trust is not enabled by policy" } });
+
+            var userAgent = ctx.Request.Headers.UserAgent.ToString();
+            var fingerprint = DeviceTrustHelper.ComputeFingerprint(userAgent, ctx);
+
+            var existing = await db.MfaTrustedSessions
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.BrowserFingerprint == fingerprint && !s.IsRevoked);
+            if (existing != null) existing.IsRevoked = true;
+
+            var trustHours = Math.Min(maxHours, 168);
+            var label = string.IsNullOrWhiteSpace(req.DeviceLabel) ? "Browser" : req.DeviceLabel[..Math.Min(req.DeviceLabel.Length, 256)];
+            var session = new MfaTrustedSession
+            {
+                UserId = userId,
+                BrowserFingerprint = fingerprint,
+                DeviceLabel = label,
+                TrustExpiresAtUtc = DateTime.UtcNow.AddHours(trustHours),
+                GrantedFromIp = ip,
+                GrantedAtUtc = DateTime.UtcNow
+            };
+            db.MfaTrustedSessions.Add(session);
+            await db.SaveChangesAsync();
+
+            await audit.LogAsync("Auth", "MFA_SESSION_TRUST_GRANTED", userId, null, ip,
+                "MfaTrustedSession", session.Id.ToString(), new { session.DeviceLabel, TrustHours = trustHours });
+
+            return Results.Ok(new { success = true, data = new { session.Id, session.TrustExpiresAtUtc, trustHours } });
+        }).RequireAuthorization().WithTags("Auth");
+
+        // GET /api/v1/auth/trusted-sessions — list user's active trusted sessions
+        app.MapGet("/api/v1/auth/trusted-sessions", async (OrkunPamDbContext db, HttpContext ctx) =>
+        {
+            var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdStr, out var userId)) return Results.Unauthorized();
+
+            var sessions = await db.MfaTrustedSessions
+                .Where(s => s.UserId == userId && !s.IsRevoked && s.TrustExpiresAtUtc > DateTime.UtcNow)
+                .OrderByDescending(s => s.GrantedAtUtc)
+                .Select(s => new { s.Id, s.DeviceLabel, s.TrustExpiresAtUtc, s.GrantedFromIp, s.GrantedAtUtc, s.LastUsedAtUtc })
+                .ToListAsync();
+
+            return Results.Ok(new { success = true, data = sessions });
+        }).RequireAuthorization().WithTags("Auth");
+
+        // DELETE /api/v1/auth/trusted-sessions/{id} — self-service revoke
+        app.MapDelete("/api/v1/auth/trusted-sessions/{id:guid}", async (Guid id, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdStr, out var userId)) return Results.Unauthorized();
+
+            var session = await db.MfaTrustedSessions.FindAsync(id);
+            if (session == null || session.UserId != userId)
+                return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
+
+            session.IsRevoked = true;
+            await db.SaveChangesAsync();
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Auth", "MFA_SESSION_TRUST_REVOKED", userId, null, ip,
+                "MfaTrustedSession", id.ToString(), new { });
+
+            return Results.Ok(new { success = true, message = "Trusted session revoked" });
+        }).RequireAuthorization().WithTags("Auth");
+
+        // GET /api/v1/admin/users/{userId}/trusted-sessions — admin view
+        app.MapGet("/api/v1/admin/users/{userId:guid}/trusted-sessions", async (Guid userId, OrkunPamDbContext db) =>
+        {
+            var sessions = await db.MfaTrustedSessions
+                .Where(s => s.UserId == userId)
+                .OrderByDescending(s => s.GrantedAtUtc)
+                .Select(s => new { s.Id, s.DeviceLabel, s.TrustExpiresAtUtc, s.GrantedFromIp, s.GrantedAtUtc, s.LastUsedAtUtc, s.IsRevoked })
+                .ToListAsync();
+            return Results.Ok(new { success = true, data = sessions });
+        }).RequireAuthorization("AdminPolicy").WithTags("Auth");
+
+        // DELETE /api/v1/admin/users/{userId}/trusted-sessions — admin bulk revoke all
+        app.MapDelete("/api/v1/admin/users/{userId:guid}/trusted-sessions", async (Guid userId, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var adminIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Guid.TryParse(adminIdStr, out var adminId);
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            var count = await db.MfaTrustedSessions
+                .Where(s => s.UserId == userId && !s.IsRevoked)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRevoked, true));
+
+            await audit.LogAsync("Auth", "MFA_SESSION_TRUST_ADMIN_REVOKED_ALL", adminId, null, ip,
+                "User", userId.ToString(), new { Count = count });
+
+            return Results.Ok(new { success = true, message = $"{count} trusted sessions revoked" });
+        }).RequireAuthorization("AdminPolicy").WithTags("Auth");
     }
 }
 
@@ -933,6 +1067,7 @@ public record ForgotPasswordRequest(string Username, string Email);
 public record ResetPasswordRequest(string Token, string NewPassword);
 public record EmailOtpRequestRequest(string Username, string Password);
 public record EmailOtpVerifyRequest(string Username, string Code);
+public record TrustSessionRequest(string? DeviceLabel);
 
 /// <summary>
 /// Adaptive MFA helper: loads policy from DB and calculates real-time login risk score.

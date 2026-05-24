@@ -83,6 +83,13 @@
                             @onclick="SendEmailOtpAsync" disabled="@_loading">
                         Resend Code
                     </button>
+                    @if (_mfaTrustMaxHours > 0)
+                    {
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin:.5rem 0;color:#8b949e;font-size:.85rem">
+                            <input type="checkbox" @bind="_rememberDevice" />
+                            Trust this browser for @_mfaTrustMaxHours hours
+                        </label>
+                    }
                 }
                 <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
                         @onclick="ResetToLogin" disabled="@_loading">
@@ -127,6 +134,13 @@
                             @onclick="SendSmsOtpAsync" disabled="@_loading">
                         Resend Code
                     </button>
+                    @if (_mfaTrustMaxHours > 0)
+                    {
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin:.5rem 0;color:#8b949e;font-size:.85rem">
+                            <input type="checkbox" @bind="_rememberDevice" />
+                            Trust this browser for @_mfaTrustMaxHours hours
+                        </label>
+                    }
                 }
                 <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
                         @onclick="ResetToLogin" disabled="@_loading">
@@ -149,6 +163,13 @@
                         disabled="@(_loading || _mfaCode.Length != 6)">
                     @if (_loading) { <span class="pam-spinner-sm"></span> } Verify
                 </button>
+                @if (_mfaTrustMaxHours > 0)
+                {
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin:.5rem 0;color:#8b949e;font-size:.85rem">
+                        <input type="checkbox" @bind="_rememberDevice" />
+                        Trust this browser for @_mfaTrustMaxHours hours
+                    </label>
+                }
                 <button class="pam-btn pam-btn-secondary w-100" style="margin-top:.5rem"
                         @onclick="ResetToLogin" disabled="@_loading">
                     ← Back to Sign In
@@ -169,13 +190,15 @@
 @code {
     private readonly LoginModel _model = new();
     private bool   _loading;
-    private string _error        = "";
+    private string _error           = "";
     private bool   _mfaStep;
-    private string _mfaType      = "";
-    private string _mfaCode      = "";
+    private string _mfaType         = "";
+    private string _mfaCode         = "";
     private bool   _emailOtpSent;
     private bool   _smsOtpSent;
-    private string _riskLevel    = "";
+    private string _riskLevel       = "";
+    private bool   _rememberDevice;
+    private int    _mfaTrustMaxHours;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -206,10 +229,13 @@
             }
             if (d.MfaRequired)
             {
+                var trustPolicy = await Api.GetMfaTrustPolicyAsync();
+                _mfaTrustMaxHours = trustPolicy?.MaxHours ?? 0;
                 _mfaStep    = true;
                 _mfaType    = d.MfaType ?? "Totp";
                 _mfaCode    = "";
                 _emailOtpSent = false;
+                _rememberDevice = false;
                 _loading    = false;
                 StateHasChanged();
                 return;
@@ -248,6 +274,8 @@
     {
         var user = new AuthUser(d.UserId, d.Username, d.DisplayName, []);
         await Auth.SetSessionAsync(d.AccessToken, user);
+        if (_rememberDevice && _mfaTrustMaxHours > 0)
+            await Api.CreateTrustedSessionAsync("Browser");
         Nav.NavigateTo("/", forceLoad: true);
     }
 
@@ -335,7 +363,7 @@
             await HandleSmsOtpAsync();
     }
 
-    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; _smsOtpSent = false; _riskLevel = ""; }
+    private void ResetToLogin() { _mfaStep = false; _mfaCode = ""; _error = ""; _emailOtpSent = false; _smsOtpSent = false; _riskLevel = ""; _rememberDevice = false; _mfaTrustMaxHours = 0; }
 
     private sealed class LoginModel
     {

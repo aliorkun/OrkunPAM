@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-21 (Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | PM run #25: 34 gap items remain | Sprint 49: MFA #20 #257 | Sprint 50: RA #40 #258)
+> Last updated: 2026-05-24 (Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239; Sprint 39 PV #20+#33+#35+RA#34+#35 → PC | Next: Sprint 50 RA #40 #258)
 
 ## Platform (44 items)
 
@@ -182,7 +182,7 @@
 | 17 | Solution shall support MFA for API access | PC | ApiKeyEndpoints.cs — HMAC-SHA256 signed API keys; X-Api-Key + X-Timestamp + X-Signature headers; ±5 min replay protection; IP CIDR restriction; usage audit log; ApiKeyAuthMiddleware injects JWT before UseAuthentication (#250) |
 | 18 | Solution shall support MFA for service accounts | PC | ApiKey entity — IsServiceAccount flag on User; service accounts use HMAC-signed API key instead of interactive MFA; ReadOnly role assigned; one-time key+HMAC secret returned on creation (#250) |
 | 19 | Solution shall support MFA throttling | PC | SmsOtpService.cs + EmailOtpService.cs — 3-attempt limit per session; rate limiting on MFA endpoints |
-| 20 | Solution shall support MFA session persistence |  |  |
+| 20 | Solution shall support MFA session persistence | PC | MfaTrustedSession entity — BrowserFingerprint (SHA-256) + TrustExpiresAtUtc; POST /trusted-sessions creates trust; login checks trusted session → skips MFA; "Trust this browser" checkbox in Login.razor; self-service revoke in SelfService.razor; admin bulk revoke; MaxMfaTrustHours policy (mfa.trust.max_hours SystemConfig, max 168h); 3 audit events (#257) |
 | 21 | Solution shall support MFA for remote access | PC | SSH/RDP/VNC session start — MFA verified JWT required at session creation |
 | 22 | Solution shall support MFA for privileged workstations |  |  |
 | 23 | Solution shall support MFA token synchronization |  |  |

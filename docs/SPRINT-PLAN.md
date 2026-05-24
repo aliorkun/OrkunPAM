@@ -799,8 +799,39 @@
 
 ---
 
+## Sprint 49 — MFA Session Persistence (#257) — Trusted Browser Token
+**Tarih:** 2026-05-24
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #257 | [MVP] MFA Session Persistence — Trusted Browser Token (MFA #20) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 49 Tamamlanan Bilesenler (2026-05-24):**
+- **MfaTrustedSession entity** (User.cs): UserId FK, BrowserFingerprint (SHA-256), DeviceLabel, TrustExpiresAtUtc, GrantedFromIp, GrantedAtUtc, LastUsedAtUtc, IsRevoked
+- **Migration `20260524_AddMfaTrustedSession`:** MfaTrustedSessions tablosu + 2 index (UserId_IsRevoked, BrowserFingerprint)
+- **DbContext:** MfaTrustedSessions DbSet + EF Core konfigurasyonu (cascade delete, max lengths)
+- **AuthEndpoints.cs — login flow:** Trusted session check eklendi (MFA exception check'ten sonra); gecerli trusted session bulunursa MFA atlaniyor; audit log: MFA_SESSION_TRUST_USED
+- **AuthEndpoints.cs — yeni endpointler:**
+  - `GET /api/v1/auth/mfa-trust-policy` (anonim) — MaxMfaTrustHours doner (0=kapali)
+  - `POST /api/v1/auth/trusted-sessions` (auth) — mevcut browseri guvene al; mevcut kaydı revoke eder; audit: MFA_SESSION_TRUST_GRANTED
+  - `GET /api/v1/auth/trusted-sessions` (auth) — kullanici kendi aktif trusted session listesini gorur
+  - `DELETE /api/v1/auth/trusted-sessions/{id}` (auth) — self-service revoke; audit: MFA_SESSION_TRUST_REVOKED
+  - `GET /api/v1/admin/users/{userId}/trusted-sessions` (AdminPolicy) — admin goruntuleme
+  - `DELETE /api/v1/admin/users/{userId}/trusted-sessions` (AdminPolicy) — admin bulk revoke; audit: MFA_SESSION_TRUST_ADMIN_REVOKED_ALL
+- **Login.razor:** `_rememberDevice` + `_mfaTrustMaxHours` alanlari; MFA step'e "Trust this browser for N hours" checkbox (policy MaxHours > 0 ise gorunur); `HandleLoginAsync`'de trust policy yukleniyor; `CompleteLoginAsync`'de `CreateTrustedSessionAsync` cagrisi
+- **SelfService.razor:** "Trusted Devices" sekme eklendi — aktif trusted session listesi (label, IP, tarihler, bitis), Revoke butonu; `LoadTrustedSessionsAsync` + `RevokeTrustedSessionAsync` metodlari
+- **PamApiService.cs:** LoginData record eksik alanlari duzeltildi (MfaType, MfaEnrollmentRequired, MustChangePassword, PasswordExpired, PortalProfile, RiskLevel, RiskScore); `GetMfaTrustPolicyAsync`, `CreateTrustedSessionAsync`, `GetTrustedSessionsAsync`, `RevokeTrustedSessionAsync` metodlari; `MfaTrustPolicyDto` + `MfaTrustedSessionDto` kayitlari
+- **Policy config:** `mfa.trust.max_hours` SystemConfig anahtari (int, 0=kapali, max 168h=7gun); admin System Settings'ten ayarlanabilir
+- **RFP-CHECKLIST.md:** MFA #20 (MFA session persistence) → PC
+- **Fingerprint:** DeviceTrustHelper.ComputeFingerprint() ile hesaplaniyor — User-Agent + Accept-Language + Accept-Encoding + subnet-level IP SHA-256
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 48 tamamlandi.** Credential Orchestration #251 push'landi, PV #38 → PC.
+**Sprint 49 tamamlandi.** MFA Session Persistence #257 push'landi, MFA #20 → PC.
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

@@ -830,6 +830,54 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // ── MFA Trusted Sessions (#257) ────────────────────────────────────────────
+    public async Task<MfaTrustPolicyDto?> GetMfaTrustPolicyAsync()
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var resp = await client.GetAsync("/api/v1/auth/mfa-trust-policy");
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<MfaTrustPolicyDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> CreateTrustedSessionAsync(string deviceLabel = "Browser")
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/trusted-sessions", new { deviceLabel });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<MfaTrustedSessionDto>?> GetTrustedSessionsAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.GetAsync("/api/v1/auth/trusted-sessions");
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<ListResult<MfaTrustedSessionDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RevokeTrustedSessionAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/auth/trusted-sessions/" + id)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── SSH Keys ───────────────────────────────────────────────────────────────
     public async Task<List<SshKeyDto>?> GetSshKeysAsync()
     {
@@ -1553,13 +1601,20 @@ public sealed class PamApiService
 public record LoginResult(bool Success, LoginData? Data);
 public record LoginData(
     string   AccessToken,
-    string   TokenType,
+    string?  TokenType,
     int      ExpiresIn,
     string   Username,
-    string   DisplayName,
-    string   Role,
+    string?  DisplayName,
+    string?  Role,
     bool     MfaRequired,
-    Guid     UserId);
+    Guid     UserId,
+    string?  MfaType                = null,
+    bool     MfaEnrollmentRequired  = false,
+    bool     MustChangePassword     = false,
+    bool     PasswordExpired        = false,
+    string?  PortalProfile          = null,
+    string?  RiskLevel              = null,
+    decimal  RiskScore              = 0);
 
 public record PagedResult<T>(bool Success, List<T>? Data, PagingMeta? Meta);
 public record ListResult<T>(bool Success, List<T>? Data);
@@ -2146,3 +2201,13 @@ public record OrchestrationRunDto(
     string    TriggeredBy);
 
 public record IdDto(Guid Id);
+
+// MFA Trusted Sessions (#257)
+public record MfaTrustPolicyDto(int MaxHours);
+public record MfaTrustedSessionDto(
+    Guid      Id,
+    string?   DeviceLabel,
+    DateTime  TrustExpiresAtUtc,
+    string?   GrantedFromIp,
+    DateTime  GrantedAtUtc,
+    DateTime? LastUsedAtUtc);

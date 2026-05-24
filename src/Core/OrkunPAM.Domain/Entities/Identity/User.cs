@@ -108,3 +108,18 @@ public class UserPasswordHistory
     public string PasswordHash { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
+
+// MFA Trusted Session — allows skipping MFA for recognized browsers (#257)
+public class MfaTrustedSession
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    public string BrowserFingerprint { get; set; } = string.Empty;
+    public string? DeviceLabel { get; set; }
+    public DateTime TrustExpiresAtUtc { get; set; }
+    public string? GrantedFromIp { get; set; }
+    public DateTime GrantedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? LastUsedAtUtc { get; set; }
+    public bool IsRevoked { get; set; }
+}

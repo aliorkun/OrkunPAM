@@ -33,6 +33,7 @@
     <button class="pam-tab @(_tab == "jit" ? "active" : "")" @onclick="@(() => SetTab("jit"))">+ Request Access</button>
     <button class="pam-tab @(_tab == "profile" ? "active" : "")" @onclick="@(() => SetTab("profile"))">My Profile</button>
     <button class="pam-tab @(_tab == "security" ? "active" : "")" @onclick="@(() => SetTab("security"))">Security</button>
+    <button class="pam-tab @(_tab == "trusted" ? "active" : "")" @onclick="@(() => SetTab("trusted"))">Trusted Devices</button>
 </div>
 
 @* ===== MY DEVICES ===== *@
@@ -542,6 +543,53 @@
     </div>
 }
 
+@* ===== TRUSTED DEVICES (#257) ===== *@
+@if (_tab == "trusted")
+{
+    <div class="pam-card">
+        <div class="pam-card-header">
+            <span>Trusted Browsers / Devices</span>
+            <span class="pam-text-muted" style="font-size:.85rem">Browsers that skip MFA verification</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loadingTrusted)
+            {
+                <div class="pam-loading-text">Loading trusted devices...</div>
+            }
+            else if (_trustedSessions == null || _trustedSessions.Count == 0)
+            {
+                <div class="pam-empty">No trusted browsers registered. Enable MFA trust in policy settings and check "Trust this browser" during login.</div>
+            }
+            else
+            {
+                <table class="pam-table">
+                    <thead><tr><th>Label</th><th>Granted From</th><th>Granted</th><th>Last Used</th><th>Expires</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _trustedSessions)
+                        {
+                            <tr>
+                                <td><strong>@(s.DeviceLabel ?? "Browser")</strong></td>
+                                <td><code>@(s.GrantedFromIp ?? "—")</code></td>
+                                <td style="font-size:.82rem">@s.GrantedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td style="font-size:.82rem">@(s.LastUsedAtUtc.HasValue ? s.LastUsedAtUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "Never")</td>
+                                <td>
+                                    @if (s.TrustExpiresAtUtc > DateTime.UtcNow)
+                                    { <span class="pam-badge pam-badge-green">@s.TrustExpiresAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-gray">Expired</span> }
+                                </td>
+                                <td>
+                                    <button class="pam-btn pam-btn-xs pam-btn-danger" @onclick="@(() => RevokeTrustedSessionAsync(s.Id))" disabled="@_submitting">Revoke</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "devices";
     private bool _loading;
@@ -580,6 +628,9 @@
     private List<MfaDeviceDto>? _mfaDevices;
     private bool _loadingSecurity;
 
+    private List<MfaTrustedSessionDto>? _trustedSessions;
+    private bool _loadingTrusted;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -598,6 +649,7 @@
         else if (tab == "requests") await LoadMyRequestsAsync();
         else if (tab == "profile") await LoadProfileAsync();
         else if (tab == "security") await LoadMfaDevicesAsync();
+        else if (tab == "trusted") await LoadTrustedSessionsAsync();
     }
 
     private async Task LoadDevicesAsync()
@@ -734,6 +786,22 @@
         _loadingSecurity = true;
         _mfaDevices = await Api.GetMyMfaDevicesAsync();
         _loadingSecurity = false;
+    }
+
+    private async Task LoadTrustedSessionsAsync()
+    {
+        _loadingTrusted = true;
+        _trustedSessions = await Api.GetTrustedSessionsAsync();
+        _loadingTrusted = false;
+    }
+
+    private async Task RevokeTrustedSessionAsync(Guid id)
+    {
+        _error = null; _success = null; _submitting = true;
+        var ok = await Api.RevokeTrustedSessionAsync(id);
+        _submitting = false;
+        if (ok) { _success = "Trusted session revoked."; await LoadTrustedSessionsAsync(); }
+        else _error = "Failed to revoke trusted session.";
     }
 
     private async Task RevokeByTypeAsync(string type)

@@ -181,6 +181,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === MFA Exception Management (#252) ===
     public DbSet<MfaException> MfaExceptions => Set<MfaException>();
 
+    // === MFA Trusted Sessions (#257) ===
+    public DbSet<MfaTrustedSession> MfaTrustedSessions => Set<MfaTrustedSession>();
+
     public DbSet<CredentialOrchestrationSet>    CredentialOrchestrationSets    => Set<CredentialOrchestrationSet>();
     public DbSet<CredentialOrchestrationMember> CredentialOrchestrationMembers => Set<CredentialOrchestrationMember>();
     public DbSet<CredentialOrchestrationRun>    CredentialOrchestrationRuns    => Set<CredentialOrchestrationRun>();
@@ -725,6 +728,16 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(r => r.SetId);
             e.Property(r => r.Status).HasConversion<byte>().HasDefaultValue((byte)0);
             e.HasOne(r => r.TriggeredByUser).WithMany().HasForeignKey(r => r.TriggeredByUserId).OnDelete(DeleteBehavior.SetNull).IsRequired(false);
+        });
+
+        modelBuilder.Entity<MfaTrustedSession>(e =>
+        {
+            e.HasIndex(s => new { s.UserId, s.IsRevoked });
+            e.HasIndex(s => s.BrowserFingerprint);
+            e.Property(s => s.BrowserFingerprint).HasMaxLength(64);
+            e.Property(s => s.DeviceLabel).HasMaxLength(256);
+            e.Property(s => s.GrantedFromIp).HasMaxLength(64);
+            e.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Seed built-in data
