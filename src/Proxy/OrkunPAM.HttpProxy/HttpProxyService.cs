@@ -71,7 +71,7 @@ internal sealed class HttpProxyService : BackgroundService
             TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
         var address = string.IsNullOrEmpty(_opts.ListenAddress)
-            ? IPAddress.Any
+            ? IPAddress.IPv6Any  // dual-stack (#262)
             : IPAddress.Parse(_opts.ListenAddress);
 
         X509Certificate2? tlsCert = null;
@@ -83,6 +83,7 @@ internal sealed class HttpProxyService : BackgroundService
         }
 
         var listener = new TcpListener(address, _opts.ListenPort);
+        if (address.Equals(IPAddress.IPv6Any)) listener.Server.DualMode = true;
         listener.Start();
         _log.LogInformation("HTTP proxy listening on {Address}:{Port} (TLS: {TlsEnabled})",
             address, _opts.ListenPort, tlsCert != null);

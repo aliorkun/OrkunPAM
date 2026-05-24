@@ -33,10 +33,11 @@ internal sealed class TelnetProxyService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var address = string.IsNullOrEmpty(_opts.ListenAddress)
-            ? IPAddress.Any
+            ? IPAddress.IPv6Any  // dual-stack (#262)
             : IPAddress.Parse(_opts.ListenAddress);
 
         var listener = new TcpListener(address, _opts.ListenPort);
+        if (address.Equals(IPAddress.IPv6Any)) listener.Server.DualMode = true;
         listener.Start();
         _log.LogInformation("Telnet proxy listening on {Address}:{Port}", address, _opts.ListenPort);
 

@@ -40,10 +40,11 @@ internal sealed class TacacsProxyService : BackgroundService
         }
 
         var address = string.IsNullOrEmpty(_opts.ListenAddress)
-            ? IPAddress.Any
+            ? IPAddress.IPv6Any  // dual-stack (#262)
             : IPAddress.Parse(_opts.ListenAddress);
 
         var listener = new TcpListener(address, _opts.ListenPort);
+        if (address.Equals(IPAddress.IPv6Any)) listener.Server.DualMode = true;
         listener.Start();
         _log.LogInformation("TACACS+ proxy listening on {Address}:{Port}", address, _opts.ListenPort);
 

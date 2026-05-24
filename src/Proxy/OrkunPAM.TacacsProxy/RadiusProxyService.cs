@@ -48,8 +48,9 @@ internal sealed class RadiusProxyService : BackgroundService
         _log.LogInformation("RADIUS proxy starting — auth UDP:{AuthPort}, acct UDP:{AcctPort}",
             _opts.RadiusAuthPort, _opts.RadiusAcctPort);
 
-        using var authSocket = new UdpClient(new IPEndPoint(IPAddress.Any, _opts.RadiusAuthPort));
-        using var acctSocket = new UdpClient(new IPEndPoint(IPAddress.Any, _opts.RadiusAcctPort));
+        // Dual-stack UDP: bind to IPv6Any with DualMode to accept IPv4-mapped addresses (#262)
+        using var authSocket = CreateDualStackUdp(_opts.RadiusAuthPort);
+        using var acctSocket = CreateDualStackUdp(_opts.RadiusAcctPort);
 
         try
         {
@@ -194,5 +195,13 @@ internal sealed class RadiusProxyService : BackgroundService
         {
             // UDP send failures are non-fatal
         }
+    }
+
+    private static UdpClient CreateDualStackUdp(int port)
+    {
+        var socket = new UdpClient(System.Net.Sockets.AddressFamily.InterNetworkV6);
+        socket.Client.DualMode = true;
+        socket.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+        return socket;
     }
 }
