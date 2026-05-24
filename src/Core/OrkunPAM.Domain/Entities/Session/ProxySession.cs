@@ -117,6 +117,21 @@ public class PeripheralRedirectionPolicy : AuditableEntity
 }
 
 /// <summary>
+/// Tracks a real-time shadow (read-only observation) of an active proxy session.
+/// </summary>
+public class SessionShadow
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public Guid ShadowByUserId { get; set; }
+    public string? ShadowByUsername { get; set; }
+    public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? EndedAtUtc { get; set; }
+    public string? ShadowIp { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
 /// A periodic screen-capture snapshot taken during an RDP or VNC session.
 /// DataBase64 is null when actual pixel capture is not available (TCP-relay mode).
 /// </summary>
