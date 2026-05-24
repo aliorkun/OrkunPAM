@@ -2668,6 +2668,66 @@ namespace OrkunPAM.Persistence.Migrations
                     b.ToTable("SessionShadows");
                 });
 
+            modelBuilder.Entity("OrkunPAM.Domain.Entities.Identity.HardwareToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Algorithm")
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<long>("CounterValue")
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<int>("Digits")
+                        .HasColumnType("int")
+                        .HasDefaultValue(6);
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("PeriodSeconds")
+                        .HasColumnType("int")
+                        .HasDefaultValue(30);
+
+                    b.Property<DateTime>("ProvisionedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("SecretKeyEnc")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("TokenType")
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_HardwareTokens_UserId");
+
+                    b.HasIndex("UserId", "IsActive")
+                        .HasDatabaseName("IX_HardwareTokens_UserId_IsActive");
+
+                    b.ToTable("HardwareTokens");
+                });
+
             modelBuilder.Entity("OrkunPAM.Domain.Entities.System.AuditLogEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -3604,6 +3664,17 @@ namespace OrkunPAM.Persistence.Migrations
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OrkunPAM.Domain.Entities.Identity.HardwareToken", b =>
+                {
+                    b.HasOne("OrkunPAM.Domain.Entities.Identity.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
 

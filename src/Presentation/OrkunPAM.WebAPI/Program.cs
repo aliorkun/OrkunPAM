@@ -509,6 +509,7 @@ try
     api.MapLiveSessionEndpoints();
     api.MapShadowEndpoints();
     api.MapSmsOtpEndpoints();
+    api.MapHardwareTokenEndpoints();
     api.MapSessionTagEndpoints();
     api.MapDeviceRealmEndpoints();
     api.MapAssignedCredentialEndpoints();

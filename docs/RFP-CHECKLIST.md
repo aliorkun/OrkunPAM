@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-24 (Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-24 (Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 ## Platform (44 items)
 
@@ -169,7 +169,7 @@
 | 4 | Solution shall support SMS-based OTP | PC | SmsOtpService.cs — Twilio/AWS SNS; /api/v1/auth/sms-otp/send + /verify; 6-digit code, 5-min TTL, 3-attempt limit (#215) |
 | 5 | Solution shall support email-based OTP | PC | EmailOtpService.cs — 6-digit code, 10-min TTL, 3-attempt limit, IP-logged; /api/v1/auth/email-otp/send + /verify (#178) |
 | 6 | Solution shall support push notifications | PC | PushMfaService.cs — device token registration, push challenge + approve/deny; /api/v1/auth/push-mfa/* (#196) |
-| 7 | Solution shall support hardware tokens (OATH) |  |  |
+| 7 | Solution shall support hardware tokens (OATH) | PC | HardwareTokenEndpoints.cs — POST/GET/DELETE /api/v1/auth/hardware-tokens; POST /verify-hardware-otp; RFC 4226 HOTP (±5 window) + RFC 6238 TOTP (±1 period); SHA1/256/512; AES-GCM encrypted secret; Login.razor HardwareToken MFA step; Integrations.razor admin tab (#261) |
 | 8 | Solution shall support adaptive MFA | PC | AdaptiveMfaService.cs — risk-score-driven step-up; low risk → no MFA, medium → TOTP, high → FIDO2; configurable thresholds (#205) |
 | 9 | Solution shall support MFA bypass policies | PC | PolicyEndpoints.cs — bypass conditions (Windows Auth/Kerberos, trusted network CIDR, trusted device) |
 | 10 | Solution shall support MFA enrollment self-service | PC | SelfService.razor — MFA enrollment tab: enroll TOTP, register FIDO2 key, add phone/email; user-initiated without admin |

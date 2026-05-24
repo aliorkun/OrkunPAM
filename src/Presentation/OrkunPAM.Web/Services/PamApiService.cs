@@ -1666,6 +1666,65 @@ public sealed class PamApiService
     public async Task<List<OrchestrationRunDto>?> GetOrchestrationRunsAsync(string id)
         => (await GetAsync<ListResult<OrchestrationRunDto>>($"/api/v1/vault/orchestration/{id}/runs"))?.Data;
 
+    // ── Hardware Tokens (#261) ─────────────────────────────────────────────────
+
+    public async Task<bool> ProvisionHardwareTokenAsync(
+        string userId, string serialNumber, string secretKeyBase32,
+        string tokenType, string algorithm, int digits, int periodSeconds, string? label)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var body = new
+            {
+                userId, serialNumber, secretKeyBase32,
+                tokenType, algorithm, digits, periodSeconds, label
+            };
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/hardware-tokens", body);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<HardwareTokenDto>?> GetHardwareTokensAsync(string userId)
+        => await GetAsync<List<HardwareTokenDto>>($"/api/v1/auth/hardware-tokens?userId={userId}");
+
+    public async Task<List<HardwareTokenDto>?> GetAllHardwareTokensAsync()
+        => await GetAsync<List<HardwareTokenDto>>("/api/v1/auth/hardware-tokens?all=true");
+
+    public async Task<bool> RevokeHardwareTokenAsync(Guid tokenId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.DeleteAsync($"/api/v1/auth/hardware-tokens/{tokenId}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<LoginResult?> VerifyHardwareOtpAsync(string username, string otp)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var resp = await client.PostAsJsonAsync("/api/v1/auth/verify-hardware-otp",
+                new { username, otp });
+            if (!resp.IsSuccessStatusCode) return new LoginResult(false, null);
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            var success = doc.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+            if (!success) return new LoginResult(false, null);
+            if (doc.RootElement.TryGetProperty("data", out var data))
+            {
+                var loginData = data.Deserialize<LoginData>(JsonOpts);
+                return new LoginResult(true, loginData);
+            }
+            return new LoginResult(false, null);
+        }
+        catch { return new LoginResult(false, null); }
+    }
+
     // ── Private helpers ────────────────────────────────────────────────────────
 
     private async Task<HttpClient> GetAuthClientAsync()
@@ -2347,3 +2406,16 @@ public record SessionCommandDto(
     decimal  RiskScore,
     bool     WasBlocked,
     string?  BlockReason);
+
+// Hardware Tokens (#261)
+public record HardwareTokenDto(
+    Guid     Id,
+    Guid     UserId,
+    string   SerialNumber,
+    string   TokenType,
+    string   Algorithm,
+    int      Digits,
+    int      PeriodSeconds,
+    string?  Label,
+    bool     IsActive,
+    DateTime ProvisionedAtUtc);

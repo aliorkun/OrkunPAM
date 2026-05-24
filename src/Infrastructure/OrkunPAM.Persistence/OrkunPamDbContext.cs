@@ -185,6 +185,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === MFA Trusted Sessions (#257) ===
     public DbSet<MfaTrustedSession> MfaTrustedSessions => Set<MfaTrustedSession>();
 
+    // === OATH Hardware Tokens (#261) ===
+    public DbSet<HardwareToken> HardwareTokens => Set<HardwareToken>();
+
     public DbSet<CredentialOrchestrationSet>    CredentialOrchestrationSets    => Set<CredentialOrchestrationSet>();
     public DbSet<CredentialOrchestrationMember> CredentialOrchestrationMembers => Set<CredentialOrchestrationMember>();
     public DbSet<CredentialOrchestrationRun>    CredentialOrchestrationRuns    => Set<CredentialOrchestrationRun>();
@@ -748,6 +751,17 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(s => s.DeviceLabel).HasMaxLength(256);
             e.Property(s => s.GrantedFromIp).HasMaxLength(64);
             e.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // === OATH Hardware Tokens (#261) ===
+        modelBuilder.Entity<HardwareToken>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.SerialNumber).HasMaxLength(128);
+            e.Property(t => t.Label).HasMaxLength(256);
+            e.HasIndex(t => t.UserId);
+            e.HasIndex(t => new { t.UserId, t.IsActive });
+            e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Seed built-in data

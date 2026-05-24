@@ -855,9 +855,32 @@
 
 ---
 
+## Sprint 51 - OATH Hardware Token (#261) ✅ TAMAMLANDI
+**Tarih:** 2026-05-24
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #261 | [MVP] OATH Hardware Token Support — Physical MFA for Air-Gapped Environments (MFA #7) | MVP-MFA | ✅ Tamamlandi |
+
+**Sprint 51 Tamamlanan Bilesenler (2026-05-24):**
+- **HardwareToken entity** (Identity/HardwareToken.cs): Id, UserId FK, SerialNumber, SecretKeyEnc (AES-GCM), TokenType (TOTP/HOTP), CounterValue, Algorithm (SHA1/256/512), Digits (6/8), PeriodSeconds, IsActive, Label, ProvisionedAtUtc
+- **Migration `20260524_AddHardwareToken`:** HardwareTokens tablosu + 2 index (UserId, UserId+IsActive) + FK → Users CASCADE
+- **DbContext:** HardwareTokens DbSet + EF Core config; ModelSnapshot guncellendi
+- **HardwareTokenEndpoints.cs:** 4 endpoint — POST /hardware-tokens (provision, AdminPolicy), GET /hardware-tokens (list, self or admin), DELETE /hardware-tokens/{id} (revoke), POST /verify-hardware-otp (OTP verify → JWT); RFC 4226 HOTP (±5 look-ahead window) + RFC 6238 TOTP (±1 period); SHA1/SHA256/SHA512; 3 audit events (HARDWARE_TOKEN_PROVISIONED/VERIFIED/REVOKED); OathHelper static class with Base32Decode
+- **Program.cs:** MapHardwareTokenEndpoints() kaydedildi
+- **Login.razor:** HardwareToken MFA step eklendi (🗝 ikon, 6-8 digit input, HandleHardwareTokenAsync + OnHardwareTokenKeyUp)
+- **Integrations.razor:** Hardware Tokens sekmesi — token provision formu (User ID, Serial, Base32 secret, type, algorithm, digits, period, label); token listesi tablosu (serial, type, algorithm, status, revoke butonu); state variables + SetTab case + ProvisionTokenAsync + RevokeTokenAsync metodlari
+- **PamApiService.cs:** ProvisionHardwareTokenAsync, GetHardwareTokensAsync, GetAllHardwareTokensAsync, RevokeHardwareTokenAsync, VerifyHardwareOtpAsync; HardwareTokenDto record
+- **RFP-CHECKLIST.md:** MFA #7 (OATH hardware tokens) → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 50 tamamlandi.** Session Shadowing #258 push'landi, RA #40 → PC.
-**Sprint 51 hedefi:** #261 OATH Hardware Token (MFA #7) veya #262 IPv6 Dual-Stack (Platform #21)
+**Sprint 51 tamamlandi.** OATH Hardware Token #261 push'landi, MFA #7 → PC.
+**Sprint 52 hedefi:** #262 IPv6 Dual-Stack (Platform #21) veya #263 Session Handoff (RA #41)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

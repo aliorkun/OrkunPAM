@@ -22,6 +22,8 @@
             @onclick="@(() => SetTab("soar"))">&#x26A1; SOAR</button>
     <button class="pam-btn @(_tab == "sms" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("sms"))">&#x1F4F1; SMS Gateway</button>
+    <button class="pam-btn @(_tab == "hwtoken" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("hwtoken"))">&#x1F5DD; Hardware Tokens</button>
 </div>
 
 @if (_tab == "ldap")
@@ -657,9 +659,136 @@
     </div>
 }
 
+@if (_tab == "hwtoken")
+{
+    @if (_hwtError != null) { <div class="pam-alert pam-alert-danger">@_hwtError</div> }
+    @if (_hwtMsg != null)   { <div class="pam-alert pam-alert-success">@_hwtMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-header"><strong>Provision Hardware Token</strong></div>
+        <div class="pam-card-body">
+            <p style="color:#8b949e;font-size:.85rem;margin-bottom:12px">
+                Register OATH HOTP/TOTP hardware tokens (RSA SecurID, YubiKey OTP, SafeNet eToken).
+                The secret key is stored encrypted and never exposed after provisioning.
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:700px">
+                <div>
+                    <label class="pam-label">User ID (GUID)</label>
+                    <input class="pam-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" @bind="_hwtUserId" />
+                </div>
+                <div>
+                    <label class="pam-label">Serial Number</label>
+                    <input class="pam-input" placeholder="e.g. SN123456789" @bind="_hwtSerial" />
+                </div>
+                <div>
+                    <label class="pam-label">Secret Key (Base32)</label>
+                    <input class="pam-input" type="password" placeholder="JBSWY3DPEHPK3PXP..." @bind="_hwtSecret" />
+                </div>
+                <div>
+                    <label class="pam-label">Label (optional)</label>
+                    <input class="pam-input" placeholder="e.g. RSA Token for VPN" @bind="_hwtLabel" />
+                </div>
+                <div>
+                    <label class="pam-label">Token Type</label>
+                    <select class="pam-select" @bind="_hwtTokenType">
+                        <option value="Totp">TOTP (time-based)</option>
+                        <option value="Hotp">HOTP (counter-based)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Algorithm</label>
+                    <select class="pam-select" @bind="_hwtAlgorithm">
+                        <option value="Sha1">SHA-1 (most common)</option>
+                        <option value="Sha256">SHA-256</option>
+                        <option value="Sha512">SHA-512</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Digits</label>
+                    <select class="pam-select" @bind="_hwtDigits">
+                        <option value="6">6 digits</option>
+                        <option value="8">8 digits</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="pam-label">Period (seconds, TOTP only)</label>
+                    <input class="pam-input" type="number" @bind="_hwtPeriod" min="30" max="60" step="30" />
+                </div>
+            </div>
+            <button class="pam-btn pam-btn-primary" style="margin-top:12px"
+                    @onclick="ProvisionTokenAsync" disabled="@_hwtSaving">
+                @(_hwtSaving ? "Provisioning..." : "Provision Token")
+            </button>
+        </div>
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-header"><strong>Provisioned Tokens</strong></div>
+        <div class="pam-card-body p-0">
+            @if (_hwtLoading)
+            {
+                <div class="pam-loading-text p-4">Loading tokens...</div>
+            }
+            else if (_hwtTokens == null || _hwtTokens.Count == 0)
+            {
+                <div class="pam-empty p-4">No hardware tokens provisioned yet.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Serial</th><th>Label</th><th>Type</th><th>Algorithm</th><th>Digits</th><th>User</th><th>Provisioned</th><th>Status</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _hwtTokens)
+                        {
+                            <tr>
+                                <td>@t.SerialNumber</td>
+                                <td>@(t.Label ?? "—")</td>
+                                <td>@t.TokenType</td>
+                                <td>@t.Algorithm</td>
+                                <td>@t.Digits</td>
+                                <td style="font-size:.8em">@t.UserId</td>
+                                <td>@t.ProvisionedAtUtc.ToLocalTime().ToString("MM/dd/yyyy HH:mm")</td>
+                                <td><span class="pam-status @(t.IsActive ? "pam-status-active" : "pam-status-inactive")">@(t.IsActive ? "Active" : "Revoked")</span></td>
+                                <td>
+                                    @if (t.IsActive)
+                                    {
+                                        <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                                @onclick="@(() => RevokeTokenAsync(t.Id))">
+                                            Revoke
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // Hardware Token state (#261)
+    private bool   _hwtLoading  = false;
+    private bool   _hwtSaving   = false;
+    private string? _hwtError;
+    private string? _hwtMsg;
+    private string  _hwtUserId    = "";
+    private string  _hwtSerial    = "";
+    private string  _hwtSecret    = "";
+    private string  _hwtLabel     = "";
+    private string  _hwtTokenType = "Totp";
+    private string  _hwtAlgorithm = "Sha1";
+    private int     _hwtDigits    = 6;
+    private int     _hwtPeriod    = 30;
+    private List<HardwareTokenDto>? _hwtTokens;
 
     // SMS Gateway state (#215)
     private bool    _smsLoading            = false;
@@ -783,6 +912,40 @@
             await LoadSoarAsync();
         if (tab == "sms")
             await LoadSmsConfigAsync();
+        if (tab == "hwtoken")
+            await LoadHardwareTokensAsync();
+    }
+
+    // ── Hardware Tokens (#261) ───────────────────────────────────────────────────────────────
+    private async Task LoadHardwareTokensAsync()
+    {
+        _hwtLoading = true; _hwtError = null; StateHasChanged();
+        _hwtTokens = await Api.GetAllHardwareTokensAsync();
+        _hwtLoading = false; StateHasChanged();
+    }
+
+    private async Task ProvisionTokenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_hwtUserId) || string.IsNullOrWhiteSpace(_hwtSerial) || string.IsNullOrWhiteSpace(_hwtSecret))
+        { _hwtError = "User ID, Serial Number, and Secret Key are required."; return; }
+        _hwtSaving = true; _hwtError = null; _hwtMsg = null; StateHasChanged();
+        var ok = await Api.ProvisionHardwareTokenAsync(_hwtUserId, _hwtSerial, _hwtSecret, _hwtTokenType, _hwtAlgorithm, _hwtDigits, _hwtPeriod, _hwtLabel);
+        _hwtSaving = false;
+        if (ok)
+        {
+            _hwtMsg = "Hardware token provisioned successfully.";
+            _hwtUserId = _hwtSerial = _hwtSecret = _hwtLabel = "";
+            await LoadHardwareTokensAsync();
+        }
+        else { _hwtError = "Failed to provision token. Check User ID and Base32 secret format."; StateHasChanged(); }
+    }
+
+    private async Task RevokeTokenAsync(Guid tokenId)
+    {
+        _hwtError = null; _hwtMsg = null;
+        var ok = await Api.RevokeHardwareTokenAsync(tokenId);
+        if (ok) { _hwtMsg = "Token revoked."; await LoadHardwareTokensAsync(); }
+        else { _hwtError = "Failed to revoke token."; StateHasChanged(); }
     }
 
     // ── ITSM ────────────────────────────────────────────────────────────────────────────────
