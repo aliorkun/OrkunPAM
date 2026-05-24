@@ -76,6 +76,16 @@ internal sealed class SshServerSession
             pamSessionId = await _api.StartSessionAsync(
                 userId, deviceId, credentialId, _clientIp, targetIp, targetPort, _ct);
 
+            // Block TOFU first-use when RequireFingerprintVerification=true (CWE-295)
+            if (expectedFingerprint == null && _opts.RequireFingerprintVerification)
+            {
+                _log.LogError("SECURITY: TOFU blocked for {Host} — no host key fingerprint enrolled. " +
+                    "Admin must pre-enroll fingerprint before first connection.", targetIp);
+                throw new SshException(
+                    $"Connection to {targetIp} blocked: host key fingerprint not enrolled. " +
+                    "Admin must pre-enroll the fingerprint in PAM device settings.");
+            }
+
             using var target = new SshTargetClient(
                 targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log,
                 expectedFingerprint: expectedFingerprint);
@@ -122,6 +132,7 @@ internal sealed class SshServerSession
 
         int offset = 1;
         var e = SshEncoding.ReadMpInt(dhInitPkt, ref offset);
+        DhGroup14.ValidatePeerPublicKey(e); // RFC 4253 §8 — reject out-of-bounds DH values (CWE-325)
 
         var dh         = new DhGroup14();
         var K          = dh.ComputeSharedSecret(e);

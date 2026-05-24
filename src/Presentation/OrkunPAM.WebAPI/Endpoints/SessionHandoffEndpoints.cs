@@ -37,6 +37,11 @@ public static class SessionHandoffEndpoints
             if (session.Status != SessionStatus.Active)
                 return Results.BadRequest(new { success = false, errors = new[] { "Session is not active" } });
 
+            // Only the session owner or a GlobalAdmin may initiate a handoff (CWE-285)
+            var isGlobalAdmin = ctx.User.HasClaim("role", "GlobalAdmin");
+            if (session.UserId != uid && !isGlobalAdmin)
+                return Results.Forbid();
+
             // Resolve target user
             var targetUser = await db.Users.FindAsync(body.TargetUserId);
             if (targetUser is null)

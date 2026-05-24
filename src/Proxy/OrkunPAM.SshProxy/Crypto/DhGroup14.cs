@@ -44,6 +44,17 @@ internal sealed class DhGroup14
         BigInteger.ModPow(peerPublicKey, _privateKey, P);
 
     /// <summary>
+    /// RFC 4253 §8 + NIST SP 800-56A Rev 3 §5.6.2.3 — DH peer public key must be in (1, p-1).
+    /// e=0, e=1, or e=p-1 all collapse the shared secret to a predictable value.
+    /// </summary>
+    internal static void ValidatePeerPublicKey(BigInteger value)
+    {
+        if (value <= BigInteger.One || value >= P - BigInteger.One)
+            throw new SshException(
+                "DH public key validation failed: value out of bounds (RFC 4253 / NIST SP 800-56A)");
+    }
+
+    /// <summary>
     /// RFC 4253 §7.2 — derive IV, encryption key, and MAC key from K and H.
     /// Returns (ivC2S[16], ivS2C[16], ekC2S[32], ekS2C[32], mkC2S[32], mkS2C[32]).
     /// </summary>

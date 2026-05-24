@@ -134,6 +134,7 @@ internal sealed class SshTargetClient : IDisposable
         var hostKeyBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
         var f           = SshEncoding.ReadMpInt(replyPkt, ref pos);
         var sigBlob     = SshEncoding.ReadByteString(replyPkt, ref pos);
+        DhGroup14.ValidatePeerPublicKey(f); // RFC 4253 §8 — reject out-of-bounds DH values (CWE-325)
 
         var K = dh.ComputeSharedSecret(f);
         var H = ComputeExchangeHash(clientKexPayload, serverKexPayload, hostKeyBlob,
