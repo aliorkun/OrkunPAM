@@ -749,12 +749,9 @@ public static class AuthEndpoints
         }).RequireAuthorization().WithTags("Auth");
 
         // === Windows/Kerberos SSO (#126) ===
-        // Browser hits this endpoint; Negotiate middleware challenges, validates Kerberos/NTLM,
-        // then the handler maps the Windows identity to a PAM user and issues a PAM JWT.
         app.MapGet("/api/v1/auth/windows", async (OrkunPamDbContext db, IJwtTokenService jwt,
             IEventBus eventBus, HttpContext ctx) =>
         {
-            // Runtime toggle — Windows Auth must be explicitly enabled by admin
             var enabledStr = await db.SystemConfigs
                 .Where(c => c.Key == "windows.auth.enabled")
                 .Select(c => c.Value)
@@ -762,18 +759,15 @@ public static class AuthEndpoints
             if (enabledStr != "true")
                 return Results.Json(new { success = false, error = "Windows authentication is not enabled" }, statusCode: 403);
 
-            // Windows identity name set by Negotiate middleware
             var windowsName = ctx.User.Identity?.Name;
             if (string.IsNullOrEmpty(windowsName))
                 return Results.Unauthorized();
 
-            // Parse sAMAccountName: "DOMAIN\\username" → "username", "user@domain.com" → "user"
             var samAccountName = windowsName.Contains('\\')
                 ? windowsName.Split('\\')[1].Trim()
                 : windowsName.Split('@')[0].Trim();
             var normalizedSam = samAccountName.ToUpperInvariant();
 
-            // Trusted domain check
             if (windowsName.Contains('\\'))
             {
                 var trustedDomains = await db.SystemConfigs
@@ -791,7 +785,6 @@ public static class AuthEndpoints
                 }
             }
 
-            // Find PAM user by sAMAccountName (Windows or AD auth source)
             var user = await db.Users
                 .Include(u => u.UserRoles).ThenInclude(ur => ur.Role).ThenInclude(r => r.RolePermissions)
                 .Include(u => u.UserGroups).ThenInclude(ug => ug.Group).ThenInclude(g => g.GroupRoles)
@@ -801,7 +794,6 @@ public static class AuthEndpoints
 
             if (user == null)
             {
-                // Auto-provision if configured
                 var autoProvStr = await db.SystemConfigs
                     .Where(c => c.Key == "windows.auth.auto_provision")
                     .Select(c => c.Value)
@@ -831,7 +823,6 @@ public static class AuthEndpoints
             if (user.Status != UserStatus.Active || user.IsLocked)
                 return Results.Json(new { success = false, error = "Account is not active" }, statusCode: 401);
 
-            // Collect roles and permissions
             var roles = new HashSet<string>();
             var permissions = new HashSet<string>();
             foreach (var ur in user.UserRoles)
@@ -846,7 +837,6 @@ public static class AuthEndpoints
                     foreach (var rp in gr.Role.RolePermissions) permissions.Add(rp.PermissionCode);
                 }
 
-            // MFA bypass option for Kerberos-authenticated users (admin-configurable)
             var mfaBypassStr = await db.SystemConfigs
                 .Where(c => c.Key == "windows.auth.mfa_bypass")
                 .Select(c => c.Value)
@@ -861,7 +851,6 @@ public static class AuthEndpoints
 
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            // Device Trust check — #211: Windows/Kerberos auth must also enforce device trust policy
             var winUserAgent = ctx.Request.Headers.UserAgent.ToString();
             var winFingerprint = DeviceTrustHelper.ComputeFingerprint(winUserAgent, ctx);
             var winDtData = new AuthResult(tokenResult.Value, user.Id, user.Username, user.DisplayName,
@@ -953,6 +942,11 @@ public static class AuthEndpoints
         app.MapPost("/api/v1/auth/trusted-sessions", async (TrustSessionRequest req, OrkunPamDbContext db,
             IAuditService audit, HttpContext ctx) =>
         {
+            // Require MFA to have been completed — pre-MFA tokens must not create trusted sessions (CWE-287 #267)
+            var mfaVerified = ctx.User.FindFirstValue("mfa_verified");
+            if (mfaVerified != "true")
+                return Results.Forbid();
+
             var userIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!Guid.TryParse(userIdStr, out var userId)) return Results.Unauthorized();
 
@@ -1087,7 +1081,22 @@ internal static class DeviceTrustHelper
             var ip         = ctx.Connection.RemoteIpAddress?.ToString() ?? "";
             // Subnet-level (last octet stripped) to tolerate NAT/proxy IP variation
             var ipSubnet   = ip.Contains('.') ? string.Join('.', ip.Split('.')[..3]) : ip;
-            raw = $"{userAgent.ToLowerInvariant()}|{acceptLang}|{acceptEnc}|{ipSubnet}";
+
+            // Server-issued HttpOnly token prevents header-spoofing MFA bypass (CWE-807, CWE-330 #268)
+            var fpToken = ctx.Request.Cookies["__pam_fp_token"];
+            if (string.IsNullOrEmpty(fpToken))
+            {
+                fpToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                ctx.Response.Cookies.Append("__pam_fp_token", fpToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTimeOffset.UtcNow.AddDays(30)
+                });
+            }
+
+            raw = $"{userAgent.ToLowerInvariant()}|{acceptLang}|{acceptEnc}|{ipSubnet}|{fpToken}";
         }
         else
         {
@@ -1181,7 +1190,6 @@ internal static class GeoLocationHelper
         if (string.IsNullOrEmpty(ip) || ip == "unknown") return null;
         if (!System.Net.IPAddress.TryParse(ip, out var addr)) return null;
 
-        // Loopback / link-local — treat as internal, no geo lookup
         if (System.Net.IPAddress.IsLoopback(addr)) return null;
         if (addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 &&
             addr.IsIPv6LinkLocal) return null;
@@ -1193,7 +1201,7 @@ internal static class GeoLocationHelper
                 (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
                 (b[0] == 192 && b[1] == 168) ||
                 (b[0] == 169 && b[1] == 254))
-                return null; // RFC 1918 private / APIPA
+                return null;
         }
 
         try
@@ -1223,16 +1231,13 @@ internal static class GeoLocationHelper
 
         var countryCode = await LookupCountryCodeAsync(ip);
 
-        // Private / internal IP
         if (countryCode == null)
             return policy.AllowPrivateIps ? data : ApplyAction(policy.UnknownLocationAction, data);
 
-        // Explicit block list takes highest priority
         if (policy.BlockedCountryCodes.Length > 0 &&
             policy.BlockedCountryCodes.Contains(countryCode, StringComparer.OrdinalIgnoreCase))
             return ApplyAction(policy.ViolationAction, data);
 
-        // Allow list — if non-empty, country must be in it
         if (policy.AllowedCountryCodes.Length > 0 &&
             !policy.AllowedCountryCodes.Contains(countryCode, StringComparer.OrdinalIgnoreCase))
             return ApplyAction(policy.ViolationAction, data);
