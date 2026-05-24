@@ -138,7 +138,7 @@
 
 ## ~~Sprint 9 - RFP Gap: Reporting + Auth + CLI~~ ✅ TAMAMLANDI
 **Tarih:** 16-22 Mayıs 2026
-**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarnı kapattı
+**Durum:** Tamamlandı — Reporting, MFA, UX RFP boşluklarını kapattı
 
 | Issue | Başlık | Tip | Durum |
 |-------|--------|-----|------|
@@ -389,7 +389,7 @@
 **Durum:** Tamamlandi
 
 | Item | Aciklama | Durum |
-|------|----------|—|
+|------|----------|---|
 | Counter.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | Weather.razor | Blazor default demo sayfasi — silindi | ✅ Tamamlandi |
 | MapAccessAssignmentEndpoints() | Eski model (Sprint 24 AssignedCredential ile superseded) — Program.cs'den kaldirildi | ✅ Tamamlandi |
@@ -830,8 +830,34 @@
 
 ---
 
+## Sprint 50 - Live Session Shadowing (#258) ✅ TAMAMLANDI
+**Tarih:** 2026-05-24
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #258 | [MVP] Live Session Shadowing — Admin Co-Watch for Compliance (RA #40) | MVP-SESSION | ✅ Tamamlandi |
+
+**Sprint 50 Tamamlanan Bilesenler (2026-05-24):**
+- **SessionShadow entity** (ProxySession.cs): SessionId FK, ShadowByUserId, ShadowByUsername, StartedAtUtc, EndedAtUtc, ShadowIp, IsActive
+- **Migration `20260524_AddSessionShadow`:** SessionShadows tablosu + 2 index (SessionId, SessionId+IsActive) + FK → ProxySessions CASCADE
+- **DbContext:** SessionShadows DbSet + EF Core config (max lengths, indexes)
+- **ShadowEndpoints.cs:** 4 endpoint — POST /shadow (create + observer++), DELETE /shadow (end + observer--), GET /shadows (active list), POST /shadow/revoke-all (admin bulk revoke); 3 audit events (SESSION_SHADOW_STARTED/ENDED/REVOKED)
+- **Program.cs:** MapShadowEndpoints() kaydedildi
+- **SshTargetClient.cs:** RelayToClientAsync + TargetToClientLoopAsync — `liveChunk` callback parametresi eklendi; target→client byte stream her chunki liveChunk?.Invoke() ile iletir
+- **SshServerSession.cs:** `pamSessionId != null ? text => _api.SendLiveChunk(pamSessionId, text) : null` callback RelayToClientAsync'e gecirildi — SSH terminal output artik SessionChunkStore'a yaziliyor
+- **Sessions.razor:** ShadowAsync() metodu duzeltildi — RDP download yerine `/shadow/{sessionId}` navigasyonu; Shadow butonu basitledirildi
+- **SessionShadow.razor:** Yeni sayfa `/shadow/{SessionId}` — StartShadowAsync ile DB kaydedilen shadow baslatma; 2s poll ile terminal output stream; Status panel (observers, risk score, target IP); Recent Commands panel; Terminate Session modal; DisposeAsync'de StopShadowAsync ile temiz kapanma
+- **PamApiService.cs:** Eksik private metodlar eklendi: GetAuthClientAsync + GetAsync<T> (data-field extractor with root fallback); Yeni live session metodlar: JoinLiveSessionAsync, LeaveLiveSessionAsync, BroadcastLiveMessageAsync, GetSessionCommandsAsync; Yeni shadow metodlar: StartShadowAsync, StopShadowAsync, GetLiveStreamAsync; GetLiveSessionStatusAsync → LiveSessionStatusDto; Yeni DTOs: ShadowStartDto, LiveStreamDto, LiveSessionStatusDto, LiveObserverDto, SessionCommandDto
+- **RFP-CHECKLIST.md:** RA #40 (session collaboration) → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 49 tamamlandi.** MFA Session Persistence #257 push'landi, MFA #20 → PC.
+**Sprint 50 tamamlandi.** Session Shadowing #258 push'landi, RA #40 → PC.
+**Sprint 51 hedefi:** #261 OATH Hardware Token (MFA #7) veya #262 IPv6 Dual-Stack (Platform #21)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
