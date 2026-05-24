@@ -167,3 +167,31 @@ public class ScreenCaptureFrame
     public string? DataBase64 { get; set; }
     public string SessionType { get; set; } = "Unknown";
 }
+
+/// <summary>
+/// Grants a delegatee scoped temporary access to start sessions against a device or device group
+/// using the delegator's credential. Distinct from Handoff (no active session transferred) and
+/// Shadow (not read-only observation). RA #42.
+/// </summary>
+public class SessionDelegation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid DelegatorUserId { get; set; }
+    public string? DelegatorUsername { get; set; }
+    public Guid DelegateUserId { get; set; }
+    public string? DelegateUsername { get; set; }
+    /// <summary>Target device. Null means DeviceGroupId is used.</summary>
+    public Guid? DeviceId { get; set; }
+    /// <summary>Target device group. Null means DeviceId is used.</summary>
+    public Guid? DeviceGroupId { get; set; }
+    /// <summary>Specific credential granted. Null = any credential the delegator owns on the target.</summary>
+    public Guid? CredentialId { get; set; }
+    public DateTime GrantedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAtUtc { get; set; }
+    public DateTime? RevokedAtUtc { get; set; }
+    /// <summary>Active | Expired | Revoked | Used</summary>
+    public string Status { get; set; } = "Active";
+    public int MaxSessionCount { get; set; } = 1;
+    public int UsageCount { get; set; } = 0;
+    public string? DelegationNote { get; set; }
+}
