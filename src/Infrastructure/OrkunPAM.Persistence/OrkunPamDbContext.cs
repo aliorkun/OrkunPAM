@@ -56,6 +56,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<SessionPolicy> SessionPolicies => Set<SessionPolicy>();
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
     public DbSet<SessionObserverLog> SessionObserverLogs => Set<SessionObserverLog>();
+    public DbSet<SessionShadow> SessionShadows => Set<SessionShadow>();
     public DbSet<ScreenCaptureFrame> ScreenCaptureFrames => Set<ScreenCaptureFrame>();
 
     // Analytics
@@ -598,6 +599,15 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(o => o.SessionId);
             e.HasIndex(o => o.ObserverUserId);
             e.Property(o => o.ObserverUsername).HasMaxLength(256);
+        });
+
+        modelBuilder.Entity<SessionShadow>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.ShadowByUsername).HasMaxLength(256);
+            e.Property(s => s.ShadowIp).HasMaxLength(64);
+            e.HasIndex(s => s.SessionId);
+            e.HasIndex(s => new { s.SessionId, s.IsActive });
         });
 
         // === Assigned Credential (Kron PAM model) ===
