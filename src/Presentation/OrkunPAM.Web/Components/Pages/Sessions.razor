@@ -628,7 +628,7 @@
             "compliance-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
     }
 
-    // ── Tags ─────────────────────────────────────────────────────────────────
+    // ── Tags ─────────────────────────────────────────────────────────────────────
     private void OpenTagModal(SessionDto s)
     {
         _tagSession = s;
@@ -647,7 +647,7 @@
         else { _error = "Failed to save tags."; StateHasChanged(); }
     }
 
-    // ── Annotations ──────────────────────────────────────────────────────────
+    // ── Annotations ──────────────────────────────────────────────────────────────────
     private async Task OpenAnnotationsPanel(string sessionId)
     {
         _annotSessionId = sessionId;
@@ -677,7 +677,7 @@
         StateHasChanged();
     }
 
-    // ── Handoff ──────────────────────────────────────────────────────────────
+    // ── Handoff ──────────────────────────────────────────────────────────────────────
     private async Task OpenHandoffModal(SessionDto s)
     {
         _handoffSession      = s;
