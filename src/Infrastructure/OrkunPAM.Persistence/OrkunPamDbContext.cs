@@ -57,6 +57,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CommandLog> CommandLogs => Set<CommandLog>();
     public DbSet<SessionObserverLog> SessionObserverLogs => Set<SessionObserverLog>();
     public DbSet<SessionShadow> SessionShadows => Set<SessionShadow>();
+    public DbSet<SessionHandoff> SessionHandoffs => Set<SessionHandoff>();
     public DbSet<ScreenCaptureFrame> ScreenCaptureFrames => Set<ScreenCaptureFrame>();
 
     // Analytics
@@ -611,6 +612,18 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(s => s.ShadowIp).HasMaxLength(64);
             e.HasIndex(s => s.SessionId);
             e.HasIndex(s => new { s.SessionId, s.IsActive });
+        });
+
+        modelBuilder.Entity<SessionHandoff>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.RequestedByUsername).HasMaxLength(256);
+            e.Property(h => h.RequestedToUsername).HasMaxLength(256);
+            e.Property(h => h.Status).HasMaxLength(32);
+            e.Property(h => h.TransferNotes).HasMaxLength(1024);
+            e.HasOne<ProxySession>().WithMany().HasForeignKey(h => h.SessionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(h => h.SessionId);
+            e.HasIndex(h => new { h.RequestedToUserId, h.Status });
         });
 
         // === Assigned Credential (Kron PAM model) ===

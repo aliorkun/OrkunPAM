@@ -878,9 +878,32 @@
 
 ---
 
+## Sprint 52 — Session Handoff (#263) — RA #41
+**Tarih:** 2026-05-24
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #263 | [MVP] Session Handoff — Admin Session Transfer for Shift Changes & Escalation (RA #41) | MVP-SESSION | ✅ Tamamlandi |
+
+**Sprint 52 Tamamlanan Bilesenler (2026-05-24):**
+- **SessionHandoff entity** (ProxySession.cs): Id, SessionId FK, RequestedByUserId, RequestedByUsername, RequestedToUserId, RequestedToUsername, RequestedAtUtc, AcceptedAtUtc, Status (Pending/Accepted/Declined/Expired), TransferNotes, ExpiresAtUtc (15 dk TTL)
+- **Migration `20260524_AddSessionHandoff`:** SessionHandoffs tablosu + 2 index (SessionId, RequestedToUserId+Status) + FK → ProxySessions CASCADE
+- **DbContext:** SessionHandoffs DbSet + EF Core konfigurasyonu (cascade delete, max lengths, indexes)
+- **SessionHandoffEndpoints.cs:** 5 endpoint — POST /handoff (request, cancels prior pending), POST /handoff/accept (ownership transfer + ProxySession.UserId güncelleme), POST /handoff/decline, GET /handoff/pending (stale auto-expire), GET /{id}/handoffs (admin history); 5 audit event: SESSION_HANDOFF_REQUESTED/ACCEPTED/DECLINED/EXPIRED + SESSION_TRANSFERRED
+- **Program.cs:** MapSessionHandoffEndpoints() kaydedildi
+- **PamApiService.cs:** RequestHandoffAsync, AcceptHandoffAsync, DeclineHandoffAsync, GetPendingHandoffsAsync + HandoffCreatedDto + PendingHandoffDto
+- **Sessions.razor:** Handoff button (active sessions), pending badge (header), Handoff request modal (user dropdown + notes), Pending Handoffs panel (Accept/Decline); LoadPendingHandoffsAsync on page load
+- **Live stream notification:** Handoff request + acceptance banners injected into SessionChunkStore (visible to shadow observers)
+- **RFP-CHECKLIST.md:** RA #41 → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 51 tamamlandi.** OATH Hardware Token #261 push'landi, MFA #7 → PC.
-**Sprint 52 hedefi:** #262 IPv6 Dual-Stack (Platform #21) veya #263 Session Handoff (RA #41)
+**Sprint 52 tamamlandi.** Session Handoff #263 push'landi, RA #41 → PC.
+**Sprint 53 hedefi:** #262 IPv6 Dual-Stack (Platform #21) — socket bind degisiklikleri
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

@@ -7,7 +7,14 @@
 
 <div class="pam-page-header" style="display:flex;align-items:center;justify-content:space-between;">
     <h2 class="pam-page-title">Sessions</h2>
-    <div style="display:flex;gap:.5rem">
+    <div style="display:flex;gap:.5rem;align-items:center">
+        @if (_pendingHandoffs != null && _pendingHandoffs.Count > 0)
+        {
+            <button class="pam-btn pam-btn-warning pam-btn-sm" @onclick="OpenPendingHandoffsPanel"
+                    title="You have pending session handoff requests">
+                &#x21C4; @_pendingHandoffs.Count Handoff Request@(_pendingHandoffs.Count == 1 ? "" : "s")
+            </button>
+        }
         @if (_activeTab == "sessions")
         {
             <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportCsvAsync">Export CSV</button>
@@ -96,7 +103,7 @@
                                 </td>
                                 <td style="display:flex;gap:4px;flex-wrap:wrap;">
                                     <button class="pam-btn pam-btn-secondary pam-btn-sm"
-                                            @onclick="@(() => OpenAnnotationsPanel(s.Id))">
+                                            @onclick="@(() => OpenAnnotationsPanel(s.Id.ToString()))">
                                         &#x1F4DD; Notes
                                     </button>
                                     @if (s.Status == "Active")
@@ -106,8 +113,12 @@
                                             &#x25CF; Live
                                         </button>
                                         <button class="pam-btn pam-btn-warning pam-btn-sm"
-                                                @onclick="@(() => ShadowAsync(s.Id))">
+                                                @onclick="@(() => ShadowAsync(s.Id.ToString()))">
                                             &#x1F441; Shadow
+                                        </button>
+                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                @onclick="@(() => OpenHandoffModal(s))">
+                                            &#x21C4; Handoff
                                         </button>
                                     }
                                 </td>
@@ -362,6 +373,112 @@
     </div>
 }
 
+@* Handoff request modal *@
+@if (_handoffSession != null)
+{
+    <div class="pam-modal-overlay" @onclick="CloseHandoffModal">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">&#x21C4; Request Session Handoff</h3>
+                <button class="pam-close-btn" @onclick="CloseHandoffModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <div style="margin-bottom:.75rem;font-size:0.9em;color:#aaa">
+                    Transfer ownership of this active session to another admin.
+                    The recipient has 15 minutes to accept or decline.
+                </div>
+                <label class="pam-label">Target Admin</label>
+                <select class="pam-input pam-select" style="width:100%;margin-bottom:.75rem" @bind="_handoffTargetUserId">
+                    <option value="">— Select admin —</option>
+                    @if (_adminUsers != null)
+                    {
+                        @foreach (var u in _adminUsers)
+                        {
+                            <option value="@u.Id.ToString()">@(u.DisplayName ?? u.Username) (@u.Username)</option>
+                        }
+                    }
+                </select>
+                <label class="pam-label">Transfer Notes (optional)</label>
+                <textarea class="pam-input" rows="3" style="width:100%" @bind="_handoffNotes"
+                          placeholder="e.g. Shift change — please monitor the rm command in progress"></textarea>
+                @if (_handoffError != null)
+                {
+                    <div class="pam-alert pam-alert-danger" style="margin-top:.5rem">@_handoffError</div>
+                }
+                @if (_handoffSuccess != null)
+                {
+                    <div class="pam-alert pam-alert-success" style="margin-top:.5rem">@_handoffSuccess</div>
+                }
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseHandoffModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SendHandoffRequestAsync"
+                        disabled="@(_handoffSending || string.IsNullOrEmpty(_handoffTargetUserId))">
+                    @if (_handoffSending) { <span class="pam-spinner-sm"></span> } Send Request
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Pending handoffs panel *@
+@if (_showPendingHandoffs)
+{
+    <div class="pam-modal-overlay" @onclick="ClosePendingHandoffsPanel">
+        <div class="pam-modal" style="max-width:640px" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">&#x21C4; Pending Handoff Requests</h3>
+                <button class="pam-close-btn" @onclick="ClosePendingHandoffsPanel">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_pendingHandoffs == null || _pendingHandoffs.Count == 0)
+                {
+                    <div class="pam-empty">No pending handoff requests.</div>
+                }
+                else
+                {
+                    @foreach (var h in _pendingHandoffs)
+                    {
+                        <div style="border:1px solid #30363d;border-radius:6px;padding:.75rem;margin-bottom:.5rem">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                                <div>
+                                    <div style="font-weight:600;margin-bottom:.25rem">
+                                        Session transfer from <strong>@(h.RequestedByUsername ?? "admin")</strong>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(h.TransferNotes))
+                                    {
+                                        <div style="font-size:0.85em;color:#ccc;margin-bottom:.25rem">@h.TransferNotes</div>
+                                    }
+                                    <div style="font-size:0.75em;color:#888">
+                                        Requested @h.RequestedAtUtc.ToLocalTime().ToString("MM/dd HH:mm") —
+                                        Expires @h.ExpiresAtUtc.ToLocalTime().ToString("HH:mm")
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:.5rem;flex-shrink:0;margin-left:1rem">
+                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                            @onclick="@(() => AcceptHandoffAsync(h))"
+                                            disabled="@_handoffActionBusy">
+                                        Accept
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => DeclineHandoffAsync(h))"
+                                            disabled="@_handoffActionBusy">
+                                        Decline
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                @if (_handoffActionResult != null)
+                {
+                    <div class="pam-alert pam-alert-success" style="margin-top:.5rem">@_handoffActionResult</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private List<SessionDto>? _sessions;
     private PageMeta?         _meta;
@@ -392,12 +509,27 @@
     private bool                       _annotSaving   = false;
     private string?                    _annotError;
 
+    // Handoff — send
+    private SessionDto? _handoffSession;
+    private List<UserDto>? _adminUsers;
+    private string      _handoffTargetUserId = "";
+    private string      _handoffNotes        = "";
+    private bool        _handoffSending      = false;
+    private string?     _handoffError;
+    private string?     _handoffSuccess;
+
+    // Handoff — pending (incoming)
+    private List<PendingHandoffDto>? _pendingHandoffs;
+    private bool                     _showPendingHandoffs = false;
+    private bool                     _handoffActionBusy   = false;
+    private string?                  _handoffActionResult;
+
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        await LoadAsync();
+        await Task.WhenAll(LoadAsync(), LoadPendingHandoffsAsync());
     }
 
     private async Task SwitchTab(string tab)
@@ -418,7 +550,7 @@
     private async Task LoadAsync()
     {
         _loading = true; _error = null; StateHasChanged();
-        var result = await Api.GetSessionsAsync(_statusFilter, _page, _pageSize);
+        var result = await Api.GetSessionsAsync(status: _statusFilter, page: _page, pageSize: _pageSize);
         if (result == null) _error = "Failed to load sessions.";
         else { _sessions = result.Data; _meta = result.Meta; }
         _loading = false; StateHasChanged();
@@ -509,7 +641,7 @@
     {
         if (_tagSession == null) return;
         _tagSaving = true; StateHasChanged();
-        var ok = await Api.UpdateSessionTagsAsync(_tagSession.Id, _tagInput.Trim());
+        var ok = await Api.UpdateSessionTagsAsync(_tagSession.Id.ToString(), _tagInput.Trim());
         _tagSaving = false;
         if (ok) { CloseTagModal(); await LoadAsync(); }
         else { _error = "Failed to save tags."; StateHasChanged(); }
@@ -542,6 +674,103 @@
             _annotations   = await Api.GetSessionAnnotationsAsync(_annotSessionId!);
         }
         else { _annotError = "Failed to add note."; }
+        StateHasChanged();
+    }
+
+    // ── Handoff ──────────────────────────────────────────────────────────────
+    private async Task OpenHandoffModal(SessionDto s)
+    {
+        _handoffSession      = s;
+        _handoffTargetUserId = "";
+        _handoffNotes        = "";
+        _handoffError        = null;
+        _handoffSuccess      = null;
+        if (_adminUsers == null)
+        {
+            var users = await Api.GetUsersAsync(page: 1, pageSize: 100);
+            _adminUsers = users?.Data?.Where(u => u.Status == "Active" && !u.IsServiceAccount).ToList();
+        }
+        StateHasChanged();
+    }
+
+    private void CloseHandoffModal()
+    {
+        _handoffSession = null;
+        StateHasChanged();
+    }
+
+    private async Task SendHandoffRequestAsync()
+    {
+        if (_handoffSession == null || string.IsNullOrEmpty(_handoffTargetUserId)) return;
+        if (!Guid.TryParse(_handoffTargetUserId, out var targetId))
+        { _handoffError = "Invalid target user."; StateHasChanged(); return; }
+
+        _handoffSending = true; _handoffError = null; _handoffSuccess = null; StateHasChanged();
+        var result = await Api.RequestHandoffAsync(_handoffSession.Id.ToString(), targetId, _handoffNotes.Trim());
+        _handoffSending = false;
+        if (result != null)
+        {
+            _handoffSuccess = "Handoff request sent. The recipient has 15 minutes to accept.";
+        }
+        else
+        {
+            _handoffError = "Failed to send handoff request.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadPendingHandoffsAsync()
+    {
+        _pendingHandoffs = await Api.GetPendingHandoffsAsync();
+        StateHasChanged();
+    }
+
+    private async Task OpenPendingHandoffsPanel()
+    {
+        await LoadPendingHandoffsAsync();
+        _showPendingHandoffs = true;
+        _handoffActionResult = null;
+        StateHasChanged();
+    }
+
+    private void ClosePendingHandoffsPanel()
+    {
+        _showPendingHandoffs = false;
+        StateHasChanged();
+    }
+
+    private async Task AcceptHandoffAsync(PendingHandoffDto h)
+    {
+        _handoffActionBusy = true; _handoffActionResult = null; StateHasChanged();
+        var ok = await Api.AcceptHandoffAsync(h.SessionId.ToString(), h.Id);
+        _handoffActionBusy = false;
+        if (ok)
+        {
+            _handoffActionResult = "Session ownership transferred to you successfully.";
+            await LoadPendingHandoffsAsync();
+            await LoadAsync();
+        }
+        else
+        {
+            _handoffActionResult = "Failed to accept handoff (expired or already resolved).";
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeclineHandoffAsync(PendingHandoffDto h)
+    {
+        _handoffActionBusy = true; _handoffActionResult = null; StateHasChanged();
+        var ok = await Api.DeclineHandoffAsync(h.SessionId.ToString(), h.Id);
+        _handoffActionBusy = false;
+        if (ok)
+        {
+            _handoffActionResult = "Handoff request declined.";
+            await LoadPendingHandoffsAsync();
+        }
+        else
+        {
+            _handoffActionResult = "Failed to decline handoff.";
+        }
         StateHasChanged();
     }
 }

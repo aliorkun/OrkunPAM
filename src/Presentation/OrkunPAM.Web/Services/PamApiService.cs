@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace OrkunPAM.Web.Services;
 
@@ -468,6 +469,54 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    public async Task<bool> UpdateSessionTagsAsync(string id, string tags)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/sessions/{id}/tags", new { tags });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<SessionAnnotationDto>?> GetSessionAnnotationsAsync(string id)
+        => await GetAsync<List<SessionAnnotationDto>>($"/api/v1/sessions/{id}/annotations");
+
+    public async Task<SessionAnnotationDto?> AddSessionAnnotationAsync(string id, string note)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/{id}/annotations", new { note });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<SessionAnnotationDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<string?> GetSessionsExportCsvAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.GetAsync("/api/v1/sessions?pageSize=5000");
+            if (!resp.IsSuccessStatusCode) return null;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var dataProp)) return null;
+            var sessions = dataProp.Deserialize<List<SessionDto>>(JsonOpts);
+            if (sessions == null) return null;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Id,SessionType,Status,TargetIpAddress,TargetPort,ClientIpAddress,StartedAtUtc,EndedAtUtc,DurationSeconds,RiskScore,Tags");
+            foreach (var s in sessions)
+                sb.AppendLine($"{s.Id},{s.SessionType},{s.Status},{s.TargetIpAddress},{s.TargetPort},{s.ClientIpAddress},{s.StartedAtUtc:O},{s.EndedAtUtc:O},{s.DurationSeconds},{s.RiskScore},{s.Tags}");
+            return sb.ToString();
+        }
+        catch { return null; }
+    }
+
     // ── Live Session (join/leave/broadcast/stream/status) ──────────────────────
     public async Task<bool> JoinLiveSessionAsync(string sessionId)
     {
@@ -537,6 +586,48 @@ public sealed class PamApiService
 
     public async Task<LiveSessionStatusDto?> GetLiveSessionStatusAsync(string sessionId)
         => await GetAsync<LiveSessionStatusDto>($"/api/v1/sessions/live/{sessionId}/status");
+
+    // ── Session Handoff ────────────────────────────────────────────────────────
+    public async Task<HandoffCreatedDto?> RequestHandoffAsync(string sessionId, Guid targetUserId, string? notes)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/handoff",
+                new { targetUserId, notes });
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<HandoffCreatedDto>>(JsonOpts);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> AcceptHandoffAsync(string sessionId, Guid handoffId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/handoff/accept",
+                new { handoffId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeclineHandoffAsync(string sessionId, Guid handoffId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/handoff/decline",
+                new { handoffId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<PendingHandoffDto>?> GetPendingHandoffsAsync()
+        => await GetAsync<List<PendingHandoffDto>>("/api/v1/sessions/handoff/pending");
 
     // ── Audit Logs ─────────────────────────────────────────────────────────────
     public async Task<PagedResult<AuditLogDto>?> GetAuditLogsAsync(
@@ -1780,9 +1871,10 @@ public record LoginData(
     string?  RiskLevel              = null,
     decimal  RiskScore              = 0);
 
-public record PagedResult<T>(bool Success, List<T>? Data, PagingMeta? Meta);
+public record PagedResult<T>(bool Success, List<T>? Data, PageMeta? Meta);
 public record ListResult<T>(bool Success, List<T>? Data);
 public record SingleResult<T>(bool Success, T? Data);
+public record PageMeta(int Page, int PageSize, int TotalCount);
 public record PagingMeta(int Page, int PageSize, int Total, int TotalPages);
 
 public record UserDto(
@@ -1901,17 +1993,29 @@ public record DeviceRealmDto(
 public record SessionDto(
     Guid      Id,
     Guid      UserId,
-    string    UserName,
     Guid      DeviceId,
-    string    DeviceName,
-    string    Protocol,
+    Guid      CredentialId,
+    [property: JsonPropertyName("type")] string SessionType,
     string    Status,
-    DateTime  StartedAt,
-    DateTime? EndedAt,
+    DateTime  StartedAtUtc,
+    DateTime? EndedAtUtc,
     int?      DurationSeconds,
-    string?   TerminationReason,
-    bool      IsRecorded,
-    string?   RecordingPath);
+    string?   ClientIpAddress,
+    string?   TargetIpAddress,
+    int?      TargetPort,
+    decimal   RiskScore,
+    bool      HasKeystrokeLog,
+    bool      HasOcrData,
+    string?   Reason,
+    string?   TicketNumber,
+    string?   Tags);
+
+public record SessionAnnotationDto(
+    Guid     Id,
+    Guid     SessionId,
+    string?  Note,
+    string?  AuthorUsername,
+    DateTime CreatedAtUtc);
 
 public record AuditLogDto(
     Guid      Id,
@@ -2406,6 +2510,22 @@ public record SessionCommandDto(
     decimal  RiskScore,
     bool     WasBlocked,
     string?  BlockReason);
+
+// Session Handoff (#263)
+public record HandoffCreatedDto(
+    Guid     HandoffId,
+    Guid     SessionId,
+    string?  RequestedToUser,
+    DateTime ExpiresAtUtc,
+    string   Status);
+
+public record PendingHandoffDto(
+    Guid     Id,
+    Guid     SessionId,
+    string?  RequestedByUsername,
+    DateTime RequestedAtUtc,
+    DateTime ExpiresAtUtc,
+    string?  TransferNotes);
 
 // Hardware Tokens (#261)
 public record HardwareTokenDto(

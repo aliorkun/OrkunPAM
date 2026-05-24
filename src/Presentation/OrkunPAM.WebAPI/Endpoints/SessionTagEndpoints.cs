@@ -16,7 +16,7 @@ public static class SessionTagEndpoints
             Guid id, UpdateTagsRequest req, OrkunPamDbContext db,
             IAuditService audit, ICurrentUserService currentUser) =>
         {
-            var session = await db.Sessions.FindAsync(id);
+            var session = await db.ProxySessions.FindAsync(id);
             if (session == null)
                 return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
 
@@ -59,7 +59,7 @@ public static class SessionTagEndpoints
             if (string.IsNullOrWhiteSpace(req.Note))
                 return Results.BadRequest(new { success = false, errors = new[] { "Note cannot be empty" } });
 
-            if (!await db.Sessions.AnyAsync(s => s.Id == id))
+            if (!await db.ProxySessions.AnyAsync(s => s.Id == id))
                 return Results.NotFound(new { success = false, errors = new[] { "Session not found" } });
 
             var authorId = currentUser.UserId ?? Guid.Empty;

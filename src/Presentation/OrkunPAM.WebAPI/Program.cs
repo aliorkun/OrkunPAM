@@ -508,6 +508,7 @@ try
     api.MapRdpProxySessionEndpoints();
     api.MapLiveSessionEndpoints();
     api.MapShadowEndpoints();
+    api.MapSessionHandoffEndpoints();
     api.MapSmsOtpEndpoints();
     api.MapHardwareTokenEndpoints();
     api.MapSessionTagEndpoints();

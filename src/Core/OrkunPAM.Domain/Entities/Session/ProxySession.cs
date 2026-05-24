@@ -117,6 +117,27 @@ public class PeripheralRedirectionPolicy : AuditableEntity
 }
 
 /// <summary>
+/// Represents a session ownership transfer request (handoff) between two admins.
+/// The requesting admin initiates the transfer; the receiving admin accepts/declines.
+/// On acceptance, ProxySession.UserId is updated to the new owner.
+/// </summary>
+public class SessionHandoff
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionId { get; set; }
+    public Guid RequestedByUserId { get; set; }
+    public string? RequestedByUsername { get; set; }
+    public Guid RequestedToUserId { get; set; }
+    public string? RequestedToUsername { get; set; }
+    public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? AcceptedAtUtc { get; set; }
+    /// <summary>Pending | Accepted | Declined | Expired</summary>
+    public string Status { get; set; } = "Pending";
+    public string? TransferNotes { get; set; }
+    public DateTime ExpiresAtUtc { get; set; } = DateTime.UtcNow.AddMinutes(15);
+}
+
+/// <summary>
 /// Tracks a real-time shadow (read-only observation) of an active proxy session.
 /// </summary>
 public class SessionShadow

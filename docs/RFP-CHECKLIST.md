@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-24 (Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-24 (Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 ## Platform (44 items)
 
@@ -232,7 +232,7 @@
 | 38 | Solution shall support session reporting | PC | Sessions.razor — session list, compliance tab; Reports.razor — session activity reports |
 | 39 | Solution shall support session approval | PC | Approvals.razor + ApprovalsEndpoints.cs — pre-session approval workflow, JIT access requests |
 | 40 | Solution shall support session collaboration | PC | ShadowEndpoints.cs — POST/DELETE /shadow (DB-tracked, audit); SessionShadow.razor — real-time terminal viewer; SSH proxy live chunk streaming; SessionChunkStore ring buffer; RFP RA #40 (#258) |
-| 41 | Solution shall support session handoff |  |  |
+| 41 | Solution shall support session handoff | PC | SessionHandoffEndpoints.cs — POST /handoff (request), /handoff/accept, /handoff/decline, GET /handoff/pending; Sessions.razor — Handoff button + pending badge + modals; 5 audit events; 15 min TTL auto-expire; RFP RA #41 (#263) |
 | 42 | Solution shall support session delegation |  |  |
 | 43 | Solution shall support session federation |  |  |
 | 44 | Solution shall support multi-protocol sessions | PC | SSH + RDP + VNC + HTTP + SQL + TACACS+ + RADIUS + Telnet — 8 protocols via unified PAM |
