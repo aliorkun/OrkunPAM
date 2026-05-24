@@ -507,6 +507,7 @@ try
     api.MapSshProxySessionEndpoints();
     api.MapRdpProxySessionEndpoints();
     api.MapLiveSessionEndpoints();
+    api.MapShadowEndpoints();
     api.MapSmsOtpEndpoints();
     api.MapSessionTagEndpoints();
     api.MapDeviceRealmEndpoints();

@@ -106,9 +106,8 @@
                                             &#x25CF; Live
                                         </button>
                                         <button class="pam-btn pam-btn-warning pam-btn-sm"
-                                                disabled="@(_shadowingId == s.Id)"
                                                 @onclick="@(() => ShadowAsync(s.Id))">
-                                            @(_shadowingId == s.Id ? "&#x2026;" : "Shadow")
+                                            &#x1F441; Shadow
                                         </button>
                                     }
                                 </td>
@@ -371,7 +370,6 @@
     private string            _statusFilter = "";
     private int               _page         = 1;
     private const int         _pageSize     = 20;
-    private string?           _shadowingId;
 
     // Tabs
     private string _activeTab = "sessions";
@@ -453,19 +451,9 @@
     private async Task PrevPage() { _page--; await LoadAsync(); }
     private async Task NextPage() { _page++; await LoadAsync(); }
 
-    private async Task ShadowAsync(string sessionId)
+    private void ShadowAsync(string sessionId)
     {
-        _shadowingId = sessionId;
-        _error = null;
-        StateHasChanged();
-        try
-        {
-            var result = await Api.ShadowSessionAsync(sessionId);
-            if (result == null) { _error = "Shadow failed. Requires GlobalAdmin or SessionAdmin role."; return; }
-            await JS.InvokeVoidAsync("downloadRdpFile", result.RdpFile.Filename, result.RdpFile.ContentBase64);
-        }
-        catch (Exception ex) { _error = "Error: " + ex.Message; }
-        finally { _shadowingId = null; StateHasChanged(); }
+        Nav.NavigateTo("/shadow/" + sessionId);
     }
 
     private async Task ExportCsvAsync()
