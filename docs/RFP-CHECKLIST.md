@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-24 (Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-24 (Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 ## Platform (44 items)
 
@@ -28,7 +28,7 @@
 | 18 | Solution shall support disaster recovery. | PC | BackupService.cs — AES-256-GCM encrypted backup/restore, Hangfire scheduler, Blazor UI (#55) |
 | 19 | Solution shall support different software versions of a network device simultaneously. |  |  |
 | 20 | Solution software shall support working on indu |  |  |
-| 21 | Solution shall support IPv6. |  |  |
+| 21 | Solution shall support IPv6. | PC | All 8 proxy services updated to IPv6 dual-stack: IPAddress.IPv6Any + DualMode=true for TCP proxies (SSH :2222, RDP :3389, SQL, VNC, HTTP, Telnet, TACACS+); RADIUS UdpClient dual-stack factory — UdpClient(IPv6) + DualMode=true before Bind; single socket accepts both IPv4 and IPv6 connections (#262) |
 | 22 | Solution shall be able to support a minimum of 100,000 devices and/or 100,000 accounts. |  |  |
 | 23 | Solution shall have REST-API support. | PC | OrkunPAM.WebAPI — ASP.NET Minimal API with OpenAPI/Swagger; full REST CRUD for all resources |
 | 24 | Solution shall support programmatic access through REST API. | PC | REST API with JWT bearer auth; all major endpoints documented |
