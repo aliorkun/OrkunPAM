@@ -425,11 +425,16 @@ internal sealed class SshServerSession
 
         try
         {
+            Action<string>? liveChunk = pamSessionId != null
+                ? text => _api.SendLiveChunk(pamSessionId, text)
+                : null;
+
             var relayTask = target.RelayToClientAsync(
                 _conn, clientChanId, recorder, idleCts.Token, lastActivity,
                 commandFilter, filterMode, sessionPolicy?.CommandFilterRulesJson,
                 sessionPolicy?.DoubleConfirmRiskThreshold ?? 0,
-                sessionPolicy?.DoubleConfirmCommandsJson);
+                sessionPolicy?.DoubleConfirmCommandsJson,
+                liveChunk);
             var idleTask  = IdleWatchAsync(idleTimeoutMinutes, lastActivity, idleCts, pamSessionId);
 
             await Task.WhenAny(relayTask, idleTask);

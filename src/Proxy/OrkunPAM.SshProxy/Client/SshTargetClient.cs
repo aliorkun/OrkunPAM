@@ -419,9 +419,10 @@ internal sealed class SshTargetClient : IDisposable
         SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks = null,
         CommandFilter? commandFilter = null, CommandFilterModeProxy filterMode = CommandFilterModeProxy.None,
         string? commandFilterRulesJson = null,
-        decimal doubleConfirmThreshold = 0, string? doubleConfirmCommandsJson = null)
+        decimal doubleConfirmThreshold = 0, string? doubleConfirmCommandsJson = null,
+        Action<string>? liveChunk = null)
     {
-        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct, lastActivityTicks), ct);
+        var t2c = Task.Run(() => TargetToClientLoopAsync(clientConn, clientSideChanId, recorder, ct, lastActivityTicks, liveChunk), ct);
         var c2t = Task.Run(() => ClientToTargetLoopAsync(clientConn, clientSideChanId, ct, lastActivityTicks,
             commandFilter, filterMode, commandFilterRulesJson,
             doubleConfirmThreshold, doubleConfirmCommandsJson), ct);
@@ -431,7 +432,8 @@ internal sealed class SshTargetClient : IDisposable
     // Receives data from target → forwards to client connection
     private async Task TargetToClientLoopAsync(
         SshConnection clientConn, uint clientSideChanId,
-        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks)
+        SessionRecorder? recorder, CancellationToken ct, long[]? lastActivityTicks,
+        Action<string>? liveChunk = null)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -458,6 +460,7 @@ internal sealed class SshTargetClient : IDisposable
                     await _conn.SendAsync(adj, ct);
 
                     recorder?.WriteOutput(data);
+                    liveChunk?.Invoke(System.Text.Encoding.UTF8.GetString(data));
                     if (lastActivityTicks != null)
                         Interlocked.Exchange(ref lastActivityTicks[0], DateTime.UtcNow.Ticks);
                     break;
