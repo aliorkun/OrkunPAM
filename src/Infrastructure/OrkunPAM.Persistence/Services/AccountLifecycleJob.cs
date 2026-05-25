@@ -169,6 +169,13 @@ public sealed class AccountLifecycleJob : BackgroundService
         if (locked > 0 || warned > 0)
             await db.SaveChangesAsync(ct);
 
+        // Cleanup expired session restore tokens
+        var deletedTokens = await db.SessionRestoreTokens
+            .Where(t => t.IsUsed || t.ExpiresAtUtc < now)
+            .ExecuteDeleteAsync(ct);
+        if (deletedTokens > 0)
+            _logger.LogInformation("AccountLifecycleJob: removed {Count} expired session restore tokens", deletedTokens);
+
         _logger.LogInformation("AccountLifecycleJob: locked={Locked} warned={Warned}", locked, warned);
     }
 

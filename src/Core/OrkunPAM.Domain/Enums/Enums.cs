@@ -33,7 +33,7 @@ public enum ImportSource : byte { Manual = 0, Csv = 1, AdSync = 2, Discovery = 3
 public enum CredentialPurpose : byte { Administrative = 0, Service = 1, Emergency = 2, Discovery = 3 }
 
 public enum SessionType : byte { Ssh = 0, Rdp = 1, Vnc = 2, Sql = 3, Http = 4, Sftp = 5, Telnet = 6 }
-public enum SessionStatus : byte { Active = 0, Completed = 1, Terminated = 2, Failed = 3 }
+public enum SessionStatus : byte { Active = 0, Completed = 1, Terminated = 2, Failed = 3, Disconnected = 4 }
 public enum CommandFilterMode : byte { None = 0, Whitelist = 1, Blacklist = 2 }
 
 public enum ApprovalStatus : byte { Pending = 0, Approved = 1, Denied = 2, Expired = 3, Escalated = 4 }

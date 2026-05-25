@@ -304,6 +304,27 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>
+    /// Mark a session as unexpectedly disconnected and issue a 15-min restore token.
+    /// Best-effort — never throws.
+    /// </summary>
+    internal async Task MarkSessionDisconnectedAsync(string sessionId)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post,
+                $"/api/v1/sessions/{sessionId}/mark-disconnected");
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            req.Content = JsonContent.Create(new { });
+            await client.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "MarkSessionDisconnected API call failed for session {SessionId} (non-fatal)", sessionId);
+        }
+    }
+
     /// <summary>Check if an admin has terminated this session via the UI.</summary>
     internal async Task<bool> IsTerminatedAsync(string sessionId, CancellationToken ct)
     {
