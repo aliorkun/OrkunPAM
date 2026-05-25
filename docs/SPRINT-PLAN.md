@@ -1028,9 +1028,39 @@
 
 ---
 
+## Sprint 59 - Biometric Authentication (#282) ✅ TAMAMLANDI
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #282 | [MVP] Biometric Authentication — Windows Hello / Touch ID via WebAuthn Platform Authenticators (Platform #44) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 59 Tamamlanan Bilesenler (2026-05-25):**
+- **Fido2Credential entity:** `AuthenticatorType` alani eklendi ("cross-platform" default, "platform" = biometric)
+- **Migration `20260525_AddFido2AuthenticatorType`:** Fido2Credentials tablosuna AuthenticatorType kolonu (maxLength:32, default:"cross-platform")
+- **OrkunPamDbContext:** Fido2Credential EF config'e `AuthenticatorType` max length + default value eklendi
+- **Fido2Endpoints.cs `register/begin`:** `?type=platform|cross-platform` query param; `authenticatorAttachment` dinamik; platform → `userVerification=required`; cache key'e type suffix eklendi
+- **Fido2Endpoints.cs `register/complete`:** `AuthenticatorType` body'den okunuyor + credential'a yaziliyor; audit events: `BIOMETRIC_PASSKEY_REGISTERED` / `FIDO2_KEY_REGISTERED`
+- **Fido2Endpoints.cs `authenticate/complete`:** `BIOMETRIC_AUTH_SUCCESS` / `FIDO2_AUTH_SUCCESS` / `BIOMETRIC_AUTH_FAILED` audit events; IAuditService inject edildi
+- **Fido2Endpoints.cs `list`:** `authenticatorType` alani response'a eklendi
+- **Fido2RegisterRequest:** `AuthenticatorType?` alani eklendi
+- **PamApiService.cs:** `BeginFido2RegistrationAsync(type)`, `GetFido2CredentialsAsync()`, `RevokeFido2DeviceAsync(credId)` + `Fido2CredentialDto` eklendi
+- **SelfService.razor:** "Add Biometric Passkey" butonu + `_biometricMsg`/`_biometricSuccess` state + `RegisterBiometricPasskeyAsync()` metodu
+- **RFP-CHECKLIST.md:** Platform #44 → PC
+
+**Security Fixes (ayni commit):**
+- **#286 [HIGH]:** SessionRestorationEndpoints.cs restore endpoint — kullanici hesap durumu + credential assignment re-check (CWE-285)
+- **#287 [MEDIUM]:** SessionRestorationEndpoints.cs mark-disconnected — FixedTimeEquals constant-time comparison (CWE-208)
+- **#288 [MEDIUM]:** SshProxy PamApiClient.cs ValidateUserAsync — Utf8JsonWriter ile password string heap'te daha kisa sureli (CWE-316)
+
+**Ilerleme:** 4/4 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 58 tamamlandi.** RA #47 → PC.
-**Sprint 59 hedefi:** #282 Biometric Auth (Platform #44) — S/M scope
+**Sprint 59 tamamlandi.** Platform #44 + 3 security fix → PC.
+**Sprint 60 hedefi:** #283 Network Segmentation (RA #8) veya #284 Credential Federation (PV #12)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

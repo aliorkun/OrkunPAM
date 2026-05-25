@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-25 (Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Sprint 53 RA #42 → PC #269; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-25 (Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Sprint 53 RA #42 → PC #269; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 ## Platform (44 items)
 
@@ -100,7 +100,7 @@
 | 41 | Solution shall support vendor access management | PC | VendorEndpoints.cs — vendor account lifecycle: onboard, sponsor-based access, automatic expiry, revocation (#186) |
 | 42 | Solution shall support third-party access | PC | AssignedCredential + DeviceRealm — external user scoped to specific device/credential assignments |
 | 43 | Solution shall support access federation | PC | SAML 2.0 + FIDO2 + PKI + Windows Auth — federated identity support |
-| 44 | Solution shall support biometric authentication |  |  |
+| 44 | Solution shall support biometric authentication | PC | Fido2Endpoints.cs — platform authenticator (Windows Hello / Touch ID) via WebAuthn authenticatorAttachment=platform (#282) |
 | 45 | Solution shall support certificate-based authentication | PC | PKI auth — X.509 client certificates via /api/v1/auth/pki/login (#115) |
 | 46 | Solution shall support smart card authentication | PC | PKI auth supports smart card certificates (X.509 via PkiEndpoints.cs) |
 | 47 | Solution shall support passwordless authentication | PC | FIDO2/WebAuthn — passwordless login via hardware security keys (#158) |

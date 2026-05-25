@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Session;
@@ -11,6 +13,16 @@ public static class SessionRestorationEndpoints
 {
     private const int RestoreWindowMinutes = 15;
 
+    private static bool ValidateProxySecret(IConfiguration config, HttpContext ctx)
+    {
+        var secret = config["ProxyService:Secret"] ?? "";
+        if (secret.Length < 32) return false;
+        var header = ctx.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+        var secretBytes = Encoding.UTF8.GetBytes(secret);
+        var headerBytes = Encoding.UTF8.GetBytes(header);
+        return CryptographicOperations.FixedTimeEquals(secretBytes, headerBytes);
+    }
+
     public static void MapSessionRestorationEndpoints(this IEndpointRouteBuilder app)
     {
         // ── Proxy-facing: mark session as disconnected + issue restore token ──────
@@ -18,8 +30,7 @@ public static class SessionRestorationEndpoints
         app.MapPost("/api/v1/sessions/{id:guid}/mark-disconnected",
             async (Guid id, OrkunPamDbContext db, IConfiguration config, HttpContext ctx) =>
         {
-            var secret = config["ProxyService:Secret"] ?? "";
-            if (secret.Length < 32 || ctx.Request.Headers["X-Proxy-Secret"] != secret)
+            if (!ValidateProxySecret(config, ctx))
                 return Results.Unauthorized();
 
             var session = await db.ProxySessions.FindAsync(id);
@@ -97,6 +108,29 @@ public static class SessionRestorationEndpoints
             var original = await db.ProxySessions.FindAsync(token.OriginalSessionId);
             if (original is null)
                 return Results.NotFound(new { success = false, errors = new[] { "Original session not found" } });
+
+            // Re-check current authorization (CWE-285): user account must still be active
+            var user = await db.Users.FindAsync(userId);
+            if (user is null || user.Status != UserStatus.Active)
+                return Results.Forbid();
+
+            // Re-check credential is still assigned to this user (direct or via group)
+            var credentialId = token.CredentialId ?? original.CredentialId;
+            if (credentialId.HasValue)
+            {
+                var userGroupIds = await db.UserGroups
+                    .Where(ug => ug.UserId == userId)
+                    .Select(ug => ug.GroupId)
+                    .ToListAsync();
+
+                var hasAccess = await db.AssignedCredentials
+                    .AnyAsync(a => a.CredentialId == credentialId.Value && a.IsEnabled &&
+                        ((a.PrincipalType == PrincipalType.User  && a.PrincipalId == userId) ||
+                         (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId))));
+
+                if (!hasAccess)
+                    return Results.Forbid();
+            }
 
             // Create new proxy session using original parameters
             var newSession = new ProxySession

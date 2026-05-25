@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Identity.Services;
 using OrkunPAM.Persistence;
@@ -19,11 +20,15 @@ public static class Fido2Endpoints
     public static void MapFido2Endpoints(this IEndpointRouteBuilder app)
     {
         // ── Registration: begin ───────────────────────────────────────────────────────
+        // type=cross-platform (hardware key, default) or type=platform (Windows Hello / Touch ID)
         app.MapPost("/api/v1/auth/fido2/register/begin",
-            async (OrkunPamDbContext db, IMemoryCache cache, HttpContext ctx) =>
+            async (OrkunPamDbContext db, IMemoryCache cache, HttpContext ctx,
+                   [FromQuery] string? type) =>
         {
             var userId = GetUserId(ctx);
             if (userId == null) return Results.Unauthorized();
+
+            var authenticatorType = type?.ToLowerInvariant() == "platform" ? "platform" : "cross-platform";
 
             var user = await db.Users.FindAsync(userId.Value);
             if (user == null) return Results.NotFound();
@@ -34,7 +39,7 @@ public static class Fido2Endpoints
                 .ToListAsync();
 
             var challenge    = Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
-            cache.Set($"{ChallengePrefix}reg:{userId}", challenge, TimeSpan.FromMinutes(2));
+            cache.Set($"{ChallengePrefix}reg:{userId}:{authenticatorType}", challenge, TimeSpan.FromMinutes(2));
 
             var options = new
             {
@@ -51,13 +56,14 @@ public static class Fido2Endpoints
                 attestation          = "none",
                 authenticatorSelection = new
                 {
-                    authenticatorAttachment = "cross-platform",
+                    authenticatorAttachment = authenticatorType,
                     requireResidentKey      = false,
-                    userVerification        = "preferred"
+                    userVerification        = authenticatorType == "platform" ? "required" : "preferred"
                 },
                 excludeCredentials = existingCreds
                     .Select(id => new { type = "public-key", id })
-                    .ToArray()
+                    .ToArray(),
+                authenticatorType    = authenticatorType
             };
 
             return Results.Ok(new { success = true, data = options });
@@ -66,15 +72,28 @@ public static class Fido2Endpoints
         // ── Registration: complete ────────────────────────────────────────────────────
         app.MapPost("/api/v1/auth/fido2/register/complete",
             async (OrkunPamDbContext db, IMemoryCache cache, HttpContext ctx,
-                   [FromBody] Fido2RegisterRequest req) =>
+                   IAuditService audit, [FromBody] Fido2RegisterRequest req) =>
         {
             var userId = GetUserId(ctx);
             if (userId == null) return Results.Unauthorized();
 
-            var cacheKey = $"{ChallengePrefix}reg:{userId}";
+            var authenticatorType = req.AuthenticatorType?.ToLowerInvariant() == "platform" ? "platform" : "cross-platform";
+            var cacheKey = $"{ChallengePrefix}reg:{userId}:{authenticatorType}";
             if (!cache.TryGetValue<string>(cacheKey, out var expectedChallenge))
-                return Results.BadRequest(new { success = false, errors = new[] { "Challenge expired" } });
-            cache.Remove(cacheKey);
+            {
+                // fallback: try legacy key without type suffix for backward compat
+                var legacyKey = $"{ChallengePrefix}reg:{userId}";
+                if (!cache.TryGetValue<string>(legacyKey, out expectedChallenge))
+                    return Results.BadRequest(new { success = false, errors = new[] { "Challenge expired" } });
+                cache.Remove(legacyKey);
+            }
+            else
+            {
+                cache.Remove(cacheKey);
+            }
+
+            var actorName = ctx.User.FindFirstValue(ClaimTypes.Name);
+            var ip = ctx.Connection.RemoteIpAddress?.ToString();
 
             try
             {
@@ -129,6 +148,9 @@ public static class Fido2Endpoints
                 if (await db.Set<Fido2Credential>().AnyAsync(c => c.CredentialIdB64 == credIdB64))
                     return Results.Conflict(new { success = false, errors = new[] { "Already registered" } });
 
+                var friendlyName = req.FriendlyName
+                    ?? (authenticatorType == "platform" ? "Biometric Passkey" : "Security Key");
+
                 var cred = new Fido2Credential
                 {
                     UserId            = userId.Value,
@@ -137,14 +159,21 @@ public static class Fido2Endpoints
                     PublicKeyX        = xBytes,
                     PublicKeyY        = yBytes,
                     SignatureCounter  = signCount,
-                    FriendlyName      = req.FriendlyName ?? "Security Key",
+                    FriendlyName      = friendlyName,
+                    AuthenticatorType = authenticatorType,
                     RegisteredAtUtc   = DateTime.UtcNow
                 };
 
                 db.Set<Fido2Credential>().Add(cred);
                 await db.SaveChangesAsync();
 
-                return Results.Ok(new { success = true, data = new { cred.Id } });
+                var auditEvent = authenticatorType == "platform"
+                    ? "BIOMETRIC_PASSKEY_REGISTERED"
+                    : "FIDO2_KEY_REGISTERED";
+                _ = audit.LogAsync("MFA", auditEvent, userId.Value, actorName, ip,
+                    "Fido2Credential", cred.Id.ToString(), new { friendlyName, authenticatorType });
+
+                return Results.Ok(new { success = true, data = new { cred.Id, authenticatorType } });
             }
             catch (Exception ex)
             {
@@ -193,7 +222,7 @@ public static class Fido2Endpoints
         // ── Authentication: complete ──────────────────────────────────────────────────
         app.MapPost("/api/v1/auth/fido2/authenticate/complete",
             async (OrkunPamDbContext db, IMemoryCache cache, HttpContext ctx,
-                   [FromBody] Fido2AuthCompleteRequest req, IJwtTokenService jwt) =>
+                   [FromBody] Fido2AuthCompleteRequest req, IJwtTokenService jwt, IAuditService audit) =>
         {
             if (!Guid.TryParse(req.UserId, out var userId))
                 return Results.BadRequest(new { success = false, errors = new[] { "Invalid userId" } });
@@ -258,6 +287,7 @@ public static class Fido2Endpoints
                 // Update credential state
                 cred.SignatureCounter = signCount;
                 cred.LastUsedAtUtc   = DateTime.UtcNow;
+                var ip = ctx.Connection.RemoteIpAddress?.ToString();
 
                 // Load user + roles + permissions for JWT
                 var user = await db.Users
@@ -290,6 +320,12 @@ public static class Fido2Endpoints
 
                 await db.SaveChangesAsync();
 
+                var authEvent = cred.AuthenticatorType == "platform"
+                    ? "BIOMETRIC_AUTH_SUCCESS"
+                    : "FIDO2_AUTH_SUCCESS";
+                _ = audit.LogAsync("Auth", authEvent, user.Id, user.Username, ip,
+                    "Fido2Credential", cred.Id.ToString(), new { authenticatorType = cred.AuthenticatorType });
+
                 return Results.Ok(new
                 {
                     success = true,
@@ -310,6 +346,8 @@ public static class Fido2Endpoints
             }
             catch (Exception ex)
             {
+                _ = audit.LogAsync("Auth", "BIOMETRIC_AUTH_FAILED", userId, null,
+                    ctx.Connection.RemoteIpAddress?.ToString(), "Fido2", req.CredentialId, ex.Message);
                 return Fail("Verification failed: " + ex.Message);
             }
         }).WithTags("FIDO2").AllowAnonymous();
@@ -326,10 +364,11 @@ public static class Fido2Endpoints
                 .OrderByDescending(c => c.RegisteredAtUtc)
                 .Select(c => new
                 {
-                    id           = c.Id,
-                    friendlyName = c.FriendlyName,
-                    registeredAt = c.RegisteredAtUtc,
-                    lastUsed     = c.LastUsedAtUtc
+                    id                = c.Id,
+                    friendlyName      = c.FriendlyName,
+                    authenticatorType = c.AuthenticatorType,
+                    registeredAt      = c.RegisteredAtUtc,
+                    lastUsed          = c.LastUsedAtUtc
                 })
                 .ToListAsync();
 
@@ -381,7 +420,8 @@ public static class Fido2Endpoints
 public record Fido2RegisterRequest(
     string  ClientDataJSON,
     string  AttestationObject,
-    string? FriendlyName);
+    string? FriendlyName,
+    string? AuthenticatorType);
 
 public record Fido2AuthBeginRequest(string Username);
 

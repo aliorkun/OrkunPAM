@@ -1,4 +1,7 @@
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 
 namespace OrkunPAM.SshProxy;
@@ -39,11 +42,22 @@ internal sealed class PamApiClient
         try
         {
             var client = _factory.CreateClient("PamApi");
-            // String is unavoidably on managed heap during JSON serialization; byte[] is zeroed by caller.
-            var password = System.Text.Encoding.UTF8.GetString(passwordBytes);
-            var resp = await client.PostAsJsonAsync("/api/v1/auth/login",
-                new { username, password, mfaCode = (string?)null }, ct);
+            // Write JSON directly from bytes to minimise the time a string lives on the heap (CWE-316).
+            using var ms = new System.IO.MemoryStream();
+            using (var writer = new Utf8JsonWriter(ms))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("username", username);
+                writer.WriteString("password", Encoding.UTF8.GetString(passwordBytes));
+                writer.WriteNull("mfaCode");
+                writer.WriteEndObject();
+            }
+            var body = ms.ToArray();
+            using var content = new ByteArrayContent(body);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            CryptographicOperations.ZeroMemory(body);
 
+            var resp = await client.PostAsync("/api/v1/auth/login", content, ct);
             if (!resp.IsSuccessStatusCode) return (false, null);
 
             var json = await resp.Content.ReadFromJsonAsync<LoginResponse>(ct);

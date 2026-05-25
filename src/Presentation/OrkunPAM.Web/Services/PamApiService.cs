@@ -2181,6 +2181,50 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // ── FIDO2 / Biometric Passkey ─────────────────────────────────────────────
+
+    public async Task<object?> BeginFido2RegistrationAsync(string? type = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var url = "/api/v1/auth/fido2/register/begin" + (type != null ? $"?type={type}" : "");
+            var resp = await client.PostAsync(url, null);
+            if (!resp.IsSuccessStatusCode) return null;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            return doc.RootElement.TryGetProperty("data", out var d) ? d.Clone() : (object?)null;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<Fido2CredentialDto>?> GetFido2CredentialsAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp   = await client.GetAsync("/api/v1/auth/fido2/credentials");
+            if (!resp.IsSuccessStatusCode) return null;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.TryGetProperty("data", out var d))
+                return d.Deserialize<List<Fido2CredentialDto>>(JsonOpts);
+            return null;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RevokeFido2DeviceAsync(string? credId)
+    {
+        if (string.IsNullOrEmpty(credId)) return false;
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/auth/fido2/credentials/" + credId)).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── Private helpers ────────────────────────────────────────────────────────
 
     private async Task<HttpClient> GetAuthClientAsync()
@@ -3125,3 +3169,10 @@ public record SlaReportDto(
     int      TotalActiveUsers,
     int      MfaEnrolledUsers,
     List<JsonElement> SlaBreaches);
+
+public record Fido2CredentialDto(
+    Guid      Id,
+    string    FriendlyName,
+    string    AuthenticatorType,
+    DateTime  RegisteredAt,
+    DateTime? LastUsed);

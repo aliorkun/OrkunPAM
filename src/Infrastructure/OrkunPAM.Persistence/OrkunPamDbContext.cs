@@ -469,6 +469,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(f => f.UserId);
             e.Property(f => f.FriendlyName).HasMaxLength(256);
             e.Property(f => f.CredentialIdB64).HasMaxLength(512);
+            e.Property(f => f.AuthenticatorType).HasMaxLength(32).HasDefaultValue("cross-platform");
         });
 
         // === PKI / Smart Card Authentication (#115) ===
