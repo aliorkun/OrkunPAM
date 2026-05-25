@@ -41,15 +41,25 @@
     <div class="pam-alert pam-alert-danger">@_error</div>
 }
 
-@* ── Sessions Tab ───────────────────────────────────────────────────────────── *@
+@* ── Sessions Tab ─────────────────────────────────────────────────────────────────────────────── *@
 @if (_activeTab == "sessions")
 {
+    @* Restorable sessions banner *@
+    @if (_restorableSessions != null && _restorableSessions.Count > 0)
+    {
+        <div class="pam-alert" style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:.75rem 1rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;">
+            <span>&#x26A0;&#xFE0F; <strong>@_restorableSessions.Count disconnected session@(_restorableSessions.Count == 1 ? "" : "s")</strong> can be restored within the next few minutes.</span>
+            <button class="pam-btn pam-btn-warning pam-btn-sm" @onclick="OpenRestorePanel">Restore Sessions</button>
+        </div>
+    }
+
     <div class="pam-filters">
         <select class="pam-input pam-select" @bind="_statusFilter" @bind:after="LoadAsync">
             <option value="">All Sessions</option>
             <option value="Active">Active</option>
             <option value="Completed">Completed</option>
             <option value="Failed">Failed</option>
+            <option value="Disconnected">Disconnected</option>
         </select>
     </div>
 
@@ -123,6 +133,14 @@
                                             &#x21C4; Handoff
                                         </button>
                                     }
+                                    @if (s.Status == "Disconnected")
+                                    {
+                                        <button class="pam-btn pam-btn-warning pam-btn-sm"
+                                                @onclick="@(() => RestoreFromSessionAsync(s.Id))"
+                                                disabled="@_restoreBusy">
+                                            &#x21BA; Restore
+                                        </button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -144,7 +162,7 @@
     </div>
 }
 
-@* ── Compliance Tab ─────────────────────────────────────────────────────────── *@
+@* ── Compliance Tab ────────────────────────────────────────────────────────────────────────────── *@
 @if (_activeTab == "compliance")
 {
     <div class="pam-filters" style="margin-bottom:1rem">
@@ -301,7 +319,7 @@
     }
 }
 
-@* ── Delegations Tab ─────────────────────────────────────────────────────────── *@
+@* ── Delegations Tab ─────────────────────────────────────────────────────────────────────────────── *@
 @if (_activeTab == "delegations")
 {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
@@ -507,6 +525,57 @@
     </div>
 }
 
+@* Restore Sessions Panel *@
+@if (_showRestorePanel && _restorableSessions != null && _restorableSessions.Count > 0)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => { _showRestorePanel = false; StateHasChanged(); })">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">&#x21BA; Restore Disconnected Sessions</h3>
+                <button class="pam-modal-close" @onclick="@(() => { _showRestorePanel = false; StateHasChanged(); })">&#x2715;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_restoreResult != null)
+                {
+                    <div class="pam-alert pam-alert-success" style="margin-bottom:.75rem">@_restoreResult</div>
+                }
+                <table class="pam-table" style="font-size:.9em">
+                    <thead>
+                        <tr>
+                            <th>Protocol</th>
+                            <th>Disconnected</th>
+                            <th>Expires</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _restorableSessions)
+                        {
+                            <tr>
+                                <td><span class="pam-badge">@t.Protocol</span></td>
+                                <td>@t.CreatedAtUtc.ToLocalTime().ToString("HH:mm:ss")</td>
+                                <td>@t.ExpiresAtUtc.ToLocalTime().ToString("HH:mm:ss")</td>
+                                <td style="display:flex;gap:4px">
+                                    <button class="pam-btn pam-btn-primary pam-btn-sm"
+                                            @onclick="@(() => RestoreTokenAsync(t.Id))"
+                                            disabled="@_restoreBusy">
+                                        @if (_restoreBusy) { <span class="pam-spinner-sm"></span> } Restore
+                                    </button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => CancelRestoreTokenAsync(t.Id))"
+                                            disabled="@_restoreBusy">
+                                        Cancel
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
 @* Handoff request modal *@
 @if (_handoffSession != null)
 {
@@ -670,12 +739,18 @@
     private bool                     _handoffActionBusy   = false;
     private string?                  _handoffActionResult;
 
+    // Session Restoration (#279 RA #47)
+    private List<RestorableSessionDto>? _restorableSessions;
+    private bool                        _showRestorePanel = false;
+    private bool                        _restoreBusy      = false;
+    private string?                     _restoreResult;
+
     private int TotalPages => _meta == null ? 1 : (int)Math.Ceiling(_meta.TotalCount / (double)_pageSize);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        await Task.WhenAll(LoadAsync(), LoadPendingHandoffsAsync());
+        await Task.WhenAll(LoadAsync(), LoadPendingHandoffsAsync(), LoadRestorableSessionsAsync());
     }
 
     private async Task SwitchTab(string tab)
@@ -714,9 +789,10 @@
 
     private static string StatusClass(string s) => s switch
     {
-        "Active"    => "pam-status-active",
-        "Completed" => "pam-status-done",
-        _           => "pam-status-error"
+        "Active"       => "pam-status-active",
+        "Completed"    => "pam-status-done",
+        "Disconnected" => "pam-status-warning",
+        _              => "pam-status-error"
     };
 
     private static string Duration(SessionDto s)
@@ -734,6 +810,47 @@
     private void ShadowAsync(string sessionId)
     {
         Nav.NavigateTo("/shadow/" + sessionId);
+    }
+
+    private async Task LoadRestorableSessionsAsync()
+    {
+        _restorableSessions = await Api.GetRestorableSessionsAsync();
+        StateHasChanged();
+    }
+
+    private void OpenRestorePanel() { _showRestorePanel = true; _restoreResult = null; StateHasChanged(); }
+
+    private async Task RestoreFromSessionAsync(Guid sessionId)
+    {
+        var token = _restorableSessions?.FirstOrDefault(t => t.OriginalSessionId == sessionId);
+        if (token == null)
+        {
+            // Try to find a matching token from the restorable list or just reload
+            await LoadRestorableSessionsAsync();
+            token = _restorableSessions?.FirstOrDefault(t => t.OriginalSessionId == sessionId);
+        }
+        if (token == null) { _error = "No active restore token found for this session."; StateHasChanged(); return; }
+        await RestoreTokenAsync(token.Id);
+    }
+
+    private async Task RestoreTokenAsync(Guid tokenId)
+    {
+        _restoreBusy = true; _restoreResult = null; StateHasChanged();
+        var result = await Api.RestoreSessionAsync(tokenId);
+        if (result == null)
+            _restoreResult = "Restore failed — token may have expired.";
+        else
+            _restoreResult = $"New session started: {result.Protocol} → {result.TargetIpAddress}:{result.TargetPort} (ID: {result.NewSessionId})";
+
+        _restoreBusy = false;
+        await LoadRestorableSessionsAsync();
+        await LoadAsync();
+    }
+
+    private async Task CancelRestoreTokenAsync(Guid tokenId)
+    {
+        await Api.CancelRestoreTokenAsync(tokenId);
+        await LoadRestorableSessionsAsync();
     }
 
     private async Task ExportCsvAsync()
@@ -776,7 +893,7 @@
             "compliance-" + DateTime.Now.ToString("yyyyMMdd") + ".csv", sb.ToString());
     }
 
-    // ── Tags ─────────────────────────────────────────────────────────────────────
+    // ── Tags ────────────────────────────────────────────────────────────────────────────────────
     private void OpenTagModal(SessionDto s)
     {
         _tagSession = s;
@@ -795,7 +912,7 @@
         else { _error = "Failed to save tags."; StateHasChanged(); }
     }
 
-    // ── Annotations ──────────────────────────────────────────────────────────────────
+    // ── Annotations ──────────────────────────────────────────────────────────────────────────────────────
     private async Task OpenAnnotationsPanel(string sessionId)
     {
         _annotSessionId = sessionId;
@@ -825,7 +942,7 @@
         StateHasChanged();
     }
 
-    // ── Handoff ──────────────────────────────────────────────────────────────────────
+    // ── Handoff ───────────────────────────────────────────────────────────────────────────────────────
     private async Task OpenHandoffModal(SessionDto s)
     {
         _handoffSession      = s;
@@ -922,7 +1039,7 @@
         StateHasChanged();
     }
 
-    // ── Delegations ───────────────────────────────────────────────────────────────
+    // ── Delegations ───────────────────────────────────────────────────────────────────────────────────
     private async Task LoadDelegationsAsync()
     {
         _delegationLoading = true; StateHasChanged();
