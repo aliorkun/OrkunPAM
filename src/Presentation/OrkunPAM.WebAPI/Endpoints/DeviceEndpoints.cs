@@ -39,7 +39,8 @@ public static class DeviceEndpoints
                     d.NetworkZoneId,
                     NetworkZoneName = d.NetworkZone != null ? d.NetworkZone.Name : null,
                     JumpHostAddress = d.NetworkZone != null ? d.NetworkZone.JumpHostAddress : null,
-                    JumpHostCredentialId = d.NetworkZone != null ? d.NetworkZone.JumpHostCredentialId : null
+                    JumpHostCredentialId = d.NetworkZone != null ? d.NetworkZone.JumpHostCredentialId : null,
+                    JumpHostFingerprint = d.NetworkZone != null ? d.NetworkZone.JumpHostFingerprint : null
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });

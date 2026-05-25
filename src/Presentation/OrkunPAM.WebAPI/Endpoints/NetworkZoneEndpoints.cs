@@ -18,7 +18,7 @@ public static class NetworkZoneEndpoints
                 .Select(z => new
                 {
                     z.Id, z.Name, z.Description, z.IpRangesJson,
-                    z.JumpHostAddress, z.JumpHostCredentialId,
+                    z.JumpHostAddress, z.JumpHostCredentialId, z.JumpHostFingerprint,
                     z.ProxyBindAddress, z.IsDefault, z.Notes,
                     DeviceCount = db.Devices.Count(d => d.NetworkZoneId == z.Id)
                 })
@@ -45,6 +45,7 @@ public static class NetworkZoneEndpoints
                 IpRangesJson        = req.IpRangesJson,
                 JumpHostAddress     = req.JumpHostAddress?.Trim(),
                 JumpHostCredentialId = req.JumpHostCredentialId,
+                JumpHostFingerprint = req.JumpHostFingerprint?.Trim(),
                 ProxyBindAddress    = req.ProxyBindAddress?.Trim(),
                 IsDefault           = req.IsDefault,
                 Notes               = req.Notes?.Trim()
@@ -71,7 +72,7 @@ public static class NetworkZoneEndpoints
                 data = new
                 {
                     z.Id, z.Name, z.Description, z.IpRangesJson,
-                    z.JumpHostAddress, z.JumpHostCredentialId,
+                    z.JumpHostAddress, z.JumpHostCredentialId, z.JumpHostFingerprint,
                     z.ProxyBindAddress, z.IsDefault, z.Notes,
                     z.CreatedAtUtc, z.UpdatedAtUtc
                 }
@@ -88,6 +89,7 @@ public static class NetworkZoneEndpoints
             if (req.IpRangesJson != null) z.IpRangesJson = req.IpRangesJson;
             if (req.JumpHostAddress != null) z.JumpHostAddress = string.IsNullOrWhiteSpace(req.JumpHostAddress) ? null : req.JumpHostAddress.Trim();
             if (req.JumpHostCredentialId.HasValue) z.JumpHostCredentialId = req.JumpHostCredentialId;
+            if (req.JumpHostFingerprint != null) z.JumpHostFingerprint = string.IsNullOrWhiteSpace(req.JumpHostFingerprint) ? null : req.JumpHostFingerprint.Trim();
             if (req.ProxyBindAddress != null) z.ProxyBindAddress = req.ProxyBindAddress.Trim();
             if (req.Notes != null) z.Notes = req.Notes.Trim();
             if (req.IsDefault.HasValue && req.IsDefault.Value)
@@ -123,6 +125,20 @@ public static class NetworkZoneEndpoints
                 await audit.LogAsync(Guid.Parse(userId), "NETWORK_ZONE_DELETED", "NetworkZone",
                     id, $"Zone '{z.Name}' deleted");
 
+            return Results.Ok(new { success = true });
+        });
+
+        // Store jump host fingerprint (TOFU: called by SSH proxy on first successful connection)
+        zones.MapPost("/{id:guid}/jump-fingerprint", async (Guid id, JumpFingerprintRequest req, OrkunPamDbContext db, HttpContext ctx) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Fingerprint))
+                return Results.BadRequest(new { success = false, errors = new[] { "Fingerprint is required" } });
+
+            var z = await db.NetworkZones.FindAsync(id);
+            if (z == null) return Results.NotFound(new { success = false, errors = new[] { "Zone not found" } });
+
+            z.JumpHostFingerprint = req.Fingerprint.Trim();
+            await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
         });
 
@@ -172,6 +188,7 @@ record CreateNetworkZoneRequest(
     string? IpRangesJson,
     string? JumpHostAddress,
     Guid? JumpHostCredentialId,
+    string? JumpHostFingerprint,
     string? ProxyBindAddress,
     bool IsDefault,
     string? Notes);
@@ -182,6 +199,9 @@ record UpdateNetworkZoneRequest(
     string? IpRangesJson,
     string? JumpHostAddress,
     Guid? JumpHostCredentialId,
+    string? JumpHostFingerprint,
     string? ProxyBindAddress,
     bool? IsDefault,
     string? Notes);
+
+record JumpFingerprintRequest(string Fingerprint);

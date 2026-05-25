@@ -15,17 +15,22 @@ internal sealed class SshJumpTunnel : IDisposable
     private readonly int _jumpPort;
     private readonly string _jumpUser;
     private readonly byte[] _jumpPassword;
+    private readonly string? _jumpHostFingerprint;
     private readonly ILogger _log;
     private SshTargetClient? _jumpClient;
     private SshChannelStream? _channelStream;
 
-    internal SshJumpTunnel(string jumpAddress, string jumpUser, byte[] jumpPassword, ILogger log)
+    internal string? ObservedFingerprint => _jumpClient?.ObservedFingerprint;
+
+    internal SshJumpTunnel(string jumpAddress, string jumpUser, byte[] jumpPassword,
+        string? jumpHostFingerprint, ILogger log)
     {
         var parts = jumpAddress.Split(':');
         _jumpHost = parts[0];
         _jumpPort = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 22;
         _jumpUser = jumpUser;
         _jumpPassword = jumpPassword;
+        _jumpHostFingerprint = jumpHostFingerprint;
         _log = log;
     }
 
@@ -35,7 +40,8 @@ internal sealed class SshJumpTunnel : IDisposable
         _log.LogInformation("Opening SSH jump tunnel: {JumpHost}:{JumpPort} → {TargetHost}:{TargetPort}",
             _jumpHost, _jumpPort, targetHost, targetPort);
 
-        _jumpClient = new SshTargetClient(_jumpHost, _jumpPort, _jumpUser, _jumpPassword, null, _log);
+        _jumpClient = new SshTargetClient(_jumpHost, _jumpPort, _jumpUser, _jumpPassword, null, _log,
+            expectedFingerprint: _jumpHostFingerprint);
         await _jumpClient.ConnectAsync(ct);
 
         _channelStream = await _jumpClient.OpenDirectTcpipChannelAsync(targetHost, targetPort, ct);

@@ -47,6 +47,14 @@
                                 @if (!string.IsNullOrEmpty(z.JumpHostAddress))
                                 {
                                     <span class="pam-badge pam-badge-info">@z.JumpHostAddress</span>
+                                    @if (!string.IsNullOrEmpty(z.JumpHostFingerprint))
+                                    {
+                                        <div class="pam-sub-text pam-text-success">&#x2714; Fingerprint enrolled</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="pam-sub-text pam-text-warning">&#x26A0; No fingerprint (TOFU)</div>
+                                    }
                                 }
                                 else
                                 {
@@ -114,6 +122,12 @@
                            placeholder="10.1.0.5:22 (leave empty for direct access)" />
                 </div>
                 <div class="pam-form-group">
+                    <label class="pam-label">Jump Host Fingerprint (SHA-256)</label>
+                    <input class="pam-input w-100-input" @bind="_fJumpHostFingerprint"
+                           placeholder="SHA256:... (leave empty to enroll on first connection — TOFU)" />
+                    <div class="pam-help-text">Pre-enroll the jump host fingerprint to prevent MITM attacks. Leave empty to auto-enroll on first connection.</div>
+                </div>
+                <div class="pam-form-group">
                     <label class="pam-label">Proxy Bind Address</label>
                     <input class="pam-input w-100-input" @bind="_fProxyBindAddress"
                            placeholder="Optional: local IP for proxy to bind on" />
@@ -168,12 +182,13 @@
     private Guid?       _editingId;
     private string?     _formError;
     private bool        _formSaving;
-    private string      _fName             = "";
-    private string      _fDescription      = "";
-    private string      _fIpRanges         = "";
-    private string      _fJumpHostAddress  = "";
-    private string      _fProxyBindAddress = "";
-    private string      _fNotes            = "";
+    private string      _fName               = "";
+    private string      _fDescription        = "";
+    private string      _fIpRanges           = "";
+    private string      _fJumpHostAddress    = "";
+    private string      _fJumpHostFingerprint = "";
+    private string      _fProxyBindAddress   = "";
+    private string      _fNotes              = "";
     private bool        _fIsDefault;
 
     private NetworkZoneDto? _deleteTarget;
@@ -198,7 +213,7 @@
     private void OpenAddModal()
     {
         _editingId = null;
-        _fName = _fDescription = _fIpRanges = _fJumpHostAddress = _fProxyBindAddress = _fNotes = "";
+        _fName = _fDescription = _fIpRanges = _fJumpHostAddress = _fJumpHostFingerprint = _fProxyBindAddress = _fNotes = "";
         _fIsDefault = false;
         _formError = null;
         _showModal = true;
@@ -206,14 +221,15 @@
 
     private void OpenEditModal(NetworkZoneDto z)
     {
-        _editingId         = z.Id;
-        _fName             = z.Name;
-        _fDescription      = z.Description ?? "";
-        _fIpRanges         = z.IpRangesJson ?? "";
-        _fJumpHostAddress  = z.JumpHostAddress ?? "";
-        _fProxyBindAddress = z.ProxyBindAddress ?? "";
-        _fNotes            = z.Notes ?? "";
-        _fIsDefault        = z.IsDefault;
+        _editingId              = z.Id;
+        _fName                  = z.Name;
+        _fDescription           = z.Description ?? "";
+        _fIpRanges              = z.IpRangesJson ?? "";
+        _fJumpHostAddress       = z.JumpHostAddress ?? "";
+        _fJumpHostFingerprint   = z.JumpHostFingerprint ?? "";
+        _fProxyBindAddress      = z.ProxyBindAddress ?? "";
+        _fNotes                 = z.Notes ?? "";
+        _fIsDefault             = z.IsDefault;
         _formError         = null;
         _showModal         = true;
     }
@@ -248,26 +264,28 @@
         {
             ok = await Api.CreateNetworkZoneAsync(
                 _fName.Trim(),
-                string.IsNullOrWhiteSpace(_fDescription)      ? null : _fDescription.Trim(),
-                string.IsNullOrWhiteSpace(_fIpRanges)         ? null : _fIpRanges.Trim(),
-                string.IsNullOrWhiteSpace(_fJumpHostAddress)  ? null : _fJumpHostAddress.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription)           ? null : _fDescription.Trim(),
+                string.IsNullOrWhiteSpace(_fIpRanges)              ? null : _fIpRanges.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostAddress)       ? null : _fJumpHostAddress.Trim(),
                 null, // JumpHostCredentialId — configure separately
-                string.IsNullOrWhiteSpace(_fProxyBindAddress) ? null : _fProxyBindAddress.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostFingerprint)   ? null : _fJumpHostFingerprint.Trim(),
+                string.IsNullOrWhiteSpace(_fProxyBindAddress)      ? null : _fProxyBindAddress.Trim(),
                 _fIsDefault,
-                string.IsNullOrWhiteSpace(_fNotes)            ? null : _fNotes.Trim());
+                string.IsNullOrWhiteSpace(_fNotes)                 ? null : _fNotes.Trim());
         }
         else
         {
             ok = await Api.UpdateNetworkZoneAsync(
                 _editingId.Value,
                 _fName.Trim(),
-                string.IsNullOrWhiteSpace(_fDescription)      ? null : _fDescription.Trim(),
-                string.IsNullOrWhiteSpace(_fIpRanges)         ? null : _fIpRanges.Trim(),
-                string.IsNullOrWhiteSpace(_fJumpHostAddress)  ? null : _fJumpHostAddress.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription)           ? null : _fDescription.Trim(),
+                string.IsNullOrWhiteSpace(_fIpRanges)              ? null : _fIpRanges.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostAddress)       ? null : _fJumpHostAddress.Trim(),
                 null,
-                string.IsNullOrWhiteSpace(_fProxyBindAddress) ? null : _fProxyBindAddress.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostFingerprint)   ? null : _fJumpHostFingerprint.Trim(),
+                string.IsNullOrWhiteSpace(_fProxyBindAddress)      ? null : _fProxyBindAddress.Trim(),
                 _fIsDefault,
-                string.IsNullOrWhiteSpace(_fNotes)            ? null : _fNotes.Trim());
+                string.IsNullOrWhiteSpace(_fNotes)                 ? null : _fNotes.Trim());
         }
 
         _formSaving = false;

@@ -11,6 +11,7 @@ public class NetworkZone : AuditableEntity
     public string? IpRangesJson { get; set; }     // JSON: ["10.1.0.0/24"]
     public string? JumpHostAddress { get; set; }   // e.g. "10.1.0.5:22"
     public Guid? JumpHostCredentialId { get; set; }
+    public string? JumpHostFingerprint { get; set; }  // SHA-256 fingerprint (TOFU/pre-enrolled)
     public string? ProxyBindAddress { get; set; }
     public bool IsDefault { get; set; }
     public string? Notes { get; set; }
