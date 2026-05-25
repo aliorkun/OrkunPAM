@@ -178,30 +178,42 @@ public sealed class PamApiService
     public async Task<DeviceDto?> GetDeviceAsync(string id)
         => await GetAsync<DeviceDto>($"/api/v1/devices/{id}");
 
-    public async Task<DeviceDto?> CreateDeviceAsync(object payload)
+    public async Task<bool> CreateDeviceAsync(
+        string hostname, string? fqdn, string? ipAddress,
+        string type, string protocol, int port, string? os,
+        Guid? networkZoneId = null)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/devices", payload);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceDto>>(JsonOpts);
-            return result?.Data;
+            var resp = await client.PostAsJsonAsync("/api/v1/devices", new
+            {
+                hostname, fqdn, ipAddress,
+                deviceType = type, protocol, port,
+                operatingSystem = os, networkZoneId
+            });
+            return resp.IsSuccessStatusCode;
         }
-        catch { return null; }
+        catch { return false; }
     }
 
-    public async Task<DeviceDto?> UpdateDeviceAsync(string id, object payload)
+    public async Task<bool> UpdateDeviceAsync(
+        string id, string hostname, string? fqdn, string? ipAddress,
+        string type, string protocol, int port, string? os,
+        Guid? networkZoneId = null)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync($"/api/v1/devices/{id}", payload);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceDto>>(JsonOpts);
-            return result?.Data;
+            var resp = await client.PutAsJsonAsync($"/api/v1/devices/{id}", new
+            {
+                hostname, fqdn, ipAddress,
+                deviceType = type, protocol, port,
+                operatingSystem = os, networkZoneId
+            });
+            return resp.IsSuccessStatusCode;
         }
-        catch { return null; }
+        catch { return false; }
     }
 
     public async Task<bool> DeleteDeviceAsync(string id)
@@ -217,6 +229,58 @@ public sealed class PamApiService
         try { return (await client.PostAsync($"/api/v1/devices/{id}/test-connectivity", null)).IsSuccessStatusCode; }
         catch { return false; }
     }
+
+    // ── Network Zones ─────────────────────────────────────────────────────────
+    public async Task<List<NetworkZoneDto>?> GetNetworkZonesAsync()
+    {
+        var result = await GetAsync<ListResult<NetworkZoneDto>>("/api/v1/system/network-zones");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateNetworkZoneAsync(string name, string? description, string? ipRanges,
+        string? jumpHostAddress, Guid? jumpHostCredentialId, string? proxyBindAddress, bool isDefault, string? notes)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/network-zones", new
+            {
+                name, description, ipRangesJson = ipRanges,
+                jumpHostAddress, jumpHostCredentialId, proxyBindAddress, isDefault, notes
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateNetworkZoneAsync(Guid id, string? name, string? description, string? ipRanges,
+        string? jumpHostAddress, Guid? jumpHostCredentialId, string? proxyBindAddress, bool? isDefault, string? notes)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/system/network-zones/{id}", new
+            {
+                name, description, ipRangesJson = ipRanges,
+                jumpHostAddress, jumpHostCredentialId, proxyBindAddress, isDefault, notes
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteNetworkZoneAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync($"/api/v1/system/network-zones/{id}")).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<NetworkZoneTestResultDto?> TestNetworkZoneAsync(Guid id)
+        => await PostAsync<NetworkZoneTestResultDto>($"/api/v1/system/network-zones/{id}/test", null);
 
     // ── Device Groups ──────────────────────────────────────────────────────────
     public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
@@ -995,6 +1059,12 @@ public sealed class PamApiService
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
+    }
+
+    public async Task<int> GetPendingApprovalCountAsync()
+    {
+        var result = await GetApprovalRequestsAsync(status: "Pending", page: 1, pageSize: 1);
+        return result?.Meta?.TotalCount ?? 0;
     }
 
     // ── Reports ────────────────────────────────────────────────────────────────
@@ -2243,6 +2313,29 @@ public sealed class PamApiService
     /// GET helper: tries to deserialize the `data` sub-field of the API envelope first.
     /// Falls back to reading the full root JSON for wrapper types (PagedResult/ListResult).
     /// </summary>
+    private async Task<T?> PostAsync<T>(string url, object? payload)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            HttpResponseMessage resp;
+            if (payload == null)
+                resp = await client.PostAsync(url, null);
+            else
+                resp = await client.PostAsJsonAsync(url, payload, JsonOpts);
+            if (!resp.IsSuccessStatusCode) return default;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.TryGetProperty("data", out var dataProp))
+            {
+                try { return dataProp.Deserialize<T>(JsonOpts); }
+                catch { /* fall through */ }
+            }
+            return doc.RootElement.Deserialize<T>(JsonOpts);
+        }
+        catch { return default; }
+    }
+
     private async Task<T?> GetAsync<T>(string url)
     {
         try
@@ -2320,20 +2413,23 @@ public record RoleDto(
     DateTime CreatedAtUtc);
 
 public record DeviceDto(
-    Guid      Id,
-    string    Name,
+    string    Id,
     string    Hostname,
-    string    IpAddress,
-    string    DeviceType,
-    string    OperatingSystem,
-    int       SshPort,
-    int       RdpPort,
+    string?   Fqdn,
+    string?   IpAddress,
+    string    Type,
+    string    Protocol,
+    int?      ConnectionPort,
+    string?   OperatingSystem,
     string    Status,
-    Guid?     GroupId,
-    string?   GroupName,
-    string?   Description,
-    DateTime  CreatedAtUtc,
-    DateTime  UpdatedAtUtc);
+    bool?     IsReachable,
+    DateTime? LastReachableCheck,
+    string?   Tags,
+    bool      IsManaged,
+    string?   SshHostKeyFingerprint,
+    int       CredentialCount,
+    string?   NetworkZoneName = null,
+    Guid?     NetworkZoneId = null);
 
 public record DeviceGroupDto(
     Guid      Id,
@@ -3176,3 +3272,17 @@ public record Fido2CredentialDto(
     string    AuthenticatorType,
     DateTime  RegisteredAt,
     DateTime? LastUsed);
+
+public record NetworkZoneDto(
+    Guid      Id,
+    string    Name,
+    string?   Description,
+    string?   IpRangesJson,
+    string?   JumpHostAddress,
+    Guid?     JumpHostCredentialId,
+    string?   ProxyBindAddress,
+    bool      IsDefault,
+    string?   Notes,
+    int       DeviceCount);
+
+public record NetworkZoneTestResultDto(bool Reachable, int LatencyMs, string Message);
