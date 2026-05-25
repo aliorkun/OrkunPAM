@@ -24,6 +24,8 @@
             @onclick="@(() => SetTab("sms"))">&#x1F4F1; SMS Gateway</button>
     <button class="pam-btn @(_tab == "hwtoken" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("hwtoken"))">&#x1F5DD; Hardware Tokens</button>
+    <button class="pam-btn @(_tab == "oidc" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("oidc"))">&#x1F511; OIDC Federation</button>
 </div>
 
 @if (_tab == "ldap")
@@ -771,9 +773,181 @@
     </div>
 }
 
+@if (_tab == "oidc")
+{
+    @if (_oidcError != null) { <div class="pam-alert pam-alert-danger">@_oidcError</div> }
+    @if (_oidcMsg != null)   { <div class="pam-alert pam-alert-success">@_oidcMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <strong>OIDC Identity Providers</strong>
+            <button class="pam-btn pam-btn-primary pam-btn-sm"
+                    @onclick="@(() => { _oidcShowNew = true; _oidcEditId = null; ResetOidcForm(); })">
+                + New Provider
+            </button>
+        </div>
+        <div class="pam-card-body p-0">
+            @if (_oidcLoading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_oidcProviders == null || _oidcProviders.Count == 0)
+            {
+                <div class="pam-empty p-4">No OIDC providers configured. Add one to enable SSO with Azure AD, Okta, or Auth0.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr><th>Name</th><th>Display Name</th><th>Authority</th><th>Auto-Provision</th><th>Status</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _oidcProviders)
+                        {
+                            <tr>
+                                <td><code style="font-size:.8em">@p.Name</code></td>
+                                <td>@p.DisplayName</td>
+                                <td style="font-size:.8em;word-break:break-all">@p.Authority</td>
+                                <td>@(p.AutoProvisionUsers ? "Yes" : "No")</td>
+                                <td><span class="pam-status @(p.IsEnabled ? "pam-status-active" : "pam-status-inactive")">@(p.IsEnabled ? "Enabled" : "Disabled")</span></td>
+                                <td style="white-space:nowrap">
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => TestOidcAsync(p.Id))">Test</button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                            @onclick="@(() => StartEditOidc(p))">Edit</button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                            @onclick="@(() => { _oidcDeleteId = p.Id; _oidcDeleteName = p.DisplayName; })">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    @if (_oidcTestResult != null)
+    {
+        <div class="pam-alert @(_oidcTestResult.Reachable ? "pam-alert-success" : "pam-alert-danger")" style="margin-bottom:12px">
+            @if (_oidcTestResult.Reachable)
+            {
+                <strong>Discovery reachable.</strong> Issuer: @_oidcTestResult.Issuer<br />
+                Auth endpoint: @_oidcTestResult.AuthorizationEndpoint<br />
+                Token endpoint: @_oidcTestResult.TokenEndpoint
+            }
+            else
+            {
+                <strong>Discovery failed:</strong> @_oidcTestResult.Error
+            }
+        </div>
+    }
+
+    @if (_oidcShowNew || _oidcEditId.HasValue)
+    {
+        <div class="pam-card">
+            <div class="pam-card-header"><strong>@(_oidcEditId.HasValue ? "Edit" : "New") OIDC Provider</strong></div>
+            <div class="pam-card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:700px">
+                    <div>
+                        <label class="pam-label">Name (slug, no spaces)</label>
+                        <input class="pam-input" placeholder="azure-ad" @bind="_oidcName" disabled="@_oidcEditId.HasValue" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Display Name</label>
+                        <input class="pam-input" placeholder="Sign in with Azure AD" @bind="_oidcDisplayName" />
+                    </div>
+                    <div style="grid-column:1/-1">
+                        <label class="pam-label">Authority (Issuer URL)</label>
+                        <input class="pam-input" placeholder="https://login.microsoftonline.com/{tenant}/v2.0" @bind="_oidcAuthority" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Client ID</label>
+                        <input class="pam-input" @bind="_oidcClientId" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Client Secret @(_oidcEditId.HasValue ? "(leave blank to keep current)" : "")</label>
+                        <input class="pam-input" type="password" @bind="_oidcClientSecret" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Scopes</label>
+                        <input class="pam-input" placeholder="openid profile email" @bind="_oidcScopes" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Group Claim Type (optional)</label>
+                        <input class="pam-input" placeholder="groups" @bind="_oidcGroupClaimType" />
+                    </div>
+                    <div>
+                        <label class="pam-label">Default Role for New Users</label>
+                        <select class="pam-select" @bind="_oidcDefaultRole">
+                            <option value="Viewer">Viewer</option>
+                            <option value="StandardUser">Standard User</option>
+                            <option value="SessionAdmin">Session Admin</option>
+                            <option value="VaultAdmin">Vault Admin</option>
+                            <option value="GlobalAdmin">Global Admin</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-top:8px">
+                        <input type="checkbox" id="oidcAutoProvision" @bind="_oidcAutoProvision" />
+                        <label for="oidcAutoProvision" class="pam-label" style="margin-bottom:0">Auto-Provision New Users</label>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-top:8px">
+                        <input type="checkbox" id="oidcEnabled" @bind="_oidcIsEnabled" />
+                        <label for="oidcEnabled" class="pam-label" style="margin-bottom:0">Enabled</label>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveOidcAsync" disabled="@_oidcSaving">
+                        @(_oidcSaving ? "Saving..." : (_oidcEditId.HasValue ? "Update Provider" : "Create Provider"))
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => { _oidcShowNew = false; _oidcEditId = null; })">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_oidcDeleteId.HasValue)
+    {
+        <div class="pam-modal-backdrop">
+            <div class="pam-modal">
+                <div class="pam-modal-header"><strong>Delete OIDC Provider</strong></div>
+                <div class="pam-modal-body">
+                    <p>Delete provider <strong>@_oidcDeleteName</strong>? Users provisioned via this provider will keep their accounts but cannot SSO until another provider is configured.</p>
+                </div>
+                <div class="pam-modal-footer">
+                    <button class="pam-btn pam-btn-danger" @onclick="ConfirmDeleteOidcAsync">Delete</button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _oidcDeleteId = null)">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // OIDC Federation state (#271)
+    private bool    _oidcLoading  = false;
+    private bool    _oidcSaving   = false;
+    private string? _oidcError;
+    private string? _oidcMsg;
+    private bool    _oidcShowNew  = false;
+    private Guid?   _oidcEditId;
+    private Guid?   _oidcDeleteId;
+    private string? _oidcDeleteName;
+    private OidcTestResultDto? _oidcTestResult;
+    private List<OidcProviderDto>? _oidcProviders;
+    // Form fields
+    private string _oidcName           = "";
+    private string _oidcDisplayName    = "";
+    private string _oidcAuthority      = "";
+    private string _oidcClientId       = "";
+    private string _oidcClientSecret   = "";
+    private string _oidcScopes         = "openid profile email";
+    private string _oidcGroupClaimType = "";
+    private string _oidcDefaultRole    = "Viewer";
+    private bool   _oidcAutoProvision  = true;
+    private bool   _oidcIsEnabled      = true;
 
     // Hardware Token state (#261)
     private bool   _hwtLoading  = false;
@@ -914,6 +1088,105 @@
             await LoadSmsConfigAsync();
         if (tab == "hwtoken")
             await LoadHardwareTokensAsync();
+        if (tab == "oidc")
+            await LoadOidcAsync();
+    }
+
+    // ── OIDC Federation (#271) ───────────────────────────────────────────────────────────────
+
+    private async Task LoadOidcAsync()
+    {
+        _oidcLoading = true; _oidcError = null; StateHasChanged();
+        _oidcProviders = await Api.GetOidcProvidersAdminAsync();
+        _oidcLoading = false; StateHasChanged();
+    }
+
+    private void ResetOidcForm()
+    {
+        _oidcName = _oidcDisplayName = _oidcAuthority = _oidcClientId = _oidcClientSecret = "";
+        _oidcScopes = "openid profile email";
+        _oidcGroupClaimType = "";
+        _oidcDefaultRole = "Viewer";
+        _oidcAutoProvision = true;
+        _oidcIsEnabled = true;
+        _oidcTestResult = null;
+    }
+
+    private void StartEditOidc(OidcProviderDto p)
+    {
+        _oidcEditId       = p.Id;
+        _oidcShowNew      = false;
+        _oidcName         = p.Name;
+        _oidcDisplayName  = p.DisplayName;
+        _oidcAuthority    = p.Authority;
+        _oidcClientId     = p.ClientId;
+        _oidcClientSecret = "";
+        _oidcScopes       = p.Scopes;
+        _oidcGroupClaimType = p.GroupClaimType ?? "";
+        _oidcDefaultRole  = p.DefaultRole;
+        _oidcAutoProvision = p.AutoProvisionUsers;
+        _oidcIsEnabled    = p.IsEnabled;
+        _oidcTestResult   = null;
+        _oidcError = _oidcMsg = null;
+        StateHasChanged();
+    }
+
+    private async Task SaveOidcAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_oidcName) || string.IsNullOrWhiteSpace(_oidcAuthority)
+            || string.IsNullOrWhiteSpace(_oidcClientId))
+        { _oidcError = "Name, Authority, and Client ID are required."; return; }
+
+        _oidcSaving = true; _oidcError = null; _oidcMsg = null; StateHasChanged();
+        bool ok;
+        if (_oidcEditId.HasValue)
+        {
+            ok = await Api.UpdateOidcProviderAsync(
+                _oidcEditId.Value,
+                _oidcDisplayName, _oidcAuthority, _oidcClientId,
+                string.IsNullOrEmpty(_oidcClientSecret) ? null : _oidcClientSecret,
+                _oidcScopes,
+                string.IsNullOrEmpty(_oidcGroupClaimType) ? null : _oidcGroupClaimType,
+                null, _oidcAutoProvision, _oidcDefaultRole, _oidcIsEnabled);
+        }
+        else
+        {
+            ok = await Api.CreateOidcProviderAsync(
+                _oidcName, _oidcDisplayName, _oidcAuthority, _oidcClientId,
+                string.IsNullOrEmpty(_oidcClientSecret) ? null : _oidcClientSecret,
+                _oidcScopes,
+                string.IsNullOrEmpty(_oidcGroupClaimType) ? null : _oidcGroupClaimType,
+                null, _oidcAutoProvision, _oidcDefaultRole, _oidcIsEnabled);
+        }
+        _oidcSaving = false;
+        if (ok)
+        {
+            _oidcMsg     = _oidcEditId.HasValue ? "Provider updated." : "Provider created.";
+            _oidcShowNew = false;
+            _oidcEditId  = null;
+            await LoadOidcAsync();
+        }
+        else
+        {
+            _oidcError = "Failed to save provider. Check all fields and try again.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task TestOidcAsync(Guid id)
+    {
+        _oidcTestResult = null; StateHasChanged();
+        _oidcTestResult = await Api.TestOidcProviderAsync(id);
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDeleteOidcAsync()
+    {
+        if (!_oidcDeleteId.HasValue) return;
+        var ok = await Api.DeleteOidcProviderAsync(_oidcDeleteId.Value);
+        _oidcDeleteId = null; _oidcDeleteName = null;
+        if (ok) { _oidcMsg = "Provider deleted."; await LoadOidcAsync(); }
+        else    { _oidcError = "Failed to delete provider."; StateHasChanged(); }
     }
 
     // ── Hardware Tokens (#261) ───────────────────────────────────────────────────────────────

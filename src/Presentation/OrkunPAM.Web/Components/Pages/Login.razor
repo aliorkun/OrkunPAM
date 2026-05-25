@@ -202,6 +202,24 @@
             <a href="/forgot-password" style="color:#58a6ff;font-size:.85rem;text-decoration:none">Forgot password?</a>
         </div>
 
+        @if (!_mfaStep && _oidcProviders?.Count > 0)
+        {
+            <div style="margin:.75rem 0;display:flex;align-items:center;gap:.5rem">
+                <hr style="flex:1;border-color:#30363d" />
+                <span style="color:#8b949e;font-size:.8rem">or sign in with</span>
+                <hr style="flex:1;border-color:#30363d" />
+            </div>
+            @foreach (var p in _oidcProviders)
+            {
+                var providerName = p.Name;
+                <button class="pam-btn pam-btn-secondary w-100"
+                        style="margin-bottom:.4rem"
+                        @onclick="@(() => Nav.NavigateTo("/api/v1/auth/oidc/" + providerName + "/login", forceLoad: true))">
+                    &#x1F512; @p.DisplayName
+                </button>
+            }
+        }
+
         <p class="pam-login-footer">
             &copy; @DateTime.Now.Year OrkunPAM — Enterprise PAM
         </p>
@@ -217,6 +235,7 @@
     private string _mfaCode         = "";
     private bool   _emailOtpSent;
     private bool   _smsOtpSent;
+    private List<OidcProviderPublicDto>? _oidcProviders;
     private string _riskLevel       = "";
     private bool   _rememberDevice;
     private int    _mfaTrustMaxHours;
@@ -225,7 +244,12 @@
     {
         if (!firstRender) return;
         if (await Auth.IsAuthenticatedAsync())
+        {
             Nav.NavigateTo("/");
+            return;
+        }
+        _oidcProviders = await Api.GetOidcProvidersPublicAsync();
+        StateHasChanged();
     }
 
     private async Task HandleLoginAsync()

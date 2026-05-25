@@ -1856,6 +1856,89 @@ public sealed class PamApiService
         catch { return new LoginResult(false, null); }
     }
 
+    // ── OIDC Federation (#271 UM #48) ─────────────────────────────────────────
+
+    public async Task<List<OidcProviderPublicDto>?> GetOidcProvidersPublicAsync()
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            var resp   = await client.GetAsync("/api/v1/auth/oidc/providers");
+            if (!resp.IsSuccessStatusCode) return null;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.TryGetProperty("data", out var d))
+                return d.Deserialize<List<OidcProviderPublicDto>>(JsonOpts);
+            return null;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<OidcProviderDto>?> GetOidcProvidersAdminAsync()
+        => (await GetAsync<ListResult<OidcProviderDto>>("/api/v1/system/oidc-providers"))?.Data;
+
+    public async Task<bool> CreateOidcProviderAsync(
+        string name, string displayName, string authority, string clientId, string? clientSecret,
+        string? scopes, string? groupClaimType, string? groupRoleMapping,
+        bool autoProvision, string defaultRole, bool isEnabled)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var body   = JsonSerializer.Serialize(new
+            {
+                name, displayName, authority, clientId, clientSecret,
+                scopes, groupClaimType, groupRoleMapping,
+                autoProvisionUsers = autoProvision, defaultRole, isEnabled
+            }, JsonOpts);
+            var resp = await client.PostAsync("/api/v1/system/oidc-providers",
+                new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateOidcProviderAsync(
+        Guid id, string? displayName, string? authority, string? clientId, string? clientSecret,
+        string? scopes, string? groupClaimType, string? groupRoleMapping,
+        bool? autoProvision, string? defaultRole, bool? isEnabled)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var body   = JsonSerializer.Serialize(new
+            {
+                displayName, authority, clientId, clientSecret,
+                scopes, groupClaimType, groupRoleMapping,
+                autoProvisionUsers = autoProvision, defaultRole, isEnabled
+            }, JsonOpts);
+            var resp = await client.PutAsync("/api/v1/system/oidc-providers/" + id,
+                new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteOidcProviderAsync(Guid id)
+    {
+        try { return (await (await GetAuthClientAsync()).DeleteAsync("/api/v1/system/oidc-providers/" + id)).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<OidcTestResultDto?> TestOidcProviderAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp   = await client.PostAsync("/api/v1/system/oidc-providers/" + id + "/test", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            using var stream = await resp.Content.ReadAsStreamAsync();
+            using var doc    = await JsonDocument.ParseAsync(stream);
+            return doc.RootElement.Deserialize<OidcTestResultDto>(JsonOpts);
+        }
+        catch { return null; }
+    }
+
     // ── Private helpers ────────────────────────────────────────────────────────
 
     private async Task<HttpClient> GetAuthClientAsync()
@@ -2638,3 +2721,30 @@ public record HardwareTokenDto(
     string?  Label,
     bool     IsActive,
     DateTime ProvisionedAtUtc);
+
+// OIDC Federation (#271)
+public record OidcProviderPublicDto(Guid Id, string Name, string DisplayName);
+
+public record OidcProviderDto(
+    Guid     Id,
+    string   Name,
+    string   DisplayName,
+    string   Authority,
+    string   ClientId,
+    bool     ClientSecretSet,
+    string   Scopes,
+    string?  GroupClaimType,
+    string?  GroupRoleMapping,
+    bool     AutoProvisionUsers,
+    string   DefaultRole,
+    bool     IsEnabled,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record OidcTestResultDto(
+    bool     Success,
+    bool     Reachable,
+    string?  AuthorizationEndpoint,
+    string?  TokenEndpoint,
+    string?  Issuer,
+    string?  Error);

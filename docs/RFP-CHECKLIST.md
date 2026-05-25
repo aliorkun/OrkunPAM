@@ -104,7 +104,7 @@
 | 45 | Solution shall support certificate-based authentication | PC | PKI auth — X.509 client certificates via /api/v1/auth/pki/login (#115) |
 | 46 | Solution shall support smart card authentication | PC | PKI auth supports smart card certificates (X.509 via PkiEndpoints.cs) |
 | 47 | Solution shall support passwordless authentication | PC | FIDO2/WebAuthn — passwordless login via hardware security keys (#158) |
-| 48 | Solution shall support federated identity |  |  |
+| 48 | Solution shall support federated identity | PC | OIDC Federation — Azure AD / Okta / Auth0 via OidcAuthEndpoints.cs (PKCE + auto-provision, Sprint 54) |
 
 ## Reporting (48 items)
 

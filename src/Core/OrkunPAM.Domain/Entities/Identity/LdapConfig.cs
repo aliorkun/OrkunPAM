@@ -34,3 +34,19 @@ public class SamlProvider : AuditableEntity
     public string? GroupMapping { get; set; } // JSON
     public bool IsEnabled { get; set; } = true;
 }
+
+// OIDC Federation (#271 UM #48)
+public class OidcProvider : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;           // slug used in URLs (e.g., "azure-ad")
+    public string DisplayName { get; set; } = string.Empty;    // shown on login button
+    public string Authority { get; set; } = string.Empty;      // issuer URL (e.g., https://login.microsoftonline.com/{tenant}/v2.0)
+    public string ClientId { get; set; } = string.Empty;
+    public byte[]? ClientSecretEnc { get; set; }               // AES-256-GCM encrypted
+    public string Scopes { get; set; } = "openid profile email";
+    public string? GroupClaimType { get; set; }                // e.g., "groups" or "roles"
+    public string? GroupRoleMapping { get; set; }              // JSON: {"pam-admin": "GlobalAdmin"}
+    public bool AutoProvisionUsers { get; set; } = true;
+    public string DefaultRole { get; set; } = "Viewer";
+    public bool IsEnabled { get; set; } = true;
+}

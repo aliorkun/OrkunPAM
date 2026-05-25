@@ -901,9 +901,37 @@
 
 ---
 
+## Sprint 54 - OIDC Federation — Azure AD / Okta / Auth0 (#271)
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #271 | [MVP] OpenID Connect (OIDC) Federation — Azure AD / Okta / Auth0 Identity Provider Support (UM #48) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 54 Tamamlanan Bilesenler (2026-05-25):**
+- **OidcProvider entity** (LdapConfig.cs): Name (slug), DisplayName, Authority (issuer URL), ClientId, ClientSecretEnc (AES-256-GCM), Scopes, GroupClaimType, GroupRoleMapping (JSON), AutoProvisionUsers, DefaultRole, IsEnabled
+- **Migration `20260525_AddOidcProvider`:** OidcProviders tablosu + unique index on Name + IsEnabled index
+- **DbContext:** OidcProviders DbSet + EF Core konfigurasyonu (unique Name, max lengths)
+- **OidcAuthEndpoints.cs:** 7 endpoint — GET /providers (public), GET /{name}/login (PKCE+state+nonce redirect), GET /{name}/callback (code exchange + ID token validation + user provision + PAM JWT → /oidc-callback redirect); Admin CRUD: GET/POST/PUT/DELETE /api/v1/system/oidc-providers, POST /test
+- **PKCE (RFC 7636):** code_verifier (32 bytes random) + S256 code_challenge; state + nonce in IMemoryCache (10 min TTL); replay protection
+- **ID token validation:** exp/iss/aud/nonce checks; flexible issuer comparison; no signature verification needed (direct token endpoint fetch over TLS)
+- **User auto-provision:** First login creates User with AuthSource=Oidc + ExternalId=sub; default role assignment; subsequent logins sync by sub claim
+- **3 audit events:** OIDC_LOGIN_SUCCESS, OIDC_LOGIN_FAILED, OIDC_USER_PROVISIONED
+- **Program.cs:** MapOidcAuthEndpoints() kaydedildi
+- **OidcCallback.razor:** /oidc-callback page — token parse + SetSessionAsync → same pattern as SamlCallback
+- **Login.razor:** GetOidcProvidersPublicAsync() on load; "or sign in with" divider + provider buttons (forceLoad:true to follow 302 redirects)
+- **Integrations.razor:** "OIDC Federation" sekmesi — provider listesi, New/Edit modal (authority/clientId/scopes/groupClaim/defaultRole/autoProvision), Test butonu (discovery endpoint ping), Delete confirm modal; SetTab case + 8 yeni method + 21 yeni state field
+- **PamApiService.cs:** GetOidcProvidersPublicAsync, GetOidcProvidersAdminAsync, CreateOidcProviderAsync, UpdateOidcProviderAsync, DeleteOidcProviderAsync, TestOidcProviderAsync + OidcProviderPublicDto + OidcProviderDto + OidcTestResultDto
+- **RFP-CHECKLIST.md:** UM #48 → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 52 tamamlandi.** Session Handoff #263 push'landi, RA #41 → PC.
-**Sprint 53 hedefi:** #262 IPv6 Dual-Stack (Platform #21) — socket bind degisiklikleri
+**Sprint 54 tamamlandi.** OIDC Federation #271 → PC.
+**Sprint 55 hedefi:** #270 MFA for Privileged Workstations (MFA #22)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

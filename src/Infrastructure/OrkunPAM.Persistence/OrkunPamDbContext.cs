@@ -28,6 +28,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<Policy> Policies => Set<Policy>();
     public DbSet<LdapConfiguration> LdapConfigurations => Set<LdapConfiguration>();
     public DbSet<SamlProvider> SamlProviders => Set<SamlProvider>();
+    public DbSet<OidcProvider> OidcProviders => Set<OidcProvider>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<GroupRole> GroupRoles => Set<GroupRole>();
@@ -791,6 +792,21 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(t => t.UserId);
             e.HasIndex(t => new { t.UserId, t.IsActive });
             e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OidcProvider>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Name).HasMaxLength(100);
+            e.Property(p => p.DisplayName).HasMaxLength(200);
+            e.Property(p => p.Authority).HasMaxLength(500);
+            e.Property(p => p.ClientId).HasMaxLength(300);
+            e.Property(p => p.Scopes).HasMaxLength(500).HasDefaultValue("openid profile email");
+            e.Property(p => p.GroupClaimType).HasMaxLength(100);
+            e.Property(p => p.GroupRoleMapping).HasMaxLength(2000);
+            e.Property(p => p.DefaultRole).HasMaxLength(100).HasDefaultValue("Viewer");
+            e.HasIndex(p => p.Name).IsUnique();
+            e.HasIndex(p => p.IsEnabled);
         });
 
         // Seed built-in data

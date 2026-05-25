@@ -1,0 +1,106 @@
+@page "/oidc-callback"
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+@inject ILogger<OidcCallback> Logger
+
+<PageTitle>SSO Login — OrkunPAM</PageTitle>
+
+<div class="pam-login-page">
+    <div class="pam-login-card">
+        <div class="pam-login-logo">🔐</div>
+        <h1 class="pam-login-title">OrkunPAM</h1>
+        @if (_error != null)
+        {
+            <div class="pam-alert pam-alert-danger">@_error</div>
+            <a href="/login" class="pam-btn pam-btn-primary" style="display:block;text-align:center;margin-top:1rem">Back to Login</a>
+        }
+        else
+        {
+            <p class="pam-login-sub" style="text-align:center">Completing OIDC login…</p>
+            <div class="pam-loading-text" style="text-align:center">
+                <span class="pam-spinner-sm"></span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var token = ParseTokenFromQuery(Nav.Uri);
+
+        if (string.IsNullOrEmpty(token))
+        {
+            _error = "OIDC login failed: no token received from identity provider.";
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            var authUser = DecodeJwtClaims(token);
+            await Auth.SetSessionAsync(token, authUser);
+            Nav.NavigateTo("/", forceLoad: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning("OIDC callback token decode failed: {Msg}", ex.Message);
+            _error = "OIDC login failed: unable to read session token.";
+            StateHasChanged();
+        }
+    }
+
+    private static string? ParseTokenFromQuery(string uri)
+    {
+        var queryStart = uri.IndexOf('?');
+        if (queryStart < 0) return null;
+        var query = uri[(queryStart + 1)..];
+        foreach (var part in query.Split('&'))
+        {
+            var eq = part.IndexOf('=');
+            if (eq < 0) continue;
+            var key = Uri.UnescapeDataString(part[..eq]);
+            if (key.Equals("token", StringComparison.OrdinalIgnoreCase))
+                return Uri.UnescapeDataString(part[(eq + 1)..]);
+        }
+        return null;
+    }
+
+    private static AuthUser DecodeJwtClaims(string token)
+    {
+        var parts = token.Split('.');
+        if (parts.Length != 3) throw new FormatException("Invalid JWT format");
+
+        var payload = parts[1];
+        var padded  = payload.Replace('-', '+').Replace('_', '/');
+        padded += (padded.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
+        var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded));
+
+        using var doc  = System.Text.Json.JsonDocument.Parse(json);
+        var root       = doc.RootElement;
+
+        var userId      = GetStr(root, "sub");
+        var username    = GetStr(root, "username");
+        var displayName = GetStr(root, "name") is { Length: > 0 } dn ? dn : username;
+
+        const string roleClaimType = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
+        var roles = new List<string>();
+        if (root.TryGetProperty(roleClaimType, out var roleEl))
+        {
+            if (roleEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                foreach (var r in roleEl.EnumerateArray())
+                { if (r.GetString() is string s) roles.Add(s); }
+            else if (roleEl.GetString() is string single)
+                roles.Add(single);
+        }
+
+        return new AuthUser(userId, username, displayName, roles.ToArray());
+    }
+
+    private static string GetStr(System.Text.Json.JsonElement el, string key)
+        => el.TryGetProperty(key, out var p) ? p.GetString() ?? "" : "";
+}
