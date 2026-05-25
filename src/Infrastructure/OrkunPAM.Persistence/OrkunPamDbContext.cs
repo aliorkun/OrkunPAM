@@ -60,6 +60,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<SessionShadow> SessionShadows => Set<SessionShadow>();
     public DbSet<SessionHandoff> SessionHandoffs => Set<SessionHandoff>();
     public DbSet<ScreenCaptureFrame> ScreenCaptureFrames => Set<ScreenCaptureFrame>();
+    public DbSet<SessionRestoreToken> SessionRestoreTokens => Set<SessionRestoreToken>();
 
     // Analytics
     public DbSet<CommandRiskRule> CommandRiskRules => Set<CommandRiskRule>();
@@ -631,6 +632,16 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasOne<ProxySession>().WithMany().HasForeignKey(h => h.SessionId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(h => h.SessionId);
             e.HasIndex(h => new { h.RequestedToUserId, h.Status });
+        });
+
+        // === Session Restore Tokens (Sprint 58 RA #47) ===
+        modelBuilder.Entity<SessionRestoreToken>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Protocol).HasMaxLength(32);
+            e.HasOne<ProxySession>().WithMany().HasForeignKey(t => t.OriginalSessionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(t => new { t.UserId, t.IsUsed });
+            e.HasIndex(t => t.ExpiresAtUtc);
         });
 
         // === Session Delegation (#269 RA #42) ===

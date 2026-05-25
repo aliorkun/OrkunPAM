@@ -510,6 +510,7 @@ try
     api.MapLiveSessionEndpoints();
     api.MapShadowEndpoints();
     api.MapSessionHandoffEndpoints();
+    api.MapSessionRestorationEndpoints();
     api.MapSessionDelegationEndpoints();
     api.MapSmsOtpEndpoints();
     api.MapHardwareTokenEndpoints();
