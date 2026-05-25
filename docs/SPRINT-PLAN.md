@@ -998,9 +998,39 @@
 
 ---
 
+## Sprint 58 - Session Restoration (#279) ✅ TAMAMLANDI
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #279 | Session Restoration — Reconnect Interrupted Sessions Without Re-Auth (RA #47) | MVP-SESSION | ✅ Tamamlandi |
+
+**Sprint 58 Tamamlanan Bilesenler (2026-05-25):**
+- **SessionStatus.Disconnected (=4):** Enum'a yeni deger eklendi — unexpected network disconnect icin ayri durum
+- **SessionRestoreToken entity** (ProxySession.cs): OriginalSessionId FK, UserId, DeviceId, CredentialId, Protocol, CreatedAtUtc, ExpiresAtUtc (15 dk), IsUsed, RestoredSessionId; `Disconnect()` method ProxySession'a eklendi
+- **Migration `20260525_AddSessionRestoreToken`:** SessionRestoreTokens tablosu + 2 index (UserId+IsUsed, ExpiresAtUtc) + FK → ProxySessions CASCADE
+- **DbContext:** SessionRestoreTokens DbSet + EF Core konfigurasyonu (maxLength, index, cascade delete)
+- **SessionRestorationEndpoints.cs (yeni):** 4 endpoint:
+  - `POST /api/v1/sessions/{id}/mark-disconnected` — X-Proxy-Secret auth; session.Disconnect() + restore token olusturur
+  - `GET /api/v1/sessions/restorable` — kullanicinin aktif (IsUsed=false, ExpiresAt>now) token listesi
+  - `POST /api/v1/sessions/restore/{tokenId}` — token ile yeni session olusturur; 2 audit event (RESTORE_INITIATED/COMPLETED)
+  - `DELETE /api/v1/sessions/restore/{tokenId}` — token iptali
+- **Program.cs:** MapSessionRestorationEndpoints() kayitlandi
+- **SshProxy/PamApiClient.cs:** `MarkSessionDisconnectedAsync()` — best-effort, asla throw etmez; X-Proxy-Secret ile dogrulanir
+- **SshServerSession.cs:** `unexpectedDisconnect` flag; `IOException`/`SocketException` catch'te `true` set edilir; finally'de `MarkSessionDisconnectedAsync()` cagrisi
+- **AccountLifecycleJob.cs:** Gunluk temizlik — `IsUsed=true` veya `ExpiresAtUtc<now` tokenlari `ExecuteDeleteAsync` ile siler
+- **Sessions.razor:** "Disconnected" status filter secenegi; pam-status-warning badge; Restorable sessions sarı uyarı bannerı (adet badge + "Restore Sessions" butonu); Restore butonu disconnected satirlar icin; restore panel modali (protocol, disconnect saati, bitis saati, Restore/Cancel butonlari); LoadRestorableSessionsAsync + OpenRestorePanel + RestoreFromSessionAsync + RestoreTokenAsync + CancelRestoreTokenAsync metodlari; OnAfterRenderAsync'de LoadRestorableSessionsAsync
+- **PamApiService.cs:** GetRestorableSessionsAsync, RestoreSessionAsync, CancelRestoreTokenAsync + RestorableSessionDto + SessionRestoreResponseDto
+- **RFP-CHECKLIST.md:** RA #47 → PC
+
+**Ilerleme:** 12/12 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 57 tamamlandi.** Reporting #39+40+41 → PC.
-**Sprint 58 hedefi:** #279 Session Restoration (RA #47) — M scope
+**Sprint 58 tamamlandi.** RA #47 → PC.
+**Sprint 59 hedefi:** #282 Biometric Auth (Platform #44) — S/M scope
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
