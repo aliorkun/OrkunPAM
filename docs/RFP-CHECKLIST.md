@@ -238,7 +238,7 @@
 | 44 | Solution shall support multi-protocol sessions | PC | SSH + RDP + VNC + HTTP + SQL + TACACS+ + RADIUS + Telnet — 8 protocols via unified PAM |
 | 45 | Solution shall support session export | PC | SessionEndpoints.cs — GET /export (ZIP: metadata + recording); GET /export/bulk (multi-session ZIP); SessionPlayback.razor download button; RFP RA #45 (#239) |
 | 46 | Solution shall support session import |  |  |
-| 47 | Solution shall support session restoration |  |  |
+| 47 | Solution shall support session restoration | PC | SessionRestoreToken entity + mark-disconnected endpoint + 15-min TTL; SSH proxy unexpected disconnect hook; Sessions.razor Restore button + restorable sessions banner; Sprint 58 #279 |
 | 48 | Solution shall support RADIUS access | PC | OrkunPAM.RadiusProxy — native C# RADIUS (RFC 2865/2866) UDP :1812/:1813; PAP/CHAP auth; audit events |
 
 ## Password Vault (48 items)
