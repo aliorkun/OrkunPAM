@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-25 (Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Sprint 53 RA #42 → PC #269; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-25 (Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -175,7 +175,7 @@
 | RA 5 | HTTP/HTTPS proxy | NS | - |
 | RA 6 | Database proxy | NS | Deferred to v3+ |
 | RA 7 | Web-based SSH terminal | PC | XTerm.js terminal |
-| RA 8 | Network segmentation support | NS | - |
+| RA 8 | Network segmentation support | PC | NetworkZone entity + jump host ProxyJump (SSH direct-tcpip) + /network-zones UI (#283) |
 | RA 9 | Jump server / bastion | PC | SSH proxy as bastion |
 | RA 10 | Session recording (SSH) | PC | SessionRecorder |
 | RA 11 | Session recording (RDP) | NS | RDP recording not yet implemented |
@@ -321,25 +321,24 @@
 
 | Sprint | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| Sprint 60 | #283 | RA #8 (network segmentation + SSH ProxyJump) |
 | Sprint 59 | #282, #286, #287, #288 | Platform #44 (biometric auth) |
 | Sprint 58 | #279 | RA #47 (session restore) |
 | Sprint 57 | #278 | R #39, R #40, R #41 (operational reports) |
 | Sprint 56 | #277 | MFA #23 (OATH token drift report) |
-| Sprint 55 | #270 | MFA #22 (device MFA policy) |
 
 ---
 
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. RA #8 — Network segmentation support (#283 queued)
-2. PV #12 — Credential federation (#284 queued)
-3. Platform #3 — HA clustering
-4. Platform #47 — Zero-trust network access
-5. UM #13 — SCIM provisioning
-6. RA #3 — VNC proxy
-7. RA #6 — Database proxy (deferred v3+)
-8. PV #14 — HSM integration
+1. PV #12 — Credential federation (#284 queued)
+2. Platform #3 — HA clustering
+3. Platform #47 — Zero-trust network access
+4. UM #13 — SCIM provisioning
+5. RA #3 — VNC proxy
+6. RA #6 — Database proxy (deferred v3+)
+7. PV #14 — HSM integration
 
 ---
 
