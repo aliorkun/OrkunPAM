@@ -48,6 +48,7 @@
                         <th>Type</th>
                         <th>Protocol</th>
                         <th>OS</th>
+                        <th>Zone</th>
                         <th>Credentials</th>
                         <th>Reachable</th>
                         <th>Status</th>
@@ -69,6 +70,16 @@
                             <td><span class="pam-badge">@d.Type</span></td>
                             <td>@d.Protocol@(d.ConnectionPort.HasValue ? $":{d.ConnectionPort}" : "")</td>
                             <td>@(d.OperatingSystem ?? "&#8212;")</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(d.NetworkZoneName))
+                                {
+                                    <span class="pam-badge pam-badge-info">@d.NetworkZoneName</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-text-muted">—</span>
+                                }
+                            </td>
                             <td>
                                 <span class="pam-badge @(d.CredentialCount > 0 ? "pam-badge-success" : "pam-badge-secondary")">
                                     @d.CredentialCount
@@ -176,6 +187,19 @@
                     <input class="pam-input w-100-input" @bind="_fOs"
                            placeholder="e.g. Windows Server 2022, Ubuntu 22.04" />
                 </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Network Zone</label>
+                    <select class="pam-input" style="width:100%" @bind="_fNetworkZoneId">
+                        <option value="">— None (direct access) —</option>
+                        @if (_networkZones != null)
+                        {
+                            @foreach (var z in _networkZones)
+                            {
+                                <option value="@z.Id">@z.Name@(string.IsNullOrEmpty(z.JumpHostAddress) ? "" : " (jump: " + z.JumpHostAddress + ")")</option>
+                            }
+                        }
+                    </select>
+                </div>
             </div>
             <div class="pam-modal-footer">
                 <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
@@ -203,13 +227,16 @@
     private string? _editingId;
     private string? _formError;
     private bool    _formSaving;
-    private string  _fHostname  = "";
-    private string  _fIpAddress = "";
-    private string  _fFqdn      = "";
-    private string  _fType      = "Server";
-    private string  _fProtocol  = "Ssh";
-    private int     _fPort      = 22;
-    private string  _fOs        = "";
+    private string  _fHostname       = "";
+    private string  _fIpAddress      = "";
+    private string  _fFqdn           = "";
+    private string  _fType           = "Server";
+    private string  _fProtocol       = "Ssh";
+    private int     _fPort           = 22;
+    private string  _fOs             = "";
+    private string  _fNetworkZoneId  = "";
+
+    private List<NetworkZoneDto>? _networkZones;
 
     private string? _launchingDeviceId;
     private string? _launchError;
@@ -219,6 +246,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        _networkZones = await Api.GetNetworkZonesAsync();
         await LoadAsync();
     }
 
@@ -266,7 +294,7 @@
             return;
         }
 
-        var result = await Api.GenerateLaunchTokenAsync(deviceId, credId);
+        var result = await Api.GenerateLaunchTokenAsync(deviceId, credId.ToString());
         if (result == null)
         {
             _launchError = "Failed to generate launch token.";
@@ -285,22 +313,24 @@
         _editingId = null;
         _fHostname = _fIpAddress = _fFqdn = _fOs = "";
         _fType = "Server"; _fProtocol = "Ssh"; _fPort = 22;
+        _fNetworkZoneId = "";
         _formError = null;
         _showModal = true;
     }
 
     private void OpenEditModal(DeviceDto d)
     {
-        _editingId  = d.Id;
-        _fHostname  = d.Hostname;
-        _fIpAddress = d.IpAddress ?? "";
-        _fFqdn      = d.Fqdn ?? "";
-        _fType      = d.Type;
-        _fProtocol  = d.Protocol;
-        _fPort      = d.ConnectionPort ?? 22;
-        _fOs        = d.OperatingSystem ?? "";
-        _formError  = null;
-        _showModal  = true;
+        _editingId      = d.Id;
+        _fHostname      = d.Hostname;
+        _fIpAddress     = d.IpAddress ?? "";
+        _fFqdn          = d.Fqdn ?? "";
+        _fType          = d.Type;
+        _fProtocol      = d.Protocol;
+        _fPort          = d.ConnectionPort ?? 22;
+        _fOs            = d.OperatingSystem ?? "";
+        _fNetworkZoneId = d.NetworkZoneId?.ToString() ?? "";
+        _formError      = null;
+        _showModal      = true;
     }
 
     private void CloseModal() { _showModal = false; _formError = null; }
@@ -314,6 +344,8 @@
         _formSaving = true;
         StateHasChanged();
 
+        var zoneId = Guid.TryParse(_fNetworkZoneId, out var zid) ? (Guid?)zid : null;
+
         bool ok;
         if (_editingId == null)
         {
@@ -322,7 +354,8 @@
                 string.IsNullOrWhiteSpace(_fFqdn)      ? null : _fFqdn.Trim(),
                 string.IsNullOrWhiteSpace(_fIpAddress) ? null : _fIpAddress.Trim(),
                 _fType, _fProtocol, _fPort,
-                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim());
+                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim(),
+                zoneId);
         }
         else
         {
@@ -332,7 +365,8 @@
                 string.IsNullOrWhiteSpace(_fFqdn)      ? null : _fFqdn.Trim(),
                 string.IsNullOrWhiteSpace(_fIpAddress) ? null : _fIpAddress.Trim(),
                 _fType, _fProtocol, _fPort,
-                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim());
+                string.IsNullOrWhiteSpace(_fOs)        ? null : _fOs.Trim(),
+                zoneId);
         }
 
         _formSaving = false;
