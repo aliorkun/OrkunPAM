@@ -556,7 +556,7 @@
 - **AutoRotationService.cs:** Rotasyon basarisiz olduğunda `IEmailService` ile VaultAdmin/GlobalAdmin rollerine email bildirimi
 - **CredentialRiskEndpoints.cs:** `GET /api/v1/vault/credentials/rotation-failures` endpoint eklendi
 - **Home.razor:** "Rotation Failures (24h)" stat card + son 5 rotation failure widget
-- **Vault.razor:** Başarısız rotasyon için kirmizi "Failed" badge + tooltip
+- **Vault.razor:** Başarısız rotasyon icin kirmizi "Failed" badge + tooltip
 - **VaultEndpoints.cs:** Projeksiyonlara `RotationFailureCount`, `LastRotationError`, `LastRotationFailedAtUtc` eklendi
 - **PamApiService.cs:** `CredentialDto` +3 alan, `GetRotationFailuresAsync()`, `RotationFailureItemDto`, `RotationFailuresResponseDto`
 - **Cache fixes (#237/#238):** CommandFilterPolicy mutation'lari cache temizliyor, /effective endpoint'e `action` alani eklendi
@@ -670,8 +670,6 @@
 
 ---
 
----
-
 ## Sprint 43 - Security Fixes + Visual Screen Capture (#240)
 **Tarih:** 2026-05-21 (aktif)
 **Durum:** Tamamlandi ✅
@@ -683,12 +681,6 @@
 | #247 | [HIGH] Modulo bias in password generation (CWE-331) | security | ✅ Fix'lendi |
 | #240 | [MVP] Visual Screen Capture for RDP/VNC Sessions (RA #28 + #30) | product | ✅ Tamamlandi |
 
-**Sprint 43 Tamamlanan Bilesenler (2026-05-21):**
-- **#245:** RotationScriptEndpoints.cs `rotate-with-script` endpoint: IVaultEncryptionService inject + `credential.PasswordEnc = vault.EncryptString(newPassword).Value` basarili rotasyondan sonra; AutoRotationService.cs custom-script yolunda da ayni duzeltme
-- **#246:** `rotate-with-script` basari yaniti artik `result.Output` icermiyor; `RedactSensitivePatterns()` helper: regex ile password/secret/token pattern'lari [REDACTED] ile maskeler, 2048 char limit
-- **#247:** `GeneratePassword()`: modulo bias giderildi — rejection sampling (NIST SP 800-132): `limit = 256 - (256 % chars.Length) = 248`, bias range'i atlar
-- **#240:** ScreenCaptureFrame entity (ProxySession.cs) + migration 20260521_AddScreenCaptureFrame + DbContext DbSet; ScreenCaptureEndpoints.cs (3 endpoint); Program.cs kaydı; VNC proxy (VncSession.cs): ServerInit'ten width/height parse + 5s periyodik capture timer + `_api.ReportScreenCaptureAsync()`; RDP proxy (RdpServerSession.cs): 5s periyodik capture timer; Both PamApiClients: `ReportScreenCaptureAsync()` method; SessionPlayback.razor: Screen Captures tab (timeline table + progress bar); PamApiService.cs: `GetScreenCapturesAsync()` + ScreenCaptureFrameDto; RFP-CHECKLIST.md: RA #28 → PC, RA #30 → PC
-
 **Ilerleme:** 4/4 (%100) ✅
 
 ---
@@ -699,8 +691,8 @@
 
 ### Implemented
 - `CredentialTemplate` entity (AuditableEntity with IsBuiltIn protection)
-- Migration `20260521_AddCredentialTemplate` with 8 built-in templates (linux-root, linux-service, windows-admin, windows-service, mssql-sa, cisco-enable, juniper-admin, nas-admin)
-- `CredentialTemplateEndpoints.cs` — GET list, GET single, POST create, PUT update, DELETE, POST apply (all with AdminPolicy; built-in templates are read-only)
+- Migration `20260521_AddCredentialTemplate` with 8 built-in templates
+- `CredentialTemplateEndpoints.cs` — GET list, GET single, POST create, PUT update, DELETE, POST apply
 - `OrkunPamDbContext`: CredentialTemplates DbSet + EF config
 - `Program.cs`: MapCredentialTemplateEndpoints() + MapScreenCaptureEndpoints() registered
 - `PamApiService.cs`: GetCredentialTemplatesAsync, CreateCredentialTemplateAsync, UpdateCredentialTemplateAsync, DeleteCredentialTemplateAsync, CredentialTemplateDto
@@ -717,19 +709,6 @@
 |-------|--------|-----|-------|
 | #249 | [MVP] RDP/VNC USB & Peripheral Redirection Control | MVP-SESSION | ✅ Tamamlandi |
 
-**Sprint 45 Tamamlanan Bilesenler (2026-05-21):**
-- **PeripheralRedirectionPolicy entity** (ProxySession.cs): Name, IsEnabled, AllowClipboard, AllowDriveRedirection, AllowPrinterRedirection, AllowUsbRedirection, AllowAudioRedirection, AllowSmartCardRedirection, DeviceGroupId FK
-- **Migration `20260521_AddPeripheralRedirectionPolicy`:** PeripheralRedirectionPolicies tablosu + 2 index (IsEnabled, DeviceGroupId)
-- **DbContext:** PeripheralRedirectionPolicies DbSet + OnModelCreating config
-- **PeripheralPolicyEndpoints.cs:** 5 endpoint — GET list, POST, GET {id}, PUT, DELETE (AdminPolicy) + GET /effective (X-Proxy-Secret); secure defaults when no policy configured
-- **Program.cs:** MapPeripheralPolicyEndpoints() kaydedildi
-- **PamApiService.cs:** PeripheralRedirectionPolicyDto + GetPeripheralPoliciesAsync, CreatePeripheralPolicyAsync, UpdatePeripheralPolicyAsync, DeletePeripheralPolicyAsync
-- **Policies.razor:** "Peripheral Control" tab — policy table (emoji channel indicators), New/Edit modal (checkbox toggles per channel), Delete confirm modal; SwitchTab case + LoadPrpAsync
-- **RDP PamApiClient:** GetPeripheralPolicyAsync() — X-Proxy-Secret header, fallback to secure defaults
-- **RdpCommandAuditor:** SetPeripheralPolicy() + ShouldBlockPdu() — CLIPRDR/RDPDR/RDPSND channels dropped when blocked; CLIPBOARD_REDIRECTION_BLOCKED / DRIVE_REDIRECTION_BLOCKED / AUDIO_REDIRECTION_BLOCKED audit log
-- **RdpServerSession:** peripheralPolicy fetched at session start, passed to auditor; PumpWithAuditAsync checks ShouldBlockPdu before forwarding
-- **RFP-CHECKLIST.md:** RA #26 → PC
-
 **Ilerleme:** 10/10 (%100) ✅
 
 ---
@@ -741,18 +720,6 @@
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
 | #250 | [MVP] MFA for API Access — Service Account API Key + HMAC-Timestamp Binding (MFA #17, #18) | MVP-AUTH | ✅ Tamamlandi |
-
-**Sprint 46 Tamamlanan Bilesenler (2026-05-21):**
-- **ApiKey entity:** Name, Prefix, KeyHash (SHA-256), HmacSecretEnc (AES-encrypted 32-byte HMAC secret), ServiceAccountUserId FK, AllowedIpCidrsJson, ExpiresAtUtc, UsageCount, IsActive
-- **User.IsServiceAccount flag:** Added to User entity — service accounts skip interactive MFA
-- **Migration `20260521_AddApiKey`:** ApiKeys table + Users.IsServiceAccount column + 3 indexes
-- **DbContext:** ApiKeys DbSet + EF Core configuration (unique prefix index, cascade delete)
-- **ApiKeyAuthMiddleware.cs:** Runs before UseAuthentication — X-Api-Key + X-Timestamp + X-Signature validation; SHA-256 key hash verify (constant-time); HMAC-SHA256 signature verify; ±5 min timestamp tolerance; replay attack protection via IMemoryCache nonce; IP CIDR restriction; injects short-lived JWT (5 min) for the service account user
-- **ApiKeyEndpoints.cs:** 5 endpoints — GET list, POST create (returns one-time raw key + HMAC secret), GET single, DELETE revoke, POST rotate; 3 audit events (API_KEY_CREATED/REVOKED/ROTATED); AdminPolicy protected
-- **Program.cs:** `app.UseMiddleware<ApiKeyAuthMiddleware>()` before UseAuthentication + `api.MapApiKeyEndpoints()` registered
-- **PamApiService.cs:** `GetApiKeysAsync`, `CreateApiKeyAsync`, `RevokeApiKeyAsync`, `RotateApiKeyAsync` + `ApiKeyDto` + `ApiKeyCreatedDto`
-- **Integrations.razor:** "API Keys" tab — create form, one-time key material display panel (warn banner), key table (prefix/status/usage/expiry) + Rotate/Revoke actions
-- **RFP-CHECKLIST.md:** MFA #17 → PC, MFA #18 → PC
 
 **Ilerleme:** 9/9 (%100) ✅
 
@@ -767,11 +734,6 @@
 | #259 | [HIGH] MFA Exception enforcement missing in auth flow | security | ✅ Fix'lendi |
 | #260 | [MEDIUM] HMAC secret bytes not zeroed after vault.Encrypt() | security | ✅ Fix'lendi |
 
-**Sprint 47 Tamamlanan Bilesenler (2026-05-21):**
-- **AuthEndpoints.cs:** `using System.Net` + `using OrkunPAM.Application.Contracts` eklendi; login handler'a `IAuditService audit` inject edildi; MFA Exception check blogu eklendi — `Status == Approved && ExpiresAtUtc > now && UsageCount < MaxUsageCount && !RevokedAtUtc.HasValue`; IP CIDR restriction kontrolu; `UsageCount++`; `MFA_EXCEPTION_USED` audit log; `data = data with { MfaRequired = false }` ile bypass
-- **AuthEndpoints.cs:** `MfaCidrHelper` static class eklendi — `IsIpAllowed` + `IsInCidr` (ApiKeyAuthMiddleware'daki aynı CIDR logic)
-- **ApiKeyEndpoints.cs:** `CryptographicOperations.ZeroMemory(hmacSecret)` — create endpoint satir 98 + rotate endpoint satir 208 sonrasina eklendi (CWE-316)
-
 **Ilerleme:** 2/2 (%100) ✅
 
 ---
@@ -783,17 +745,6 @@
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
 | #251 | [MVP] Credential Orchestration — Multi-System Synchronized Rotation (PV #38) | MVP-VAULT | ✅ Tamamlandi |
-
-**Sprint 48 Tamamlanan Bilesenler (2026-05-21):**
-- **Enums.cs:** `OrchestrationExecutionMode` (Sequential/Parallel) + `OrchestrationRunStatus` (Pending/Running/Success/PartialFailure/RolledBack/Failed) eklendi
-- **Credential.cs:** `CredentialOrchestrationSet` + `CredentialOrchestrationMember` + `CredentialOrchestrationRun` entity'leri eklendi
-- **Migration `20260521_AddCredentialOrchestration`:** 3 tablo — CredentialOrchestrationSets, CredentialOrchestrationMembers, CredentialOrchestrationRuns
-- **DbContext:** 3 DbSet + OnModelCreating config (cascade delete, FK'lar, index'ler)
-- **CredentialOrchestrationEndpoints.cs:** 7 endpoint — GET list, POST create, GET detail, PUT update, DELETE, POST run (sequential/parallel + rollback + email), GET runs history; 6 audit event
-- **Program.cs:** `MapCredentialOrchestrationEndpoints()` kaydedildi
-- **PamApiService.cs:** `GetOrchestrationSetsAsync`, `CreateOrchestrationSetAsync`, `UpdateOrchestrationSetAsync`, `DeleteOrchestrationSetAsync`, `RunOrchestrationAsync`, `GetOrchestrationRunsAsync` + 6 DTO (OrchestrationSetDto, OrchestrationSetDetailDto, OrchestrationMemberDto, OrchestrationRunResultDto, OrchestrationRunDto, IdDto)
-- **Vault.razor:** "Orchestration" tab — set listesi, Run/History/Delete butonlari, New Set modali (mode/rollback/notify/cron), history modali (run log)
-- **RFP-CHECKLIST.md:** PV #38 → PC
 
 **Ilerleme:** 8/8 (%100) ✅
 
@@ -807,25 +758,6 @@
 |-------|--------|-----|-------|
 | #257 | [MVP] MFA Session Persistence — Trusted Browser Token (MFA #20) | MVP-AUTH | ✅ Tamamlandi |
 
-**Sprint 49 Tamamlanan Bilesenler (2026-05-24):**
-- **MfaTrustedSession entity** (User.cs): UserId FK, BrowserFingerprint (SHA-256), DeviceLabel, TrustExpiresAtUtc, GrantedFromIp, GrantedAtUtc, LastUsedAtUtc, IsRevoked
-- **Migration `20260524_AddMfaTrustedSession`:** MfaTrustedSessions tablosu + 2 index (UserId_IsRevoked, BrowserFingerprint)
-- **DbContext:** MfaTrustedSessions DbSet + EF Core konfigurasyonu (cascade delete, max lengths)
-- **AuthEndpoints.cs — login flow:** Trusted session check eklendi (MFA exception check'ten sonra); gecerli trusted session bulunursa MFA atlaniyor; audit log: MFA_SESSION_TRUST_USED
-- **AuthEndpoints.cs — yeni endpointler:**
-  - `GET /api/v1/auth/mfa-trust-policy` (anonim) — MaxMfaTrustHours doner (0=kapali)
-  - `POST /api/v1/auth/trusted-sessions` (auth) — mevcut browseri guvene al; mevcut kaydı revoke eder; audit: MFA_SESSION_TRUST_GRANTED
-  - `GET /api/v1/auth/trusted-sessions` (auth) — kullanici kendi aktif trusted session listesini gorur
-  - `DELETE /api/v1/auth/trusted-sessions/{id}` (auth) — self-service revoke; audit: MFA_SESSION_TRUST_REVOKED
-  - `GET /api/v1/admin/users/{userId}/trusted-sessions` (AdminPolicy) — admin goruntuleme
-  - `DELETE /api/v1/admin/users/{userId}/trusted-sessions` (AdminPolicy) — admin bulk revoke; audit: MFA_SESSION_TRUST_ADMIN_REVOKED_ALL
-- **Login.razor:** `_rememberDevice` + `_mfaTrustMaxHours` alanlari; MFA step'e "Trust this browser for N hours" checkbox (policy MaxHours > 0 ise gorunur); `HandleLoginAsync`'de trust policy yukleniyor; `CompleteLoginAsync`'de `CreateTrustedSessionAsync` cagrisi
-- **SelfService.razor:** "Trusted Devices" sekme eklendi — aktif trusted session listesi (label, IP, tarihler, bitis), Revoke butonu; `LoadTrustedSessionsAsync` + `RevokeTrustedSessionAsync` metodlari
-- **PamApiService.cs:** LoginData record eksik alanlari duzeltildi (MfaType, MfaEnrollmentRequired, MustChangePassword, PasswordExpired, PortalProfile, RiskLevel, RiskScore); `GetMfaTrustPolicyAsync`, `CreateTrustedSessionAsync`, `GetTrustedSessionsAsync`, `RevokeTrustedSessionAsync` metodlari; `MfaTrustPolicyDto` + `MfaTrustedSessionDto` kayitlari
-- **Policy config:** `mfa.trust.max_hours` SystemConfig anahtari (int, 0=kapali, max 168h=7gun); admin System Settings'ten ayarlanabilir
-- **RFP-CHECKLIST.md:** MFA #20 (MFA session persistence) → PC
-- **Fingerprint:** DeviceTrustHelper.ComputeFingerprint() ile hesaplaniyor — User-Agent + Accept-Language + Accept-Encoding + subnet-level IP SHA-256
-
 **Ilerleme:** 8/8 (%100) ✅
 
 ---
@@ -837,19 +769,6 @@
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
 | #258 | [MVP] Live Session Shadowing — Admin Co-Watch for Compliance (RA #40) | MVP-SESSION | ✅ Tamamlandi |
-
-**Sprint 50 Tamamlanan Bilesenler (2026-05-24):**
-- **SessionShadow entity** (ProxySession.cs): SessionId FK, ShadowByUserId, ShadowByUsername, StartedAtUtc, EndedAtUtc, ShadowIp, IsActive
-- **Migration `20260524_AddSessionShadow`:** SessionShadows tablosu + 2 index (SessionId, SessionId+IsActive) + FK → ProxySessions CASCADE
-- **DbContext:** SessionShadows DbSet + EF Core config (max lengths, indexes)
-- **ShadowEndpoints.cs:** 4 endpoint — POST /shadow (create + observer++), DELETE /shadow (end + observer--), GET /shadows (active list), POST /shadow/revoke-all (admin bulk revoke); 3 audit events (SESSION_SHADOW_STARTED/ENDED/REVOKED)
-- **Program.cs:** MapShadowEndpoints() kaydedildi
-- **SshTargetClient.cs:** RelayToClientAsync + TargetToClientLoopAsync — `liveChunk` callback parametresi eklendi; target→client byte stream her chunki liveChunk?.Invoke() ile iletir
-- **SshServerSession.cs:** `pamSessionId != null ? text => _api.SendLiveChunk(pamSessionId, text) : null` callback RelayToClientAsync'e gecirildi — SSH terminal output artik SessionChunkStore'a yaziliyor
-- **Sessions.razor:** ShadowAsync() metodu duzeltildi — RDP download yerine `/shadow/{sessionId}` navigasyonu; Shadow butonu basitledirildi
-- **SessionShadow.razor:** Yeni sayfa `/shadow/{SessionId}` — StartShadowAsync ile DB kaydedilen shadow baslatma; 2s poll ile terminal output stream; Status panel (observers, risk score, target IP); Recent Commands panel; Terminate Session modal; DisposeAsync'de StopShadowAsync ile temiz kapanma
-- **PamApiService.cs:** Eksik private metodlar eklendi: GetAuthClientAsync + GetAsync<T> (data-field extractor with root fallback); Yeni live session metodlar: JoinLiveSessionAsync, LeaveLiveSessionAsync, BroadcastLiveMessageAsync, GetSessionCommandsAsync; Yeni shadow metodlar: StartShadowAsync, StopShadowAsync, GetLiveStreamAsync; GetLiveSessionStatusAsync → LiveSessionStatusDto; Yeni DTOs: ShadowStartDto, LiveStreamDto, LiveSessionStatusDto, LiveObserverDto, SessionCommandDto
-- **RFP-CHECKLIST.md:** RA #40 (session collaboration) → PC
 
 **Ilerleme:** 8/8 (%100) ✅
 
@@ -863,17 +782,6 @@
 |-------|--------|-----|-------|
 | #261 | [MVP] OATH Hardware Token Support — Physical MFA for Air-Gapped Environments (MFA #7) | MVP-MFA | ✅ Tamamlandi |
 
-**Sprint 51 Tamamlanan Bilesenler (2026-05-24):**
-- **HardwareToken entity** (Identity/HardwareToken.cs): Id, UserId FK, SerialNumber, SecretKeyEnc (AES-GCM), TokenType (TOTP/HOTP), CounterValue, Algorithm (SHA1/256/512), Digits (6/8), PeriodSeconds, IsActive, Label, ProvisionedAtUtc
-- **Migration `20260524_AddHardwareToken`:** HardwareTokens tablosu + 2 index (UserId, UserId+IsActive) + FK → Users CASCADE
-- **DbContext:** HardwareTokens DbSet + EF Core config; ModelSnapshot guncellendi
-- **HardwareTokenEndpoints.cs:** 4 endpoint — POST /hardware-tokens (provision, AdminPolicy), GET /hardware-tokens (list, self or admin), DELETE /hardware-tokens/{id} (revoke), POST /verify-hardware-otp (OTP verify → JWT); RFC 4226 HOTP (±5 look-ahead window) + RFC 6238 TOTP (±1 period); SHA1/SHA256/SHA512; 3 audit events (HARDWARE_TOKEN_PROVISIONED/VERIFIED/REVOKED); OathHelper static class with Base32Decode
-- **Program.cs:** MapHardwareTokenEndpoints() kaydedildi
-- **Login.razor:** HardwareToken MFA step eklendi (🗹 ikon, 6-8 digit input, HandleHardwareTokenAsync + OnHardwareTokenKeyUp)
-- **Integrations.razor:** Hardware Tokens sekmesi — token provision formu (User ID, Serial, Base32 secret, type, algorithm, digits, period, label); token listesi tablosu (serial, type, algorithm, status, revoke butonu); state variables + SetTab case + ProvisionTokenAsync + RevokeTokenAsync metodlari
-- **PamApiService.cs:** ProvisionHardwareTokenAsync, GetHardwareTokensAsync, GetAllHardwareTokensAsync, RevokeHardwareTokenAsync, VerifyHardwareOtpAsync; HardwareTokenDto record
-- **RFP-CHECKLIST.md:** MFA #7 (OATH hardware tokens) → PC
-
 **Ilerleme:** 8/8 (%100) ✅
 
 ---
@@ -885,17 +793,6 @@
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
 | #263 | [MVP] Session Handoff — Admin Session Transfer for Shift Changes & Escalation (RA #41) | MVP-SESSION | ✅ Tamamlandi |
-
-**Sprint 52 Tamamlanan Bilesenler (2026-05-24):**
-- **SessionHandoff entity** (ProxySession.cs): Id, SessionId FK, RequestedByUserId, RequestedByUsername, RequestedToUserId, RequestedToUsername, RequestedAtUtc, AcceptedAtUtc, Status (Pending/Accepted/Declined/Expired), TransferNotes, ExpiresAtUtc (15 dk TTL)
-- **Migration `20260524_AddSessionHandoff`:** SessionHandoffs tablosu + 2 index (SessionId, RequestedToUserId+Status) + FK → ProxySessions CASCADE
-- **DbContext:** SessionHandoffs DbSet + EF Core konfigurasyonu (cascade delete, max lengths, indexes)
-- **SessionHandoffEndpoints.cs:** 5 endpoint — POST /handoff (request, cancels prior pending), POST /handoff/accept (ownership transfer + ProxySession.UserId güncelleme), POST /handoff/decline, GET /handoff/pending (stale auto-expire), GET /{id}/handoffs (admin history); 5 audit event: SESSION_HANDOFF_REQUESTED/ACCEPTED/DECLINED/EXPIRED + SESSION_TRANSFERRED
-- **Program.cs:** MapSessionHandoffEndpoints() kaydedildi
-- **PamApiService.cs:** RequestHandoffAsync, AcceptHandoffAsync, DeclineHandoffAsync, GetPendingHandoffsAsync + HandoffCreatedDto + PendingHandoffDto
-- **Sessions.razor:** Handoff button (active sessions), pending badge (header), Handoff request modal (user dropdown + notes), Pending Handoffs panel (Accept/Decline); LoadPendingHandoffsAsync on page load
-- **Live stream notification:** Handoff request + acceptance banners injected into SessionChunkStore (visible to shadow observers)
-- **RFP-CHECKLIST.md:** RA #41 → PC
 
 **Ilerleme:** 8/8 (%100) ✅
 
@@ -909,22 +806,6 @@
 |-------|--------|-----|-------|
 | #271 | [MVP] OpenID Connect (OIDC) Federation — Azure AD / Okta / Auth0 Identity Provider Support (UM #48) | MVP-AUTH | ✅ Tamamlandi |
 
-**Sprint 54 Tamamlanan Bilesenler (2026-05-25):**
-- **OidcProvider entity** (LdapConfig.cs): Name (slug), DisplayName, Authority (issuer URL), ClientId, ClientSecretEnc (AES-256-GCM), Scopes, GroupClaimType, GroupRoleMapping (JSON), AutoProvisionUsers, DefaultRole, IsEnabled
-- **Migration `20260525_AddOidcProvider`:** OidcProviders tablosu + unique index on Name + IsEnabled index
-- **DbContext:** OidcProviders DbSet + EF Core konfigurasyonu (unique Name, max lengths)
-- **OidcAuthEndpoints.cs:** 7 endpoint — GET /providers (public), GET /{name}/login (PKCE+state+nonce redirect), GET /{name}/callback (code exchange + ID token validation + user provision + PAM JWT → /oidc-callback redirect); Admin CRUD: GET/POST/PUT/DELETE /api/v1/system/oidc-providers, POST /test
-- **PKCE (RFC 7636):** code_verifier (32 bytes random) + S256 code_challenge; state + nonce in IMemoryCache (10 min TTL); replay protection
-- **ID token validation:** exp/iss/aud/nonce checks; flexible issuer comparison; no signature verification needed (direct token endpoint fetch over TLS)
-- **User auto-provision:** First login creates User with AuthSource=Oidc + ExternalId=sub; default role assignment; subsequent logins sync by sub claim
-- **3 audit events:** OIDC_LOGIN_SUCCESS, OIDC_LOGIN_FAILED, OIDC_USER_PROVISIONED
-- **Program.cs:** MapOidcAuthEndpoints() kaydedildi
-- **OidcCallback.razor:** /oidc-callback page — token parse + SetSessionAsync → same pattern as SamlCallback
-- **Login.razor:** GetOidcProvidersPublicAsync() on load; "or sign in with" divider + provider buttons (forceLoad:true to follow 302 redirects)
-- **Integrations.razor:** "OIDC Federation" sekmesi — provider listesi, New/Edit modal (authority/clientId/scopes/groupClaim/defaultRole/autoProvision), Test butonu (discovery endpoint ping), Delete confirm modal; SetTab case + 8 yeni method + 21 yeni state field
-- **PamApiService.cs:** GetOidcProvidersPublicAsync, GetOidcProvidersAdminAsync, CreateOidcProviderAsync, UpdateOidcProviderAsync, DeleteOidcProviderAsync, TestOidcProviderAsync + OidcProviderPublicDto + OidcProviderDto + OidcTestResultDto
-- **RFP-CHECKLIST.md:** UM #48 → PC
-
 **Ilerleme:** 8/8 (%100) ✅
 
 ---
@@ -934,19 +815,8 @@
 **Durum:** Tamamlandi
 
 | Issue | Baslik | Tip | Durum |
-|-------|--------|-----|—-----|
+|-------|--------|-----|------- |
 | #270 | [MVP] MFA for Privileged Workstations — Device-Type Specific MFA Enforcement Policy (MFA #22) | MVP-AUTH | ✅ Tamamlandi |
-
-**Sprint 55 Tamamlanan Bilesenler (2026-05-25):**
-- **DeviceMfaPolicy entity** (ProxySession.cs): Name, Description, DeviceGroupId/DeviceId FK, RequiredMfaLevel (string: None/Totp/Fido2/HardwareToken/Any), EnforceAtSessionStart, IsEnabled
-- **Migration `20260525_AddDeviceMfaPolicy`:** DeviceMfaPolicies tablosu + 3 index (IsEnabled, DeviceGroupId, DeviceId)
-- **DbContext:** DeviceMfaPolicies DbSet + OnModelCreating config (maxLengths, indexes)
-- **DeviceMfaPolicyEndpoints.cs:** 5 endpoint (CRUD + /effective) + `POST /api/v1/sessions/step-up-verify` (TOTP dogrulama → IMemoryCache 15-dk completion token); 3 audit event (CREATED/UPDATED/DELETED); GetEffectivePolicyAsync: device → device-group → global fallback
-- **SessionEndpoints.cs:** `CreateSession` fonksiyonuna adim-yukleme kontrolu eklendi — `stepup:{userId}:{deviceId}` cache key; 403 + stepUpToken donerken `SESSION_MFA_STEP_UP_REQUIRED` audit event
-- **Program.cs:** `MapDeviceMfaPolicyEndpoints()` kayitlandi
-- **Policies.razor:** "Device MFA" sekmesi — policy tablosu, New/Edit modal (level dropdown/enforce/enabled), Delete confirm; state fields + 8 metod
-- **PamApiService.cs:** `GetDeviceMfaPoliciesAsync`, `CreateDeviceMfaPolicyAsync`, `UpdateDeviceMfaPolicyAsync`, `DeleteDeviceMfaPolicyAsync` + `DeviceMfaPolicyDto`; **+** eksik `CommandFilterPolicy` metodlari eklendi (GetCommandFilterPoliciesAsync/GetCommandFilterPolicyAsync/ToggleCommandFilterPolicyAsync/CreateCommandFilterPolicyAsync/DeleteCommandFilterPolicyAsync/AddCommandFilterRuleAsync/DeleteCommandFilterRuleAsync + 3 DTO); **+** eksik `PeripheralRedirectionPolicy` metodlari eklendi (GetPeripheralPoliciesAsync/CreatePeripheralPolicyAsync/UpdatePeripheralPolicyAsync/DeletePeripheralPolicyAsync + DTO)
-- **RFP-CHECKLIST.md:** MFA #22 → PC
 
 **Ilerleme:** 8/8 (%100) ✅
 
@@ -960,18 +830,6 @@
 |-------|--------|-----|-------|
 | #277 | [MVP] Hardware Token Resync — HOTP Counter Drift Recovery (MFA #23) | MVP-AUTH | ✅ Tamamlandi |
 
-**Sprint 56 Tamamlanan Bilesenler (2026-05-25):**
-- **OathHelper.TryResyncHotp:** RFC 4226 §7.4 forward-window scan (window=100); otp1+otp2 çifti bulunursa counter = pos+2
-- **HardwareTokenEndpoints.cs:** 3 yeni endpoint:
-  - `POST /api/v1/auth/hardware-tokens/{id}/resync` — self-service; 2-OTP çifti → RFC4226 resync; 2 audit event (RESYNC_SUCCESS/FAILED)
-  - `POST /api/v1/auth/hardware-tokens/{id}/admin-resync` — admin counter override (AdminPolicy); 1 audit event (ADMIN_RESYNC)
-  - `GET /api/v1/auth/hardware-tokens/drift-report` — son 7 günde resync ihtiyacı olan tokenlar (AuditLogs join)
-- **GET /api/v1/auth/hardware-tokens select:** CounterValue eklendi
-- **SelfService.razor:** Security sekmesine "Hardware HOTP Tokens" bölümü; Resync butonu + 2-OTP modal; LoadMyHwTokensAsync
-- **Integrations.razor:** Hardware Tokens tablosuna "Counter" sütunu + HOTP tokenlar için "Resync (Admin)" butonu; Admin Resync modal (counter override); "Drift Report" kartı (son 7 gün)
-- **PamApiService.cs:** `GetMyHardwareTokensAsync`, `ResyncHardwareTokenAsync`, `AdminResyncHardwareTokenAsync`, `GetTokenDriftReportAsync` + `HardwareTokenDto.CounterValue` eklendi + `TokenDriftReportItemDto`
-- **RFP-CHECKLIST.md:** MFA #23 → PC
-
 **Ilerleme:** 7/7 (%100) ✅
 
 ---
@@ -983,16 +841,6 @@
 | Issue | Baslik | Tip | Durum |
 |-------|--------|-----|-------|
 | #278 | Operational Reports Bundle — Capacity Planning, Performance & SLA Reports (R #39-41) | MVP-REPORTING | ✅ Tamamlandi |
-
-**Sprint 57 Tamamlanan Bilesenler (2026-05-25):**
-- **OperationalReportsEndpoints.cs (yeni):** 3 endpoint:
-  - `GET /api/v1/reports/operational/capacity?months=N` — haftalık device/credential/user/storage trend + 90-gün linear projeksiyon
-  - `GET /api/v1/reports/operational/performance?from=&to=` — session basari orani, rotation coverage, proxy uptime by protocol, top failed devices
-  - `GET /api/v1/reports/operational/sla?from=&to=` — rotation on-time %, recording coverage %, approval response time, checkout compliance %, MFA enrollment %; SLA breach listesi
-- **Program.cs:** `MapOperationalReportsEndpoints()` kaydedildi
-- **Reports.razor:** "Operational" sekmesi eklendi — 3 alt sekme (Capacity | Performance | SLA); stat cards renk kodlu (yesil/sari/kirmizi); haftalık tablo; SLA breach listesi; JSON export
-- **PamApiService.cs:** `GetCapacityReportAsync`, `GetPerformanceReportAsync`, `GetSlaReportAsync`, `GetOperationalReportCsvAsync` + `GetAuthHttpClientAsync`; `CapacityReportDto`, `PerformanceReportDto`, `SlaReportDto`
-- **RFP-CHECKLIST.md:** Reporting #39 → PC, #40 → PC, #41 → PC
 
 **Ilerleme:** 7/7 (%100) ✅
 
@@ -1006,24 +854,6 @@
 |-------|--------|-----|-------|
 | #279 | Session Restoration — Reconnect Interrupted Sessions Without Re-Auth (RA #47) | MVP-SESSION | ✅ Tamamlandi |
 
-**Sprint 58 Tamamlanan Bilesenler (2026-05-25):**
-- **SessionStatus.Disconnected (=4):** Enum'a yeni deger eklendi — unexpected network disconnect icin ayri durum
-- **SessionRestoreToken entity** (ProxySession.cs): OriginalSessionId FK, UserId, DeviceId, CredentialId, Protocol, CreatedAtUtc, ExpiresAtUtc (15 dk), IsUsed, RestoredSessionId; `Disconnect()` method ProxySession'a eklendi
-- **Migration `20260525_AddSessionRestoreToken`:** SessionRestoreTokens tablosu + 2 index (UserId+IsUsed, ExpiresAtUtc) + FK → ProxySessions CASCADE
-- **DbContext:** SessionRestoreTokens DbSet + EF Core konfigurasyonu (maxLength, index, cascade delete)
-- **SessionRestorationEndpoints.cs (yeni):** 4 endpoint:
-  - `POST /api/v1/sessions/{id}/mark-disconnected` — X-Proxy-Secret auth; session.Disconnect() + restore token olusturur
-  - `GET /api/v1/sessions/restorable` — kullanicinin aktif (IsUsed=false, ExpiresAt>now) token listesi
-  - `POST /api/v1/sessions/restore/{tokenId}` — token ile yeni session olusturur; 2 audit event (RESTORE_INITIATED/COMPLETED)
-  - `DELETE /api/v1/sessions/restore/{tokenId}` — token iptali
-- **Program.cs:** MapSessionRestorationEndpoints() kayitlandi
-- **SshProxy/PamApiClient.cs:** `MarkSessionDisconnectedAsync()` — best-effort, asla throw etmez; X-Proxy-Secret ile dogrulanir
-- **SshServerSession.cs:** `unexpectedDisconnect` flag; `IOException`/`SocketException` catch'te `true` set edilir; finally'de `MarkSessionDisconnectedAsync()` cagrisi
-- **AccountLifecycleJob.cs:** Gunluk temizlik — `IsUsed=true` veya `ExpiresAtUtc<now` tokenlari `ExecuteDeleteAsync` ile siler
-- **Sessions.razor:** "Disconnected" status filter secenegi; pam-status-warning badge; Restorable sessions sarı uyarı bannerı (adet badge + "Restore Sessions" butonu); Restore butonu disconnected satirlar icin; restore panel modali (protocol, disconnect saati, bitis saati, Restore/Cancel butonlari); LoadRestorableSessionsAsync + OpenRestorePanel + RestoreFromSessionAsync + RestoreTokenAsync + CancelRestoreTokenAsync metodlari; OnAfterRenderAsync'de LoadRestorableSessionsAsync
-- **PamApiService.cs:** GetRestorableSessionsAsync, RestoreSessionAsync, CancelRestoreTokenAsync + RestorableSessionDto + SessionRestoreResponseDto
-- **RFP-CHECKLIST.md:** RA #47 → PC
-
 **Ilerleme:** 12/12 (%100) ✅
 
 ---
@@ -1036,19 +866,6 @@
 |-------|--------|-----|-------|
 | #282 | [MVP] Biometric Authentication — Windows Hello / Touch ID via WebAuthn Platform Authenticators (Platform #44) | MVP-AUTH | ✅ Tamamlandi |
 
-**Sprint 59 Tamamlanan Bilesenler (2026-05-25):**
-- **Fido2Credential entity:** `AuthenticatorType` alani eklendi ("cross-platform" default, "platform" = biometric)
-- **Migration `20260525_AddFido2AuthenticatorType`:** Fido2Credentials tablosuna AuthenticatorType kolonu (maxLength:32, default:"cross-platform")
-- **OrkunPamDbContext:** Fido2Credential EF config'e `AuthenticatorType` max length + default value eklendi
-- **Fido2Endpoints.cs `register/begin`:** `?type=platform|cross-platform` query param; `authenticatorAttachment` dinamik; platform → `userVerification=required`; cache key'e type suffix eklendi
-- **Fido2Endpoints.cs `register/complete`:** `AuthenticatorType` body'den okunuyor + credential'a yaziliyor; audit events: `BIOMETRIC_PASSKEY_REGISTERED` / `FIDO2_KEY_REGISTERED`
-- **Fido2Endpoints.cs `authenticate/complete`:** `BIOMETRIC_AUTH_SUCCESS` / `FIDO2_AUTH_SUCCESS` / `BIOMETRIC_AUTH_FAILED` audit events; IAuditService inject edildi
-- **Fido2Endpoints.cs `list`:** `authenticatorType` alani response'a eklendi
-- **Fido2RegisterRequest:** `AuthenticatorType?` alani eklendi
-- **PamApiService.cs:** `BeginFido2RegistrationAsync(type)`, `GetFido2CredentialsAsync()`, `RevokeFido2DeviceAsync(credId)` + `Fido2CredentialDto` eklendi
-- **SelfService.razor:** "Add Biometric Passkey" butonu + `_biometricMsg`/`_biometricSuccess` state + `RegisterBiometricPasskeyAsync()` metodu
-- **RFP-CHECKLIST.md:** Platform #44 → PC
-
 **Security Fixes (ayni commit):**
 - **#286 [HIGH]:** SessionRestorationEndpoints.cs restore endpoint — kullanici hesap durumu + credential assignment re-check (CWE-285)
 - **#287 [MEDIUM]:** SessionRestorationEndpoints.cs mark-disconnected — FixedTimeEquals constant-time comparison (CWE-208)
@@ -1058,9 +875,32 @@
 
 ---
 
+## Sprint 60 — Network Segmentation (#283) ✅ TAMAMLANDI (2026-05-25)
+
+**RFP:** RA #8 — Network segmentation support
+
+### Yapılanlar
+- **NetworkZone entity** (Device.cs) — Name, JumpHostAddress, JumpHostCredentialId, IpRangesJson, IsDefault
+- **Migration** 20260525_AddNetworkZone.cs — NetworkZones tablosu + Devices.NetworkZoneId FK
+- **EF Core** OrkunPamDbContext.cs — DbSet + unique name index + SetNull delete behavior
+- **API** NetworkZoneEndpoints.cs — 6 endpoint (CRUD + test) `/api/v1/system/network-zones`
+- **DeviceEndpoints.cs** — NetworkZoneId support on create/update + NetworkZoneName in list
+- **SshJumpTunnel.cs** — SSH direct-tcpip ProxyJump implementasyonu (native C#, System.IO.Pipelines)
+- **SshTargetClient.cs** — ConnectViaStreamAsync + OpenDirectTcpipChannelAsync
+- **SshServerSession.cs** — ProxyJump routing (jump creds → tunnel → ConnectViaStream)
+- **PamApiClient.cs** — JumpHostAddress/Credential support, jump cred fetch + decrypt
+- **NetworkZones.razor** — Yönetim UI (list/add/edit/delete/test)
+- **Devices.razor** — Zone dropdown + zone column
+- **NavMenu.razor** — Network Zones linki (System bölümü)
+- **RFP-CHECKLIST.md** — RA #8 NS → PC
+
+**Ilerleme:** 14/14 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 59 tamamlandi.** Platform #44 + 3 security fix → PC.
-**Sprint 60 hedefi:** #283 Network Segmentation (RA #8) veya #284 Credential Federation (PV #12)
+**Sprint 60 tamamlandi.** RA #8 Network Segmentation → PC (#283 kapatildi).
+**Sprint 61 hedefi:** #284 Credential Federation (PV #12)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
