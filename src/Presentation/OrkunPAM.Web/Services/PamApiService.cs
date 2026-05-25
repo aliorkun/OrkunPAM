@@ -499,6 +499,55 @@ public sealed class PamApiService
     public async Task<SessionComplianceSummaryDto?> GetSessionComplianceSummaryAsync(int days = 30)
         => await GetAsync<SessionComplianceSummaryDto>($"/api/v1/sessions/compliance/summary?days={days}");
 
+    // ── Operational Reports (#278 — Reporting #39-41) ─────────────────────────
+    public async Task<CapacityReportDto?> GetCapacityReportAsync(int months = 3)
+        => await GetAsync<CapacityReportDto>($"/api/v1/reports/operational/capacity?months={months}");
+
+    public async Task<PerformanceReportDto?> GetPerformanceReportAsync(DateTime? from = null, DateTime? to = null)
+    {
+        var url = "/api/v1/reports/operational/performance";
+        if (from.HasValue || to.HasValue)
+        {
+            var parts = new List<string>();
+            if (from.HasValue) parts.Add("from=" + Uri.EscapeDataString(from.Value.ToString("O")));
+            if (to.HasValue)   parts.Add("to="   + Uri.EscapeDataString(to.Value.ToString("O")));
+            url += "?" + string.Join("&", parts);
+        }
+        return await GetAsync<PerformanceReportDto>(url);
+    }
+
+    public async Task<SlaReportDto?> GetSlaReportAsync(DateTime? from = null, DateTime? to = null)
+    {
+        var url = "/api/v1/reports/operational/sla";
+        if (from.HasValue || to.HasValue)
+        {
+            var parts = new List<string>();
+            if (from.HasValue) parts.Add("from=" + Uri.EscapeDataString(from.Value.ToString("O")));
+            if (to.HasValue)   parts.Add("to="   + Uri.EscapeDataString(to.Value.ToString("O")));
+            url += "?" + string.Join("&", parts);
+        }
+        return await GetAsync<SlaReportDto>(url);
+    }
+
+    public async Task<string?> GetOperationalReportCsvAsync(string type, DateTime? from = null, DateTime? to = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var url = type switch
+            {
+                "performance" => "/api/v1/reports/operational/performance",
+                "sla"         => "/api/v1/reports/operational/sla",
+                _             => "/api/v1/reports/operational/capacity"
+            };
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = await resp.Content.ReadAsStringAsync();
+            return json;
+        }
+        catch { return null; }
+    }
+
     public async Task<string?> GetSessionsExportCsvAsync()
     {
         try
@@ -2144,6 +2193,8 @@ public sealed class PamApiService
         return client;
     }
 
+    public Task<HttpClient> GetAuthHttpClientAsync() => GetAuthClientAsync();
+
     /// <summary>
     /// GET helper: tries to deserialize the `data` sub-field of the API envelope first.
     /// Falls back to reading the full root JSON for wrapper types (PagedResult/ListResult).
@@ -3015,3 +3066,62 @@ public record TokenDriftReportItemDto(
     DateTime? LastResyncAtUtc,
     int       ResyncCount,
     string?   LastEvent);
+
+// Operational Reports (#278 — Reporting #39-41)
+public record CapacityTrendPoint(string Week, int NewCount, int Total);
+
+public record StorageTrendPoint(string Week, double NewGb);
+
+public record CapacityProjection(int Devices, int Creds, int Users);
+
+public record CapacityReportDto(
+    int    Months,
+    DateTime Since,
+    List<JsonElement> DeviceTrend,
+    List<JsonElement> CredentialTrend,
+    List<JsonElement> UserTrend,
+    List<JsonElement> StorageTrend,
+    JsonElement?      Projection90Days);
+
+public record ProxyUptimeItem(string Protocol, int ActiveDays, int TotalDays, double UptimePercent);
+
+public record TopTerminatedDevice(Guid DeviceId, string Hostname, int FailedCount);
+
+public record PerformanceReportDto(
+    DateTime PeriodFrom,
+    DateTime PeriodTo,
+    int      TotalSessions,
+    int      CompletedSessions,
+    double   SessionSuccessRate,
+    int      TotalCredentials,
+    int      CredentialsRotated,
+    double   RotationSuccessRate,
+    int      TotalRotationFailures,
+    List<JsonElement> ProxyUptimeByProtocol,
+    List<JsonElement> TopTerminatedDevices);
+
+public record SlaBreachItem(string Metric, double Actual, double Target, string? Unit = null);
+
+public record SlaReportDto(
+    DateTime PeriodFrom,
+    DateTime PeriodTo,
+    double   RotationOnTimePercent,
+    double   RotationTarget,
+    int      CredentialsWithPolicy,
+    int      OnTimeRotations,
+    double   RecordingCoveragePercent,
+    double   RecordingTarget,
+    int      TotalPeriodSessions,
+    int      RecordedSessions,
+    double   AvgApprovalHours,
+    double   ApprovalMaxHoursTarget,
+    int      TotalApprovals,
+    double   CheckoutCompliancePercent,
+    double   CheckoutTarget,
+    int      TotalCheckouts,
+    int      CompliantCheckouts,
+    double   MfaEnrollmentPercent,
+    double   MfaTarget,
+    int      TotalActiveUsers,
+    int      MfaEnrolledUsers,
+    List<JsonElement> SlaBreaches);

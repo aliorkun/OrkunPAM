@@ -2,7 +2,7 @@
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this for feature gap analysis.
 > Status: FC=Fully Compliant, PC=Partially Compliant, NC=Not Compliant
-> Last updated: 2026-05-25 (Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Sprint 53 RA #42 → PC #269; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-25 (Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Sprint 53 RA #42 → PC #269; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 ## Platform (44 items)
 
@@ -148,9 +148,9 @@
 | 36 | Solution shall support MFA usage reports | PC | MfaReportEndpoints.cs — MFA usage breakdown, success/failure rates (#174) |
 | 37 | Solution shall support session recording reports | PC | Sessions.razor — session recording status per session; Reports.razor session export |
 | 38 | Solution shall support session playback reports | PC | SessionPlayback.razor — timeline, command log, risk events, screen captures |
-| 39 | Solution shall support capacity planning reports |  |  |
-| 40 | Solution shall support performance reports |  |  |
-| 41 | Solution shall support SLA reports |  |  |
+| 39 | Solution shall support capacity planning reports | PC | OperationalReportsEndpoints.cs — GET /api/v1/reports/operational/capacity: weekly device/credential/user/storage trend + 90-day linear projection; Reports.razor Operational tab (Sprint 57, #278) |
+| 40 | Solution shall support performance reports | PC | OperationalReportsEndpoints.cs — GET /api/v1/reports/operational/performance: session success rate, rotation coverage, proxy uptime by protocol, top failed devices (Sprint 57, #278) |
+| 41 | Solution shall support SLA reports | PC | OperationalReportsEndpoints.cs — GET /api/v1/reports/operational/sla: rotation on-time %, recording coverage %, approval response time, checkout compliance %, MFA enrollment %; SLA breach summary (Sprint 57, #278) |
 | 42 | Solution shall support trend analysis reports | PC | ThreatAnalytics.razor — behavioral trends, anomaly rate over time |
 | 43 | Solution shall support predictive analytics | PC | AnomalyDetectionService.cs — risk scoring; ThreatAnalytics.razor forward-looking metrics |
 | 44 | Solution shall support benchmark reports | PC | docs/perf-baseline.md — AES-256-GCM < 0.1 ms/op |

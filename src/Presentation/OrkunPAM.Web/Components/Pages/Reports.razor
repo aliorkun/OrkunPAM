@@ -25,6 +25,8 @@
             @onclick="@(() => SetTab("patterns"))">&#x1F50D; Access Patterns</button>
     <button class="pam-btn @(_tab == "apiusage" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("apiusage"))">&#x1F511; API Usage</button>
+    <button class="pam-btn @(_tab == "operational" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("operational"))">&#x1F4C8; Operational</button>
 </div>
 
 @if (_tab == "audit")
@@ -1074,6 +1076,247 @@ else if (_tab == "reports")
     }
 }
 
+@if (_tab == "operational")
+{
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <button class="pam-btn @(_opSubTab == "capacity" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetOpSubTab("capacity"))">&#x1F4E6; Capacity</button>
+        <button class="pam-btn @(_opSubTab == "performance" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetOpSubTab("performance"))">&#x26A1; Performance</button>
+        <button class="pam-btn @(_opSubTab == "sla" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+                @onclick="@(() => SetOpSubTab("sla"))">&#x1F3AF; SLA</button>
+        <span style="flex:1"></span>
+        <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportOpReportCsvAsync">Export JSON</button>
+        <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="LoadOpReportAsync">Refresh</button>
+    </div>
+
+    @if (_opError != null) { <div class="pam-alert pam-alert-danger">@_opError</div> }
+    @if (_opLoading) { <div class="pam-alert pam-alert-info">Loading…</div> }
+
+    @if (_opSubTab == "capacity" && _opCapacity != null)
+    {
+        @* Date range selector *@
+        <div class="pam-filters" style="margin-bottom:12px">
+            <label style="font-size:0.85em">Months:</label>
+            <select class="pam-input pam-select" style="width:100px" @bind="_opCapMonths">
+                <option value="1">1 month</option>
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12">12 months</option>
+            </select>
+            <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="LoadCapacityAsync">Apply</button>
+        </div>
+
+        @* Projection cards *@
+        @{
+            var proj = _opCapacity.Value.GetProperty("projection90Days");
+            var devProj  = proj.GetProperty("devices").GetInt32();
+            var credProj = proj.GetProperty("creds").GetInt32();
+            var usrProj  = proj.GetProperty("users").GetInt32();
+        }
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:#0d6efd">@devProj</div>
+                <div style="font-size:0.85em;color:#6c757d">Devices (90-day projection)</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:#198754">@credProj</div>
+                <div style="font-size:0.85em;color:#6c757d">Credentials (90-day projection)</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:#6f42c1">@usrProj</div>
+                <div style="font-size:0.85em;color:#6c757d">Users (90-day projection)</div>
+            </div></div>
+        </div>
+
+        @* Weekly trend table *@
+        <div class="pam-card">
+            <div class="pam-card-header"><strong>&#x1F4C5; Weekly Growth Trend</strong></div>
+            <div class="pam-card-body p-0">
+                <table class="pam-table">
+                    <thead><tr><th>Week</th><th>New Devices</th><th>Total Devices</th><th>New Creds</th><th>Total Creds</th><th>New Users</th><th>Total Users</th></tr></thead>
+                    <tbody>
+                    @{
+                        var capDevRows  = _opCapacity.Value.GetProperty("deviceTrend").EnumerateArray().ToList();
+                        var capCreRows  = _opCapacity.Value.GetProperty("credentialTrend").EnumerateArray().ToList();
+                        var capUsrRows  = _opCapacity.Value.GetProperty("userTrend").EnumerateArray().ToList();
+                        var capCount    = Math.Max(capDevRows.Count, Math.Max(capCreRows.Count, capUsrRows.Count));
+                    }
+                    @for (var i = 0; i < capCount; i++)
+                    {
+                        var dv = i < capDevRows.Count ? (System.Text.Json.JsonElement?)capDevRows[i] : null;
+                        var cv = i < capCreRows.Count ? (System.Text.Json.JsonElement?)capCreRows[i] : null;
+                        var uv = i < capUsrRows.Count ? (System.Text.Json.JsonElement?)capUsrRows[i] : null;
+                        var weekLabel = dv.HasValue ? dv.Value.GetProperty("week").GetString()
+                                      : cv.HasValue ? cv.Value.GetProperty("week").GetString()
+                                      : uv.HasValue ? uv.Value.GetProperty("week").GetString() : "";
+                        <tr>
+                            <td>@weekLabel</td>
+                            <td>@(dv.HasValue ? dv.Value.GetProperty("newCount").GetInt32() : 0)</td>
+                            <td>@(dv.HasValue ? dv.Value.GetProperty("total").GetInt32() : 0)</td>
+                            <td>@(cv.HasValue ? cv.Value.GetProperty("newCount").GetInt32() : 0)</td>
+                            <td>@(cv.HasValue ? cv.Value.GetProperty("total").GetInt32() : 0)</td>
+                            <td>@(uv.HasValue ? uv.Value.GetProperty("newCount").GetInt32() : 0)</td>
+                            <td>@(uv.HasValue ? uv.Value.GetProperty("total").GetInt32() : 0)</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_opSubTab == "performance" && _opPerformance != null)
+    {
+        @{
+            var pd = _opPerformance.Value.GetProperty("data");
+            var totalSess  = pd.GetProperty("totalSessions").GetInt32();
+            var compSess   = pd.GetProperty("completedSessions").GetInt32();
+            var sessRate   = pd.GetProperty("sessionSuccessRate").GetDouble();
+            var totalCr    = pd.GetProperty("totalCredentials").GetInt32();
+            var rotatedCr  = pd.GetProperty("credentialsRotated").GetInt32();
+            var rotRate    = pd.GetProperty("rotationSuccessRate").GetDouble();
+            var rotFails   = pd.GetProperty("totalRotationFailures").GetInt32();
+        }
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(sessRate >= 95 ? "#198754" : sessRate >= 80 ? "#e6a817" : "#dc3545")">@sessRate%</div>
+                <div style="font-size:0.85em;color:#6c757d">Session Success Rate</div>
+                <div style="font-size:0.78em;color:#adb5bd">@compSess / @totalSess completed</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(rotRate >= 90 ? "#198754" : rotRate >= 70 ? "#e6a817" : "#dc3545")">@rotRate%</div>
+                <div style="font-size:0.85em;color:#6c757d">Rotation Coverage</div>
+                <div style="font-size:0.78em;color:#adb5bd">@rotatedCr / @totalCr rotated</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(rotFails == 0 ? "#198754" : rotFails < 5 ? "#e6a817" : "#dc3545")">@rotFails</div>
+                <div style="font-size:0.85em;color:#6c757d">Total Rotation Failures</div>
+            </div></div>
+        </div>
+
+        <div class="pam-card" style="margin-bottom:12px">
+            <div class="pam-card-header"><strong>&#x1F4BB; Proxy Uptime by Protocol</strong></div>
+            <div class="pam-card-body p-0">
+                <table class="pam-table">
+                    <thead><tr><th>Protocol</th><th>Active Days</th><th>Total Days</th><th>Uptime %</th></tr></thead>
+                    <tbody>
+                    @foreach (var proto in pd.GetProperty("proxyUptimeByProtocol").EnumerateArray())
+                    {
+                        var up = proto.GetProperty("uptimePercent").GetDouble();
+                        <tr>
+                            <td>@proto.GetProperty("protocol").GetString()</td>
+                            <td>@proto.GetProperty("activeDays").GetInt32()</td>
+                            <td>@proto.GetProperty("totalDays").GetInt32()</td>
+                            <td style="color:@(up >= 99 ? "#198754" : up >= 90 ? "#e6a817" : "#dc3545")">@up%</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (pd.GetProperty("topTerminatedDevices").GetArrayLength() > 0)
+        {
+            <div class="pam-card">
+                <div class="pam-card-header"><strong>&#x26A0; Top Devices with Session Failures</strong></div>
+                <div class="pam-card-body p-0">
+                    <table class="pam-table">
+                        <thead><tr><th>Hostname</th><th>Failed Sessions</th></tr></thead>
+                        <tbody>
+                        @foreach (var d in pd.GetProperty("topTerminatedDevices").EnumerateArray())
+                        {
+                            <tr>
+                                <td>@d.GetProperty("hostname").GetString()</td>
+                                <td style="color:#dc3545">@d.GetProperty("failedCount").GetInt32()</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (_opSubTab == "sla" && _opSla != null)
+    {
+        @{
+            var sd = _opSla.Value.GetProperty("data");
+            var rotPct   = sd.GetProperty("rotationOnTimePercent").GetDouble();
+            var rotTgt   = sd.GetProperty("rotationTarget").GetDouble();
+            var recPct   = sd.GetProperty("recordingCoveragePercent").GetDouble();
+            var recTgt   = sd.GetProperty("recordingTarget").GetDouble();
+            var coChk    = sd.GetProperty("checkoutCompliancePercent").GetDouble();
+            var coTgt    = sd.GetProperty("checkoutTarget").GetDouble();
+            var mfaPct   = sd.GetProperty("mfaEnrollmentPercent").GetDouble();
+            var mfaTgt   = sd.GetProperty("mfaTarget").GetDouble();
+            var appHrs   = sd.GetProperty("avgApprovalHours").GetDouble();
+            var appTgt   = sd.GetProperty("approvalMaxHoursTarget").GetDouble();
+            var breaches = sd.GetProperty("slaBreaches").EnumerateArray().ToList();
+        }
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(rotPct >= rotTgt ? "#198754" : rotPct >= 70 ? "#e6a817" : "#dc3545")">@rotPct%</div>
+                <div style="font-size:0.85em;color:#6c757d">Rotation On-Time</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @rotTgt%</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(recPct >= recTgt ? "#198754" : recPct >= 80 ? "#e6a817" : "#dc3545")">@recPct%</div>
+                <div style="font-size:0.85em;color:#6c757d">Recording Coverage</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @recTgt%</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(appHrs <= appTgt ? "#198754" : appHrs <= appTgt * 2 ? "#e6a817" : "#dc3545")">@(Math.Round(appHrs, 1))h</div>
+                <div style="font-size:0.85em;color:#6c757d">Avg Approval Response</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: ≤ @appTgt h</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(coChk >= coTgt ? "#198754" : coChk >= 80 ? "#e6a817" : "#dc3545")">@coChk%</div>
+                <div style="font-size:0.85em;color:#6c757d">Checkout Compliance</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @coTgt%</div>
+            </div></div>
+            <div class="pam-card"><div class="pam-card-body" style="text-align:center">
+                <div style="font-size:1.6em;font-weight:700;color:@(mfaPct >= mfaTgt ? "#198754" : mfaPct >= 80 ? "#e6a817" : "#dc3545")">@mfaPct%</div>
+                <div style="font-size:0.85em;color:#6c757d">MFA Enrollment</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @mfaTgt%</div>
+            </div></div>
+        </div>
+
+        @if (breaches.Count > 0)
+        {
+            <div class="pam-card">
+                <div class="pam-card-header"><strong>&#x26A0; SLA Breaches</strong></div>
+                <div class="pam-card-body p-0">
+                    <table class="pam-table">
+                        <thead><tr><th>Metric</th><th>Actual</th><th>Target</th><th>Status</th></tr></thead>
+                        <tbody>
+                        @foreach (var b in breaches)
+                        {
+                            var unit = b.TryGetProperty("unit", out var u) ? u.GetString() ?? "%" : "%";
+                            <tr>
+                                <td>@b.GetProperty("metric").GetString()</td>
+                                <td style="color:#dc3545">@b.GetProperty("actual").GetDouble() @unit</td>
+                                <td>@b.GetProperty("target").GetDouble() @unit</td>
+                                <td><span style="color:#dc3545">&#x26A0; Breach</span></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="pam-alert pam-alert-info">&#x2705; All SLA targets met for the selected period.</div>
+        }
+    }
+
+    @if (!_opLoading && _opCapacity == null && _opPerformance == null && _opSla == null)
+    {
+        <div class="pam-alert pam-alert-info">Click "Refresh" to load operational reports.</div>
+    }
+}
+
 @code {
     private string _tab = "audit";
     private AuditVerifyResult? _integrityResult;
@@ -1135,6 +1378,17 @@ else if (_tab == "reports")
     private ApiUsageSummaryDto?    _auSummary;
     private ApiUsageAnomaliesDto?  _auAnomalies;
 
+    // ---- Operational Reports state (#278) ----
+    private string                          _opSubTab     = "capacity";
+    private bool                            _opLoading;
+    private string?                         _opError;
+    private int                             _opCapMonths  = 3;
+    private System.Text.Json.JsonElement?   _opCapacity;
+    private System.Text.Json.JsonElement?   _opPerformance;
+    private System.Text.Json.JsonElement?   _opSla;
+    private DateTime                        _opFrom       = DateTime.Today.AddDays(-30);
+    private DateTime                        _opTo         = DateTime.Today;
+
     private async Task SetTab(string tab)
     {
         _tab = tab;
@@ -1142,6 +1396,8 @@ else if (_tab == "reports")
             await LoadSchedulesAsync();
         if (tab == "custom" && _crSavedReports == null)
             await LoadCustomReportsAsync();
+        if (tab == "operational" && _opCapacity == null)
+            await LoadOpReportAsync();
     }
 
     private async Task ApplyPreset(string preset)
@@ -1721,5 +1977,102 @@ else if (_tab == "reports")
         _auAnomalies = await Api.GetApiUsageAnomaliesAsync(Math.Min(_auDays, 7));
         if (_auSummary == null) _auError = "Failed to load API usage report.";
         _auLoading = false; StateHasChanged();
+    }
+
+    // ── Operational Reports (#278) ────────────────────────────────────────────
+    private void SetOpSubTab(string sub)
+    {
+        _opSubTab = sub;
+        StateHasChanged();
+    }
+
+    private async Task LoadOpReportAsync()
+    {
+        _opLoading = true; _opError = null; StateHasChanged();
+        try
+        {
+            await LoadCapacityAsync();
+            await LoadPerformanceAsync();
+            await LoadSlaAsync();
+        }
+        catch (Exception ex)
+        {
+            _opError = "Failed to load operational reports: " + ex.Message;
+        }
+        _opLoading = false; StateHasChanged();
+    }
+
+    private async Task LoadCapacityAsync()
+    {
+        try
+        {
+            var client = await Api.GetAuthHttpClientAsync();
+            var resp = await client.GetAsync("/api/v1/reports/operational/capacity?months=" + _opCapMonths);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var stream = await resp.Content.ReadAsStreamAsync();
+                var doc = await System.Text.Json.JsonDocument.ParseAsync(stream);
+                _opCapacity = doc.RootElement.GetProperty("data").Clone();
+            }
+        }
+        catch { _opError = "Failed to load capacity report."; }
+        StateHasChanged();
+    }
+
+    private async Task LoadPerformanceAsync()
+    {
+        try
+        {
+            var client = await Api.GetAuthHttpClientAsync();
+            var url = "/api/v1/reports/operational/performance?from=" +
+                      Uri.EscapeDataString(_opFrom.ToString("O")) + "&to=" +
+                      Uri.EscapeDataString(_opTo.AddDays(1).ToString("O"));
+            var resp = await client.GetAsync(url);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var stream = await resp.Content.ReadAsStreamAsync();
+                var doc = await System.Text.Json.JsonDocument.ParseAsync(stream);
+                _opPerformance = doc.RootElement.Clone();
+            }
+        }
+        catch { _opError = "Failed to load performance report."; }
+        StateHasChanged();
+    }
+
+    private async Task LoadSlaAsync()
+    {
+        try
+        {
+            var client = await Api.GetAuthHttpClientAsync();
+            var url = "/api/v1/reports/operational/sla?from=" +
+                      Uri.EscapeDataString(_opFrom.ToString("O")) + "&to=" +
+                      Uri.EscapeDataString(_opTo.AddDays(1).ToString("O"));
+            var resp = await client.GetAsync(url);
+            if (resp.IsSuccessStatusCode)
+            {
+                using var stream = await resp.Content.ReadAsStreamAsync();
+                var doc = await System.Text.Json.JsonDocument.ParseAsync(stream);
+                _opSla = doc.RootElement.Clone();
+            }
+        }
+        catch { _opError = "Failed to load SLA report."; }
+        StateHasChanged();
+    }
+
+    private async Task ExportOpReportCsvAsync()
+    {
+        try
+        {
+            var json = _opSubTab switch
+            {
+                "performance" => _opPerformance?.GetRawText(),
+                "sla"         => _opSla?.GetRawText(),
+                _             => _opCapacity?.GetRawText()
+            };
+            if (json == null) return;
+            var filename = "operational-" + _opSubTab + "-" + DateTime.Now.ToString("yyyyMMdd") + ".json";
+            await JS.InvokeVoidAsync("downloadCsvFile", filename, json);
+        }
+        catch { }
     }
 }

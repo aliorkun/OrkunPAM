@@ -976,9 +976,31 @@
 
 ---
 
+## Sprint 57 - Operational Reports Bundle (#278) ✅ TAMAMLANDI
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #278 | Operational Reports Bundle — Capacity Planning, Performance & SLA Reports (R #39-41) | MVP-REPORTING | ✅ Tamamlandi |
+
+**Sprint 57 Tamamlanan Bilesenler (2026-05-25):**
+- **OperationalReportsEndpoints.cs (yeni):** 3 endpoint:
+  - `GET /api/v1/reports/operational/capacity?months=N` — haftalık device/credential/user/storage trend + 90-gün linear projeksiyon
+  - `GET /api/v1/reports/operational/performance?from=&to=` — session basari orani, rotation coverage, proxy uptime by protocol, top failed devices
+  - `GET /api/v1/reports/operational/sla?from=&to=` — rotation on-time %, recording coverage %, approval response time, checkout compliance %, MFA enrollment %; SLA breach listesi
+- **Program.cs:** `MapOperationalReportsEndpoints()` kaydedildi
+- **Reports.razor:** "Operational" sekmesi eklendi — 3 alt sekme (Capacity | Performance | SLA); stat cards renk kodlu (yesil/sari/kirmizi); haftalık tablo; SLA breach listesi; JSON export
+- **PamApiService.cs:** `GetCapacityReportAsync`, `GetPerformanceReportAsync`, `GetSlaReportAsync`, `GetOperationalReportCsvAsync` + `GetAuthHttpClientAsync`; `CapacityReportDto`, `PerformanceReportDto`, `SlaReportDto`
+- **RFP-CHECKLIST.md:** Reporting #39 → PC, #40 → PC, #41 → PC
+
+**Ilerleme:** 7/7 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 56 tamamlandi.** Hardware Token Resync #277 → PC.
-**Sprint 57 hedefi:** #278 Operational Reports Bundle (Reporting #39-41) — M scope
+**Sprint 57 tamamlandi.** Reporting #39+40+41 → PC.
+**Sprint 58 hedefi:** #279 Session Restoration (RA #47) — M scope
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
