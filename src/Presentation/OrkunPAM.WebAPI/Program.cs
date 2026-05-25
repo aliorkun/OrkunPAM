@@ -525,6 +525,7 @@ try
     api.MapScreenCaptureEndpoints();
     api.MapPeripheralPolicyEndpoints();
     api.MapApiKeyEndpoints();
+    api.MapDeviceMfaPolicyEndpoints();
     api.MapMfaExceptionEndpoints();
     api.MapCredentialOrchestrationEndpoints();
 

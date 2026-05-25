@@ -197,6 +197,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<CredentialOrchestrationMember> CredentialOrchestrationMembers => Set<CredentialOrchestrationMember>();
     public DbSet<CredentialOrchestrationRun>    CredentialOrchestrationRuns    => Set<CredentialOrchestrationRun>();
 
+    // === Device MFA Policy (#270 — MFA #22) ===
+    public DbSet<DeviceMfaPolicy> DeviceMfaPolicies => Set<DeviceMfaPolicy>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -807,6 +810,17 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(p => p.DefaultRole).HasMaxLength(100).HasDefaultValue("Viewer");
             e.HasIndex(p => p.Name).IsUnique();
             e.HasIndex(p => p.IsEnabled);
+        });
+
+        // === Device MFA Policy (#270 — MFA #22) ===
+        modelBuilder.Entity<DeviceMfaPolicy>(e =>
+        {
+            e.Property(p => p.Name).HasMaxLength(256).IsRequired();
+            e.Property(p => p.Description).HasMaxLength(1024);
+            e.Property(p => p.RequiredMfaLevel).HasMaxLength(32).HasDefaultValue("Any");
+            e.HasIndex(p => p.IsEnabled);
+            e.HasIndex(p => p.DeviceGroupId);
+            e.HasIndex(p => p.DeviceId);
         });
 
         // Seed built-in data
