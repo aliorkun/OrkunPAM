@@ -51,6 +51,7 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<DeviceGroupMember> DeviceGroupMembers => Set<DeviceGroupMember>();
     public DbSet<DeviceCredential> DeviceCredentials => Set<DeviceCredential>();
+    public DbSet<NetworkZone> NetworkZones => Set<NetworkZone>();
 
     // Session
     public DbSet<ProxySession> ProxySessions => Set<ProxySession>();
@@ -300,12 +301,24 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
         });
 
         // === Device ===
+        modelBuilder.Entity<NetworkZone>(e =>
+        {
+            e.Property(z => z.Name).HasMaxLength(256);
+            e.Property(z => z.Description).HasMaxLength(1024);
+            e.Property(z => z.JumpHostAddress).HasMaxLength(512);
+            e.Property(z => z.ProxyBindAddress).HasMaxLength(256);
+            e.HasIndex(z => z.Name).IsUnique();
+            e.HasIndex(z => z.IsDefault);
+        });
+
         modelBuilder.Entity<Device>(e =>
         {
             e.Property(d => d.Hostname).HasMaxLength(256);
             e.Property(d => d.IpAddress).HasMaxLength(45);
             e.HasIndex(d => d.Hostname);
             e.HasIndex(d => d.IpAddress);
+            e.HasOne(d => d.NetworkZone).WithMany(z => z.Devices)
+             .HasForeignKey(d => d.NetworkZoneId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<DeviceGroupMember>(e =>

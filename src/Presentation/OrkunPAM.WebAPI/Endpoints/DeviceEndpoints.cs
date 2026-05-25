@@ -35,7 +35,11 @@ public static class DeviceEndpoints
                     d.IsReachable, d.LastReachableCheck,
                     d.Tags, d.IsManaged,
                     d.SshHostKeyFingerprint,
-                    CredentialCount = d.DeviceCredentials.Count
+                    CredentialCount = d.DeviceCredentials.Count,
+                    d.NetworkZoneId,
+                    NetworkZoneName = d.NetworkZone != null ? d.NetworkZone.Name : null,
+                    JumpHostAddress = d.NetworkZone != null ? d.NetworkZone.JumpHostAddress : null,
+                    JumpHostCredentialId = d.NetworkZone != null ? d.NetworkZone.JumpHostCredentialId : null
                 }).ToListAsync();
 
             return Results.Ok(new { success = true, data = list, meta = new { page, pageSize, totalCount = total } });
@@ -54,7 +58,8 @@ public static class DeviceEndpoints
                 OperatingSystem = req.OperatingSystem,
                 Tags = req.Tags,
                 Notes = req.Notes,
-                PlatformId = req.PlatformId
+                PlatformId = req.PlatformId,
+                NetworkZoneId = req.NetworkZoneId
             };
 
             db.Devices.Add(device);
@@ -110,6 +115,7 @@ public static class DeviceEndpoints
             if (req.Notes != null) d.Notes = req.Notes;
             if (req.Port.HasValue) d.ConnectionPort = req.Port.Value;
             if (req.Status.HasValue) d.Status = req.Status.Value;
+            if (req.NetworkZoneId.HasValue) d.NetworkZoneId = req.NetworkZoneId == Guid.Empty ? null : req.NetworkZoneId;
 
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, data = new { d.Id, d.Hostname } });
@@ -234,9 +240,9 @@ public static class DeviceEndpoints
 
 public record CreateDeviceRequest(string Hostname, string? Fqdn, string? IpAddress,
     DeviceType DeviceType, ConnectionProtocol Protocol, int? Port,
-    string? OperatingSystem, string? Tags, string? Notes, Guid? PlatformId);
+    string? OperatingSystem, string? Tags, string? Notes, Guid? PlatformId, Guid? NetworkZoneId);
 public record UpdateDeviceRequest(string? Hostname, string? IpAddress, string? Fqdn,
-    string? OperatingSystem, string? Tags, string? Notes, int? Port, DeviceStatus? Status);
+    string? OperatingSystem, string? Tags, string? Notes, int? Port, DeviceStatus? Status, Guid? NetworkZoneId);
 public record LinkCredentialRequest(Guid CredentialId, CredentialPurpose Purpose, bool IsPrimary);
 public record CreateDeviceGroupRequest(string Name, DeviceGroupType GroupType, int? VlanId, string? SubnetCidr, Guid? ParentGroupId);
 public record AddDeviceGroupMembersRequest(Guid[] DeviceIds);

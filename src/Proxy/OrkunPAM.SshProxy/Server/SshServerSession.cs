@@ -65,7 +65,7 @@ internal sealed class SshServerSession
             // Fetch session policy for command filtering
             var sessionPolicy = await _api.GetFullSessionPolicyAsync(_ct);
 
-            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId) =
+            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId, jumpHostAddress, jumpHostPassword, jumpHostUser) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
             _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth}, tofu: {Tofu})",
@@ -90,7 +90,19 @@ internal sealed class SshServerSession
             using var target = new SshTargetClient(
                 targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, _log,
                 expectedFingerprint: expectedFingerprint);
-            await target.ConnectAsync(_ct);
+
+            if (!string.IsNullOrEmpty(jumpHostAddress) && jumpHostPassword != null && jumpHostUser != null)
+            {
+                _log.LogInformation("Zone routing: connecting via jump host {JumpHost}", jumpHostAddress);
+                using var jumpTunnel = new SshJumpTunnel(jumpHostAddress, jumpHostUser, jumpHostPassword, _log);
+                var tunnelStream = await jumpTunnel.OpenAsync(targetIp, targetPort, _ct);
+                await target.ConnectViaStreamAsync(tunnelStream, _ct);
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(jumpHostPassword);
+            }
+            else
+            {
+                await target.ConnectAsync(_ct);
+            }
 
             // TOFU: if no fingerprint was stored yet, persist the observed one now
             if (expectedFingerprint == null && target.ObservedFingerprint != null)
