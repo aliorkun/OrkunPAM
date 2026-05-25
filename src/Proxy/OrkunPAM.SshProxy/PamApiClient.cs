@@ -76,7 +76,7 @@ internal sealed class PamApiClient
     /// Also returns the stored SSH host key fingerprint (null = first connection, TOFU applies) and deviceId.
     /// Throws InvalidOperationException on any failure -- caller must close session (fail-closed).
     /// </summary>
-    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId, string credentialId, string? jumpHostAddress, byte[]? jumpHostPassword, string? jumpHostUser)>
+    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId, string credentialId, string? jumpHostAddress, byte[]? jumpHostPassword, string? jumpHostUser, string? jumpHostFingerprint, Guid? networkZoneId)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
     {
         try
@@ -202,7 +202,9 @@ internal sealed class PamApiClient
                 cred.Id,
                 jumpHostAddress,
                 jumpHostPasswordBytes,
-                jumpHostUser);
+                jumpHostUser,
+                string.IsNullOrEmpty(jumpHostAddress) ? null : device.JumpHostFingerprint,
+                device.NetworkZoneId);
         }
         catch (InvalidOperationException)
         {
@@ -293,6 +295,33 @@ internal sealed class PamApiClient
         catch (Exception ex)
         {
             _log.LogWarning(ex, "StoreSshFingerprint: unexpected error for device {DeviceId}", deviceId);
+        }
+    }
+
+    /// <summary>
+    /// Store jump host SSH fingerprint for a network zone (TOFU: first successful connection).
+    /// Best-effort -- never throws, logs on failure.
+    /// </summary>
+    internal async Task StoreJumpHostFingerprintAsync(Guid zoneId, string fingerprint, CancellationToken ct)
+    {
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post,
+                $"/api/v1/system/network-zones/{zoneId}/jump-fingerprint");
+            req.Content = JsonContent.Create(new { fingerprint });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+                _log.LogWarning("StoreJumpHostFingerprint: failed for zone {ZoneId} (HTTP {Status})",
+                    zoneId, (int)resp.StatusCode);
+            else
+                _log.LogInformation("TOFU: Jump host fingerprint stored for zone {ZoneId}: {Fp}",
+                    zoneId, fingerprint);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "StoreJumpHostFingerprint: unexpected error for zone {ZoneId}", zoneId);
         }
     }
 
@@ -405,7 +434,7 @@ internal sealed class PamApiClient
     private record LoginData(string? Token, string? UserId);
     private record DeviceListResponse(IEnumerable<DeviceDto>? Data);
     private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort, string? SshHostKeyFingerprint,
-        string? JumpHostAddress, Guid? JumpHostCredentialId);
+        string? JumpHostAddress, Guid? JumpHostCredentialId, string? JumpHostFingerprint, Guid? NetworkZoneId);
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
