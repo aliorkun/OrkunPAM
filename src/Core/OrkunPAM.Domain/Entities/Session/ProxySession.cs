@@ -195,3 +195,19 @@ public class SessionDelegation
     public int UsageCount { get; set; } = 0;
     public string? DelegationNote { get; set; }
 }
+
+/// <summary>
+/// Defines a step-up MFA requirement for sessions targeting a specific device or device group.
+/// When a matching policy exists, users must complete step-up MFA before a session is started (MFA #22).
+/// RequiredMfaLevel: None | Totp | Fido2 | HardwareToken | Any
+/// </summary>
+public class DeviceMfaPolicy : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public Guid? DeviceGroupId { get; set; }
+    public Guid? DeviceId { get; set; }
+    public string RequiredMfaLevel { get; set; } = "Any";
+    public bool EnforceAtSessionStart { get; set; } = true;
+    public bool IsEnabled { get; set; } = true;
+}
