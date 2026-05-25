@@ -541,6 +541,46 @@
             </div>
         </div>
     </div>
+
+    @if (_hwTokens != null && _hwTokens.Any(t => t.TokenType == "Hotp" && t.IsActive))
+    {
+        <div class="pam-card" style="margin-top:16px">
+            <div class="pam-card-header">
+                <span>Hardware HOTP Tokens</span>
+                <span class="pam-text-muted" style="font-size:.85rem">Resynchronize counter-based tokens</span>
+            </div>
+            <div class="pam-card-body">
+                @if (_loadingHwTokens)
+                {
+                    <div class="pam-loading-text">Loading...</div>
+                }
+                else
+                {
+                    <table class="pam-table">
+                        <thead>
+                            <tr><th>Serial</th><th>Label</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var hwt in _hwTokens.Where(t => t.TokenType == "Hotp" && t.IsActive))
+                            {
+                                <tr>
+                                    <td><code>@hwt.SerialNumber</code></td>
+                                    <td>@(hwt.Label ?? "—")</td>
+                                    <td><span class="pam-badge pam-badge-green">Active</span></td>
+                                    <td>
+                                        <button class="pam-btn pam-btn-xs pam-btn-secondary"
+                                                @onclick="@(() => OpenResyncModal(hwt))">
+                                            Resync
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
 }
 
 @* ===== TRUSTED DEVICES (#257) ===== *@
@@ -590,6 +630,38 @@
     </div>
 }
 
+@* ===== HOTP RESYNC MODAL (#277) ===== *@
+@if (_resyncTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => CloseResyncModal())">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">Resync Token: @_resyncTarget.SerialNumber</div>
+            <div class="pam-modal-body">
+                @if (_resyncError != null) { <div class="pam-alert pam-alert-danger">@_resyncError</div> }
+                <p class="pam-text-muted" style="font-size:.85rem;margin-bottom:12px">
+                    Press your token twice in sequence and enter both OTPs below.
+                </p>
+                <div class="pam-form-group">
+                    <label class="pam-label">First OTP</label>
+                    <input class="pam-input" maxlength="8" placeholder="e.g. 123456"
+                           @bind="_resyncOtp1" autocomplete="one-time-code" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Second OTP (next press)</label>
+                    <input class="pam-input" maxlength="8" placeholder="e.g. 789012"
+                           @bind="_resyncOtp2" autocomplete="one-time-code" />
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitResyncAsync" disabled="@_resyncSaving">
+                    @(_resyncSaving ? "Resyncing..." : "Resync Token")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => CloseResyncModal())">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "devices";
     private bool _loading;
@@ -631,6 +703,15 @@
     private List<MfaTrustedSessionDto>? _trustedSessions;
     private bool _loadingTrusted;
 
+    // HOTP Resync (#277)
+    private List<HardwareTokenDto>? _hwTokens;
+    private bool _loadingHwTokens;
+    private HardwareTokenDto? _resyncTarget;
+    private string _resyncOtp1 = string.Empty;
+    private string _resyncOtp2 = string.Empty;
+    private bool _resyncSaving;
+    private string? _resyncError;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -648,7 +729,7 @@
         else if (tab == "sessions") await LoadMySessionsAsync();
         else if (tab == "requests") await LoadMyRequestsAsync();
         else if (tab == "profile") await LoadProfileAsync();
-        else if (tab == "security") await LoadMfaDevicesAsync();
+        else if (tab == "security") { await LoadMfaDevicesAsync(); await LoadMyHwTokensAsync(); }
         else if (tab == "trusted") await LoadTrustedSessionsAsync();
     }
 
@@ -856,6 +937,48 @@
         else
         {
             _error = err ?? "Password change failed.";
+        }
+    }
+
+    // HOTP Resync (#277)
+    private async Task LoadMyHwTokensAsync()
+    {
+        _loadingHwTokens = true;
+        _hwTokens = await Api.GetMyHardwareTokensAsync();
+        _loadingHwTokens = false;
+    }
+
+    private void OpenResyncModal(HardwareTokenDto t)
+    {
+        _resyncTarget = t;
+        _resyncOtp1 = _resyncOtp2 = string.Empty;
+        _resyncError = null;
+    }
+
+    private void CloseResyncModal()
+    {
+        _resyncTarget = null;
+        _resyncError = null;
+    }
+
+    private async Task SubmitResyncAsync()
+    {
+        if (_resyncTarget == null) return;
+        if (string.IsNullOrWhiteSpace(_resyncOtp1) || string.IsNullOrWhiteSpace(_resyncOtp2))
+        { _resyncError = "Both OTP values are required."; return; }
+
+        _resyncSaving = true; _resyncError = null;
+        var (ok, err) = await Api.ResyncHardwareTokenAsync(_resyncTarget.Id, _resyncOtp1.Trim(), _resyncOtp2.Trim());
+        _resyncSaving = false;
+
+        if (ok)
+        {
+            _success = "Token resynchronized successfully.";
+            CloseResyncModal();
+        }
+        else
+        {
+            _resyncError = err ?? "Resync failed.";
         }
     }
 

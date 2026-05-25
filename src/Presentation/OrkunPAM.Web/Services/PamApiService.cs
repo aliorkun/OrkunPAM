@@ -1834,6 +1834,49 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // Hardware Token Resync (#277 — MFA #23)
+    public async Task<List<HardwareTokenDto>?> GetMyHardwareTokensAsync()
+        => await GetAsync<List<HardwareTokenDto>>("/api/v1/auth/hardware-tokens");
+
+    public async Task<(bool Success, string? Error)> ResyncHardwareTokenAsync(Guid tokenId, string otp1, string otp2)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/auth/hardware-tokens/{tokenId}/resync",
+                new { otp1, otp2 });
+            if (resp.IsSuccessStatusCode) return (true, null);
+            try
+            {
+                using var stream = await resp.Content.ReadAsStreamAsync();
+                using var doc = await JsonDocument.ParseAsync(stream);
+                if (doc.RootElement.TryGetProperty("errors", out var errProp))
+                {
+                    var first = errProp.EnumerateArray().FirstOrDefault();
+                    return (false, first.GetString());
+                }
+            }
+            catch { /* ignore */ }
+            return (false, "Resync failed. Ensure the two OTPs are consecutive presses.");
+        }
+        catch { return (false, "Network error during resync."); }
+    }
+
+    public async Task<bool> AdminResyncHardwareTokenAsync(Guid tokenId, long newCounter)
+    {
+        var client = await GetAuthClientAsync();
+        try
+        {
+            var resp = await client.PostAsJsonAsync($"/api/v1/auth/hardware-tokens/{tokenId}/admin-resync",
+                new { newCounter });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<List<TokenDriftReportItemDto>?> GetTokenDriftReportAsync()
+        => await GetAsync<List<TokenDriftReportItemDto>>("/api/v1/auth/hardware-tokens/drift-report");
+
     public async Task<LoginResult?> VerifyHardwareOtpAsync(string username, string otp)
     {
         try
@@ -2870,7 +2913,8 @@ public record HardwareTokenDto(
     int      PeriodSeconds,
     string?  Label,
     bool     IsActive,
-    DateTime ProvisionedAtUtc);
+    DateTime ProvisionedAtUtc,
+    long     CounterValue = 0);
 
 // OIDC Federation (#271)
 public record OidcProviderPublicDto(Guid Id, string Name, string DisplayName);
@@ -2959,3 +3003,15 @@ public record DeviceMfaPolicyDto(
     bool     EnforceAtSessionStart,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
+
+// Hardware Token Drift Report (#277 — MFA #23)
+public record TokenDriftReportItemDto(
+    Guid      TokenId,
+    string    SerialNumber,
+    Guid      UserId,
+    string    Username,
+    long      CounterValue,
+    string?   Label,
+    DateTime? LastResyncAtUtc,
+    int       ResyncCount,
+    string?   LastEvent);

@@ -142,7 +142,8 @@ public static class HardwareTokenEndpoints
                     t.PeriodSeconds,
                     t.Label,
                     t.IsActive,
-                    t.ProvisionedAtUtc
+                    t.ProvisionedAtUtc,
+                    t.CounterValue
                 })
                 .ToListAsync();
 
@@ -180,6 +181,154 @@ public static class HardwareTokenEndpoints
 
             return Results.Ok(new { success = true, message = "Hardware token revoked" });
         }).RequireAuthorization().WithTags("HardwareToken");
+
+        // POST /api/v1/auth/hardware-tokens/{id}/resync — RFC 4226 §7.4 self-service HOTP counter resync
+        app.MapPost("/api/v1/auth/hardware-tokens/{id:guid}/resync", async (
+            Guid id,
+            HardwareTokenResyncRequest req,
+            OrkunPamDbContext db,
+            IVaultEncryptionService vault,
+            IAuditService audit,
+            HttpContext ctx) =>
+        {
+            var callerIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Guid.TryParse(callerIdStr, out var callerId);
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            var token = await db.HardwareTokens.FindAsync(id);
+            if (token == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Token not found" } });
+
+            var isAdmin = ctx.User.HasClaim("role", "Admin") ||
+                          ctx.User.IsInRole("Admin") ||
+                          ctx.User.HasClaim(ClaimTypes.Role, "Admin");
+
+            if (token.UserId != callerId && !isAdmin)
+                return Results.Forbid();
+
+            if (!token.IsActive)
+                return Results.BadRequest(new { success = false, errors = new[] { "Token is not active" } });
+
+            if (token.TokenType != HardwareTokenType.Hotp)
+                return Results.BadRequest(new { success = false, errors = new[] { "Resync is only available for HOTP tokens" } });
+
+            if (string.IsNullOrWhiteSpace(req.Otp1) || string.IsNullOrWhiteSpace(req.Otp2))
+                return Results.BadRequest(new { success = false, errors = new[] { "Both OTP values are required" } });
+
+            var decResult = vault.Decrypt(token.SecretKeyEnc);
+            if (decResult.IsFailure)
+                return Results.Problem("Failed to decrypt token secret");
+
+            bool success = false;
+            long newCounter = 0;
+            var secret = decResult.Value;
+            try
+            {
+                (success, newCounter) = OathHelper.TryResyncHotp(
+                    secret, req.Otp1.Trim(), req.Otp2.Trim(),
+                    token.CounterValue, token.Digits, token.Algorithm, window: 100);
+            }
+            finally { CryptographicOperations.ZeroMemory(secret); }
+
+            if (success)
+            {
+                token.CounterValue = newCounter;
+                await db.SaveChangesAsync();
+                await audit.LogAsync("Auth", "HARDWARE_TOKEN_RESYNC_SUCCESS", callerId, null, ip,
+                    "HardwareToken", token.Id.ToString(),
+                    new { token.SerialNumber, NewCounter = newCounter, token.UserId });
+                return Results.Ok(new { success = true, message = "Token resynchronized successfully" });
+            }
+
+            await audit.LogAsync("Auth", "HARDWARE_TOKEN_RESYNC_FAILED", callerId, null, ip,
+                "HardwareToken", token.Id.ToString(),
+                new { token.SerialNumber, Reason = "OTP pair not found in forward window=100" });
+            return Results.BadRequest(new
+            {
+                success = false,
+                errors = new[] { "Counter drift too large — contact your administrator to reset the counter manually" }
+            });
+        }).RequireAuthorization().WithTags("HardwareToken");
+
+        // POST /api/v1/auth/hardware-tokens/{id}/admin-resync — admin counter override
+        app.MapPost("/api/v1/auth/hardware-tokens/{id:guid}/admin-resync", async (
+            Guid id,
+            HardwareTokenAdminResyncRequest req,
+            OrkunPamDbContext db,
+            IAuditService audit,
+            HttpContext ctx) =>
+        {
+            var adminIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Guid.TryParse(adminIdStr, out var adminId);
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            var token = await db.HardwareTokens.FindAsync(id);
+            if (token == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Token not found" } });
+
+            if (token.TokenType != HardwareTokenType.Hotp)
+                return Results.BadRequest(new { success = false, errors = new[] { "Counter override only applies to HOTP tokens" } });
+
+            if (req.NewCounter < 0)
+                return Results.BadRequest(new { success = false, errors = new[] { "Counter must be non-negative" } });
+
+            var oldCounter = token.CounterValue;
+            token.CounterValue = req.NewCounter;
+            await db.SaveChangesAsync();
+
+            await audit.LogAsync("Auth", "HARDWARE_TOKEN_ADMIN_RESYNC", adminId, null, ip,
+                "HardwareToken", token.Id.ToString(),
+                new { token.SerialNumber, OldCounter = oldCounter, NewCounter = req.NewCounter, token.UserId });
+
+            return Results.Ok(new { success = true, message = $"Token counter set to {req.NewCounter}" });
+        }).RequireAuthorization("AdminPolicy").WithTags("HardwareToken");
+
+        // GET /api/v1/auth/hardware-tokens/drift-report — tokens that needed resync in last 7 days
+        app.MapGet("/api/v1/auth/hardware-tokens/drift-report", async (OrkunPamDbContext db) =>
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-7);
+            var events = await db.AuditLogs
+                .Where(a => (a.EventType == "HARDWARE_TOKEN_RESYNC_SUCCESS" ||
+                             a.EventType == "HARDWARE_TOKEN_RESYNC_FAILED")
+                            && a.Timestamp >= cutoff)
+                .OrderByDescending(a => a.Timestamp)
+                .ToListAsync();
+
+            var tokenIds = events
+                .Where(a => a.TargetId != null && Guid.TryParse(a.TargetId, out _))
+                .Select(a => Guid.Parse(a.TargetId!))
+                .Distinct()
+                .ToList();
+
+            var tokens = await db.HardwareTokens
+                .Where(t => tokenIds.Contains(t.Id))
+                .ToListAsync();
+
+            var userIds = tokens.Select(t => t.UserId).Distinct().ToList();
+            var users = await db.Users
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.Username })
+                .ToDictionaryAsync(u => u.Id, u => u.Username);
+
+            var report = tokens.Select(t =>
+            {
+                var tokenEvents = events.Where(a => a.TargetId == t.Id.ToString()).ToList();
+                return new
+                {
+                    tokenId        = t.Id,
+                    serialNumber   = t.SerialNumber,
+                    userId         = t.UserId,
+                    username       = users.GetValueOrDefault(t.UserId, "Unknown"),
+                    counterValue   = t.CounterValue,
+                    label          = t.Label,
+                    lastResyncAtUtc = tokenEvents.Max(a => (DateTime?)a.Timestamp),
+                    resyncCount    = tokenEvents.Count,
+                    lastEvent      = tokenEvents.FirstOrDefault()?.EventType
+                };
+            }).OrderByDescending(r => r.lastResyncAtUtc).ToList();
+
+            return Results.Ok(new { success = true, data = report });
+        }).RequireAuthorization("AdminPolicy").WithTags("HardwareToken");
 
         // POST /api/v1/auth/verify-hardware-otp — verify OTP and return full JWT
         app.MapPost("/api/v1/auth/verify-hardware-otp", async (
@@ -368,6 +517,22 @@ internal static class OathHelper
         return (false, currentCounter);
     }
 
+    // RFC 4226 §7.4 resync: scan forward window for two consecutive matching OTPs
+    internal static (bool Success, long NewCounter) TryResyncHotp(
+        byte[] secret, string otp1, string otp2, long currentCounter,
+        int digits, HardwareTokenAlgorithm algorithm, int window = 100)
+    {
+        for (int offset = 1; offset <= window; offset++)
+        {
+            var candidate1 = ComputeHotp(secret, currentCounter + offset, digits, algorithm);
+            if (candidate1 != otp1) continue;
+            var candidate2 = ComputeHotp(secret, currentCounter + offset + 1, digits, algorithm);
+            if (candidate2 == otp2)
+                return (true, currentCounter + offset + 2);
+        }
+        return (false, currentCounter);
+    }
+
     internal static byte[] Base32Decode(string input)
     {
         const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -402,3 +567,5 @@ public record ProvisionHardwareTokenRequest(
     string? Label);
 
 public record VerifyHardwareOtpRequest(string Username, string Otp);
+public record HardwareTokenResyncRequest(string Otp1, string Otp2);
+public record HardwareTokenAdminResyncRequest(long NewCounter);

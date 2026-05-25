@@ -740,7 +740,7 @@
                 <table class="pam-table pam-table-hover">
                     <thead>
                         <tr>
-                            <th>Serial</th><th>Label</th><th>Type</th><th>Algorithm</th><th>Digits</th><th>User</th><th>Provisioned</th><th>Status</th><th></th>
+                            <th>Serial</th><th>Label</th><th>Type</th><th>Algorithm</th><th>Digits</th><th>Counter</th><th>User</th><th>Provisioned</th><th>Status</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -752,10 +752,19 @@
                                 <td>@t.TokenType</td>
                                 <td>@t.Algorithm</td>
                                 <td>@t.Digits</td>
+                                <td>@(t.TokenType == "Hotp" ? t.CounterValue.ToString() : "—")</td>
                                 <td style="font-size:.8em">@t.UserId</td>
                                 <td>@t.ProvisionedAtUtc.ToLocalTime().ToString("MM/dd/yyyy HH:mm")</td>
                                 <td><span class="pam-status @(t.IsActive ? "pam-status-active" : "pam-status-inactive")">@(t.IsActive ? "Active" : "Revoked")</span></td>
-                                <td>
+                                <td style="white-space:nowrap">
+                                    @if (t.IsActive && t.TokenType == "Hotp")
+                                    {
+                                        <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                                style="margin-right:4px"
+                                                @onclick="@(() => OpenAdminResyncModal(t))">
+                                            Resync
+                                        </button>
+                                    }
                                     @if (t.IsActive)
                                     {
                                         <button class="pam-btn pam-btn-danger pam-btn-sm"
@@ -763,6 +772,57 @@
                                             Revoke
                                         </button>
                                     }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    <div class="pam-card" style="margin-top:16px">
+        <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Drift Report — Last 7 Days</strong>
+            <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadDriftReportAsync">Refresh</button>
+        </div>
+        <div class="pam-card-body p-0">
+            @if (_hwtDriftLoading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_hwtDriftReport == null || _hwtDriftReport.Count == 0)
+            {
+                <div class="pam-empty p-4">No resync events in the last 7 days.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Serial</th><th>User</th><th>Label</th><th>Counter</th>
+                            <th>Resync Count</th><th>Last Event</th><th>Last Resync</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _hwtDriftReport)
+                        {
+                            <tr>
+                                <td>@r.SerialNumber</td>
+                                <td>@r.Username</td>
+                                <td>@(r.Label ?? "—")</td>
+                                <td>@r.CounterValue</td>
+                                <td>@r.ResyncCount</td>
+                                <td>
+                                    @if (r.LastEvent == "HARDWARE_TOKEN_RESYNC_SUCCESS")
+                                    { <span class="pam-badge pam-badge-green">Success</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-red">Failed</span> }
+                                </td>
+                                <td style="font-size:.82em">
+                                    @(r.LastResyncAtUtc.HasValue
+                                        ? r.LastResyncAtUtc.Value.ToLocalTime().ToString("MM/dd HH:mm")
+                                        : "—")
                                 </td>
                             </tr>
                         }
@@ -922,6 +982,32 @@
     }
 }
 
+@* ===== ADMIN RESYNC MODAL (#277) ===== *@
+@if (_hwtAdminResyncTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _hwtAdminResyncTarget = null)">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">Admin Resync: @_hwtAdminResyncTarget.SerialNumber</div>
+            <div class="pam-modal-body">
+                @if (_hwtError != null) { <div class="pam-alert pam-alert-danger">@_hwtError</div> }
+                <div class="pam-form-group">
+                    <label class="pam-label">New Counter Value</label>
+                    <input class="pam-input" type="number" min="0" @bind="_hwtNewCounter" />
+                    <span class="pam-text-muted" style="font-size:.8em">
+                        Current counter: @_hwtAdminResyncTarget.CounterValue
+                    </span>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-primary" @onclick="DoAdminResyncAsync" disabled="@_hwtAdminResyncing">
+                    @(_hwtAdminResyncing ? "Setting..." : "Set Counter")
+                </button>
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _hwtAdminResyncTarget = null)">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
@@ -963,6 +1049,13 @@
     private int     _hwtDigits    = 6;
     private int     _hwtPeriod    = 30;
     private List<HardwareTokenDto>? _hwtTokens;
+
+    // Admin Resync + Drift Report (#277 — MFA #23)
+    private HardwareTokenDto? _hwtAdminResyncTarget;
+    private long              _hwtNewCounter;
+    private bool              _hwtAdminResyncing;
+    private List<TokenDriftReportItemDto>? _hwtDriftReport;
+    private bool              _hwtDriftLoading;
 
     // SMS Gateway state (#215)
     private bool    _smsLoading            = false;
@@ -1087,7 +1180,7 @@
         if (tab == "sms")
             await LoadSmsConfigAsync();
         if (tab == "hwtoken")
-            await LoadHardwareTokensAsync();
+        { await LoadHardwareTokensAsync(); await LoadDriftReportAsync(); }
         if (tab == "oidc")
             await LoadOidcAsync();
     }
@@ -1219,6 +1312,37 @@
         var ok = await Api.RevokeHardwareTokenAsync(tokenId);
         if (ok) { _hwtMsg = "Token revoked."; await LoadHardwareTokensAsync(); }
         else { _hwtError = "Failed to revoke token."; StateHasChanged(); }
+    }
+
+    // Admin Resync + Drift Report (#277 — MFA #23)
+    private void OpenAdminResyncModal(HardwareTokenDto t)
+    {
+        _hwtAdminResyncTarget = t;
+        _hwtNewCounter = t.CounterValue;
+        _hwtError = null;
+    }
+
+    private async Task DoAdminResyncAsync()
+    {
+        if (_hwtAdminResyncTarget == null) return;
+        _hwtAdminResyncing = true; _hwtError = null; StateHasChanged();
+        var ok = await Api.AdminResyncHardwareTokenAsync(_hwtAdminResyncTarget.Id, _hwtNewCounter);
+        _hwtAdminResyncing = false;
+        if (ok)
+        {
+            _hwtMsg = $"Counter for {_hwtAdminResyncTarget.SerialNumber} set to {_hwtNewCounter}.";
+            _hwtAdminResyncTarget = null;
+            await LoadHardwareTokensAsync();
+        }
+        else { _hwtError = "Failed to set counter."; }
+        StateHasChanged();
+    }
+
+    private async Task LoadDriftReportAsync()
+    {
+        _hwtDriftLoading = true; StateHasChanged();
+        _hwtDriftReport = await Api.GetTokenDriftReportAsync();
+        _hwtDriftLoading = false; StateHasChanged();
     }
 
     // ── ITSM ────────────────────────────────────────────────────────────────────────────────

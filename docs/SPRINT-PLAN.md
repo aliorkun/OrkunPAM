@@ -952,9 +952,33 @@
 
 ---
 
+## Sprint 56 - Hardware Token Resynchronization (#277) ✅ TAMAMLANDI
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #277 | [MVP] Hardware Token Resync — HOTP Counter Drift Recovery (MFA #23) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 56 Tamamlanan Bilesenler (2026-05-25):**
+- **OathHelper.TryResyncHotp:** RFC 4226 §7.4 forward-window scan (window=100); otp1+otp2 çifti bulunursa counter = pos+2
+- **HardwareTokenEndpoints.cs:** 3 yeni endpoint:
+  - `POST /api/v1/auth/hardware-tokens/{id}/resync` — self-service; 2-OTP çifti → RFC4226 resync; 2 audit event (RESYNC_SUCCESS/FAILED)
+  - `POST /api/v1/auth/hardware-tokens/{id}/admin-resync` — admin counter override (AdminPolicy); 1 audit event (ADMIN_RESYNC)
+  - `GET /api/v1/auth/hardware-tokens/drift-report` — son 7 günde resync ihtiyacı olan tokenlar (AuditLogs join)
+- **GET /api/v1/auth/hardware-tokens select:** CounterValue eklendi
+- **SelfService.razor:** Security sekmesine "Hardware HOTP Tokens" bölümü; Resync butonu + 2-OTP modal; LoadMyHwTokensAsync
+- **Integrations.razor:** Hardware Tokens tablosuna "Counter" sütunu + HOTP tokenlar için "Resync (Admin)" butonu; Admin Resync modal (counter override); "Drift Report" kartı (son 7 gün)
+- **PamApiService.cs:** `GetMyHardwareTokensAsync`, `ResyncHardwareTokenAsync`, `AdminResyncHardwareTokenAsync`, `GetTokenDriftReportAsync` + `HardwareTokenDto.CounterValue` eklendi + `TokenDriftReportItemDto`
+- **RFP-CHECKLIST.md:** MFA #23 → PC
+
+**Ilerleme:** 7/7 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 55 tamamlandi.** MFA for Privileged Workstations #270 → PC.
-**Sprint 56 hedefi:** #277 Hardware Token Resync (MFA #23) — kucuk scope S
+**Sprint 56 tamamlandi.** Hardware Token Resync #277 → PC.
+**Sprint 57 hedefi:** #278 Operational Reports Bundle (Reporting #39-41) — M scope
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
