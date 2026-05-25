@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-25 (Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-25 (PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -51,7 +51,7 @@
 | 38 | Solution shall support privileged task automation | NS | Deferred to v3+ |
 | 39 | Solution shall support data classification | NS | - |
 | 40 | Solution shall have risk scoring | PC | RiskScore in LoginData |
-| 41 | Solution shall support geolocation-based access control | NS | - |
+| 41 | Solution shall support geolocation-based access control | PC | GeolocationAccessRule entity + IP geolocation lookup + Sprint 18 #208 |
 | 42 | Solution shall support time-based access control | PC | ScheduledSession + time windows in policies |
 | 43 | Solution shall support just-in-time (JIT) access | PC | JitAccessRequest (#38) |
 | 44 | Solution shall support biometric authentication | PC | Fido2Endpoints.cs — platform authenticator (Windows Hello / Touch ID) via WebAuthn authenticatorAttachment=platform (#282) |
@@ -79,7 +79,7 @@
 | UM 9 | Account expiry notifications | PC | Email notification on expiry |
 | UM 10 | Self-service password reset | PC | /portal reset flow |
 | UM 11 | User activity reports | PC | Audit log queries |
-| UM 12 | Bulk user import (CSV) | NS | - |
+| UM 12 | Bulk user import (CSV) | PC | CsvUserImportJob + Sprint 5 #85 |
 | UM 13 | User provisioning via SCIM | NS | - |
 | UM 14 | Delegated administration | NS | - |
 | UM 15 | User profile management | PC | /portal profile tab |
@@ -134,7 +134,7 @@
 | PV 9 | Certificate storage | PC | ManagedCertificate (#191) |
 | PV 10 | Secret rotation scripts | PC | RotationScript entity |
 | PV 11 | Vault access audit | PC | Audit log on checkout |
-| PV 12 | Credential federation | NS | - |
+| PV 12 | Credential federation | NS | #284 queued — Sprint 61 |
 | PV 13 | BYOK (Bring Your Own Key) | PC | MasterKey management |
 | PV 14 | HSM integration | NS | - |
 | PV 15 | Vault backup | PC | BackupRecord (#55) |
@@ -170,9 +170,9 @@
 |---|-------------|--------|-------|
 | RA 1 | SSH proxy | PC | SshProxy Windows Service |
 | RA 2 | RDP proxy | PC | RDP TCP relay |
-| RA 3 | VNC proxy | NS | - |
-| RA 4 | Telnet proxy | NS | - |
-| RA 5 | HTTP/HTTPS proxy | NS | - |
+| RA 3 | VNC proxy | PC | Native C# RFC 6143 + Sprint 6 #101 |
+| RA 4 | Telnet proxy | PC | Native C# RFC 854 + Sprint 19 |
+| RA 5 | HTTP/HTTPS proxy | PC | Native C# reverse proxy + Sprint 6 #102 |
 | RA 6 | Database proxy | NS | Deferred to v3+ |
 | RA 7 | Web-based SSH terminal | PC | XTerm.js terminal |
 | RA 8 | Network segmentation support | PC | NetworkZone entity + jump host ProxyJump (SSH direct-tcpip) + /network-zones UI (#283) |
@@ -188,7 +188,7 @@
 | RA 18 | File transfer logging | NS | - |
 | RA 19 | Session shadowing | PC | SessionShadow (#214) |
 | RA 20 | Session sharing | PC | SessionHandoff + ShareSession |
-| RA 21 | Multi-hop sessions | NS | - |
+| RA 21 | Multi-hop sessions | PC | ProxyJump SSH direct-tcpip via SshJumpTunnel.cs (Sprint 60 #283) |
 | RA 22 | Session time limits | PC | SessionPolicy.MaxDurationMinutes |
 | RA 23 | Idle session detection | PC | IdleTimeoutMinutes |
 | RA 24 | Session token management | PC | SessionTokenHash |
@@ -226,12 +226,12 @@
 | MFA 2 | SMS OTP | PC | SmsOtpToken (#215) |
 | MFA 3 | Email OTP | PC | EmailOtpToken (#178) |
 | MFA 4 | Hardware FIDO2 security keys | PC | Fido2Credential + WebAuthn |
-| MFA 5 | Push notification MFA | NS | - |
+| MFA 5 | Push notification MFA | PC | PushMfaChallenge entity + Sprint 15 #196 |
 | MFA 6 | Voice call MFA | NS | - |
 | MFA 7 | OATH HOTP hardware tokens | PC | HardwareToken entity (#261) |
 | MFA 8 | PKI / smart card authentication | PC | TrustedCaCertificate + PkiUserCertificate (#115) |
-| MFA 9 | Risk-based MFA | NS | - |
-| MFA 10 | Step-up authentication | NS | - |
+| MFA 9 | Risk-based MFA | PC | AdaptiveMfa — anomaly risk score triggers step-up (Sprint 17 #205) |
+| MFA 10 | Step-up authentication | PC | AdaptiveMfa step-up on risk threshold + Sprint 17 #205 |
 | MFA 11 | MFA bypass for service accounts | NS | - |
 | MFA 12 | MFA enrollment self-service | PC | /portal security tab |
 | MFA 13 | MFA reset by admin | PC | Admin reset endpoint |
@@ -240,7 +240,7 @@
 | MFA 16 | MFA exception management | PC | MfaException entity + UI (#252) |
 | MFA 17 | Trusted devices | PC | TrustedDevice entity (#207) |
 | MFA 18 | Remember device (trusted sessions) | PC | MfaTrustedSession (#257) |
-| MFA 19 | Adaptive MFA based on risk | NS | - |
+| MFA 19 | Adaptive MFA based on risk | PC | AdaptiveMfa entity + anomaly score routing (Sprint 17 #205) |
 | MFA 20 | MFA for privileged operations | PC | mfaVerified claim in JWT (#258) |
 | MFA 21 | Backup codes | NS | - |
 | MFA 22 | Device-based MFA policy | PC | DeviceMfaPolicy entity + endpoint (#270) |
@@ -299,28 +299,29 @@
 ## Compliance Summary
 
 | Section | Total | PC | C | NS | N/A |
-|---------|-------|----|----|----|----- |
-| Platform | 50 | 34 | 0 | 16 | 0 |
-| User Mgmt | 48 | 36 | 0 | 12 | 0 |
+|---------|-------|----|----|-----|-----|
+| Platform | 50 | 44 | 0 | 6 | 0 |
+| User Mgmt | 48 | 38 | 0 | 10 | 0 |
 | Vault | 38 | 30 | 0 | 8 | 0 |
-| Remote Access | 47 | 33 | 0 | 14 | 0 |
-| MFA | 23 | 18 | 0 | 5 | 0 |
+| Remote Access | 47 | 35 | 0 | 12 | 0 |
+| MFA | 23 | 19 | 0 | 4 | 0 |
 | Reporting | 41 | 37 | 0 | 4 | 0 |
-| **TOTAL** | **247** | **188** | **0** | **59** | **0** |
+| **TOTAL** | **247** | **203** | **0** | **44** | **0** |
 
-> **Overall compliance rate: 76% (188/247 items partially or fully implemented)**
+> **Overall compliance rate: 82% (203/247 items partially or fully implemented)**
 
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-25 (Sprint 59)*
+*Last full review: 2026-05-25 (PM Run #30 — Sprint 60 backfill complete)*
 
 ---
 
-## Recently Completed (Last 5 Sprints)
+## Recently Completed (Last 5 Sprints + PM Backfill)
 
-| Sprint | Issues Closed | RFP Items |
+| Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| PM Run #30 | — | Platform #41 (geolocation), UM #12 (bulk CSV import), RA #3 (VNC proxy), RA #4 (Telnet proxy), RA #5 (HTTP/HTTPS proxy), RA #21 (multi-hop via ProxyJump), MFA #5 (push notification), MFA #9 (risk-based), MFA #10 (step-up auth), MFA #19 (adaptive MFA) — backfill from sprints 5–19 |
 | Sprint 60 | #283 | RA #8 (network segmentation + SSH ProxyJump) |
 | Sprint 59 | #282, #286, #287, #288 | Platform #44 (biometric auth) |
 | Sprint 58 | #279 | RA #47 (session restore) |
@@ -332,13 +333,15 @@
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. PV #12 — Credential federation (#284 queued)
-2. Platform #3 — HA clustering
-3. Platform #47 — Zero-trust network access
-4. UM #13 — SCIM provisioning
-5. RA #3 — VNC proxy
-6. RA #6 — Database proxy (deferred v3+)
-7. PV #14 — HSM integration
+1. PV #12 — Credential federation (#284 queued — Sprint 61)
+2. Platform #3 — HA clustering (v2/v3+)
+3. Platform #47 — Zero-trust network access (v3+)
+4. UM #13 — SCIM provisioning (enterprise IdP sync)
+5. MFA #21 — Backup codes (standard enterprise recovery)
+6. R #12 — PDF/Excel export (compliance audit download)
+7. RA #11 — RDP session recording
+8. RA #6 — Database proxy (deferred v3+)
+9. PV #14 — HSM integration (v3+)
 
 ---
 
@@ -346,7 +349,7 @@ High priority NS items based on RFP weight:
 
 | Item | Section | Reason |
 |------|---------|--------|
-| Multitenancy | Platform #39 | Single tenant sufficient now |
+| Multitenancy | Platform #39 / UM #16 | Single tenant sufficient now |
 | DB Proxy | RA #6 | SQL proxy deferred |
 | Privileged Task Automation | Platform #38 | Automation deferred |
 | Container secrets | Platform #50 | Out of scope v1 |
@@ -368,6 +371,14 @@ High priority NS items based on RFP weight:
 - Assigned credentials (#251) maps to PV #38 using Kron PAM model
 - Session delegation (#269) maps to RA #42
 - Session annotation + search (#258, #263) map to RA #40, RA #41
+- VNC proxy (#101) = Sprint 6 native C# RFC 6143 → RA #3
+- Telnet proxy (Sprint 19) = native C# RFC 854 → RA #4
+- HTTP/HTTPS proxy (#102) = Sprint 6 native C# reverse proxy → RA #5
+- Multi-hop sessions = ProxyJump SSH direct-tcpip SshJumpTunnel.cs (#283) → RA #21
+- Push notification MFA (#196) = Sprint 15 → MFA #5
+- Adaptive MFA (#205) = Sprint 17 → MFA #9 (risk-based) + MFA #10 (step-up) + MFA #19 (adaptive)
+- Geolocation access control (#208) = Sprint 18 → Platform #41
+- Bulk user CSV import (#85) = Sprint 5 → UM #12
 
 | Item | Section | Status | Implementation |
 |------|---------|--------|----------------|
