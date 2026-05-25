@@ -44,6 +44,25 @@ public class ProxySession : Entity
         TerminatedBy = adminUserId;
         TerminationReason = reason;
     }
+
+    public void Disconnect()
+    {
+        Status = SessionStatus.Disconnected;
+    }
+}
+
+public class SessionRestoreToken
+{
+    public Guid   Id                { get; set; } = Guid.NewGuid();
+    public Guid   OriginalSessionId { get; set; }
+    public Guid   UserId            { get; set; }
+    public Guid   DeviceId          { get; set; }
+    public Guid?  CredentialId      { get; set; }
+    public string Protocol          { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc    { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAtUtc    { get; set; }
+    public bool   IsUsed            { get; set; }
+    public Guid?  RestoredSessionId { get; set; }
 }
 
 public class SessionPolicy : Entity

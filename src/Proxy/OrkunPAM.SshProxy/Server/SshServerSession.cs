@@ -50,6 +50,7 @@ internal sealed class SshServerSession
     {
         string? pamSessionId = null;
         var sessionStart = DateTime.UtcNow;
+        bool unexpectedDisconnect = false;
         try
         {
             _clientVersion = await _conn.ExchangeVersionsAsync(ServerVersion, _ct);
@@ -99,11 +100,19 @@ internal sealed class SshServerSession
         }
         catch (OperationCanceledException) { }
         catch (SshException ex) { _log.LogWarning("SSH protocol error: {Msg}", ex.Message); }
-        catch (Exception ex)    { _log.LogError(ex, "Session error"); }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Session error");
+            // Network or system failure = unexpected disconnect; offer restore window
+            if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException)
+                unexpectedDisconnect = true;
+        }
         finally
         {
             if (pamSessionId != null)
             {
+                if (unexpectedDisconnect)
+                    await _api.MarkSessionDisconnectedAsync(pamSessionId);
                 var duration = (int)(DateTime.UtcNow - sessionStart).TotalSeconds;
                 await _api.EndSessionAsync(pamSessionId, duration, _lastRecordingPath);
             }
