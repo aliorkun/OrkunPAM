@@ -869,7 +869,7 @@
 - **DbContext:** HardwareTokens DbSet + EF Core config; ModelSnapshot guncellendi
 - **HardwareTokenEndpoints.cs:** 4 endpoint — POST /hardware-tokens (provision, AdminPolicy), GET /hardware-tokens (list, self or admin), DELETE /hardware-tokens/{id} (revoke), POST /verify-hardware-otp (OTP verify → JWT); RFC 4226 HOTP (±5 look-ahead window) + RFC 6238 TOTP (±1 period); SHA1/SHA256/SHA512; 3 audit events (HARDWARE_TOKEN_PROVISIONED/VERIFIED/REVOKED); OathHelper static class with Base32Decode
 - **Program.cs:** MapHardwareTokenEndpoints() kaydedildi
-- **Login.razor:** HardwareToken MFA step eklendi (🗝 ikon, 6-8 digit input, HandleHardwareTokenAsync + OnHardwareTokenKeyUp)
+- **Login.razor:** HardwareToken MFA step eklendi (🗹 ikon, 6-8 digit input, HandleHardwareTokenAsync + OnHardwareTokenKeyUp)
 - **Integrations.razor:** Hardware Tokens sekmesi — token provision formu (User ID, Serial, Base32 secret, type, algorithm, digits, period, label); token listesi tablosu (serial, type, algorithm, status, revoke butonu); state variables + SetTab case + ProvisionTokenAsync + RevokeTokenAsync metodlari
 - **PamApiService.cs:** ProvisionHardwareTokenAsync, GetHardwareTokensAsync, GetAllHardwareTokensAsync, RevokeHardwareTokenAsync, VerifyHardwareOtpAsync; HardwareTokenDto record
 - **RFP-CHECKLIST.md:** MFA #7 (OATH hardware tokens) → PC
@@ -929,9 +929,32 @@
 
 ---
 
+## Sprint 55 - MFA for Privileged Workstations (#270) ✅ TAMAMLANDI
+**Tarih:** 2026-05-25
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|—----|
+| #270 | [MVP] MFA for Privileged Workstations — Device-Type Specific MFA Enforcement Policy (MFA #22) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 55 Tamamlanan Bilesenler (2026-05-25):**
+- **DeviceMfaPolicy entity** (ProxySession.cs): Name, Description, DeviceGroupId/DeviceId FK, RequiredMfaLevel (string: None/Totp/Fido2/HardwareToken/Any), EnforceAtSessionStart, IsEnabled
+- **Migration `20260525_AddDeviceMfaPolicy`:** DeviceMfaPolicies tablosu + 3 index (IsEnabled, DeviceGroupId, DeviceId)
+- **DbContext:** DeviceMfaPolicies DbSet + OnModelCreating config (maxLengths, indexes)
+- **DeviceMfaPolicyEndpoints.cs:** 5 endpoint (CRUD + /effective) + `POST /api/v1/sessions/step-up-verify` (TOTP dogrulama → IMemoryCache 15-dk completion token); 3 audit event (CREATED/UPDATED/DELETED); GetEffectivePolicyAsync: device → device-group → global fallback
+- **SessionEndpoints.cs:** `CreateSession` fonksiyonuna adim-yukleme kontrolu eklendi — `stepup:{userId}:{deviceId}` cache key; 403 + stepUpToken donerken `SESSION_MFA_STEP_UP_REQUIRED` audit event
+- **Program.cs:** `MapDeviceMfaPolicyEndpoints()` kayitlandi
+- **Policies.razor:** "Device MFA" sekmesi — policy tablosu, New/Edit modal (level dropdown/enforce/enabled), Delete confirm; state fields + 8 metod
+- **PamApiService.cs:** `GetDeviceMfaPoliciesAsync`, `CreateDeviceMfaPolicyAsync`, `UpdateDeviceMfaPolicyAsync`, `DeleteDeviceMfaPolicyAsync` + `DeviceMfaPolicyDto`; **+** eksik `CommandFilterPolicy` metodlari eklendi (GetCommandFilterPoliciesAsync/GetCommandFilterPolicyAsync/ToggleCommandFilterPolicyAsync/CreateCommandFilterPolicyAsync/DeleteCommandFilterPolicyAsync/AddCommandFilterRuleAsync/DeleteCommandFilterRuleAsync + 3 DTO); **+** eksik `PeripheralRedirectionPolicy` metodlari eklendi (GetPeripheralPoliciesAsync/CreatePeripheralPolicyAsync/UpdatePeripheralPolicyAsync/DeletePeripheralPolicyAsync + DTO)
+- **RFP-CHECKLIST.md:** MFA #22 → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 54 tamamlandi.** OIDC Federation #271 → PC.
-**Sprint 55 hedefi:** #270 MFA for Privileged Workstations (MFA #22)
+**Sprint 55 tamamlandi.** MFA for Privileged Workstations #270 → PC.
+**Sprint 56 hedefi:** #277 Hardware Token Resync (MFA #23) — kucuk scope S
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
