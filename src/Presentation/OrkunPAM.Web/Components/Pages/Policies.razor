@@ -24,6 +24,7 @@
     <button class="pam-tab @(_tab=="geo-access"?"pam-tab-active":"")"    @onclick="@(() => SwitchTab("geo-access"))">Geo Access</button>
     <button class="pam-tab @(_tab=="cmd-filter"?"pam-tab-active":"")"   @onclick="@(() => SwitchTab("cmd-filter"))">Command Filter</button>
     <button class="pam-tab @(_tab=="peripheral"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("peripheral"))">Peripheral Control</button>
+    <button class="pam-tab @(_tab=="device-mfa"?"pam-tab-active":"")"  @onclick="@(() => SwitchTab("device-mfa"))">Device MFA</button>
 </div>
 
 @if (_error != null)      { <div class="pam-alert pam-alert-danger">@_error</div> }
@@ -971,6 +972,143 @@
     </div>
 }
 
+@if (_tab == "device-mfa")
+{
+    <div class="pam-page-header" style="margin-bottom:1rem">
+        <span style="font-weight:600;font-size:1rem">Device MFA Policies (MFA #22)</span>
+        <button class="pam-btn pam-btn-primary" @onclick="OpenAddDmpModal">+ New Policy</button>
+    </div>
+    <div class="pam-alert pam-alert-info" style="margin-bottom:1rem;font-size:0.85rem">
+        Enforce step-up MFA when users start sessions against specific devices or device groups.
+        A matching policy triggers a second MFA challenge at session launch — independent of login MFA.
+        Required level: <strong>None</strong> (bypass), <strong>Totp</strong>, <strong>Fido2</strong>, <strong>HardwareToken</strong>, or <strong>Any</strong> (user's enrolled MFA).
+    </div>
+
+    <div class="pam-card">
+        <div class="pam-card-body p-0">
+            @if (_dmpLoading)
+            {
+                <div class="pam-loading-text p-4">Loading...</div>
+            }
+            else if (_dmpPolicies == null || _dmpPolicies.Count == 0)
+            {
+                <div class="pam-empty p-4">No device MFA policies. All sessions use login MFA only.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th><th>Required MFA</th><th>Enforce at Launch</th>
+                            <th>Scope</th><th>Status</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _dmpPolicies)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@p.Name</strong>
+                                    @if (!string.IsNullOrEmpty(p.Description))
+                                    { <div style="font-size:0.8rem;color:#888">@p.Description</div> }
+                                </td>
+                                <td><span class="pam-badge pam-badge-info">@p.RequiredMfaLevel</span></td>
+                                <td>@(p.EnforceAtSessionStart ? "Yes" : "No")</td>
+                                <td>
+                                    @if (p.DeviceId.HasValue)         { <span>Device</span> }
+                                    else if (p.DeviceGroupId.HasValue) { <span>Device Group</span> }
+                                    else                               { <span>Global</span> }
+                                </td>
+                                <td>
+                                    @if (p.IsEnabled) { <span class="pam-status pam-status-active">Enabled</span> }
+                                    else              { <span class="pam-status pam-status-done">Disabled</span> }
+                                </td>
+                                <td>
+                                    <div class="pam-actions">
+                                        <button class="pam-btn-icon" title="Edit"
+                                                @onclick="@(() => OpenEditDmpModal(p))">&#9998;</button>
+                                        <button class="pam-btn-icon pam-btn-danger" title="Delete"
+                                                @onclick="@(() => ConfirmDeleteDmp(p))">&#128465;</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (_showAddDmp)
+{
+    <div class="pam-modal-overlay" @onclick="CloseAddDmpModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_dmpEditId == null ? "New" : "Edit") Device MFA Policy</h3>
+                <button class="pam-close-btn" @onclick="CloseAddDmpModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_dmpAddError != null) { <div class="pam-alert pam-alert-danger">@_dmpAddError</div> }
+                <div class="pam-form-group">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input w-100-input" @bind="_dmpName" placeholder="e.g. Production Servers — TOTP required" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_dmpDesc" placeholder="Optional" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Required MFA Level *</label>
+                    <select class="pam-input" @bind="_dmpLevel">
+                        <option value="Any">Any (user's enrolled MFA)</option>
+                        <option value="Totp">TOTP only</option>
+                        <option value="Fido2">FIDO2/WebAuthn only</option>
+                        <option value="HardwareToken">Hardware Token (OATH) only</option>
+                        <option value="None">None (bypass step-up)</option>
+                    </select>
+                </div>
+                <div class="pam-form-group">
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+                        <input type="checkbox" @bind="_dmpEnforce" /> Enforce at session launch
+                    </label>
+                </div>
+                <div class="pam-form-group">
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+                        <input type="checkbox" @bind="_dmpEnabled" /> Enabled
+                    </label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseAddDmpModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" disabled="@_dmpAddSaving" @onclick="SubmitDmpAsync">
+                    @(_dmpAddSaving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_dmpDeleteTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="CancelDeleteDmp">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Delete Device MFA Policy</h3>
+                <button class="pam-close-btn" @onclick="CancelDeleteDmp">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete policy <strong>@_dmpDeleteTarget.Name</strong>?</p>
+                <p class="pam-hint pam-hint-warn">Sessions targeting covered devices will no longer require step-up MFA.</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CancelDeleteDmp">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="ExecuteDeleteDmpAsync">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_showAdd)
 {
     <div class="pam-modal-overlay" @onclick="CloseAddModal">
@@ -1168,6 +1306,20 @@
     private bool   _prpLoading       = false;
     private List<PeripheralRedirectionPolicyDto>? _prpPolicies;
     private PeripheralRedirectionPolicyDto?       _prpDeleteTarget;
+
+    // Device MFA Policy (#270 — MFA #22)
+    private bool   _dmpLoading     = false;
+    private List<DeviceMfaPolicyDto>? _dmpPolicies;
+    private DeviceMfaPolicyDto?       _dmpDeleteTarget;
+    private string? _dmpEditId;
+    private bool    _showAddDmp    = false;
+    private string? _dmpAddError;
+    private bool    _dmpAddSaving  = false;
+    private string  _dmpName       = "";
+    private string  _dmpDesc       = "";
+    private string  _dmpLevel      = "Any";
+    private bool    _dmpEnforce    = true;
+    private bool    _dmpEnabled    = true;
     private string? _prpEditId;
     private bool    _showAddPrp      = false;
     private string? _prpAddError;
@@ -1204,6 +1356,7 @@
             case "geo-access":   await LoadGeolocationPolicyAsync();     break;
             case "cmd-filter":   await LoadCfpAsync();                   break;
             case "peripheral":   await LoadPrpAsync();                   break;
+            case "device-mfa":   await LoadDmpAsync();                   break;
         }
     }
 
@@ -1617,5 +1770,58 @@
         var id = _prpDeleteTarget.Id.ToString(); _prpDeleteTarget = null;
         if (!await Api.DeletePeripheralPolicyAsync(id)) _error = "Failed to delete policy.";
         await LoadPrpAsync();
+    }
+
+    // Device MFA Policy methods (#270)
+    private async Task LoadDmpAsync()
+    {
+        _dmpLoading = true; StateHasChanged();
+        _dmpPolicies = await Api.GetDeviceMfaPoliciesAsync();
+        _dmpLoading = false; StateHasChanged();
+    }
+
+    private void OpenAddDmpModal()
+    {
+        _dmpEditId = null; _dmpName = ""; _dmpDesc = "";
+        _dmpLevel = "Any"; _dmpEnforce = true; _dmpEnabled = true;
+        _dmpAddError = null; _showAddDmp = true; StateHasChanged();
+    }
+
+    private void OpenEditDmpModal(DeviceMfaPolicyDto p)
+    {
+        _dmpEditId = p.Id.ToString(); _dmpName = p.Name; _dmpDesc = p.Description ?? "";
+        _dmpLevel = p.RequiredMfaLevel; _dmpEnforce = p.EnforceAtSessionStart; _dmpEnabled = p.IsEnabled;
+        _dmpAddError = null; _showAddDmp = true; StateHasChanged();
+    }
+
+    private void CloseAddDmpModal() { _showAddDmp = false; _dmpAddError = null; StateHasChanged(); }
+
+    private async Task SubmitDmpAsync()
+    {
+        _dmpAddError = null;
+        if (string.IsNullOrWhiteSpace(_dmpName)) { _dmpAddError = "Name is required."; return; }
+        _dmpAddSaving = true; StateHasChanged();
+        bool ok;
+        if (_dmpEditId == null)
+            ok = await Api.CreateDeviceMfaPolicyAsync(
+                _dmpName.Trim(), string.IsNullOrWhiteSpace(_dmpDesc) ? null : _dmpDesc.Trim(),
+                _dmpLevel, _dmpEnforce, _dmpEnabled);
+        else
+            ok = await Api.UpdateDeviceMfaPolicyAsync(
+                _dmpEditId, _dmpName.Trim(), _dmpLevel, _dmpEnforce, _dmpEnabled);
+        _dmpAddSaving = false;
+        if (!ok) { _dmpAddError = "Failed to save policy."; StateHasChanged(); return; }
+        CloseAddDmpModal(); await LoadDmpAsync();
+    }
+
+    private void ConfirmDeleteDmp(DeviceMfaPolicyDto p) { _dmpDeleteTarget = p; StateHasChanged(); }
+    private void CancelDeleteDmp() { _dmpDeleteTarget = null; StateHasChanged(); }
+
+    private async Task ExecuteDeleteDmpAsync()
+    {
+        if (_dmpDeleteTarget == null) return;
+        var id = _dmpDeleteTarget.Id.ToString(); _dmpDeleteTarget = null;
+        if (!await Api.DeleteDeviceMfaPolicyAsync(id)) _error = "Failed to delete policy.";
+        await LoadDmpAsync();
     }
 }
