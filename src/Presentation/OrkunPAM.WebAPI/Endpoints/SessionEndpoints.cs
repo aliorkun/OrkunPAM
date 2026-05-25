@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Identity;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Domain.Entities.Vault;
@@ -231,7 +232,7 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // ── Recording Playback endpoints ─────────────────────────────────────────────
+        // ── Recording Playback endpoints ────────────────────────────────────────────
         sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
             IRecordingPlaybackService playback, HttpContext context) =>
         {
@@ -556,6 +557,38 @@ public static class SessionEndpoints
             {
                 logger.LogWarning("Vendor {UserId} blocked: device {DeviceId} not in authorized device list", userId, req.DeviceId);
                 return Results.Forbid();
+            }
+        }
+
+        // Device MFA step-up check: if an active DeviceMfaPolicy requires step-up for this device,
+        // verify the user completed step-up MFA (stored in IMemoryCache by /sessions/step-up-verify).
+        if (!isAdmin)
+        {
+            var stepUpCacheKey = $"stepup:{userId}:{req.DeviceId}";
+            if (!cache.TryGetValue(stepUpCacheKey, out bool _))
+            {
+                var mfaPolicy = await DeviceMfaPolicyEndpoints.GetEffectivePolicyAsync(db, req.DeviceId);
+                if (mfaPolicy != null && mfaPolicy.IsEnabled && mfaPolicy.EnforceAtSessionStart
+                    && mfaPolicy.RequiredMfaLevel != "None")
+                {
+                    var audit = context.RequestServices.GetRequiredService<IAuditService>();
+                    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                    var stepUpToken = Guid.NewGuid().ToString("N");
+                    cache.Set($"stepup-token:{stepUpToken}",
+                        new StepUpTokenData(userId, req.DeviceId, mfaPolicy.RequiredMfaLevel),
+                        new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15) });
+                    await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_REQUIRED",
+                        userId.ToString(), null, clientIp, "Device", req.DeviceId.ToString(),
+                        new { mfaPolicy.RequiredMfaLevel });
+                    return Results.Json(new
+                    {
+                        success = false,
+                        mfaRequired = true,
+                        requiredLevel = mfaPolicy.RequiredMfaLevel,
+                        stepUpToken,
+                        errors = new[] { $"Step-up MFA required: {mfaPolicy.RequiredMfaLevel}" }
+                    }, statusCode: 403);
+                }
             }
         }
 
