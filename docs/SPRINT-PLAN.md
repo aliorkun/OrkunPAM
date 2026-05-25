@@ -934,7 +934,7 @@
 **Durum:** Tamamlandi
 
 | Issue | Baslik | Tip | Durum |
-|-------|--------|-----|—----|
+|-------|--------|-----|—-----|
 | #270 | [MVP] MFA for Privileged Workstations — Device-Type Specific MFA Enforcement Policy (MFA #22) | MVP-AUTH | ✅ Tamamlandi |
 
 **Sprint 55 Tamamlanan Bilesenler (2026-05-25):**
