@@ -65,7 +65,7 @@ internal sealed class SshServerSession
             // Fetch session policy for command filtering
             var sessionPolicy = await _api.GetFullSessionPolicyAsync(_ct);
 
-            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId, jumpHostAddress, jumpHostPassword, jumpHostUser) =
+            var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId, jumpHostAddress, jumpHostPassword, jumpHostUser, jumpHostFingerprint, networkZoneId) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
             _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth}, tofu: {Tofu})",
@@ -93,11 +93,26 @@ internal sealed class SshServerSession
 
             if (!string.IsNullOrEmpty(jumpHostAddress) && jumpHostPassword != null && jumpHostUser != null)
             {
+                // Block TOFU for jump host when RequireFingerprintVerification=true (CWE-295 fix)
+                if (jumpHostFingerprint == null && _opts.RequireFingerprintVerification)
+                {
+                    _log.LogError("SECURITY: TOFU blocked for jump host {JumpHost} — no fingerprint enrolled. " +
+                        "Admin must pre-enroll jump host fingerprint in Network Zone settings.", jumpHostAddress);
+                    throw new SshException(
+                        $"Jump host {jumpHostAddress} blocked: fingerprint not enrolled. " +
+                        "Admin must enroll the jump host fingerprint in PAM Network Zone settings.");
+                }
+
                 _log.LogInformation("Zone routing: connecting via jump host {JumpHost}", jumpHostAddress);
-                using var jumpTunnel = new SshJumpTunnel(jumpHostAddress, jumpHostUser, jumpHostPassword, _log);
+                using var jumpTunnel = new SshJumpTunnel(jumpHostAddress, jumpHostUser, jumpHostPassword,
+                    jumpHostFingerprint, _log);
                 var tunnelStream = await jumpTunnel.OpenAsync(targetIp, targetPort, _ct);
                 await target.ConnectViaStreamAsync(tunnelStream, _ct);
                 System.Security.Cryptography.CryptographicOperations.ZeroMemory(jumpHostPassword);
+
+                // TOFU: store observed jump host fingerprint if not previously enrolled
+                if (jumpHostFingerprint == null && networkZoneId.HasValue && jumpTunnel.ObservedFingerprint != null)
+                    await _api.StoreJumpHostFingerprintAsync(networkZoneId.Value, jumpTunnel.ObservedFingerprint, _ct);
             }
             else
             {
