@@ -1856,6 +1856,156 @@ public sealed class PamApiService
         catch { return new LoginResult(false, null); }
     }
 
+    // ── Command Filter Policy (#231) ──────────────────────────────────────────
+
+    public async Task<List<CommandFilterPolicyDto>?> GetCommandFilterPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<CommandFilterPolicyDto>>("/api/v1/policies/command-filter");
+        return result?.Data;
+    }
+
+    public async Task<CommandFilterPolicyDetailDto?> GetCommandFilterPolicyAsync(string id)
+        => (await GetAsync<SingleResult<CommandFilterPolicyDetailDto>>($"/api/v1/policies/command-filter/{id}"))?.Data;
+
+    public async Task<bool> ToggleCommandFilterPolicyAsync(string id, bool enable)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.PutAsJsonAsync($"/api/v1/policies/command-filter/{id}/toggle", new { isEnabled = enable })).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> CreateCommandFilterPolicyAsync(string name, string? description, bool isEnabled, string mode, Guid? deviceGroupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/command-filter",
+                new { name, description, isEnabled, mode, deviceGroupId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCommandFilterPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<bool> AddCommandFilterRuleAsync(string policyId, string pattern, bool isRegex, string action, int riskScore, string? justification)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/policies/command-filter/{policyId}/rules",
+                new { pattern, isRegex, action, riskScore, justification });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteCommandFilterRuleAsync(string policyId, string ruleId)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/command-filter/{policyId}/rules/{ruleId}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Peripheral Redirection Policy (#249) ──────────────────────────────────
+
+    public async Task<List<PeripheralRedirectionPolicyDto>?> GetPeripheralPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<PeripheralRedirectionPolicyDto>>("/api/v1/policies/peripheral");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreatePeripheralPolicyAsync(
+        string name, string? description, bool isEnabled,
+        bool allowClipboard, bool allowDriveRedirection, bool allowPrinterRedirection,
+        bool allowUsbRedirection, bool allowAudioRedirection, bool allowSmartCardRedirection,
+        Guid? deviceGroupId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/peripheral",
+                new { name, description, isEnabled, allowClipboard, allowDriveRedirection,
+                      allowPrinterRedirection, allowUsbRedirection, allowAudioRedirection,
+                      allowSmartCardRedirection, deviceGroupId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdatePeripheralPolicyAsync(
+        string id, string? name, bool? isEnabled,
+        bool? allowClipboard, bool? allowDriveRedirection, bool? allowPrinterRedirection,
+        bool? allowUsbRedirection, bool? allowAudioRedirection, bool? allowSmartCardRedirection)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/peripheral/{id}",
+                new { name, isEnabled, allowClipboard, allowDriveRedirection,
+                      allowPrinterRedirection, allowUsbRedirection, allowAudioRedirection,
+                      allowSmartCardRedirection });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeletePeripheralPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/peripheral/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    // ── Device MFA Policy (#270 — MFA #22) ────────────────────────────────────
+
+    public async Task<List<DeviceMfaPolicyDto>?> GetDeviceMfaPoliciesAsync()
+    {
+        var result = await GetAsync<ListResult<DeviceMfaPolicyDto>>("/api/v1/policies/device-mfa");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateDeviceMfaPolicyAsync(
+        string name, string? description, string requiredMfaLevel,
+        bool enforceAtSessionStart, bool isEnabled,
+        Guid? deviceGroupId = null, Guid? deviceId = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/policies/device-mfa",
+                new { name, description, requiredMfaLevel, enforceAtSessionStart, isEnabled, deviceGroupId, deviceId });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateDeviceMfaPolicyAsync(
+        string id, string? name, string? requiredMfaLevel,
+        bool? enforceAtSessionStart, bool? isEnabled)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/policies/device-mfa/{id}",
+                new { name, requiredMfaLevel, enforceAtSessionStart, isEnabled });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteDeviceMfaPolicyAsync(string id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/policies/device-mfa/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
     // ── OIDC Federation (#271 UM #48) ─────────────────────────────────────────
 
     public async Task<List<OidcProviderPublicDto>?> GetOidcProvidersPublicAsync()
@@ -2748,3 +2898,64 @@ public record OidcTestResultDto(
     string?  TokenEndpoint,
     string?  Issuer,
     string?  Error);
+
+// Command Filter Policy (#231)
+public record CommandFilterPolicyDto(
+    string   Id,
+    string   Name,
+    string?  Description,
+    bool     IsEnabled,
+    string   Mode,
+    Guid?    DeviceGroupId,
+    int      RuleCount,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public record CommandFilterPolicyDetailDto(
+    string   Id,
+    string   Name,
+    string?  Description,
+    bool     IsEnabled,
+    string   Mode,
+    Guid?    DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc,
+    List<CommandFilterRuleDto>? Rules);
+
+public record CommandFilterRuleDto(
+    string   Id,
+    string   Pattern,
+    bool     IsRegex,
+    string   Action,
+    int      RiskScore,
+    string?  Justification,
+    int      SortOrder);
+
+// Peripheral Redirection Policy (#249)
+public record PeripheralRedirectionPolicyDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    bool     IsEnabled,
+    bool     AllowClipboard,
+    bool     AllowDriveRedirection,
+    bool     AllowPrinterRedirection,
+    bool     AllowUsbRedirection,
+    bool     AllowAudioRedirection,
+    bool     AllowSmartCardRedirection,
+    Guid?    DeviceGroupId,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+// Device MFA Policy (#270 — MFA #22)
+public record DeviceMfaPolicyDto(
+    Guid     Id,
+    string   Name,
+    string?  Description,
+    bool     IsEnabled,
+    Guid?    DeviceGroupId,
+    Guid?    DeviceId,
+    string   RequiredMfaLevel,
+    bool     EnforceAtSessionStart,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
