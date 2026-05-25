@@ -238,7 +238,8 @@ public sealed class PamApiService
     }
 
     public async Task<bool> CreateNetworkZoneAsync(string name, string? description, string? ipRanges,
-        string? jumpHostAddress, Guid? jumpHostCredentialId, string? proxyBindAddress, bool isDefault, string? notes)
+        string? jumpHostAddress, Guid? jumpHostCredentialId, string? jumpHostFingerprint,
+        string? proxyBindAddress, bool isDefault, string? notes)
     {
         try
         {
@@ -246,7 +247,7 @@ public sealed class PamApiService
             var resp = await client.PostAsJsonAsync("/api/v1/system/network-zones", new
             {
                 name, description, ipRangesJson = ipRanges,
-                jumpHostAddress, jumpHostCredentialId, proxyBindAddress, isDefault, notes
+                jumpHostAddress, jumpHostCredentialId, jumpHostFingerprint, proxyBindAddress, isDefault, notes
             });
             return resp.IsSuccessStatusCode;
         }
@@ -254,7 +255,8 @@ public sealed class PamApiService
     }
 
     public async Task<bool> UpdateNetworkZoneAsync(Guid id, string? name, string? description, string? ipRanges,
-        string? jumpHostAddress, Guid? jumpHostCredentialId, string? proxyBindAddress, bool? isDefault, string? notes)
+        string? jumpHostAddress, Guid? jumpHostCredentialId, string? jumpHostFingerprint,
+        string? proxyBindAddress, bool? isDefault, string? notes)
     {
         try
         {
@@ -262,7 +264,7 @@ public sealed class PamApiService
             var resp = await client.PutAsJsonAsync($"/api/v1/system/network-zones/{id}", new
             {
                 name, description, ipRangesJson = ipRanges,
-                jumpHostAddress, jumpHostCredentialId, proxyBindAddress, isDefault, notes
+                jumpHostAddress, jumpHostCredentialId, jumpHostFingerprint, proxyBindAddress, isDefault, notes
             });
             return resp.IsSuccessStatusCode;
         }
@@ -3280,6 +3282,7 @@ public record NetworkZoneDto(
     string?   IpRangesJson,
     string?   JumpHostAddress,
     Guid?     JumpHostCredentialId,
+    string?   JumpHostFingerprint,
     string?   ProxyBindAddress,
     bool      IsDefault,
     string?   Notes,
