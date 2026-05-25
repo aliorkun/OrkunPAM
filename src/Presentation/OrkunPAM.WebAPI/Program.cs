@@ -530,6 +530,7 @@ try
     api.MapMfaExceptionEndpoints();
     api.MapCredentialOrchestrationEndpoints();
     api.MapOperationalReportsEndpoints();
+    api.MapNetworkZoneEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

@@ -76,7 +76,7 @@ internal sealed class PamApiClient
     /// Also returns the stored SSH host key fingerprint (null = first connection, TOFU applies) and deviceId.
     /// Throws InvalidOperationException on any failure -- caller must close session (fail-closed).
     /// </summary>
-    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId, string credentialId)>
+    internal async Task<(string ip, int port, string user, byte[] password, string? privateKey, string? expectedFingerprint, string deviceId, string credentialId, string? jumpHostAddress, byte[]? jumpHostPassword, string? jumpHostUser)>
         GetTargetCredentialAsync(string pamUser, string targetHost, CancellationToken ct)
     {
         try
@@ -154,6 +154,43 @@ internal sealed class PamApiClient
                 ? []
                 : System.Text.Encoding.UTF8.GetBytes(password);
 
+            // Resolve jump host credentials if device belongs to a zone with a jump host
+            string? jumpHostAddress = device.JumpHostAddress;
+            byte[]? jumpHostPasswordBytes = null;
+            string? jumpHostUser = null;
+
+            if (!string.IsNullOrEmpty(jumpHostAddress) && device.JumpHostCredentialId.HasValue)
+            {
+                try
+                {
+                    using var jumpDecryptReq = new HttpRequestMessage(HttpMethod.Post,
+                        "/api/v1/vault/credentials/proxy-decrypt");
+                    jumpDecryptReq.Content = JsonContent.Create(new { credentialId = device.JumpHostCredentialId.Value.ToString(), purpose = "SshProxy" });
+                    jumpDecryptReq.Headers.Add("X-Proxy-Secret", _proxySecret);
+                    var jumpDecryptResp = await client.SendAsync(jumpDecryptReq, ct);
+
+                    if (jumpDecryptResp.IsSuccessStatusCode)
+                    {
+                        var jumpData = await jumpDecryptResp.Content.ReadFromJsonAsync<DecryptResponse>(ct);
+                        var jumpPw = jumpData?.Data?.Password;
+                        var jumpUsername = jumpData?.Data?.Username;
+                        jumpHostUser = jumpUsername ?? "root";
+                        if (!string.IsNullOrEmpty(jumpPw))
+                            jumpHostPasswordBytes = System.Text.Encoding.UTF8.GetBytes(jumpPw);
+                    }
+                    else
+                    {
+                        _log.LogWarning("Jump host credential lookup failed for zone — falling back to direct connection");
+                        jumpHostAddress = null; // fall back to direct
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Failed to get jump host credential — falling back to direct connection");
+                    jumpHostAddress = null;
+                }
+            }
+
             return (
                 device.IpAddress ?? targetHost,
                 device.ConnectionPort ?? 22,
@@ -162,7 +199,10 @@ internal sealed class PamApiClient
                 string.IsNullOrEmpty(privateKey) ? null : privateKey,
                 device.SshHostKeyFingerprint,
                 device.Id,
-                cred.Id);
+                cred.Id,
+                jumpHostAddress,
+                jumpHostPasswordBytes,
+                jumpHostUser);
         }
         catch (InvalidOperationException)
         {
@@ -364,11 +404,12 @@ internal sealed class PamApiClient
     private record LoginResponse(LoginData? Data);
     private record LoginData(string? Token, string? UserId);
     private record DeviceListResponse(IEnumerable<DeviceDto>? Data);
-    private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort, string? SshHostKeyFingerprint);
+    private record DeviceDto(string Id, string? IpAddress, string? Hostname, int? ConnectionPort, string? SshHostKeyFingerprint,
+        string? JumpHostAddress, Guid? JumpHostCredentialId);
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
     private record DecryptResponse(DecryptData? Data);
-    private record DecryptData(string? Password, string? PrivateKey);
+    private record DecryptData(string? Password, string? PrivateKey, string? Username);
     private record SessionStartResponse(SessionStartData? Data);
     private record SessionStartData(string SessionId);
     private record SessionPolicyResponse(bool Success, SessionPolicyData? Data);

@@ -87,6 +87,62 @@ internal sealed class SshTargetClient : IDisposable
             _host, _port, _username);
     }
 
+    /// <summary>
+    /// Connect to target SSH server via a pre-established tunnel stream (SSH ProxyJump).
+    /// Use this instead of ConnectAsync when the TCP path goes through a jump host.
+    /// </summary>
+    internal async Task ConnectViaStreamAsync(Stream transport, CancellationToken ct)
+    {
+        _conn = new SshConnection(transport);
+        _targetSshVersion = await _conn.ExchangeVersionsAsync(ClientVersion, ct);
+        _log.LogDebug("Target SSH version via jump: {Ver}", _targetSshVersion);
+
+        await DoKeyExchangeAsync(ct);
+        await DoUserAuthAsync(ct);
+        CryptographicOperations.ZeroMemory(_password);
+        if (_privateKeyPemBytes != null)
+        {
+            CryptographicOperations.ZeroMemory(_privateKeyPemBytes);
+            _privateKeyPemBytes = null;
+        }
+        _log.LogInformation("Authenticated to target {Host}:{Port} via jump as '{User}'", _host, _port, _username);
+    }
+
+    /// <summary>
+    /// Opens an SSH direct-tcpip channel to reach a host through this SSH connection.
+    /// Used for ProxyJump: after authenticating to jump host, tunnel to the real target.
+    /// </summary>
+    internal async Task<SshChannelStream> OpenDirectTcpipChannelAsync(string targetHost, int targetPort, CancellationToken ct)
+    {
+        const uint jumpChanId = 99;
+
+        using var ms = new MemoryStream();
+        SshEncoding.WriteByte(ms, Msg.ChannelOpen);
+        SshEncoding.WriteString(ms, "direct-tcpip");
+        SshEncoding.WriteUInt32(ms, jumpChanId);
+        SshEncoding.WriteUInt32(ms, 2 * 1024 * 1024); // initial window
+        SshEncoding.WriteUInt32(ms, 32768);             // max packet size
+        SshEncoding.WriteString(ms, targetHost);
+        SshEncoding.WriteUInt32(ms, (uint)targetPort);
+        SshEncoding.WriteString(ms, "127.0.0.1");       // originator address
+        SshEncoding.WriteUInt32(ms, 0u);                // originator port
+        await _conn!.SendAsync(ms, ct);
+
+        var resp = await _conn.ReadPacketAsync(ct);
+        if (resp[0] == Msg.ChannelOpenFail)
+            throw new SshException($"Jump host refused direct-tcpip channel to {targetHost}:{targetPort}");
+        if (resp[0] != Msg.ChannelOpenConf)
+            throw new SshException($"Expected CHANNEL_OPEN_CONFIRMATION for direct-tcpip, got {resp[0]}");
+
+        int pos = 1;
+        _ = SshEncoding.ReadUInt32(resp, ref pos); // recipient channel (ours)
+        uint srvChan = SshEncoding.ReadUInt32(resp, ref pos);
+        _ = SshEncoding.ReadUInt32(resp, ref pos); // initial window (server)
+        _ = SshEncoding.ReadUInt32(resp, ref pos); // max packet (server)
+
+        return new SshChannelStream(_conn, srvChan, jumpChanId);
+    }
+
     // -------------------------------------------------------------------------
     // Phase 2: Open session channel with PTY / exec / shell
     // -------------------------------------------------------------------------
