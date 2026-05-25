@@ -1,0 +1,299 @@
+@page "/network-zones"
+@inject PamApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Network Zones — OrkunPAM</PageTitle>
+
+<div class="pam-page-header">
+    <h2 class="pam-page-title">Network Zones</h2>
+    <button class="pam-btn pam-btn-primary" @onclick="OpenAddModal">+ Add Zone</button>
+</div>
+
+<div class="pam-card">
+    <div class="pam-card-body pam-p-0">
+        @if (_loading)
+        {
+            <div class="pam-loading-text p-4">Loading zones…</div>
+        }
+        else if (_zones == null || _zones.Count == 0)
+        {
+            <div class="pam-empty p-4">No network zones configured. Add a zone to enable segmented routing.</div>
+        }
+        else
+        {
+            <table class="pam-table pam-table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Jump Host</th>
+                        <th>IP Ranges</th>
+                        <th>Devices</th>
+                        <th>Default</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var z in _zones)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@z.Name</strong>
+                                @if (!string.IsNullOrEmpty(z.Description))
+                                {
+                                    <div class="pam-sub-text">@z.Description</div>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(z.JumpHostAddress))
+                                {
+                                    <span class="pam-badge pam-badge-info">@z.JumpHostAddress</span>
+                                }
+                                else
+                                {
+                                    <span class="pam-text-muted">Direct access</span>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrEmpty(z.IpRangesJson) ? "—" : z.IpRangesJson)</td>
+                            <td><span class="pam-badge">@z.DeviceCount</span></td>
+                            <td>
+                                @if (z.IsDefault)
+                                { <span class="pam-badge pam-badge-success">Default</span> }
+                            </td>
+                            <td>
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                        @onclick="@(() => TestZone(z.Id))">Test</button>
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                                        @onclick="@(() => OpenEditModal(z))">Edit</button>
+                                <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                        @onclick="@(() => OpenDeleteConfirm(z))">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_testResult))
+{
+    <div class="pam-alert @(_testOk ? "pam-alert-success" : "pam-alert-danger") mt-3">
+        @_testResult
+    </div>
+}
+
+<!-- Add / Edit Modal -->
+@if (_showModal)
+{
+    <div class="pam-modal-overlay" @onclick="CloseModal">
+        <div class="pam-modal" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">@(_editingId == null ? "Add Network Zone" : "Edit Network Zone")</h3>
+                <button class="pam-close-btn" @onclick="CloseModal">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                @if (_formError != null)
+                {
+                    <div class="pam-alert pam-alert-danger">@_formError</div>
+                }
+                <div class="pam-form-group">
+                    <label class="pam-label">Name *</label>
+                    <input class="pam-input w-100-input" @bind="_fName" placeholder="e.g. DMZ, OT-Network, Internal" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Description</label>
+                    <input class="pam-input w-100-input" @bind="_fDescription" placeholder="Brief description" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">IP Ranges (JSON)</label>
+                    <input class="pam-input w-100-input" @bind="_fIpRanges" placeholder='["10.1.0.0/24","172.20.0.0/16"]' />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Jump Host Address</label>
+                    <input class="pam-input w-100-input" @bind="_fJumpHostAddress"
+                           placeholder="10.1.0.5:22 (leave empty for direct access)" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Proxy Bind Address</label>
+                    <input class="pam-input w-100-input" @bind="_fProxyBindAddress"
+                           placeholder="Optional: local IP for proxy to bind on" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-label">Notes</label>
+                    <input class="pam-input w-100-input" @bind="_fNotes" placeholder="Optional notes" />
+                </div>
+                <div class="pam-form-group">
+                    <label class="pam-checkbox-label">
+                        <input type="checkbox" @bind="_fIsDefault" />
+                        Set as default zone for new devices
+                    </label>
+                </div>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="pam-btn pam-btn-primary" @onclick="SubmitAsync" disabled="@_formSaving">
+                    @if (_formSaving) { <span class="pam-spinner-sm"></span> }
+                    @(_editingId == null ? "Add Zone" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirm -->
+@if (_deleteTarget != null)
+{
+    <div class="pam-modal-overlay" @onclick="@(() => _deleteTarget = null)">
+        <div class="pam-modal pam-modal-sm" @onclick:stopPropagation="true">
+            <div class="pam-modal-header">
+                <h3 class="pam-modal-title">Delete Zone</h3>
+                <button class="pam-close-btn" @onclick="@(() => _deleteTarget = null)">&#215;</button>
+            </div>
+            <div class="pam-modal-body">
+                <p>Delete zone <strong>@_deleteTarget.Name</strong>? Devices in this zone will revert to direct access.</p>
+            </div>
+            <div class="pam-modal-footer">
+                <button class="pam-btn pam-btn-secondary" @onclick="@(() => _deleteTarget = null)">Cancel</button>
+                <button class="pam-btn pam-btn-danger" @onclick="ConfirmDeleteAsync">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<NetworkZoneDto>? _zones;
+    private bool _loading = true;
+
+    private bool        _showModal;
+    private Guid?       _editingId;
+    private string?     _formError;
+    private bool        _formSaving;
+    private string      _fName             = "";
+    private string      _fDescription      = "";
+    private string      _fIpRanges         = "";
+    private string      _fJumpHostAddress  = "";
+    private string      _fProxyBindAddress = "";
+    private string      _fNotes            = "";
+    private bool        _fIsDefault;
+
+    private NetworkZoneDto? _deleteTarget;
+    private string?         _testResult;
+    private bool            _testOk;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _zones = await Api.GetNetworkZonesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenAddModal()
+    {
+        _editingId = null;
+        _fName = _fDescription = _fIpRanges = _fJumpHostAddress = _fProxyBindAddress = _fNotes = "";
+        _fIsDefault = false;
+        _formError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(NetworkZoneDto z)
+    {
+        _editingId         = z.Id;
+        _fName             = z.Name;
+        _fDescription      = z.Description ?? "";
+        _fIpRanges         = z.IpRangesJson ?? "";
+        _fJumpHostAddress  = z.JumpHostAddress ?? "";
+        _fProxyBindAddress = z.ProxyBindAddress ?? "";
+        _fNotes            = z.Notes ?? "";
+        _fIsDefault        = z.IsDefault;
+        _formError         = null;
+        _showModal         = true;
+    }
+
+    private void CloseModal() { _showModal = false; _formError = null; }
+
+    private void OpenDeleteConfirm(NetworkZoneDto z) { _deleteTarget = z; }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget == null) return;
+        var ok = await Api.DeleteNetworkZoneAsync(_deleteTarget.Id);
+        if (!ok)
+        {
+            _testResult = "Delete failed — zone may have devices assigned.";
+            _testOk = false;
+        }
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_fName)) { _formError = "Name is required."; return; }
+
+        _formSaving = true;
+        StateHasChanged();
+
+        bool ok;
+        if (_editingId == null)
+        {
+            ok = await Api.CreateNetworkZoneAsync(
+                _fName.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription)      ? null : _fDescription.Trim(),
+                string.IsNullOrWhiteSpace(_fIpRanges)         ? null : _fIpRanges.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostAddress)  ? null : _fJumpHostAddress.Trim(),
+                null, // JumpHostCredentialId — configure separately
+                string.IsNullOrWhiteSpace(_fProxyBindAddress) ? null : _fProxyBindAddress.Trim(),
+                _fIsDefault,
+                string.IsNullOrWhiteSpace(_fNotes)            ? null : _fNotes.Trim());
+        }
+        else
+        {
+            ok = await Api.UpdateNetworkZoneAsync(
+                _editingId.Value,
+                _fName.Trim(),
+                string.IsNullOrWhiteSpace(_fDescription)      ? null : _fDescription.Trim(),
+                string.IsNullOrWhiteSpace(_fIpRanges)         ? null : _fIpRanges.Trim(),
+                string.IsNullOrWhiteSpace(_fJumpHostAddress)  ? null : _fJumpHostAddress.Trim(),
+                null,
+                string.IsNullOrWhiteSpace(_fProxyBindAddress) ? null : _fProxyBindAddress.Trim(),
+                _fIsDefault,
+                string.IsNullOrWhiteSpace(_fNotes)            ? null : _fNotes.Trim());
+        }
+
+        _formSaving = false;
+        if (!ok) { _formError = "Operation failed — check name uniqueness."; StateHasChanged(); return; }
+
+        CloseModal();
+        await LoadAsync();
+    }
+
+    private async Task TestZone(Guid id)
+    {
+        _testResult = "Testing…";
+        _testOk = false;
+        StateHasChanged();
+
+        var result = await Api.TestNetworkZoneAsync(id);
+        if (result == null)
+        {
+            _testResult = "Test failed — API error.";
+            _testOk = false;
+        }
+        else
+        {
+            _testOk = result.Reachable;
+            _testResult = result.Message + (result.Reachable ? $" ({result.LatencyMs} ms)" : "");
+        }
+        StateHasChanged();
+    }
+}

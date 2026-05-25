@@ -3,6 +3,21 @@ using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Domain.Entities.Device;
 
+// Network zone for zone-based session routing (RA #8)
+public class NetworkZone : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? IpRangesJson { get; set; }     // JSON: ["10.1.0.0/24"]
+    public string? JumpHostAddress { get; set; }   // e.g. "10.1.0.5:22"
+    public Guid? JumpHostCredentialId { get; set; }
+    public string? ProxyBindAddress { get; set; }
+    public bool IsDefault { get; set; }
+    public string? Notes { get; set; }
+
+    public ICollection<Device> Devices { get; set; } = new List<Device>();
+}
+
 public class Device : AuditableEntity
 {
     public string Hostname { get; set; } = string.Empty;
@@ -23,6 +38,8 @@ public class Device : AuditableEntity
     public string? Notes { get; set; }
     public DeviceStatus Status { get; set; } = DeviceStatus.Active;
     public string? SshHostKeyFingerprint { get; set; }
+    public Guid? NetworkZoneId { get; set; }
+    public NetworkZone? NetworkZone { get; set; }
 
     public ICollection<DeviceGroupMember> DeviceGroupMembers { get; set; } = new List<DeviceGroupMember>();
     public ICollection<DeviceCredential> DeviceCredentials { get; set; } = new List<DeviceCredential>();
