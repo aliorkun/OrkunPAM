@@ -58,6 +58,11 @@ public class User : SoftDeletableEntity
     public string? PasswordResetToken { get; set; }
     public DateTime? PasswordResetExpiry { get; set; }
 
+    // SCIM 2.0 Provisioning (#291)
+    public string? ScimExternalId { get; set; }
+    public bool ScimProvisioned { get; set; }
+    public DateTime? ScimLastSyncedAt { get; set; }
+
     // Navigation
     public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
@@ -108,6 +113,21 @@ public class UserPasswordHistory
     public User User { get; set; } = null!;
     public string PasswordHash { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+// SCIM Token — Bearer token for IdP provisioning (#291)
+public class ScimToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = string.Empty;
+    public string TokenHash { get; set; } = string.Empty;    // SHA256 hex of raw token
+    public string TokenPrefix { get; set; } = string.Empty;  // first 8 chars (display only)
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ExpiresAtUtc { get; set; }
+    public DateTime? LastUsedAtUtc { get; set; }
+    public Guid? CreatedByUserId { get; set; }
+    public User? CreatedByUser { get; set; }
 }
 
 // MFA Trusted Session — allows skipping MFA for recognized browsers (#257)
