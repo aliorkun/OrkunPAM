@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-25 (PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-26 (PM Run #31: Sprint 61 PV #12 → PC #284; Sprint 62 MFA #21 → PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -80,7 +80,7 @@
 | UM 10 | Self-service password reset | PC | /portal reset flow |
 | UM 11 | User activity reports | PC | Audit log queries |
 | UM 12 | Bulk user import (CSV) | PC | CsvUserImportJob + Sprint 5 #85 |
-| UM 13 | User provisioning via SCIM | NS | - |
+| UM 13 | User provisioning via SCIM | NS | #291 queued — Sprint 64 |
 | UM 14 | Delegated administration | NS | - |
 | UM 15 | User profile management | PC | /portal profile tab |
 | UM 16 | Multi-tenancy user isolation | NS | Deferred to v3+ |
@@ -134,7 +134,7 @@
 | PV 9 | Certificate storage | PC | ManagedCertificate (#191) |
 | PV 10 | Secret rotation scripts | PC | RotationScript entity |
 | PV 11 | Vault access audit | PC | Audit log on checkout |
-| PV 12 | Credential federation | NS | #284 queued — Sprint 61 |
+| PV 12 | Credential federation | PC | ExternalVaultService: HashiCorp Vault KV v2 (AppRole/Token) + Azure Key Vault (SP/MSI) + 9 endpoints + ExternalVaultConnection/ExternalCredentialMapping entities + Integrations.razor UI (#284, Sprint 61) |
 | PV 13 | BYOK (Bring Your Own Key) | PC | MasterKey management |
 | PV 14 | HSM integration | NS | - |
 | PV 15 | Vault backup | PC | BackupRecord (#55) |
@@ -178,7 +178,7 @@
 | RA 8 | Network segmentation support | PC | NetworkZone entity + jump host ProxyJump (SSH direct-tcpip) + /network-zones UI (#283) |
 | RA 9 | Jump server / bastion | PC | SSH proxy as bastion |
 | RA 10 | Session recording (SSH) | PC | SessionRecorder |
-| RA 11 | Session recording (RDP) | NS | RDP recording not yet implemented |
+| RA 11 | Session recording (RDP) | NS | #295 queued — Sprint 65 |
 | RA 12 | Session playback | PC | Recording playback endpoint |
 | RA 13 | Live session monitoring | PC | /api/v1/sessions/live/* |
 | RA 14 | Session termination | PC | Admin kill endpoint |
@@ -242,7 +242,7 @@
 | MFA 18 | Remember device (trusted sessions) | PC | MfaTrustedSession (#257) |
 | MFA 19 | Adaptive MFA based on risk | PC | AdaptiveMfa entity + anomaly score routing (Sprint 17 #205) |
 | MFA 20 | MFA for privileged operations | PC | mfaVerified claim in JWT (#258) |
-| MFA 21 | Backup codes | PC | UserBackupCode generate/status/revoke endpoints + SelfService UI (#289) |
+| MFA 21 | Backup codes | PC | UserBackupCode generate/status/revoke endpoints + SelfService UI (#289, Sprint 62) |
 | MFA 22 | Device-based MFA policy | PC | DeviceMfaPolicy entity + endpoint (#270) |
 | MFA 23 | OATH token drift/resync report | PC | TokenDriftReport endpoint (#277) |
 
@@ -263,7 +263,7 @@
 | R 9 | Executive dashboard | PC | Dashboard.razor KPIs |
 | R 10 | Scheduled report delivery | PC | ReportSchedule (#159) |
 | R 11 | Custom report builder | PC | CustomReportDefinition (#169) |
-| R 12 | Export to PDF/Excel | NS | - |
+| R 12 | Export to PDF/Excel | NS | #290 queued — Sprint 63 |
 | R 13 | Real-time alerts | PC | AlertRule + AlertHistory |
 | R 14 | Trend analysis | PC | Behavior baseline + anomaly detection |
 | R 15 | Capacity planning reports | PC | Capacity trend report |
@@ -302,18 +302,18 @@
 |---------|-------|----|----|-----|-----|
 | Platform | 50 | 44 | 0 | 6 | 0 |
 | User Mgmt | 48 | 38 | 0 | 10 | 0 |
-| Vault | 38 | 30 | 0 | 8 | 0 |
+| Vault | 38 | 31 | 0 | 7 | 0 |
 | Remote Access | 47 | 35 | 0 | 12 | 0 |
 | MFA | 23 | 19 | 0 | 4 | 0 |
 | Reporting | 41 | 37 | 0 | 4 | 0 |
-| **TOTAL** | **247** | **203** | **0** | **44** | **0** |
+| **TOTAL** | **247** | **204** | **0** | **43** | **0** |
 
-> **Overall compliance rate: 82% (203/247 items partially or fully implemented)**
+> **Overall compliance rate: 83% (204/247 items partially or fully implemented)**
 
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-25 (PM Run #30 — Sprint 60 backfill complete)*
+*Last full review: 2026-05-26 (PM Run #31 — Sprint 61 PV #12 + Sprint 62 MFA #21 → PC)*
 
 ---
 
@@ -321,27 +321,24 @@
 
 | Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| Sprint 62 | #289 | MFA #21 (backup codes — generate/status/revoke + SelfService UI) |
+| Sprint 61 | #284 | PV #12 (credential federation — HashiCorp Vault KV v2 + Azure Key Vault + 9 endpoints) |
 | PM Run #30 | — | Platform #41 (geolocation), UM #12 (bulk CSV import), RA #3 (VNC proxy), RA #4 (Telnet proxy), RA #5 (HTTP/HTTPS proxy), RA #21 (multi-hop via ProxyJump), MFA #5 (push notification), MFA #9 (risk-based), MFA #10 (step-up auth), MFA #19 (adaptive MFA) — backfill from sprints 5–19 |
 | Sprint 60 | #283 | RA #8 (network segmentation + SSH ProxyJump) |
 | Sprint 59 | #282, #286, #287, #288 | Platform #44 (biometric auth) |
-| Sprint 58 | #279 | RA #47 (session restore) |
-| Sprint 57 | #278 | R #39, R #40, R #41 (operational reports) |
-| Sprint 56 | #277 | MFA #23 (OATH token drift report) |
 
 ---
 
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. PV #12 — Credential federation (#284 queued — Sprint 61)
-2. Platform #3 — HA clustering (v2/v3+)
-3. Platform #47 — Zero-trust network access (v3+)
-4. UM #13 — SCIM provisioning (enterprise IdP sync)
-5. ~~MFA #21 — Backup codes~~ ✅ PC (#289)
-6. R #12 — PDF/Excel export (compliance audit download)
-7. RA #11 — RDP session recording
-8. RA #6 — Database proxy (deferred v3+)
-9. PV #14 — HSM integration (v3+)
+1. R #12 — PDF/Excel export (#290 queued — Sprint 63)
+2. UM #13 — SCIM provisioning (#291 queued — Sprint 64)
+3. RA #11 — RDP session recording (#295 queued — Sprint 65)
+4. Platform #3 — HA clustering (v2/v3+)
+5. Platform #47 — Zero-trust network access (v3+)
+6. RA #6 — Database proxy (deferred v3+)
+7. PV #14 — HSM integration (v3+)
 
 ---
 
@@ -379,6 +376,8 @@ High priority NS items based on RFP weight:
 - Adaptive MFA (#205) = Sprint 17 → MFA #9 (risk-based) + MFA #10 (step-up) + MFA #19 (adaptive)
 - Geolocation access control (#208) = Sprint 18 → Platform #41
 - Bulk user CSV import (#85) = Sprint 5 → UM #12
+- Credential federation (#284) = Sprint 61 → PV #12 (HashiCorp Vault + Azure Key Vault)
+- MFA Backup Codes (#289) = Sprint 62 → MFA #21
 
 | Item | Section | Status | Implementation |
 |------|---------|--------|----------------|
