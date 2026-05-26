@@ -395,7 +395,8 @@ public static class AuthEndpoints
 
         // MFA Recovery Login — use a one-time recovery code instead of TOTP
         app.MapPost("/api/v1/auth/mfa/recovery", async (MfaRecoveryRequest req, OrkunPamDbContext db,
-            IJwtTokenService jwt, HttpContext context) =>
+            IJwtTokenService jwt, IAuditService audit, IEmailService email, ILogger<Program> logger,
+            HttpContext context) =>
         {
             var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
@@ -416,6 +417,28 @@ public static class AuthEndpoints
 
             user.RecoveryCodesHash = remaining;
             await db.SaveChangesAsync();
+
+            var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Auth", "MFA_BACKUP_CODE_USED", userId, null, ip,
+                "User", userId.ToString(), new { });
+
+            var codesLeft = RecoveryCodeHelper.CountRemaining(user.RecoveryCodesHash);
+            if (codesLeft < 3 && !string.IsNullOrEmpty(user.Email))
+            {
+                try
+                {
+                    await email.SendAsync(user.Email,
+                        "OrkunPAM — MFA Backup Codes Running Low",
+                        $"<h3>Backup Codes Warning</h3>" +
+                        $"<p>You have only <strong>{codesLeft}</strong> backup code(s) remaining.</p>" +
+                        $"<p>Please log in and generate new backup codes from <strong>Self-Service &rarr; Security &rarr; Backup Codes</strong> to avoid being locked out.</p>" +
+                        $"<p>If you did not use a backup code, contact your administrator immediately.</p>");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send backup code low-count warning to user '{Username}'", user.Username);
+                }
+            }
 
             // Collect roles and permissions for new token with mfa_verified=true
             var roles = new HashSet<string>();
@@ -447,10 +470,86 @@ public static class AuthEndpoints
                     accessToken = tokenResult.Value.AccessToken,
                     refreshToken = tokenResult.Value.RefreshToken,
                     expiresAt = tokenResult.Value.AccessTokenExpiry,
-                    remainingRecoveryCodes = RecoveryCodeHelper.CountRemaining(user.RecoveryCodesHash)
+                    remainingRecoveryCodes = codesLeft
                 }
             });
         }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
+
+        // === Backup Codes Management (#289 — MFA #21) ===
+
+        // POST /api/v1/auth/mfa/backup-codes/generate — regenerate 10 codes (invalidates old ones)
+        app.MapPost("/api/v1/auth/mfa/backup-codes/generate", async (OrkunPamDbContext db,
+            IAuditService audit, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            if (!user.MfaEnabled)
+                return Results.BadRequest(new { success = false, errors = new[] { "MFA is not enabled. Enable MFA first to use backup codes." } });
+
+            var codes = RecoveryCodeHelper.GenerateCodes(10);
+            user.RecoveryCodesHash = RecoveryCodeHelper.HashCodesToJson(codes);
+            user.BackupCodesGeneratedAtUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Auth", "MFA_BACKUP_CODES_GENERATED", userId, null, ip,
+                "User", userId.ToString(), new { });
+
+            return Results.Ok(new
+            {
+                success = true,
+                message = "10 new backup codes generated. Store them securely — they will not be shown again.",
+                data = new { codes }
+            });
+        }).RequireAuthorization().WithTags("Auth").RequireRateLimiting("auth");
+
+        // GET /api/v1/auth/mfa/backup-codes/status — remaining count + generation date
+        app.MapGet("/api/v1/auth/mfa/backup-codes/status", async (OrkunPamDbContext db, HttpContext context) =>
+        {
+            var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdStr == null || !Guid.TryParse(userIdStr, out var userId))
+                return Results.Unauthorized();
+
+            var user = await db.Users.FindAsync(userId);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    mfaEnabled = user.MfaEnabled,
+                    remaining = RecoveryCodeHelper.CountRemaining(user.RecoveryCodesHash),
+                    generatedAtUtc = user.BackupCodesGeneratedAtUtc
+                }
+            });
+        }).RequireAuthorization().WithTags("Auth");
+
+        // DELETE /api/v1/admin/users/{userId}/backup-codes — admin emergency revoke all
+        app.MapDelete("/api/v1/admin/users/{userId:guid}/backup-codes", async (Guid userId, OrkunPamDbContext db,
+            IAuditService audit, HttpContext ctx) =>
+        {
+            var adminIdStr = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Guid.TryParse(adminIdStr, out var adminId);
+
+            var user = await db.Users.FindAsync(userId);
+            if (user == null) return Results.NotFound(new { success = false, errors = new[] { "User not found" } });
+
+            user.RecoveryCodesHash = null;
+            user.BackupCodesGeneratedAtUtc = null;
+            await db.SaveChangesAsync();
+
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            await audit.LogAsync("Auth", "MFA_BACKUP_CODES_REVOKED_BY_ADMIN", adminId, null, ip,
+                "User", userId.ToString(), new { });
+
+            return Results.Ok(new { success = true, message = "All backup codes revoked" });
+        }).RequireAuthorization("AdminPolicy").WithTags("Auth");
 
         // === Email OTP MFA (#178) ===
 

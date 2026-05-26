@@ -242,7 +242,7 @@
 | MFA 18 | Remember device (trusted sessions) | PC | MfaTrustedSession (#257) |
 | MFA 19 | Adaptive MFA based on risk | PC | AdaptiveMfa entity + anomaly score routing (Sprint 17 #205) |
 | MFA 20 | MFA for privileged operations | PC | mfaVerified claim in JWT (#258) |
-| MFA 21 | Backup codes | NS | - |
+| MFA 21 | Backup codes | PC | UserBackupCode generate/status/revoke endpoints + SelfService UI (#289) |
 | MFA 22 | Device-based MFA policy | PC | DeviceMfaPolicy entity + endpoint (#270) |
 | MFA 23 | OATH token drift/resync report | PC | TokenDriftReport endpoint (#277) |
 
@@ -337,7 +337,7 @@ High priority NS items based on RFP weight:
 2. Platform #3 — HA clustering (v2/v3+)
 3. Platform #47 — Zero-trust network access (v3+)
 4. UM #13 — SCIM provisioning (enterprise IdP sync)
-5. MFA #21 — Backup codes (standard enterprise recovery)
+5. ~~MFA #21 — Backup codes~~ ✅ PC (#289)
 6. R #12 — PDF/Excel export (compliance audit download)
 7. RA #11 — RDP session recording
 8. RA #6 — Database proxy (deferred v3+)

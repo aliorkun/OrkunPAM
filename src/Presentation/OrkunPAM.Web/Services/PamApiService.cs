@@ -1269,6 +1269,33 @@ public sealed class PamApiService
         catch { return null; }
     }
 
+    // ── MFA Backup Codes (#289 — MFA #21) ─────────────────────────────────────
+    public async Task<string[]?> GenerateBackupCodesAsync()
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsync("/api/v1/auth/mfa/backup-codes/generate", null);
+            if (!resp.IsSuccessStatusCode) return null;
+            var result = await resp.Content.ReadFromJsonAsync<SingleResult<BackupCodesGeneratedDto>>(JsonOpts);
+            return result?.Data?.Codes;
+        }
+        catch { return null; }
+    }
+
+    public async Task<BackupCodeStatusDto?> GetBackupCodeStatusAsync()
+        => await GetAsync<BackupCodeStatusDto>("/api/v1/auth/mfa/backup-codes/status");
+
+    public async Task<bool> AdminRevokeBackupCodesAsync(Guid userId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync("/api/v1/admin/users/" + userId + "/backup-codes")).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── MFA Trusted Sessions (#257) ────────────────────────────────────────────
     public async Task<MfaTrustPolicyDto?> GetMfaTrustPolicyAsync()
     {
@@ -2793,6 +2820,10 @@ public record MfaSetupDto(
     bool    IsEnabled);
 
 public record RecoveryCodesDto(string[] Codes);
+
+// Backup Codes (#289 — MFA #21)
+public record BackupCodesGeneratedDto(string[] Codes);
+public record BackupCodeStatusDto(bool MfaEnabled, int Remaining, DateTime? GeneratedAtUtc);
 
 public record SshKeyDto(
     Guid      Id,

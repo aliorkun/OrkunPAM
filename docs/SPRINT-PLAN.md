@@ -924,9 +924,33 @@
 
 ---
 
+## Sprint 62 — MFA Backup Codes (#289) ✅ TAMAMLANDI
+**Tarih:** 2026-05-26
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #289 | MFA Backup Codes — Emergency One-Time Recovery Codes (MFA #21) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 62 Tamamlanan Bilesenler (2026-05-26):**
+- **User entity:** `BackupCodesGeneratedAtUtc (DateTime?)` alani eklendi
+- **Migration `20260526_AddBackupCodesGeneratedAt`:** Users tablosuna BackupCodesGeneratedAtUtc kolonu eklendi
+- **AuthEndpoints.cs:** 3 yeni endpoint:
+  - `POST /api/v1/auth/mfa/backup-codes/generate` — 10 yeni kod uret (eskiler gecersiz, audit log MFA_BACKUP_CODES_GENERATED)
+  - `GET /api/v1/auth/mfa/backup-codes/status` — kalan kod sayisi + son uretim tarihi
+  - `DELETE /api/v1/admin/users/{userId}/backup-codes` — admin acil iptal (AdminPolicy, audit log MFA_BACKUP_CODES_REVOKED_BY_ADMIN)
+- **Existing recovery endpoint enhanced:** audit log (MFA_BACKUP_CODE_USED) + email uyari kod < 3 kaldiysa
+- **PamApiService.cs:** `GenerateBackupCodesAsync`, `GetBackupCodeStatusAsync`, `AdminRevokeBackupCodesAsync` + `BackupCodesGeneratedDto`, `BackupCodeStatusDto`
+- **SelfService.razor Security tab:** Backup Codes karti — kalan kod sayisi (renk kodlu), son uretim tarihi, Generate New Codes modali (uyari + kod gosterimi)
+- **RFP-CHECKLIST.md:** MFA #21 → PC
+
+**Ilerleme:** 7/7 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 61 tamamlandi.** PV #12 Credential Federation → PC (#284 kapatildi).
-**Sprint 62 hedefi:** #289 MFA Backup Codes (MFA #21)
+**Sprint 62 tamamlandi.** MFA Backup Codes (MFA #21) → PC (#289 kapatildi).
+**Sprint 63 hedefi:** #290 Report Export PDF/Excel (R #12)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

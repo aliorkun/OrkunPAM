@@ -592,6 +592,110 @@
             </div>
         </div>
     }
+
+    @* ── Backup Codes (#289 — MFA #21) ── *@
+    <div class="pam-card" style="margin-top:16px">
+        <div class="pam-card-header">
+            <span>Backup Codes</span>
+            <span class="pam-text-muted" style="font-size:.85rem">One-time emergency codes when your MFA device is unavailable</span>
+        </div>
+        <div class="pam-card-body">
+            @if (_loadingBackupCodes)
+            {
+                <div class="pam-loading-text">Loading backup code status...</div>
+            }
+            else if (_backupCodeStatus == null)
+            {
+                <div class="pam-empty">Enable MFA to use backup codes.</div>
+            }
+            else if (!_backupCodeStatus.MfaEnabled)
+            {
+                <div class="pam-empty">Backup codes require MFA to be enabled. <a href="/mfa-setup" style="color:#58a6ff">Enable MFA</a>.</div>
+            }
+            else
+            {
+                <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+                    <div>
+                        <span style="font-size:2rem;font-weight:bold;color:@(_backupCodeStatus.Remaining < 3 ? "var(--pam-danger)" : "var(--pam-success)")">
+                            @_backupCodeStatus.Remaining
+                        </span>
+                        <span class="pam-text-muted"> / 10 codes remaining</span>
+                        @if (_backupCodeStatus.Remaining < 3)
+                        {
+                            <span class="pam-badge pam-badge-red" style="margin-left:8px">Low — Regenerate Now</span>
+                        }
+                    </div>
+                    @if (_backupCodeStatus.GeneratedAtUtc.HasValue)
+                    {
+                        <div class="pam-text-muted" style="font-size:.85rem">
+                            Last generated: @_backupCodeStatus.GeneratedAtUtc.Value.ToString("yyyy-MM-dd HH:mm") UTC
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pam-text-muted" style="font-size:.85rem">No backup codes generated yet.</div>
+                    }
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="pam-btn pam-btn-secondary pam-btn-sm"
+                            @onclick="@(() => OpenGenerateBackupCodesModal())"
+                            disabled="@_submitting">
+                        Generate New Codes
+                    </button>
+                </div>
+                <p class="pam-text-muted" style="font-size:.82rem;margin-top:12px">
+                    Backup codes are single-use. Generating a new set invalidates all previous codes. Store them in a safe, offline location.
+                </p>
+            }
+        </div>
+    </div>
+
+    @* Generate Backup Codes Modal *@
+    @if (_showGenerateBackupCodesModal)
+    {
+        <div class="pam-modal-overlay">
+            <div class="pam-modal">
+                <div class="pam-modal-header">
+                    <span>@(_generatedCodes == null ? "Generate New Backup Codes" : "Your New Backup Codes")</span>
+                    <button class="pam-modal-close" @onclick="@(() => CloseGenerateBackupCodesModal())">x</button>
+                </div>
+                <div class="pam-modal-body">
+                    @if (_generatedCodes == null)
+                    {
+                        <div class="pam-alert pam-alert-warning" style="margin-bottom:12px">
+                            <strong>Warning:</strong> Generating new codes will permanently invalidate all existing backup codes.
+                        </div>
+                        <p>10 new one-time backup codes will be generated. Make sure to save them — they will only be shown once.</p>
+                        <div style="display:flex;gap:8px;margin-top:16px">
+                            <button class="pam-btn pam-btn-primary" @onclick="@(() => GenerateBackupCodesAsync())" disabled="@_submitting">
+                                @(_submitting ? "Generating..." : "Generate Codes")
+                            </button>
+                            <button class="pam-btn pam-btn-secondary" @onclick="@(() => CloseGenerateBackupCodesModal())" disabled="@_submitting">Cancel</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="pam-alert pam-alert-success" style="margin-bottom:12px">
+                            10 backup codes generated. Save them securely — they will <strong>not</strong> be shown again.
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:monospace;font-size:1.1rem;margin-bottom:16px">
+                            @foreach (var c in _generatedCodes)
+                            {
+                                <div style="background:var(--pam-surface-alt,#161b22);padding:6px 12px;border-radius:4px;text-align:center">
+                                    @c[..4]-@c[4..]
+                                </div>
+                            }
+                        </div>
+                        <button class="pam-btn pam-btn-primary" @onclick="@(() => CloseGenerateBackupCodesModal())">Done</button>
+                    }
+                    @if (!string.IsNullOrEmpty(_backupCodesError))
+                    {
+                        <div class="pam-alert pam-alert-danger" style="margin-top:8px">@_backupCodesError</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @* ===== TRUSTED DEVICES (#257) ===== *@
@@ -725,6 +829,13 @@
     private bool _resyncSaving;
     private string? _resyncError;
 
+    // Backup Codes (#289 — MFA #21)
+    private BackupCodeStatusDto? _backupCodeStatus;
+    private bool _loadingBackupCodes;
+    private bool _showGenerateBackupCodesModal;
+    private string[]? _generatedCodes;
+    private string? _backupCodesError;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -742,7 +853,7 @@
         else if (tab == "sessions") await LoadMySessionsAsync();
         else if (tab == "requests") await LoadMyRequestsAsync();
         else if (tab == "profile") await LoadProfileAsync();
-        else if (tab == "security") { await LoadMfaDevicesAsync(); await LoadMyHwTokensAsync(); }
+        else if (tab == "security") { await LoadMfaDevicesAsync(); await LoadMyHwTokensAsync(); await LoadBackupCodeStatusAsync(); }
         else if (tab == "trusted") await LoadTrustedSessionsAsync();
     }
 
@@ -880,6 +991,40 @@
         _loadingSecurity = true;
         _mfaDevices = await Api.GetMyMfaDevicesAsync();
         _loadingSecurity = false;
+    }
+
+    private async Task LoadBackupCodeStatusAsync()
+    {
+        _loadingBackupCodes = true;
+        _backupCodeStatus = await Api.GetBackupCodeStatusAsync();
+        _loadingBackupCodes = false;
+    }
+
+    private void OpenGenerateBackupCodesModal()
+    {
+        _generatedCodes = null;
+        _backupCodesError = null;
+        _showGenerateBackupCodesModal = true;
+    }
+
+    private void CloseGenerateBackupCodesModal()
+    {
+        _showGenerateBackupCodesModal = false;
+        _generatedCodes = null;
+        _backupCodesError = null;
+        _ = LoadBackupCodeStatusAsync().ContinueWith(_ => InvokeAsync(StateHasChanged));
+    }
+
+    private async Task GenerateBackupCodesAsync()
+    {
+        _backupCodesError = null;
+        _submitting = true;
+        var codes = await Api.GenerateBackupCodesAsync();
+        _submitting = false;
+        if (codes == null || codes.Length == 0)
+            _backupCodesError = "Failed to generate backup codes. Ensure MFA is enabled.";
+        else
+            _generatedCodes = codes;
     }
 
     private async Task LoadTrustedSessionsAsync()
