@@ -202,6 +202,10 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     // === Device MFA Policy (#270 — MFA #22) ===
     public DbSet<DeviceMfaPolicy> DeviceMfaPolicies => Set<DeviceMfaPolicy>();
 
+    // === External Vault Federation (#284 — PV #12) ===
+    public DbSet<ExternalVaultConnection> ExternalVaultConnections => Set<ExternalVaultConnection>();
+    public DbSet<ExternalCredentialMapping> ExternalCredentialMappings => Set<ExternalCredentialMapping>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -846,6 +850,28 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.HasIndex(p => p.IsEnabled);
             e.HasIndex(p => p.DeviceGroupId);
             e.HasIndex(p => p.DeviceId);
+        });
+
+        // === External Vault Federation (#284 — PV #12) ===
+        modelBuilder.Entity<ExternalVaultConnection>(e =>
+        {
+            e.Property(v => v.Name).HasMaxLength(256).IsRequired();
+            e.Property(v => v.Endpoint).HasMaxLength(2048);
+            e.Property(v => v.VaultType).HasConversion<string>().HasMaxLength(64);
+            e.Property(v => v.AuthMethod).HasConversion<string>().HasMaxLength(64);
+            e.HasIndex(v => v.Name).IsUnique();
+            e.HasIndex(v => v.IsEnabled);
+        });
+
+        modelBuilder.Entity<ExternalCredentialMapping>(e =>
+        {
+            e.Property(m => m.ExternalPath).HasMaxLength(1024).IsRequired();
+            e.Property(m => m.SyncMode).HasConversion<string>().HasMaxLength(32);
+            e.Property(m => m.SyncStatus).HasConversion<string>().HasMaxLength(32);
+            e.HasOne(m => m.Connection).WithMany(c => c.Mappings).HasForeignKey(m => m.ConnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(m => m.ConnectionId);
+            e.HasIndex(m => m.MappedCredentialId);
         });
 
         // Seed built-in data

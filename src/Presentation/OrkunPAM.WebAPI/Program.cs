@@ -100,6 +100,9 @@ try
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IDiscoveryService, OrkunPAM.Persistence.Services.DiscoveryService>();
     builder.Services.AddSingleton<OrkunPAM.Persistence.Services.IRotationService, OrkunPAM.Persistence.Services.RotationService>();
 
+    // === External Vault Federation (#284 — PV #12) ===
+    builder.Services.AddScoped<OrkunPAM.Persistence.Services.IExternalVaultService, OrkunPAM.Persistence.Services.ExternalVaultService>();
+
     // === Password Rotation Orchestrator + Dedicated Rotators (#32) ===
     builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.SshPasswordRotator>();
     builder.Services.AddScoped<OrkunPAM.Application.Contracts.IPasswordRotator, OrkunPAM.Persistence.Services.WmiPasswordRotator>();
@@ -531,6 +534,7 @@ try
     api.MapCredentialOrchestrationEndpoints();
     api.MapOperationalReportsEndpoints();
     api.MapNetworkZoneEndpoints();
+    api.MapExternalVaultEndpoints();
 
     // === gRPC Endpoints (proxy↔core internal, mTLS authenticated) ===
     app.MapGrpcService<SessionGrpcService>().RequireAuthorization("GrpcProxy");

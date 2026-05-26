@@ -26,6 +26,8 @@
             @onclick="@(() => SetTab("hwtoken"))">&#x1F5DD; Hardware Tokens</button>
     <button class="pam-btn @(_tab == "oidc" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("oidc"))">&#x1F511; OIDC Federation</button>
+    <button class="pam-btn @(_tab == "extvault" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("extvault"))">&#x1F5C4; External Vaults</button>
 </div>
 
 @if (_tab == "ldap")
@@ -982,6 +984,245 @@
     }
 }
 
+@* ===== EXTERNAL VAULTS TAB (#284) ===== *@
+@if (_tab == "extvault")
+{
+    @if (_evError != null) { <div class="pam-alert pam-alert-danger">@_evError</div> }
+    @if (_evMsg != null)   { <div class="pam-alert pam-alert-success">@_evMsg</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <strong>External Vault Connections</strong>
+            <button class="pam-btn pam-btn-primary pam-btn-sm"
+                    @onclick="@(() => { _evShowNew = true; _evEditId = null; ResetEvForm(); })">
+                + New Connection
+            </button>
+        </div>
+        <div class="pam-card-body p-0">
+            @if (_evLoading)
+            {
+                <div class="pam-loading-text p-4">Loading…</div>
+            }
+            else if (_evVaults == null || _evVaults.Count == 0)
+            {
+                <div class="pam-empty p-4">No external vault connections. Connect HashiCorp Vault or Azure Key Vault to federate credentials.</div>
+            }
+            else
+            {
+                <table class="pam-table pam-table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Endpoint</th>
+                            <th>Auth</th>
+                            <th>Sync</th>
+                            <th>Mappings</th>
+                            <th>Last Sync</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in _evVaults)
+                        {
+                            <tr>
+                                <td>@v.Name</td>
+                                <td><span class="pam-badge @(v.VaultType == "HashiCorpVault" ? "pam-badge-info" : "pam-badge-primary")">@v.VaultType</span></td>
+                                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@v.Endpoint</td>
+                                <td>@v.AuthMethod</td>
+                                <td>@(v.SyncEnabled ? "Every " + v.SyncIntervalMinutes + "m" : "Off")</td>
+                                <td>@v.MappingCount</td>
+                                <td>@(v.LastSyncAtUtc.HasValue ? v.LastSyncAtUtc.Value.ToString("MM/dd HH:mm") : "—")</td>
+                                <td>
+                                    @if (!v.IsEnabled)
+                                    { <span class="pam-badge pam-badge-secondary">Disabled</span> }
+                                    else if (!string.IsNullOrEmpty(v.LastSyncError))
+                                    { <span class="pam-badge pam-badge-danger">Error</span> }
+                                    else
+                                    { <span class="pam-badge pam-badge-success">OK</span> }
+                                </td>
+                                <td>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-xs"
+                                            @onclick="@(() => TestEvAsync(v.Id))">Test</button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-xs"
+                                            @onclick="@(() => SyncEvAsync(v.Id))">Sync</button>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-xs"
+                                            @onclick="@(() => OpenBrowseEvAsync(v.Id, v.Name))">Browse</button>
+                                    <button class="pam-btn pam-btn-danger pam-btn-xs"
+                                            @onclick="@(() => { _evDeleteId = v.Id; _evDeleteName = v.Name; })">Delete</button>
+                                </td>
+                            </tr>
+                            @if (_evTestResults.TryGetValue(v.Id, out var testRes))
+                            {
+                                <tr>
+                                    <td colspan="9" style="padding:4px 12px;background:#f8f9fa">
+                                        <span class="pam-badge @(testRes.Success ? "pam-badge-success" : "pam-badge-danger")">
+                                            @(testRes.Success ? "Connected" : "Failed") — @testRes.LatencyMs ms
+                                        </span>
+                                        @if (!string.IsNullOrEmpty(testRes.Error))
+                                        { <span style="margin-left:8px;color:#dc3545">@testRes.Error</span> }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+
+    @* New/Edit Connection Form *@
+    @if (_evShowNew || _evEditId.HasValue)
+    {
+        <div class="pam-card" style="margin-bottom:16px">
+            <div class="pam-card-header">
+                <strong>@(_evEditId.HasValue ? "Edit" : "New") External Vault Connection</strong>
+            </div>
+            <div class="pam-card-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                    <div class="pam-form-group">
+                        <label class="pam-label">Name *</label>
+                        <input class="pam-input" placeholder="hcv-prod" @bind="_evName" />
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Vault Type *</label>
+                        <select class="pam-select" @bind="_evVaultType">
+                            <option value="HashiCorpVault">HashiCorp Vault</option>
+                            <option value="AzureKeyVault">Azure Key Vault</option>
+                        </select>
+                    </div>
+                    <div class="pam-form-group" style="grid-column:span 2">
+                        <label class="pam-label">Endpoint URL *</label>
+                        <input class="pam-input" placeholder="@(_evVaultType == "AzureKeyVault" ? "https://myvault.vault.azure.net" : "https://vault.corp.com:8200")" @bind="_evEndpoint" />
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">Auth Method *</label>
+                        <select class="pam-select" @bind="_evAuthMethod">
+                            @if (_evVaultType == "HashiCorpVault")
+                            {
+                                <option value="Token">Token</option>
+                                <option value="AppRole">AppRole</option>
+                            }
+                            else
+                            {
+                                <option value="ServicePrincipal">Service Principal</option>
+                                <option value="ManagedIdentity">Managed Identity</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="pam-form-group">
+                        <label class="pam-label">
+                            @if (_evVaultType == "HashiCorpVault" && _evAuthMethod == "Token") { @("Vault Token") }
+                            else if (_evVaultType == "HashiCorpVault" && _evAuthMethod == "AppRole") { @("role_id:secret_id") }
+                            else if (_evAuthMethod == "ServicePrincipal") { @("Client Secret") }
+                            else { @("Auth Secret (optional)") }
+                            @if (_evEditId.HasValue) { <span class="pam-text-muted"> (blank = keep current)</span> }
+                        </label>
+                        <input class="pam-input" type="password" @bind="_evAuthSecret" />
+                    </div>
+                    @if (_evVaultType == "HashiCorpVault")
+                    {
+                        <div class="pam-form-group">
+                            <label class="pam-label">Namespace (optional)</label>
+                            <input class="pam-input" placeholder="admin/team1" @bind="_evNamespace" />
+                        </div>
+                        <div class="pam-form-group">
+                            <label class="pam-label">Mount Path</label>
+                            <input class="pam-input" placeholder="secret" @bind="_evMountPath" />
+                        </div>
+                    }
+                    @if (_evVaultType == "AzureKeyVault")
+                    {
+                        <div class="pam-form-group">
+                            <label class="pam-label">Key Vault Name</label>
+                            <input class="pam-input" placeholder="myvault" @bind="_evKeyVaultName" />
+                        </div>
+                        <div class="pam-form-group">
+                            <label class="pam-label">Tenant ID</label>
+                            <input class="pam-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" @bind="_evTenantId" />
+                        </div>
+                        <div class="pam-form-group">
+                            <label class="pam-label">Client ID</label>
+                            <input class="pam-input" @bind="_evClientId" />
+                        </div>
+                    }
+                    <div class="pam-form-group" style="display:flex;align-items:center;gap:12px;padding-top:20px">
+                        <label><input type="checkbox" @bind="_evSyncEnabled" /> Enable Sync</label>
+                        @if (_evSyncEnabled)
+                        {
+                            <label>Interval (min): <input class="pam-input" type="number" style="width:80px;display:inline" @bind="_evSyncInterval" /></label>
+                        }
+                    </div>
+                </div>
+                <div style="margin-top:12px">
+                    <button class="pam-btn pam-btn-primary" @onclick="SaveEvAsync" disabled="@_evSaving">
+                        @(_evSaving ? "Saving..." : (_evEditId.HasValue ? "Update" : "Create Connection"))
+                    </button>
+                    <button class="pam-btn pam-btn-secondary" style="margin-left:8px"
+                            @onclick="@(() => { _evShowNew = false; _evEditId = null; })">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Secret Browser Modal *@
+    @if (_evBrowseConnectionId.HasValue)
+    {
+        <div class="pam-modal-overlay" @onclick="@(() => _evBrowseConnectionId = null)">
+            <div class="pam-modal" style="max-width:700px" @onclick:stopPropagation="true">
+                <div class="pam-modal-header">Browse Secrets — @_evBrowseConnectionName</div>
+                <div class="pam-modal-body">
+                    @if (_evBrowseLoading)
+                    {
+                        <div class="pam-loading-text">Loading secrets…</div>
+                    }
+                    else if (_evBrowseSecrets == null || _evBrowseSecrets.Count == 0)
+                    {
+                        <div class="pam-empty">No secrets found at this path.</div>
+                    }
+                    else
+                    {
+                        <p class="pam-text-muted" style="margin-bottom:8px">Click a secret to add as a mapping.</p>
+                        <ul style="list-style:none;padding:0;max-height:300px;overflow-y:auto">
+                            @foreach (var s in _evBrowseSecrets)
+                            {
+                                <li style="padding:6px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+                                    <span style="font-family:monospace">@s</span>
+                                    <button class="pam-btn pam-btn-secondary pam-btn-xs"
+                                            @onclick="@(() => AddMappingAsync(_evBrowseConnectionId!.Value, s))">
+                                        Add Mapping
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div class="pam-modal-footer">
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _evBrowseConnectionId = null)">Close</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Delete confirm *@
+    @if (_evDeleteId.HasValue)
+    {
+        <div class="pam-modal-overlay" @onclick="@(() => _evDeleteId = null)">
+            <div class="pam-modal" @onclick:stopPropagation="true">
+                <div class="pam-modal-header">Delete Connection</div>
+                <div class="pam-modal-body">
+                    Delete <strong>@_evDeleteName</strong>? All mappings will be removed.
+                </div>
+                <div class="pam-modal-footer">
+                    <button class="pam-btn pam-btn-danger" @onclick="ConfirmDeleteEvAsync">Delete</button>
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _evDeleteId = null)">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 @* ===== ADMIN RESYNC MODAL (#277) ===== *@
 @if (_hwtAdminResyncTarget != null)
 {
@@ -1034,6 +1275,36 @@
     private string _oidcDefaultRole    = "Viewer";
     private bool   _oidcAutoProvision  = true;
     private bool   _oidcIsEnabled      = true;
+
+    // External Vault Federation state (#284)
+    private bool    _evLoading  = false;
+    private bool    _evSaving   = false;
+    private string? _evError;
+    private string? _evMsg;
+    private bool    _evShowNew  = false;
+    private Guid?   _evEditId;
+    private Guid?   _evDeleteId;
+    private string? _evDeleteName;
+    private List<ExternalVaultDto>? _evVaults;
+    private Dictionary<Guid, ExternalVaultTestResultDto> _evTestResults = new();
+    private Guid?   _evBrowseConnectionId;
+    private string? _evBrowseConnectionName;
+    private List<string>? _evBrowseSecrets;
+    private bool    _evBrowseLoading = false;
+    // Form fields
+    private string _evName         = "";
+    private string _evVaultType    = "HashiCorpVault";
+    private string _evEndpoint     = "";
+    private string _evAuthMethod   = "AppRole";
+    private string _evAuthSecret   = "";
+    private string _evNamespace    = "";
+    private string _evMountPath    = "secret";
+    private string _evKeyVaultName = "";
+    private string _evTenantId     = "";
+    private string _evClientId     = "";
+    private bool   _evSyncEnabled  = false;
+    private int    _evSyncInterval = 60;
+    private bool   _evIsEnabled    = true;
 
     // Hardware Token state (#261)
     private bool   _hwtLoading  = false;
@@ -1183,6 +1454,8 @@
         { await LoadHardwareTokensAsync(); await LoadDriftReportAsync(); }
         if (tab == "oidc")
             await LoadOidcAsync();
+        if (tab == "extvault")
+            await LoadEvAsync();
     }
 
     // ── OIDC Federation (#271) ───────────────────────────────────────────────────────────────
@@ -1674,5 +1947,105 @@
             _smsError = "Failed to save SMS gateway configuration.";
             StateHasChanged();
         }
+    }
+
+    // ── External Vault Federation (#284) ─────────────────────────────────────
+
+    private async Task LoadEvAsync()
+    {
+        _evLoading = true; _evError = null; StateHasChanged();
+        _evVaults = await Api.GetExternalVaultsAsync();
+        _evLoading = false; StateHasChanged();
+    }
+
+    private void ResetEvForm()
+    {
+        _evName = _evEndpoint = _evAuthSecret = _evNamespace = _evKeyVaultName = _evTenantId = _evClientId = "";
+        _evVaultType = "HashiCorpVault";
+        _evAuthMethod = "AppRole";
+        _evMountPath = "secret";
+        _evSyncEnabled = false;
+        _evSyncInterval = 60;
+        _evIsEnabled = true;
+    }
+
+    private async Task SaveEvAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_evName) || string.IsNullOrWhiteSpace(_evEndpoint))
+        { _evError = "Name and Endpoint are required."; return; }
+        _evSaving = true; _evError = null; StateHasChanged();
+
+        bool ok;
+        if (_evEditId.HasValue)
+        {
+            ok = await Api.UpdateExternalVaultAsync(_evEditId.Value, _evName, _evEndpoint,
+                string.IsNullOrEmpty(_evAuthSecret) ? null : _evAuthSecret,
+                _evNamespace, _evMountPath, _evKeyVaultName, _evTenantId, _evClientId,
+                _evSyncEnabled, _evSyncInterval, _evIsEnabled);
+        }
+        else
+        {
+            ok = await Api.CreateExternalVaultAsync(_evName, _evVaultType, _evEndpoint, _evAuthMethod,
+                string.IsNullOrEmpty(_evAuthSecret) ? null : _evAuthSecret,
+                _evNamespace, _evMountPath, _evKeyVaultName, _evTenantId, _evClientId,
+                _evSyncEnabled, _evSyncInterval);
+        }
+
+        _evSaving = false;
+        if (ok)
+        {
+            _evMsg = _evEditId.HasValue ? "Connection updated." : "Connection added.";
+            _evShowNew = false; _evEditId = null;
+            await LoadEvAsync();
+        }
+        else { _evError = "Save failed."; StateHasChanged(); }
+    }
+
+    private async Task TestEvAsync(Guid id)
+    {
+        _evMsg = null; _evError = null;
+        var result = await Api.TestExternalVaultAsync(id);
+        if (result != null)
+            _evTestResults[id] = result;
+        StateHasChanged();
+    }
+
+    private async Task SyncEvAsync(Guid id)
+    {
+        _evMsg = null; _evError = null;
+        var result = await Api.SyncExternalVaultAsync(id);
+        if (result != null)
+            _evMsg = $"Sync completed — {result.SyncedCount} mapping(s) synced.";
+        else
+            _evError = "Sync failed.";
+        await LoadEvAsync();
+    }
+
+    private async Task OpenBrowseEvAsync(Guid id, string name)
+    {
+        _evBrowseConnectionId = id;
+        _evBrowseConnectionName = name;
+        _evBrowseSecrets = null;
+        _evBrowseLoading = true; StateHasChanged();
+        _evBrowseSecrets = await Api.BrowseExternalVaultSecretsAsync(id);
+        _evBrowseLoading = false; StateHasChanged();
+    }
+
+    private async Task AddMappingAsync(Guid connectionId, string secretPath)
+    {
+        var ok = await Api.AddExternalVaultMappingAsync(connectionId, secretPath,
+            null, null, null, "Passthrough");
+        if (ok) { _evMsg = $"Mapping added for '{secretPath}'."; _evBrowseConnectionId = null; }
+        else { _evError = "Failed to add mapping."; }
+        await LoadEvAsync();
+    }
+
+    private async Task ConfirmDeleteEvAsync()
+    {
+        if (!_evDeleteId.HasValue) return;
+        var ok = await Api.DeleteExternalVaultAsync(_evDeleteId.Value);
+        _evDeleteId = null;
+        if (ok) { _evMsg = "Connection deleted."; await LoadEvAsync(); }
+        else { _evError = "Delete failed."; StateHasChanged(); }
     }
 }

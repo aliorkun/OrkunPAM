@@ -284,6 +284,123 @@ public sealed class PamApiService
     public async Task<NetworkZoneTestResultDto?> TestNetworkZoneAsync(Guid id)
         => await PostAsync<NetworkZoneTestResultDto>($"/api/v1/system/network-zones/{id}/test", null);
 
+    // ── External Vault Federation (#284 — PV #12) ────────────────────────────
+
+    public async Task<List<ExternalVaultDto>?> GetExternalVaultsAsync()
+    {
+        var result = await GetAsync<ListResult<ExternalVaultDto>>("/api/v1/system/external-vaults");
+        return result?.Data;
+    }
+
+    public async Task<bool> CreateExternalVaultAsync(string name, string vaultType, string endpoint,
+        string authMethod, string? authSecret, string? ns, string? mountPath, string? keyVaultName,
+        string? tenantId, string? clientId, bool syncEnabled, int syncIntervalMinutes)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/external-vaults", new
+            {
+                name, vaultType, endpoint, authMethod, authSecret,
+                @namespace = ns, mountPath, keyVaultName, tenantId, clientId,
+                syncEnabled, syncIntervalMinutes
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateExternalVaultAsync(Guid id, string? name, string? endpoint,
+        string? authSecret, string? ns, string? mountPath, string? keyVaultName,
+        string? tenantId, string? clientId, bool syncEnabled, int syncIntervalMinutes, bool isEnabled)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PutAsJsonAsync($"/api/v1/system/external-vaults/{id}", new
+            {
+                name, endpoint, authSecret,
+                @namespace = ns, mountPath, keyVaultName, tenantId, clientId,
+                syncEnabled, syncIntervalMinutes, isEnabled
+            });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteExternalVaultAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync($"/api/v1/system/external-vaults/{id}")).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<ExternalVaultTestResultDto?> TestExternalVaultAsync(Guid id, string? authSecret = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/system/external-vaults/{id}/test",
+                new { authSecret });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<ExternalVaultTestResultDto>>();
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<ExternalVaultSyncResultDto?> SyncExternalVaultAsync(Guid id)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/system/external-vaults/{id}/sync", new { });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<ExternalVaultSyncResultDto>>();
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<List<string>?> BrowseExternalVaultSecretsAsync(Guid id, string? path = null)
+    {
+        try
+        {
+            var url = $"/api/v1/system/external-vaults/{id}/secrets";
+            if (!string.IsNullOrEmpty(path)) url += "?path=" + Uri.EscapeDataString(path);
+            var result = await GetAsync<ListResult<string>>(url);
+            return result?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> AddExternalVaultMappingAsync(Guid connectionId, string externalPath,
+        string? usernameField, string? passwordField, Guid? mappedCredentialId, string syncMode)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync($"/api/v1/system/external-vaults/{connectionId}/mappings",
+                new { externalPath, usernameField, passwordField, mappedCredentialId, syncMode });
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteExternalVaultMappingAsync(Guid connectionId, Guid mappingId)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            return (await client.DeleteAsync(
+                $"/api/v1/system/external-vaults/{connectionId}/mappings/{mappingId}")).IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── Device Groups ──────────────────────────────────────────────────────────
     public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
     {
@@ -3289,3 +3406,38 @@ public record NetworkZoneDto(
     int       DeviceCount);
 
 public record NetworkZoneTestResultDto(bool Reachable, int LatencyMs, string Message);
+
+public record ExternalVaultDto(
+    Guid      Id,
+    string    Name,
+    string    VaultType,
+    string    Endpoint,
+    string    AuthMethod,
+    string?   KeyVaultName,
+    string?   Namespace,
+    string?   MountPath,
+    string?   TenantId,
+    string?   ClientId,
+    bool      SyncEnabled,
+    int       SyncIntervalMinutes,
+    bool      IsEnabled,
+    DateTime? LastSyncAtUtc,
+    string?   LastSyncError,
+    DateTime  CreatedAtUtc,
+    int       MappingCount);
+
+public record ExternalVaultMappingDto(
+    Guid      Id,
+    string    ExternalPath,
+    string?   UsernameField,
+    string?   PasswordField,
+    Guid?     MappedCredentialId,
+    string    SyncMode,
+    string    SyncStatus,
+    DateTime? LastFetchedAtUtc,
+    DateTime? LastSyncedAtUtc,
+    string?   LastError);
+
+public record ExternalVaultTestResultDto(bool Success, string? Error, long LatencyMs);
+
+public record ExternalVaultSyncResultDto(int SyncedCount);

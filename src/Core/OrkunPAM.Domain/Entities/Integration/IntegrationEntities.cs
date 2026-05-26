@@ -2,6 +2,49 @@ using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.Domain.Entities.Integration;
 
+// === External Vault Federation (#284 — PV #12) ===
+
+public enum ExternalVaultType { HashiCorpVault, AzureKeyVault, AwsSecretsManager }
+public enum ExternalVaultAuthMethod { Token, AppRole, ManagedIdentity, ServicePrincipal }
+public enum ExternalSyncMode { Passthrough, Sync }
+public enum ExternalSyncStatus { Pending, Ok, Error }
+
+public class ExternalVaultConnection : AuditableEntity
+{
+    public string Name { get; set; } = string.Empty;
+    public ExternalVaultType VaultType { get; set; }
+    public string Endpoint { get; set; } = string.Empty;
+    public ExternalVaultAuthMethod AuthMethod { get; set; }
+    public byte[]? AuthSecretEnc { get; set; }
+    public string? Namespace { get; set; }
+    public string? MountPath { get; set; }
+    public string? KeyVaultName { get; set; }
+    public string? TenantId { get; set; }
+    public string? ClientId { get; set; }
+    public bool SyncEnabled { get; set; }
+    public int SyncIntervalMinutes { get; set; } = 60;
+    public bool IsEnabled { get; set; } = true;
+    public DateTime? LastSyncAtUtc { get; set; }
+    public string? LastSyncError { get; set; }
+
+    public ICollection<ExternalCredentialMapping> Mappings { get; set; } = new List<ExternalCredentialMapping>();
+}
+
+public class ExternalCredentialMapping : AuditableEntity
+{
+    public Guid ConnectionId { get; set; }
+    public ExternalVaultConnection Connection { get; set; } = null!;
+    public string ExternalPath { get; set; } = string.Empty;
+    public string? UsernameField { get; set; }
+    public string? PasswordField { get; set; }
+    public Guid? MappedCredentialId { get; set; }
+    public ExternalSyncMode SyncMode { get; set; } = ExternalSyncMode.Passthrough;
+    public ExternalSyncStatus SyncStatus { get; set; } = ExternalSyncStatus.Pending;
+    public DateTime? LastFetchedAtUtc { get; set; }
+    public DateTime? LastSyncedAtUtc { get; set; }
+    public string? LastError { get; set; }
+}
+
 // === PKI / Smart Card Authentication (#115) ===
 
 public class TrustedCaCertificate : AuditableEntity

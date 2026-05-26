@@ -898,9 +898,35 @@
 
 ---
 
+---
+
+## Sprint 61 - Credential Federation — HashiCorp Vault / Azure Key Vault (#284)
+**Tarih:** 2026-05-26
+**Durum:** Tamamlandi ✅
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #284 | Credential Federation — HashiCorp Vault / Azure Key Vault External Secret Sync (PV #12) | MVP-VAULT | ✅ Tamamlandi |
+
+**Sprint 61 Tamamlanan Bilesenler (2026-05-26):**
+- **ExternalVaultConnection entity:** VaultType (HashiCorpVault/AzureKeyVault), AuthMethod (Token/AppRole/ServicePrincipal/ManagedIdentity), AuthSecretEnc (AES-256-GCM), Namespace, MountPath, KeyVaultName, TenantId, ClientId, SyncEnabled, SyncIntervalMinutes
+- **ExternalCredentialMapping entity:** ConnectionId FK, ExternalPath, UsernameField, PasswordField, MappedCredentialId, SyncMode (Passthrough/Sync), SyncStatus (Pending/Ok/Error)
+- **Migration `20260526_AddExternalVaultConnection`:** ExternalVaultConnections + ExternalCredentialMappings tablolari + indexler + FK cascade
+- **DbContext:** ExternalVaultConnections + ExternalCredentialMappings DbSet + EF Core konfigurasyonu (enum string conversion, unique index, cascade delete)
+- **ExternalVaultService.cs (Persistence/Services):** HashiCorp Vault KV v2 (AppRole + Token auth, GET /v1/{mount}/data/{path}), Azure Key Vault (ServicePrincipal + ManagedIdentity OAuth2, REST API), passthrough + sync mode, IExternalVaultService interface
+- **ExternalVaultEndpoints.cs (WebAPI/Endpoints):** 9 endpoint — CRUD + test + sync + secrets browse + mapping add/delete; 5 audit events (CONNECTED, UPDATED, DELETED, TEST, SYNC_COMPLETED, MAPPING_ADDED, MAPPING_REMOVED)
+- **Program.cs:** IExternalVaultService Scoped kaydi + MapExternalVaultEndpoints()
+- **PamApiService.cs:** GetExternalVaultsAsync, CreateExternalVaultAsync, UpdateExternalVaultAsync, DeleteExternalVaultAsync, TestExternalVaultAsync, SyncExternalVaultAsync, BrowseExternalVaultSecretsAsync, AddExternalVaultMappingAsync, DeleteExternalVaultMappingAsync + ExternalVaultDto, ExternalVaultMappingDto, ExternalVaultTestResultDto, ExternalVaultSyncResultDto
+- **Integrations.razor:** "External Vaults" sekmesi — baglanti listesi (tip badge, sync status, test/sync/browse butonlari), New Connection formu (dinamik auth fields), Secret Browser modal, Delete confirm modal
+- **RFP PV #12** → PC
+
+**Ilerleme:** 9/9 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 60 tamamlandi.** RA #8 Network Segmentation → PC (#283 kapatildi).
-**Sprint 61 hedefi:** #284 Credential Federation (PV #12)
+**Sprint 61 tamamlandi.** PV #12 Credential Federation → PC (#284 kapatildi).
+**Sprint 62 hedefi:** #289 MFA Backup Codes (MFA #21)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 
