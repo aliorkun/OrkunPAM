@@ -106,6 +106,21 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+        // Download a binary file from a base64-encoded string (PDF, Excel, etc.)
+        function downloadBinaryFile(filename, contentType, contentBase64) {
+            const binary = atob(contentBase64);
+            const bytes  = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: contentType });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
         // Download any text file (client profiles, config snippets, etc.)
         function downloadTextFile(filename, content, mimeType) {
             const blob = new Blob([content], { type: mimeType || 'text/plain' });
