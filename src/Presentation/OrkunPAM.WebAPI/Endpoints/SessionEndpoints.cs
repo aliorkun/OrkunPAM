@@ -393,7 +393,7 @@ public static class SessionEndpoints
             });
         });
 
-        var policies = app.MapGroup("/api/v1/session-policies").WithTags("Sessions");
+        var policies = app.MapGroup("/api/v1/session-policies").WithTags("Sessions").RequireAuthorization();
 
         policies.MapGet("/", async (OrkunPamDbContext db) =>
         {
@@ -743,6 +743,37 @@ public static class SessionEndpoints
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
+
+        // Device MFA step-up check for RDP (mirrors CreateSession logic)
+        if (!isAdmin)
+        {
+            var stepUpCacheKey = "stepup:" + userId + ":" + req.DeviceId;
+            if (!cache.TryGetValue(stepUpCacheKey, out bool _))
+            {
+                var mfaPolicy = await DeviceMfaPolicyEndpoints.GetEffectivePolicyAsync(db, req.DeviceId);
+                if (mfaPolicy != null && mfaPolicy.IsEnabled && mfaPolicy.EnforceAtSessionStart
+                    && mfaPolicy.RequiredMfaLevel != "None")
+                {
+                    var audit = context.RequestServices.GetRequiredService<IAuditService>();
+                    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                    var stepUpToken = Guid.NewGuid().ToString("N");
+                    cache.Set("stepup-token:" + stepUpToken,
+                        new StepUpTokenData(userId, req.DeviceId, mfaPolicy.RequiredMfaLevel),
+                        new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15) });
+                    await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_REQUIRED",
+                        userId, null, clientIp, "Device", req.DeviceId.ToString(),
+                        new { mfaPolicy.RequiredMfaLevel });
+                    return Results.Json(new
+                    {
+                        success = false,
+                        mfaRequired = true,
+                        requiredLevel = mfaPolicy.RequiredMfaLevel,
+                        stepUpToken,
+                        errors = new[] { "Step-up MFA required: " + mfaPolicy.RequiredMfaLevel }
+                    }, statusCode: 403);
+                }
+            }
+        }
 
         // DeviceCredential: if the device has credential links configured, enforce the assignment
         if (!isAdmin)
