@@ -206,6 +206,9 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
     public DbSet<ExternalVaultConnection> ExternalVaultConnections => Set<ExternalVaultConnection>();
     public DbSet<ExternalCredentialMapping> ExternalCredentialMappings => Set<ExternalCredentialMapping>();
 
+    // === SCIM 2.0 Provisioning (#291) ===
+    public DbSet<ScimToken> ScimTokens => Set<ScimToken>();
+
     public OrkunPamDbContext(DbContextOptions<OrkunPamDbContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -872,6 +875,17 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(m => m.ConnectionId);
             e.HasIndex(m => m.MappedCredentialId);
+        });
+
+        // === SCIM 2.0 (#291) ===
+        modelBuilder.Entity<ScimToken>(e =>
+        {
+            e.Property(t => t.Name).HasMaxLength(256).IsRequired();
+            e.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(t => t.TokenPrefix).HasMaxLength(16).IsRequired();
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.HasOne(t => t.CreatedByUser).WithMany().HasForeignKey(t => t.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Seed built-in data
