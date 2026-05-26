@@ -60,6 +60,10 @@
         <button class="pam-btn pam-btn-primary" @onclick="LoadAuditAsync">Search</button>
         <button class="pam-btn pam-btn-secondary" @onclick="ExportAuditCsvAsync"
                 disabled="@(_auditLogs == null || _auditLogs.Count == 0)">Export CSV</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="ExportAuditPdfAsync"
+                disabled="@(_auditExporting)">@(_auditExporting ? "Exporting…" : "Export PDF")</button>
+        <button class="pam-btn pam-btn-secondary" @onclick="ExportAuditExcelAsync"
+                disabled="@(_auditExporting)">Export Excel</button>
         <button class="pam-btn pam-btn-secondary" @onclick="VerifyIntegrityAsync">Verify Integrity</button>
     </div>
 
@@ -203,6 +207,10 @@ else if (_tab == "reports")
                             @if (_reportRows.Count > 0)
                             {
                                 <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportReportCsvAsync">Export CSV</button>
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportReportPdfBtnAsync"
+                                        disabled="@(_reportExporting)">@(_reportExporting ? "…" : "PDF")</button>
+                                <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportReportExcelBtnAsync"
+                                        disabled="@(_reportExporting)">Excel</button>
                             }
                             <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="CloseReport">✕</button>
                         </div>
@@ -1330,6 +1338,7 @@ else if (_tab == "reports")
     private int      _auditPage        = 1;
     private const int _auditPageSize   = 50;
     private bool     _auditLoading;
+    private bool     _auditExporting;
     private string?  _auditError;
     private List<AuditLogDto>? _auditLogs;
     private PageMeta? _auditMeta;
@@ -1341,6 +1350,7 @@ else if (_tab == "reports")
     private DateTime _reportFrom   = DateTime.Today.AddDays(-30);
     private DateTime _reportTo     = DateTime.Today;
     private bool     _reportsLoading;
+    private bool     _reportExporting;
     private string?  _reportError;
     private List<ReportDto>? _reports;
     private ReportDto?       _selectedReport;
@@ -2074,5 +2084,80 @@ else if (_tab == "reports")
             await JS.InvokeVoidAsync("downloadCsvFile", filename, json);
         }
         catch { }
+    }
+
+    // ── PDF / Excel Export (#290) ─────────────────────────────────────────────
+    private async Task ExportAuditPdfAsync()
+    {
+        _auditExporting = true; StateHasChanged();
+        try
+        {
+            var bytes = await Api.ExportReportPdfAsync("audit-log", GetAuditFrom(), GetAuditTo());
+            if (bytes != null)
+            {
+                var b64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("downloadBinaryFile",
+                    "pam-audit-log-" + DateTime.Now.ToString("yyyyMMdd") + ".pdf",
+                    "application/pdf", b64);
+            }
+        }
+        catch { }
+        finally { _auditExporting = false; StateHasChanged(); }
+    }
+
+    private async Task ExportAuditExcelAsync()
+    {
+        _auditExporting = true; StateHasChanged();
+        try
+        {
+            var bytes = await Api.ExportReportExcelAsync("audit-log", GetAuditFrom(), GetAuditTo());
+            if (bytes != null)
+            {
+                var b64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("downloadBinaryFile",
+                    "pam-audit-log-" + DateTime.Now.ToString("yyyyMMdd") + ".xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b64);
+            }
+        }
+        catch { }
+        finally { _auditExporting = false; StateHasChanged(); }
+    }
+
+    private async Task ExportReportPdfBtnAsync()
+    {
+        if (_selectedReport == null) return;
+        _reportExporting = true; StateHasChanged();
+        try
+        {
+            var bytes = await Api.ExportReportPdfAsync(_selectedReport.Id, GetReportFrom(), GetReportTo());
+            if (bytes != null)
+            {
+                var b64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("downloadBinaryFile",
+                    "pam-" + _selectedReport.Id + "-" + DateTime.Now.ToString("yyyyMMdd") + ".pdf",
+                    "application/pdf", b64);
+            }
+        }
+        catch { }
+        finally { _reportExporting = false; StateHasChanged(); }
+    }
+
+    private async Task ExportReportExcelBtnAsync()
+    {
+        if (_selectedReport == null) return;
+        _reportExporting = true; StateHasChanged();
+        try
+        {
+            var bytes = await Api.ExportReportExcelAsync(_selectedReport.Id, GetReportFrom(), GetReportTo());
+            if (bytes != null)
+            {
+                var b64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("downloadBinaryFile",
+                    "pam-" + _selectedReport.Id + "-" + DateTime.Now.ToString("yyyyMMdd") + ".xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b64);
+            }
+        }
+        catch { }
+        finally { _reportExporting = false; StateHasChanged(); }
     }
 }

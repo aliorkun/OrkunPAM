@@ -2501,6 +2501,37 @@ public sealed class PamApiService
         catch { return default; }
     }
 
+    // ── Report Export — PDF / Excel (Sprint 63 / #290) ────────────────────────
+    public async Task<byte[]?> ExportReportPdfAsync(string reportType, DateTime from, DateTime to)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var url = "/api/v1/reports/export/pdf?reportType=" + Uri.EscapeDataString(reportType) +
+                      "&from=" + Uri.EscapeDataString(from.ToString("O")) +
+                      "&to="   + Uri.EscapeDataString(to.ToString("O"));
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsByteArrayAsync();
+        }
+        catch { return null; }
+    }
+
+    public async Task<byte[]?> ExportReportExcelAsync(string reportType, DateTime from, DateTime to)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var url = "/api/v1/reports/export/excel?reportType=" + Uri.EscapeDataString(reportType) +
+                      "&from=" + Uri.EscapeDataString(from.ToString("O")) +
+                      "&to="   + Uri.EscapeDataString(to.ToString("O"));
+            var resp = await client.GetAsync(url);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsByteArrayAsync();
+        }
+        catch { return null; }
+    }
+
 }
 
 public record LoginResult(bool Success, LoginData? Data);
