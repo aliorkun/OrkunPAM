@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-26 (PM Run #31: Sprint 61 PV #12 → PC #284; Sprint 62 MFA #21 → PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-26 (PM Run #32: Sprint 63 R #12 → PC #290; Sprint 64 UM #13 → PC #291; PM Run #31: Sprint 61 PV #12 → PC #284; Sprint 62 MFA #21 → PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -81,7 +81,7 @@
 | UM 11 | User activity reports | PC | Audit log queries |
 | UM 12 | Bulk user import (CSV) | PC | CsvUserImportJob + Sprint 5 #85 |
 | UM 13 | User provisioning via SCIM | PC | ScimEndpoints.cs — RFC 7644, Azure AD/Okta/Ping, Users+Groups CRUD, Sprint 64 #291 |
-| UM 14 | Delegated administration | NS | - |
+| UM 14 | Delegated administration | NS | #297 queued — Sprint 66 |
 | UM 15 | User profile management | PC | /portal profile tab |
 | UM 16 | Multi-tenancy user isolation | NS | Deferred to v3+ |
 | UM 17 | User risk scoring | PC | RiskScore in user analytics |
@@ -138,7 +138,7 @@
 | PV 13 | BYOK (Bring Your Own Key) | PC | MasterKey management |
 | PV 14 | HSM integration | NS | - |
 | PV 15 | Vault backup | PC | BackupRecord (#55) |
-| PV 16 | Dual control for sensitive creds | NS | - |
+| PV 16 | Dual control for sensitive creds | NS | #299 queued — Sprint 68 |
 | PV 17 | Credential expiry tracking | PC | NextRotationAt field |
 | PV 18 | Password strength enforcement | PC | PasswordPolicy |
 | PV 19 | Auto-fill for web apps | NS | - |
@@ -185,7 +185,7 @@
 | RA 15 | Command logging (SSH) | PC | CommandLog entity |
 | RA 16 | Keystroke logging | PC | CommandLog via SSH proxy |
 | RA 17 | Screen capture | PC | ScreenCaptureFrame |
-| RA 18 | File transfer logging | NS | - |
+| RA 18 | File transfer logging | NS | #298 queued — Sprint 67 |
 | RA 19 | Session shadowing | PC | SessionShadow (#214) |
 | RA 20 | Session sharing | PC | SessionHandoff + ShareSession |
 | RA 21 | Multi-hop sessions | PC | ProxyJump SSH direct-tcpip via SshJumpTunnel.cs (Sprint 60 #283) |
@@ -263,7 +263,7 @@
 | R 9 | Executive dashboard | PC | Dashboard.razor KPIs |
 | R 10 | Scheduled report delivery | PC | ReportSchedule (#159) |
 | R 11 | Custom report builder | PC | CustomReportDefinition (#169) |
-| R 12 | Export to PDF/Excel | NS | #290 queued — Sprint 63 |
+| R 12 | Export to PDF/Excel | PC | ReportExportEndpoints + QuestPDF (PDF) + ClosedXML (Excel) + PamApiService export methods + Reports.razor download UI (#290, Sprint 63) |
 | R 13 | Real-time alerts | PC | AlertRule + AlertHistory |
 | R 14 | Trend analysis | PC | Behavior baseline + anomaly detection |
 | R 15 | Capacity planning reports | PC | Capacity trend report |
@@ -305,40 +305,43 @@
 | Vault | 38 | 31 | 0 | 7 | 0 |
 | Remote Access | 47 | 35 | 0 | 12 | 0 |
 | MFA | 23 | 19 | 0 | 4 | 0 |
-| Reporting | 41 | 37 | 0 | 4 | 0 |
-| **TOTAL** | **247** | **204** | **0** | **43** | **0** |
+| Reporting | 41 | 38 | 0 | 3 | 0 |
+| **TOTAL** | **247** | **205** | **0** | **42** | **0** |
 
-> **Overall compliance rate: 83% (204/247 items partially or fully implemented)**
+> **Overall compliance rate: 83% (205/247 items partially or fully implemented)**
 
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-26 (PM Run #31 — Sprint 61 PV #12 + Sprint 62 MFA #21 → PC)*
+*Last full review: 2026-05-26 (PM Run #32 — Sprint 63 R #12 + Sprint 64 UM #13 → PC)*
 
 ---
 
-## Recently Completed (Last 5 Sprints + PM Backfill)
+## Recently Completed (Last 5 Sprints)
 
 | Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| Sprint 64 | #291 | UM #13 (SCIM 2.0 — RFC 7644, Azure AD/Okta/Ping Identity, Users+Groups CRUD, ScimEndpoints.cs) |
+| Sprint 63 | #290 | R #12 (PDF/Excel export — ReportExportEndpoints + QuestPDF + ClosedXML + Reports.razor download UI) |
 | Sprint 62 | #289 | MFA #21 (backup codes — generate/status/revoke + SelfService UI) |
 | Sprint 61 | #284 | PV #12 (credential federation — HashiCorp Vault KV v2 + Azure Key Vault + 9 endpoints) |
-| PM Run #30 | — | Platform #41 (geolocation), UM #12 (bulk CSV import), RA #3 (VNC proxy), RA #4 (Telnet proxy), RA #5 (HTTP/HTTPS proxy), RA #21 (multi-hop via ProxyJump), MFA #5 (push notification), MFA #9 (risk-based), MFA #10 (step-up auth), MFA #19 (adaptive MFA) — backfill from sprints 5–19 |
-| Sprint 60 | #283 | RA #8 (network segmentation + SSH ProxyJump) |
-| Sprint 59 | #282, #286, #287, #288 | Platform #44 (biometric auth) |
+| PM Run #30 | — | Platform #41 (geolocation), UM #12 (bulk CSV import), RA #3+4+5 (VNC/Telnet/HTTP proxies), RA #21 (multi-hop), MFA #5+9+10+19 (push/risk/step-up/adaptive) — backfill sprints 5–19 |
 
 ---
 
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. R #12 — PDF/Excel export (#290 ✅ Sprint 63 tamamlandi)
-2. UM #13 — SCIM provisioning (#291 ✅ Sprint 64 tamamlandi)
+1. ~~R #12 — PDF/Excel export~~ ✅ **PC** (Sprint 63 #290 tamamlandı)
+2. ~~UM #13 — SCIM provisioning~~ ✅ **PC** (Sprint 64 #291 tamamlandı)
 3. RA #11 — RDP session recording (#295 — Sprint 65)
-4. Platform #3 — HA clustering (v2/v3+)
-5. Platform #47 — Zero-trust network access (v3+)
-6. RA #6 — Database proxy (deferred v3+)
-7. PV #14 — HSM integration (v3+)
+4. UM #14 — Delegated Administration (#297 — Sprint 66)
+5. RA #18 — File Transfer Logging (#298 — Sprint 67)
+6. PV #16 — Dual Control for Sensitive Credentials (#299 — Sprint 68)
+7. Platform #3 — HA clustering (v2/v3+)
+8. Platform #47 — Zero-trust network access (v3+)
+9. RA #6 — Database proxy (deferred v3+)
+10. PV #14 — HSM integration (v3+)
 
 ---
 
@@ -377,3 +380,5 @@ High priority NS items based on RFP weight:
 - Geolocation access control (#208) = Sprint 18 → Platform #41
 - Bulk user CSV import (#85) = Sprint 5 → UM #12
 - Credential federation (#284) = Sprint 61 → PV #12 (HashiCorp Vault + Azure Key Vault)
+- Report Export (#290) = Sprint 63 → R #12 (QuestPDF PDF + ClosedXML Excel)
+- SCIM 2.0 (#291) = Sprint 64 → UM #13 (RFC 7644, Azure AD/Okta/Ping Identity)
