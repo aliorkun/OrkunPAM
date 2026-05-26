@@ -514,6 +514,17 @@ public static class SessionEndpoints
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
 
+        // Credential must be Active, or CheckedOut by the requesting user
+        if (!isAdmin && cred.Status != CredentialStatus.Active &&
+            !(cred.Status == CredentialStatus.CheckedOut && cred.CheckedOutByUserId == userId))
+        {
+            logger.LogWarning("Session rejected: credential {CredId} status={Status} (user {UserId})",
+                req.CredentialId, cred.Status, userId);
+            return Results.Json(
+                new { success = false, errors = new[] { "Credential is not available (status: " + cred.Status.ToString() + ")" } },
+                statusCode: 403);
+        }
+
         // Access check: realm-based (Kron PAM model) takes priority over legacy AccessAssignment.
         // When the device is in a realm-covered device group, realm membership is enforced.
         // When no realm covers the device, fall back to the legacy AccessAssignment check.
@@ -542,6 +553,20 @@ public static class SessionEndpoints
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
+
+        // DeviceCredential: if the device has credential links configured, enforce the assignment
+        if (!isAdmin)
+        {
+            var deviceHasLinks = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
+            if (deviceHasLinks && !await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId))
+            {
+                logger.LogWarning("Session rejected: credential {CredId} not assigned to device {DeviceId} (user {UserId})",
+                    req.CredentialId, req.DeviceId, userId);
+                return Results.Json(
+                    new { success = false, errors = new[] { "Credential is not assigned to this device" } },
+                    statusCode: 403);
+            }
+        }
 
         // Vendor device restriction: vendor users may only connect to their authorized devices
         var connectingUser = await db.Users.FindAsync(userId);
@@ -681,6 +706,17 @@ public static class SessionEndpoints
 
         var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
 
+        // Credential must be Active, or CheckedOut by the requesting user
+        if (!isAdmin && cred.Status != CredentialStatus.Active &&
+            !(cred.Status == CredentialStatus.CheckedOut && cred.CheckedOutByUserId == userId))
+        {
+            logger.LogWarning("RDP session rejected: credential {CredId} status={Status} (user {UserId})",
+                req.CredentialId, cred.Status, userId);
+            return Results.Json(
+                new { success = false, errors = new[] { "Credential is not available (status: " + cred.Status.ToString() + ")" } },
+                statusCode: 403);
+        }
+
         // Access check: realm-based takes priority; fall back to legacy AccessAssignment.
         if (!isAdmin)
         {
@@ -707,6 +743,20 @@ public static class SessionEndpoints
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
+
+        // DeviceCredential: if the device has credential links configured, enforce the assignment
+        if (!isAdmin)
+        {
+            var deviceHasLinks = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
+            if (deviceHasLinks && !await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId))
+            {
+                logger.LogWarning("RDP session rejected: credential {CredId} not assigned to device {DeviceId} (user {UserId})",
+                    req.CredentialId, req.DeviceId, userId);
+                return Results.Json(
+                    new { success = false, errors = new[] { "Credential is not assigned to this device" } },
+                    statusCode: 403);
+            }
+        }
 
         // Vendor device restriction for RDP sessions
         var rdpConnectingUser = await db.Users.FindAsync(userId);
