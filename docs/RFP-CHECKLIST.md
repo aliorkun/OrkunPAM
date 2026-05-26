@@ -377,8 +377,3 @@ High priority NS items based on RFP weight:
 - Geolocation access control (#208) = Sprint 18 → Platform #41
 - Bulk user CSV import (#85) = Sprint 5 → UM #12
 - Credential federation (#284) = Sprint 61 → PV #12 (HashiCorp Vault + Azure Key Vault)
-- MFA Backup Codes (#289) = Sprint 62 → MFA #21
-
-| Item | Section | Status | Implementation |
-|------|---------|--------|----------------|
-| Privileged account onboarding | PV misc | PC | Vault.razor — manual privileged account onboarding |
