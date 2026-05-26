@@ -138,7 +138,7 @@
 | PV 13 | BYOK (Bring Your Own Key) | PC | MasterKey management |
 | PV 14 | HSM integration | NS | - |
 | PV 15 | Vault backup | PC | BackupRecord (#55) |
-| PV 16 | Dual control for sensitive creds | NS | #299 queued — Sprint 68 |
+| PV 16 | Dual control for sensitive creds | NS | #300 queued — Sprint 68 |
 | PV 17 | Credential expiry tracking | PC | NextRotationAt field |
 | PV 18 | Password strength enforcement | PC | PasswordPolicy |
 | PV 19 | Auto-fill for web apps | NS | - |
@@ -337,7 +337,7 @@ High priority NS items based on RFP weight:
 3. RA #11 — RDP session recording (#295 — Sprint 65)
 4. UM #14 — Delegated Administration (#297 — Sprint 66)
 5. RA #18 — File Transfer Logging (#298 — Sprint 67)
-6. PV #16 — Dual Control for Sensitive Credentials (#299 — Sprint 68)
+6. PV #16 — Dual Control for Sensitive Credentials (#300 — Sprint 68)
 7. Platform #3 — HA clustering (v2/v3+)
 8. Platform #47 — Zero-trust network access (v3+)
 9. RA #6 — Database proxy (deferred v3+)
