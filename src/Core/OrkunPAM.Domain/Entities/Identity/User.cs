@@ -50,8 +50,9 @@ public class User : SoftDeletableEntity
     public Guid? MfaEnrollmentToken { get; set; }
     public DateTime? MfaEnrollmentTokenExpiry { get; set; }
 
-    // MFA Recovery Codes (JSON array of SHA256-hashed one-time codes)
+    // MFA Recovery / Backup Codes (JSON array of SHA256-hashed one-time codes)
     public string? RecoveryCodesHash { get; set; }
+    public DateTime? BackupCodesGeneratedAtUtc { get; set; }
 
     // Self-Service Password Reset
     public string? PasswordResetToken { get; set; }
