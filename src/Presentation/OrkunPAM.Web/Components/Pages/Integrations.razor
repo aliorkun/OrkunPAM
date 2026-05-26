@@ -892,12 +892,12 @@
 
     @if (_oidcTestResult != null)
     {
-        <div class="pam-alert @(_oidcTestResult.Reachable ? "pam-alert-success" : "pam-alert-danger")" style="margin-bottom:12px">
+        <div class="@("pam-alert " + (_oidcTestResult.Reachable ? "pam-alert-success" : "pam-alert-danger"))" style="margin-bottom:12px">
             @if (_oidcTestResult.Reachable)
             {
-                <strong>Discovery reachable.</strong> Issuer: @_oidcTestResult.Issuer<br />
-                Auth endpoint: @_oidcTestResult.AuthorizationEndpoint<br />
-                Token endpoint: @_oidcTestResult.TokenEndpoint
+                <span><strong>Discovery reachable.</strong> Issuer: @_oidcTestResult.Issuer</span><br />
+                <span>Auth endpoint: @_oidcTestResult.AuthorizationEndpoint</span><br />
+                <span>Token endpoint: @_oidcTestResult.TokenEndpoint</span>
             }
             else
             {

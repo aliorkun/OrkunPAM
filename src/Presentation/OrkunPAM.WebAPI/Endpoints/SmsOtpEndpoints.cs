@@ -214,11 +214,20 @@ public static class SmsOtpEndpoints
             await Upsert("sms.netgsm_originator", req.NetgsmOriginator ?? "");
 
             if (!string.IsNullOrEmpty(req.AuthToken))
-                await Upsert("sms.auth_token", "enc:" + vault.Encrypt(req.AuthToken));
+            {
+                var encResult = vault.EncryptString(req.AuthToken);
+                if (encResult.IsSuccess) await Upsert("sms.auth_token", "enc:" + Convert.ToBase64String(encResult.Value));
+            }
             if (!string.IsNullOrEmpty(req.WebhookSecret))
-                await Upsert("sms.webhook_secret", "enc:" + vault.Encrypt(req.WebhookSecret));
+            {
+                var encResult = vault.EncryptString(req.WebhookSecret);
+                if (encResult.IsSuccess) await Upsert("sms.webhook_secret", "enc:" + Convert.ToBase64String(encResult.Value));
+            }
             if (!string.IsNullOrEmpty(req.NetgsmPassword))
-                await Upsert("sms.netgsm_password", "enc:" + vault.Encrypt(req.NetgsmPassword));
+            {
+                var encResult = vault.EncryptString(req.NetgsmPassword);
+                if (encResult.IsSuccess) await Upsert("sms.netgsm_password", "enc:" + Convert.ToBase64String(encResult.Value));
+            }
 
             await db.SaveChangesAsync();
 

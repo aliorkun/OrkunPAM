@@ -116,7 +116,7 @@ public static class SessionRestorationEndpoints
 
             // Re-check credential is still assigned to this user (direct or via group)
             var credentialId = token.CredentialId ?? original.CredentialId;
-            if (credentialId.HasValue)
+            if (credentialId != Guid.Empty)
             {
                 var userGroupIds = await db.UserGroups
                     .Where(ug => ug.UserId == userId)
@@ -124,7 +124,7 @@ public static class SessionRestorationEndpoints
                     .ToListAsync();
 
                 var hasAccess = await db.AssignedCredentials
-                    .AnyAsync(a => a.CredentialId == credentialId.Value && a.IsEnabled &&
+                    .AnyAsync(a => a.CredentialId == credentialId && a.IsEnabled &&
                         ((a.PrincipalType == PrincipalType.User  && a.PrincipalId == userId) ||
                          (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId))));
 
@@ -154,12 +154,12 @@ public static class SessionRestorationEndpoints
             await db.SaveChangesAsync();
 
             await audit.LogAsync("Session", "SESSION_RESTORE_INITIATED", userId, username, ip,
-                $"Session restore initiated from token {tokenId} (original: {token.OriginalSessionId})",
-                newSession.Id.ToString());
+                "ProxySession", newSession.Id.ToString(),
+                $"Session restore initiated from token {tokenId} (original: {token.OriginalSessionId})");
 
             await audit.LogAsync("Session", "SESSION_RESTORE_COMPLETED", userId, username, ip,
-                $"New session {newSession.Id} created from restore token {tokenId}",
-                newSession.Id.ToString());
+                "ProxySession", newSession.Id.ToString(),
+                $"New session {newSession.Id} created from restore token {tokenId}");
 
             return Results.Ok(new
             {

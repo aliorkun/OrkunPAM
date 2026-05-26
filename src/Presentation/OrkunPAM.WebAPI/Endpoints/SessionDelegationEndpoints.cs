@@ -53,8 +53,8 @@ public static class SessionDelegationEndpoints
             await db.SaveChangesAsync();
 
             await audit.LogAsync("Session", "SESSION_DELEGATION_GRANTED", uid, username, ip,
-                $"Delegation {delegation.Id} granted to {delegateUser.Username} — expires {body.ExpiresAtUtc:u}",
-                delegation.Id.ToString());
+                "SessionDelegation", delegation.Id.ToString(),
+                $"Delegation {delegation.Id} granted to {delegateUser.Username} — expires {body.ExpiresAtUtc:u}");
 
             return Results.Ok(new
             {
@@ -196,8 +196,8 @@ public static class SessionDelegationEndpoints
             await db.SaveChangesAsync();
 
             await audit.LogAsync("Session", "SESSION_DELEGATION_REVOKED", uid, username, ip,
-                $"Delegation {id} revoked (delegate: {delegation.DelegateUsername})",
-                id.ToString());
+                "SessionDelegation", id.ToString(),
+                $"Delegation {id} revoked (delegate: {delegation.DelegateUsername})");
 
             return Results.Ok(new { success = true });
         });

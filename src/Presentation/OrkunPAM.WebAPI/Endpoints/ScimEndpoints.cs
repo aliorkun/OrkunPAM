@@ -830,7 +830,7 @@ public static class ScimEndpoints
         {
             resourceType = "User",
             created      = u.CreatedAtUtc.ToString("O"),
-            lastModified = u.UpdatedAtUtc?.ToString("O") ?? u.CreatedAtUtc.ToString("O"),
+            lastModified = u.UpdatedAtUtc.ToString("O"),
             location     = $"/scim/v2/Users/{u.Id}"
         }
     };
@@ -851,7 +851,7 @@ public static class ScimEndpoints
         {
             resourceType = "Group",
             created      = g.CreatedAtUtc.ToString("O"),
-            lastModified = g.UpdatedAtUtc?.ToString("O") ?? g.CreatedAtUtc.ToString("O"),
+            lastModified = g.UpdatedAtUtc.ToString("O"),
             location     = $"/scim/v2/Groups/{g.Id}"
         }
     };

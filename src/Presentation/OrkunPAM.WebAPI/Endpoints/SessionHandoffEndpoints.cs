@@ -71,7 +71,8 @@ public static class SessionHandoffEndpoints
 
             await db.SaveChangesAsync();
             await audit.LogAsync("Session", "SESSION_HANDOFF_REQUESTED", uid, username, ip,
-                $"Handoff requested for session {id} → user {targetUser.Username}", id.ToString());
+                "ProxySession", id.ToString(),
+                $"Handoff requested for session {id} → user {targetUser.Username}");
 
             return Results.Ok(new
             {
@@ -134,9 +135,11 @@ public static class SessionHandoffEndpoints
             await db.SaveChangesAsync();
 
             await audit.LogAsync("Session", "SESSION_HANDOFF_ACCEPTED", uid, username, ip,
-                $"Handoff accepted for session {id} (from {handoff.RequestedByUsername})", id.ToString());
+                "ProxySession", id.ToString(),
+                $"Handoff accepted for session {id} (from {handoff.RequestedByUsername})");
             await audit.LogAsync("Session", "SESSION_TRANSFERRED", uid, username, ip,
-                $"Session {id} ownership transferred from {handoff.RequestedByUsername} to {username}", id.ToString());
+                "ProxySession", id.ToString(),
+                $"Session {id} ownership transferred from {handoff.RequestedByUsername} to {username}");
 
             return Results.Ok(new
             {
@@ -172,7 +175,8 @@ public static class SessionHandoffEndpoints
             await db.SaveChangesAsync();
 
             await audit.LogAsync("Session", "SESSION_HANDOFF_DECLINED", uid, username, ip,
-                $"Handoff declined for session {id} (requested by {handoff.RequestedByUsername})", id.ToString());
+                "ProxySession", id.ToString(),
+                $"Handoff declined for session {id} (requested by {handoff.RequestedByUsername})");
 
             return Results.Ok(new { success = true });
         });

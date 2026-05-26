@@ -247,7 +247,7 @@ else
             username = user?.Username;
         }
 
-        _data = await Api.GetExecutiveDashboardAsync(_days, username);
+        _data = await Api.GetExecutiveDashboardAsync();
         _loading = false;
         StateHasChanged();
     }

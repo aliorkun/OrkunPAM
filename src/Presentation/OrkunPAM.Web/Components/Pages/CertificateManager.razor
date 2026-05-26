@@ -242,7 +242,7 @@ else
         _error = null;
         try
         {
-            _certs = await Api.GetCertificatesAsync() ?? [];
+            _certs = await Api.GetManagedCertificatesAsync() ?? [];
         }
         catch
         {
@@ -292,7 +292,7 @@ else
     {
         if (_deleteCert == null) return;
         _deleting = true;
-        var ok = await Api.DeleteCertificateAsync(_deleteCert.Id);
+        var ok = await Api.DeleteCertificateAsync(_deleteCert.Id.ToString());
         _deleting = false;
         _deleteCert = null;
         if (ok) await LoadAsync();

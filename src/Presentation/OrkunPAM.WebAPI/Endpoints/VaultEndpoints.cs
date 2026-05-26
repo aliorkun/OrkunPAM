@@ -801,3 +801,4 @@ public record ProxyDecryptRequest(Guid CredentialId, string Purpose);
 public record SetPermissionRequest(PrincipalType PrincipalType, Guid PrincipalId, PermissionLevel Level, bool CanShare);
 public record ShareCredentialRequest(Guid SharedToUserId, PermissionLevel PermissionLevel, int? ExpiresInHours, int? MaxUseCount);
 public record RotateCredentialRequest(string? Host, int? Port, string Connector, string? Domain);
+public record RequestAccessRequest(string? Reason, string? TicketNumber);

@@ -55,8 +55,8 @@ public static class NetworkZoneEndpoints
 
             var userId = ctx.User.FindFirst("sub")?.Value;
             if (userId != null)
-                await audit.LogAsync(Guid.Parse(userId), "NETWORK_ZONE_CREATED", "NetworkZone",
-                    zone.Id, $"Zone '{zone.Name}' created");
+                await audit.LogAsync("System", "NETWORK_ZONE_CREATED", Guid.TryParse(userId, out var uid) ? uid : null, null, ctx.Connection.RemoteIpAddress?.ToString(),
+                    "NetworkZone", zone.Id.ToString(), $"Zone '{zone.Name}' created");
 
             return Results.Created($"/api/v1/system/network-zones/{zone.Id}",
                 new { success = true, data = new { zone.Id, zone.Name } });
@@ -102,8 +102,8 @@ public static class NetworkZoneEndpoints
 
             var userId = ctx.User.FindFirst("sub")?.Value;
             if (userId != null)
-                await audit.LogAsync(Guid.Parse(userId), "NETWORK_ZONE_UPDATED", "NetworkZone",
-                    z.Id, $"Zone '{z.Name}' updated");
+                await audit.LogAsync("System", "NETWORK_ZONE_UPDATED", Guid.TryParse(userId, out var uid2) ? uid2 : null, null, ctx.Connection.RemoteIpAddress?.ToString(),
+                    "NetworkZone", z.Id.ToString(), $"Zone '{z.Name}' updated");
 
             return Results.Ok(new { success = true, data = new { z.Id, z.Name } });
         });
@@ -122,8 +122,8 @@ public static class NetworkZoneEndpoints
 
             var userId = ctx.User.FindFirst("sub")?.Value;
             if (userId != null)
-                await audit.LogAsync(Guid.Parse(userId), "NETWORK_ZONE_DELETED", "NetworkZone",
-                    id, $"Zone '{z.Name}' deleted");
+                await audit.LogAsync("System", "NETWORK_ZONE_DELETED", Guid.TryParse(userId, out var uid3) ? uid3 : null, null, ctx.Connection.RemoteIpAddress?.ToString(),
+                    "NetworkZone", id.ToString(), $"Zone '{z.Name}' deleted");
 
             return Results.Ok(new { success = true });
         });

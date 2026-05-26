@@ -5,6 +5,7 @@ using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Vault;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 

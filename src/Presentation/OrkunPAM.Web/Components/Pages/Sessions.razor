@@ -136,7 +136,7 @@
                                     @if (s.Status == "Disconnected")
                                     {
                                         <button class="pam-btn pam-btn-warning pam-btn-sm"
-                                                @onclick="@(() => RestoreFromSessionAsync(s.Id))"
+                                                @onclick="@(() => RestoreFromSessionAsync(Guid.Parse(s.Id)))"
                                                 disabled="@_restoreBusy">
                                             &#x21BA; Restore
                                         </button>

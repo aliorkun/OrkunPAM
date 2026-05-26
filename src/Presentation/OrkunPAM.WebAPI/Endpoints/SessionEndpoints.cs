@@ -578,7 +578,7 @@ public static class SessionEndpoints
                         new StepUpTokenData(userId, req.DeviceId, mfaPolicy.RequiredMfaLevel),
                         new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15) });
                     await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_REQUIRED",
-                        userId.ToString(), null, clientIp, "Device", req.DeviceId.ToString(),
+                        userId, null, clientIp, "Device", req.DeviceId.ToString(),
                         new { mfaPolicy.RequiredMfaLevel });
                     return Results.Json(new
                     {

@@ -1087,11 +1087,11 @@ else if (_tab == "reports")
 @if (_tab == "operational")
 {
     <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
-        <button class="pam-btn @(_opSubTab == "capacity" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+        <button class="@("pam-btn " + (_opSubTab == "capacity" ? "pam-btn-primary" : "pam-btn-secondary") + " pam-btn-sm")"
                 @onclick="@(() => SetOpSubTab("capacity"))">&#x1F4E6; Capacity</button>
-        <button class="pam-btn @(_opSubTab == "performance" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+        <button class="@("pam-btn " + (_opSubTab == "performance" ? "pam-btn-primary" : "pam-btn-secondary") + " pam-btn-sm")"
                 @onclick="@(() => SetOpSubTab("performance"))">&#x26A1; Performance</button>
-        <button class="pam-btn @(_opSubTab == "sla" ? "pam-btn-primary" : "pam-btn-secondary") pam-btn-sm"
+        <button class="@("pam-btn " + (_opSubTab == "sla" ? "pam-btn-primary" : "pam-btn-secondary") + " pam-btn-sm")"
                 @onclick="@(() => SetOpSubTab("sla"))">&#x1F3AF; SLA</button>
         <span style="flex:1"></span>
         <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="ExportOpReportCsvAsync">Export JSON</button>
@@ -1116,23 +1116,17 @@ else if (_tab == "reports")
         </div>
 
         @* Projection cards *@
-        @{
-            var proj = _opCapacity.Value.GetProperty("projection90Days");
-            var devProj  = proj.GetProperty("devices").GetInt32();
-            var credProj = proj.GetProperty("creds").GetInt32();
-            var usrProj  = proj.GetProperty("users").GetInt32();
-        }
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:#0d6efd">@devProj</div>
+                <div style="font-size:1.6em;font-weight:700;color:#0d6efd">@(_opCapacity.Value.GetProperty("projection90Days").GetProperty("devices").GetInt32())</div>
                 <div style="font-size:0.85em;color:#6c757d">Devices (90-day projection)</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:#198754">@credProj</div>
+                <div style="font-size:1.6em;font-weight:700;color:#198754">@(_opCapacity.Value.GetProperty("projection90Days").GetProperty("creds").GetInt32())</div>
                 <div style="font-size:0.85em;color:#6c757d">Credentials (90-day projection)</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:#6f42c1">@usrProj</div>
+                <div style="font-size:1.6em;font-weight:700;color:#6f42c1">@(_opCapacity.Value.GetProperty("projection90Days").GetProperty("users").GetInt32())</div>
                 <div style="font-size:0.85em;color:#6c757d">Users (90-day projection)</div>
             </div></div>
         </div>
@@ -1176,29 +1170,19 @@ else if (_tab == "reports")
 
     @if (_opSubTab == "performance" && _opPerformance != null)
     {
-        @{
-            var pd = _opPerformance.Value.GetProperty("data");
-            var totalSess  = pd.GetProperty("totalSessions").GetInt32();
-            var compSess   = pd.GetProperty("completedSessions").GetInt32();
-            var sessRate   = pd.GetProperty("sessionSuccessRate").GetDouble();
-            var totalCr    = pd.GetProperty("totalCredentials").GetInt32();
-            var rotatedCr  = pd.GetProperty("credentialsRotated").GetInt32();
-            var rotRate    = pd.GetProperty("rotationSuccessRate").GetDouble();
-            var rotFails   = pd.GetProperty("totalRotationFailures").GetInt32();
-        }
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(sessRate >= 95 ? "#198754" : sessRate >= 80 ? "#e6a817" : "#dc3545")">@sessRate%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetPerfData("sessionSuccessRate").GetDouble() >= 95 ? "#198754" : GetPerfData("sessionSuccessRate").GetDouble() >= 80 ? "#e6a817" : "#dc3545")">@(GetPerfData("sessionSuccessRate").GetDouble())%</div>
                 <div style="font-size:0.85em;color:#6c757d">Session Success Rate</div>
-                <div style="font-size:0.78em;color:#adb5bd">@compSess / @totalSess completed</div>
+                <div style="font-size:0.78em;color:#adb5bd">@(GetPerfData("completedSessions").GetInt32()) / @(GetPerfData("totalSessions").GetInt32()) completed</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(rotRate >= 90 ? "#198754" : rotRate >= 70 ? "#e6a817" : "#dc3545")">@rotRate%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetPerfData("rotationSuccessRate").GetDouble() >= 90 ? "#198754" : GetPerfData("rotationSuccessRate").GetDouble() >= 70 ? "#e6a817" : "#dc3545")">@(GetPerfData("rotationSuccessRate").GetDouble())%</div>
                 <div style="font-size:0.85em;color:#6c757d">Rotation Coverage</div>
-                <div style="font-size:0.78em;color:#adb5bd">@rotatedCr / @totalCr rotated</div>
+                <div style="font-size:0.78em;color:#adb5bd">@(GetPerfData("credentialsRotated").GetInt32()) / @(GetPerfData("totalCredentials").GetInt32()) rotated</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(rotFails == 0 ? "#198754" : rotFails < 5 ? "#e6a817" : "#dc3545")">@rotFails</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetPerfData("totalRotationFailures").GetInt32() == 0 ? "#198754" : GetPerfData("totalRotationFailures").GetInt32() < 5 ? "#e6a817" : "#dc3545")">@(GetPerfData("totalRotationFailures").GetInt32())</div>
                 <div style="font-size:0.85em;color:#6c757d">Total Rotation Failures</div>
             </div></div>
         </div>
@@ -1209,7 +1193,7 @@ else if (_tab == "reports")
                 <table class="pam-table">
                     <thead><tr><th>Protocol</th><th>Active Days</th><th>Total Days</th><th>Uptime %</th></tr></thead>
                     <tbody>
-                    @foreach (var proto in pd.GetProperty("proxyUptimeByProtocol").EnumerateArray())
+                    @foreach (var proto in _opPerformance.Value.GetProperty("data").GetProperty("proxyUptimeByProtocol").EnumerateArray())
                     {
                         var up = proto.GetProperty("uptimePercent").GetDouble();
                         <tr>
@@ -1224,7 +1208,7 @@ else if (_tab == "reports")
             </div>
         </div>
 
-        @if (pd.GetProperty("topTerminatedDevices").GetArrayLength() > 0)
+        @if (_opPerformance.Value.GetProperty("data").GetProperty("topTerminatedDevices").GetArrayLength() > 0)
         {
             <div class="pam-card">
                 <div class="pam-card-header"><strong>&#x26A0; Top Devices with Session Failures</strong></div>
@@ -1232,7 +1216,7 @@ else if (_tab == "reports")
                     <table class="pam-table">
                         <thead><tr><th>Hostname</th><th>Failed Sessions</th></tr></thead>
                         <tbody>
-                        @foreach (var d in pd.GetProperty("topTerminatedDevices").EnumerateArray())
+                        @foreach (var d in _opPerformance.Value.GetProperty("data").GetProperty("topTerminatedDevices").EnumerateArray())
                         {
                             <tr>
                                 <td>@d.GetProperty("hostname").GetString()</td>
@@ -1248,49 +1232,35 @@ else if (_tab == "reports")
 
     @if (_opSubTab == "sla" && _opSla != null)
     {
-        @{
-            var sd = _opSla.Value.GetProperty("data");
-            var rotPct   = sd.GetProperty("rotationOnTimePercent").GetDouble();
-            var rotTgt   = sd.GetProperty("rotationTarget").GetDouble();
-            var recPct   = sd.GetProperty("recordingCoveragePercent").GetDouble();
-            var recTgt   = sd.GetProperty("recordingTarget").GetDouble();
-            var coChk    = sd.GetProperty("checkoutCompliancePercent").GetDouble();
-            var coTgt    = sd.GetProperty("checkoutTarget").GetDouble();
-            var mfaPct   = sd.GetProperty("mfaEnrollmentPercent").GetDouble();
-            var mfaTgt   = sd.GetProperty("mfaTarget").GetDouble();
-            var appHrs   = sd.GetProperty("avgApprovalHours").GetDouble();
-            var appTgt   = sd.GetProperty("approvalMaxHoursTarget").GetDouble();
-            var breaches = sd.GetProperty("slaBreaches").EnumerateArray().ToList();
-        }
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(rotPct >= rotTgt ? "#198754" : rotPct >= 70 ? "#e6a817" : "#dc3545")">@rotPct%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetSlaVal("rotationOnTimePercent") >= GetSlaVal("rotationTarget") ? "#198754" : GetSlaVal("rotationOnTimePercent") >= 70 ? "#e6a817" : "#dc3545")">@(GetSlaVal("rotationOnTimePercent"))%</div>
                 <div style="font-size:0.85em;color:#6c757d">Rotation On-Time</div>
-                <div style="font-size:0.78em;color:#adb5bd">Target: @rotTgt%</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @(GetSlaVal("rotationTarget"))%</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(recPct >= recTgt ? "#198754" : recPct >= 80 ? "#e6a817" : "#dc3545")">@recPct%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetSlaVal("recordingCoveragePercent") >= GetSlaVal("recordingTarget") ? "#198754" : GetSlaVal("recordingCoveragePercent") >= 80 ? "#e6a817" : "#dc3545")">@(GetSlaVal("recordingCoveragePercent"))%</div>
                 <div style="font-size:0.85em;color:#6c757d">Recording Coverage</div>
-                <div style="font-size:0.78em;color:#adb5bd">Target: @recTgt%</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @(GetSlaVal("recordingTarget"))%</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(appHrs <= appTgt ? "#198754" : appHrs <= appTgt * 2 ? "#e6a817" : "#dc3545")">@(Math.Round(appHrs, 1))h</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetSlaVal("avgApprovalHours") <= GetSlaVal("approvalMaxHoursTarget") ? "#198754" : GetSlaVal("avgApprovalHours") <= GetSlaVal("approvalMaxHoursTarget") * 2 ? "#e6a817" : "#dc3545")">@(Math.Round(GetSlaVal("avgApprovalHours"), 1))h</div>
                 <div style="font-size:0.85em;color:#6c757d">Avg Approval Response</div>
-                <div style="font-size:0.78em;color:#adb5bd">Target: ≤ @appTgt h</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: ≤ @(GetSlaVal("approvalMaxHoursTarget")) h</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(coChk >= coTgt ? "#198754" : coChk >= 80 ? "#e6a817" : "#dc3545")">@coChk%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetSlaVal("checkoutCompliancePercent") >= GetSlaVal("checkoutTarget") ? "#198754" : GetSlaVal("checkoutCompliancePercent") >= 80 ? "#e6a817" : "#dc3545")">@(GetSlaVal("checkoutCompliancePercent"))%</div>
                 <div style="font-size:0.85em;color:#6c757d">Checkout Compliance</div>
-                <div style="font-size:0.78em;color:#adb5bd">Target: @coTgt%</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @(GetSlaVal("checkoutTarget"))%</div>
             </div></div>
             <div class="pam-card"><div class="pam-card-body" style="text-align:center">
-                <div style="font-size:1.6em;font-weight:700;color:@(mfaPct >= mfaTgt ? "#198754" : mfaPct >= 80 ? "#e6a817" : "#dc3545")">@mfaPct%</div>
+                <div style="font-size:1.6em;font-weight:700;color:@(GetSlaVal("mfaEnrollmentPercent") >= GetSlaVal("mfaTarget") ? "#198754" : GetSlaVal("mfaEnrollmentPercent") >= 80 ? "#e6a817" : "#dc3545")">@(GetSlaVal("mfaEnrollmentPercent"))%</div>
                 <div style="font-size:0.85em;color:#6c757d">MFA Enrollment</div>
-                <div style="font-size:0.78em;color:#adb5bd">Target: @mfaTgt%</div>
+                <div style="font-size:0.78em;color:#adb5bd">Target: @(GetSlaVal("mfaTarget"))%</div>
             </div></div>
         </div>
 
-        @if (breaches.Count > 0)
+        @if (GetSlaBreaches().Count > 0)
         {
             <div class="pam-card">
                 <div class="pam-card-header"><strong>&#x26A0; SLA Breaches</strong></div>
@@ -1298,7 +1268,7 @@ else if (_tab == "reports")
                     <table class="pam-table">
                         <thead><tr><th>Metric</th><th>Actual</th><th>Target</th><th>Status</th></tr></thead>
                         <tbody>
-                        @foreach (var b in breaches)
+                        @foreach (var b in GetSlaBreaches())
                         {
                             var unit = b.TryGetProperty("unit", out var u) ? u.GetString() ?? "%" : "%";
                             <tr>
@@ -1328,6 +1298,16 @@ else if (_tab == "reports")
 @code {
     private string _tab = "audit";
     private AuditVerifyResult? _integrityResult;
+
+    // ---- Operational Report helpers ----
+    private System.Text.Json.JsonElement GetPerfData(string prop) =>
+        _opPerformance!.Value.GetProperty("data").GetProperty(prop);
+
+    private double GetSlaVal(string prop) =>
+        _opSla!.Value.GetProperty("data").GetProperty(prop).GetDouble();
+
+    private List<System.Text.Json.JsonElement> GetSlaBreaches() =>
+        _opSla!.Value.GetProperty("data").GetProperty("slaBreaches").EnumerateArray().ToList();
 
     // ---- Audit Log state ----
     private string   _preset           = "7d";

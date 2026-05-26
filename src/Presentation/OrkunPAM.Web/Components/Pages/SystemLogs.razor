@@ -163,11 +163,9 @@ else
         DateTime? to   = DateTime.TryParse(_toStr,   out var td) ? td : null;
 
         var result = await Api.GetSystemLogsAsync(
-            source: _activeTab,
-            level:  string.IsNullOrEmpty(_filterLevel) ? null : _filterLevel,
-            from:   from,
-            to:     to,
-            search: string.IsNullOrEmpty(_searchText) ? null : _searchText,
+            activeTab: _activeTab,
+            levelFilter:  string.IsNullOrEmpty(_filterLevel) ? null : _filterLevel,
+            searchFilter: string.IsNullOrEmpty(_searchText) ? null : _searchText,
             page:   _page,
             pageSize: _pageSize);
 

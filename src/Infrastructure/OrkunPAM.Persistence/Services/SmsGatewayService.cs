@@ -70,7 +70,10 @@ public sealed class SmsGatewayService : ISmsGatewayService
         {
             if (!dict.TryGetValue(key, out var v) || string.IsNullOrEmpty(v)) return "";
             if (v.StartsWith("enc:", StringComparison.Ordinal))
-                return _vault.Decrypt(v[4..]);
+            {
+                var decrypted = _vault.DecryptString(Convert.FromBase64String(v[4..]));
+                return decrypted.IsSuccess ? decrypted.Value : "";
+            }
             return v;
         }
 

@@ -256,7 +256,7 @@
         _error   = null;
         StateHasChanged();
 
-        var result = await Api.GetDevicesAsync(_search, _typeFilter, _page, _pageSize);
+        var result = await Api.GetDevicesAsync(_search, _typeFilter, status: null, _page, _pageSize);
         if (result == null)
             _error = "Failed to load devices — check API connection.";
         else
@@ -303,7 +303,10 @@
             return;
         }
 
-        await JS.InvokeVoidAsync("open", result.LaunchUri, "_self");
+        var launchUri = result is System.Text.Json.JsonElement je && je.TryGetProperty("launchUri", out var prop)
+            ? prop.GetString() ?? ""
+            : result?.ToString() ?? "";
+        await JS.InvokeVoidAsync("open", launchUri, "_self");
         _launchingDeviceId = null;
         StateHasChanged();
     }

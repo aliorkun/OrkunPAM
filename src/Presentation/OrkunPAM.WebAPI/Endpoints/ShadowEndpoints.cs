@@ -59,7 +59,8 @@ public static class ShadowEndpoints
 
             if (Guid.TryParse(userId, out var actorGuid))
                 await audit.LogAsync("Session", "SESSION_SHADOW_STARTED", actorGuid, username, ip,
-                    $"Shadow started for session {id}", id.ToString());
+                    "ProxySession", id.ToString(),
+                    $"Shadow started for session {id}");
 
             return Results.Ok(new
             {
@@ -98,9 +99,10 @@ public static class ShadowEndpoints
                 chunks.DecrementObservers(id);
                 await db.SaveChangesAsync();
 
-                if (Guid.TryParse(userId, out var actorGuid))
-                    await audit.LogAsync("Session", "SESSION_SHADOW_ENDED", actorGuid, username, ip,
-                        $"Shadow ended for session {id}", id.ToString());
+                if (Guid.TryParse(userId, out var actorGuid2))
+                    await audit.LogAsync("Session", "SESSION_SHADOW_ENDED", actorGuid2, username, ip,
+                        "ProxySession", id.ToString(),
+                        $"Shadow ended for session {id}");
             }
 
             return Results.Ok(new { success = true });
@@ -150,7 +152,8 @@ public static class ShadowEndpoints
                 await db.SaveChangesAsync();
                 if (Guid.TryParse(userId, out var actorGuid))
                     await audit.LogAsync("Session", "SESSION_SHADOW_REVOKED", actorGuid, username, ip,
-                        $"All shadows revoked for session {id} ({actives.Count} observer(s))", id.ToString());
+                        "ProxySession", id.ToString(),
+                        $"All shadows revoked for session {id} ({actives.Count} observer(s))");
             }
 
             return Results.Ok(new { success = true, revokedCount = actives.Count });

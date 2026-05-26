@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Domain.Entities.Session;
 using OrkunPAM.Persistence;
+using OrkunPAM.SharedKernel;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Application.Contracts;
 using OrkunPAM.Cryptography;
 using OrkunPAM.Identity.Services;
+using AuthResult = OrkunPAM.Identity.Services.AuthResult;
 using OrkunPAM.Persistence;
 using OrkunPAM.Persistence.Services;
 using OrkunPAM.Domain.Enums;

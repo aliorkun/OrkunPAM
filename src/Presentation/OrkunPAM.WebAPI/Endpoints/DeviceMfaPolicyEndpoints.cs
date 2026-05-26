@@ -190,7 +190,7 @@ public static class DeviceMfaPolicyEndpoints
 
             if (!verified)
             {
-                await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_FAILED", userId.ToString(), null, ip,
+                await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_FAILED", userId, null, ip,
                     "Device", tokenData.DeviceId.ToString(), new { tokenData.RequiredMfaLevel });
                 return Results.BadRequest(new { success = false, errors = new[] { "MFA verification failed" } });
             }
@@ -200,7 +200,7 @@ public static class DeviceMfaPolicyEndpoints
             cache.Set($"stepup:{userId}:{tokenData.DeviceId}", true,
                 new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(15) });
 
-            await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_COMPLETED", userId.ToString(), null, ip,
+            await audit.LogAsync("Session", "SESSION_MFA_STEP_UP_COMPLETED", userId, null, ip,
                 "Device", tokenData.DeviceId.ToString(), new { tokenData.RequiredMfaLevel });
 
             return Results.Ok(new { success = true, message = "Step-up MFA verified. Proceed with session creation." });
