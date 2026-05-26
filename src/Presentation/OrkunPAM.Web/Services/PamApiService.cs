@@ -401,6 +401,40 @@ public sealed class PamApiService
         catch { return false; }
     }
 
+    // ── SCIM 2.0 Token Management (#291) ──────────────────────────────────────
+    public async Task<List<ScimTokenDto>?> GetScimTokensAsync()
+    {
+        var result = await GetAsync<ListResult<ScimTokenDto>>("/api/v1/system/scim-tokens");
+        return result?.Data;
+    }
+
+    public async Task<ScimTokenCreatedDto?> CreateScimTokenAsync(string name, int? expiresInDays = null)
+    {
+        try
+        {
+            var client = await GetAuthClientAsync();
+            var resp = await client.PostAsJsonAsync("/api/v1/system/scim-tokens",
+                new { name, expiresInDays });
+            if (!resp.IsSuccessStatusCode) return null;
+            var wrapper = await resp.Content.ReadFromJsonAsync<SingleResult<ScimTokenCreatedDto>>(JsonOpts);
+            return wrapper?.Data;
+        }
+        catch { return null; }
+    }
+
+    public async Task<bool> RevokeScimTokenAsync(Guid id)
+    {
+        var client = await GetAuthClientAsync();
+        try { return (await client.DeleteAsync($"/api/v1/system/scim-tokens/{id}")).IsSuccessStatusCode; }
+        catch { return false; }
+    }
+
+    public async Task<List<ScimProvisioningLogDto>?> GetScimProvisioningLogAsync()
+    {
+        var result = await GetAsync<ListResult<ScimProvisioningLogDto>>("/api/v1/system/scim-tokens/log");
+        return result?.Data;
+    }
+
     // ── Device Groups ──────────────────────────────────────────────────────────
     public async Task<List<DeviceGroupDto>?> GetDeviceGroupsAsync()
     {
@@ -3501,5 +3535,31 @@ public record ExternalVaultMappingDto(
     string?   LastError);
 
 public record ExternalVaultTestResultDto(bool Success, string? Error, long LatencyMs);
+
+// SCIM 2.0 Provisioning DTOs (#291)
+public record ScimTokenDto(
+    Guid      Id,
+    string    Name,
+    string    TokenPrefix,
+    bool      IsActive,
+    DateTime  CreatedAtUtc,
+    DateTime? ExpiresAtUtc,
+    DateTime? LastUsedAtUtc);
+
+public record ScimTokenCreatedDto(
+    Guid      Id,
+    string    Name,
+    string    TokenPrefix,
+    DateTime? ExpiresAtUtc,
+    string    RawToken);
+
+public record ScimProvisioningLogDto(
+    Guid      Id,
+    string    EventType,
+    Guid?     ActorId,
+    string?   ActorUsername,
+    string?   TargetId,
+    DateTime  OccurredAtUtc,
+    string?   IpAddress);
 
 public record ExternalVaultSyncResultDto(int SyncedCount);

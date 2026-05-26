@@ -28,6 +28,8 @@
             @onclick="@(() => SetTab("oidc"))">&#x1F511; OIDC Federation</button>
     <button class="pam-btn @(_tab == "extvault" ? "pam-btn-primary" : "pam-btn-secondary")"
             @onclick="@(() => SetTab("extvault"))">&#x1F5C4; External Vaults</button>
+    <button class="pam-btn @(_tab == "scim" ? "pam-btn-primary" : "pam-btn-secondary")"
+            @onclick="@(() => SetTab("scim"))">&#x1F504; SCIM 2.0</button>
 </div>
 
 @if (_tab == "ldap")
@@ -1249,9 +1251,157 @@
     </div>
 }
 
+@if (_tab == "scim")
+{
+    @if (_scimMsg   != null) { <div class="pam-alert pam-alert-info">@_scimMsg</div> }
+    @if (_scimError != null) { <div class="pam-alert pam-alert-danger">@_scimError</div> }
+
+    <div class="pam-card" style="margin-bottom:16px">
+        <div class="pam-card-body">
+            <strong>SCIM 2.0 Endpoint (RFC 7644)</strong>
+            <p style="margin:8px 0 4px;color:var(--text-secondary);font-size:13px">
+                Use this base URL when configuring Azure AD / Okta / Ping Identity SCIM provisioning.
+            </p>
+            <div style="background:var(--bg-tertiary);padding:8px 12px;border-radius:4px;font-family:monospace;font-size:13px">
+                @_scimBaseUrl/scim/v2
+            </div>
+            <p style="margin-top:8px;font-size:12px;color:var(--text-secondary)">
+                Authentication: Bearer token (generate below) &nbsp;|&nbsp;
+                Supported: Users (CRUD), Groups (CRUD), PATCH, filter, ServiceProviderConfig
+            </p>
+        </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>Bearer Tokens</strong>
+        <button class="pam-btn pam-btn-primary pam-btn-sm" @onclick="@(() => { _scimShowNew = true; _scimNewName = ""; _scimNewDays = null; _scimMsg = null; _scimError = null; })">+ Generate Token</button>
+    </div>
+
+    @if (_scimLoading)
+    {
+        <div class="pam-loading-text">Loading tokens…</div>
+    }
+    else if (_scimTokens == null || _scimTokens.Count == 0)
+    {
+        <div class="pam-empty" style="margin-bottom:16px">No tokens. Generate one to enable SCIM provisioning.</div>
+    }
+    else
+    {
+        <table class="pam-table pam-table-hover" style="margin-bottom:16px">
+            <thead><tr><th>Name</th><th>Prefix</th><th>Status</th><th>Created</th><th>Expires</th><th>Last Used</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _scimTokens)
+                {
+                    <tr>
+                        <td>@t.Name</td>
+                        <td><code>@t.TokenPrefix…</code></td>
+                        <td><span class="pam-badge @(t.IsActive ? "pam-badge-success" : "pam-badge-danger")">@(t.IsActive ? "Active" : "Revoked")</span></td>
+                        <td>@t.CreatedAtUtc.ToString("yyyy-MM-dd")</td>
+                        <td>@(t.ExpiresAtUtc.HasValue ? t.ExpiresAtUtc.Value.ToString("yyyy-MM-dd") : "Never")</td>
+                        <td>@(t.LastUsedAtUtc.HasValue ? t.LastUsedAtUtc.Value.ToString("yyyy-MM-dd HH:mm") : "—")</td>
+                        <td>
+                            @if (t.IsActive)
+                            {
+                                <button class="pam-btn pam-btn-danger pam-btn-sm"
+                                        @onclick="@(() => { _scimRevokeId = t.Id; _scimRevokeName = t.Name; })">Revoke</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_scimCreatedToken != null)
+    {
+        <div class="pam-alert pam-alert-success" style="margin-bottom:16px">
+            <strong>Token generated — copy now, it will not be shown again:</strong><br />
+            <code style="word-break:break-all;font-size:13px">@_scimCreatedToken</code>
+        </div>
+    }
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;margin-top:16px">
+        <strong>Provisioning Log (last 100 events)</strong>
+        <button class="pam-btn pam-btn-secondary pam-btn-sm" @onclick="LoadScimLogAsync">Refresh</button>
+    </div>
+    @if (_scimLog == null || _scimLog.Count == 0)
+    {
+        <div class="pam-empty">No provisioning activity yet.</div>
+    }
+    else
+    {
+        <table class="pam-table" style="font-size:12px">
+            <thead><tr><th>Event</th><th>Target</th><th>Time</th><th>IP</th></tr></thead>
+            <tbody>
+                @foreach (var entry in _scimLog)
+                {
+                    <tr>
+                        <td><code>@entry.EventType</code></td>
+                        <td>@(entry.TargetId ?? "—")</td>
+                        <td>@entry.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td>@(entry.IpAddress ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_scimShowNew)
+    {
+        <div class="pam-modal-overlay">
+            <div class="pam-modal" style="max-width:440px">
+                <div class="pam-modal-header"><h5>Generate SCIM Token</h5></div>
+                <div class="pam-modal-body">
+                    <div style="margin-bottom:8px">
+                        <label>Token Name</label>
+                        <input class="pam-input" placeholder="e.g. Azure AD Provisioning" @bind="_scimNewName" />
+                    </div>
+                    <div>
+                        <label>Expires In (days, leave blank = never)</label>
+                        <input class="pam-input" type="number" min="1" placeholder="e.g. 365" @bind="_scimNewDays" />
+                    </div>
+                </div>
+                <div class="pam-modal-footer">
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => _scimShowNew = false)">Cancel</button>
+                    <button class="pam-btn pam-btn-primary" @onclick="CreateScimTokenAsync" disabled="@_scimSaving">Generate</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_scimRevokeId.HasValue)
+    {
+        <div class="pam-modal-overlay">
+            <div class="pam-modal" style="max-width:360px">
+                <div class="pam-modal-header"><h5>Revoke Token</h5></div>
+                <div class="pam-modal-body">Revoke token <strong>@_scimRevokeName</strong>? This cannot be undone.</div>
+                <div class="pam-modal-footer">
+                    <button class="pam-btn pam-btn-secondary" @onclick="@(() => { _scimRevokeId = null; _scimRevokeName = null; })">Cancel</button>
+                    <button class="pam-btn pam-btn-danger" @onclick="ConfirmRevokeScimTokenAsync">Revoke</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 @code {
     private string _tab = "ldap";
     private bool _loading = true;
+
+    // SCIM 2.0 state (#291)
+    private bool _scimLoading = false;
+    private bool _scimSaving  = false;
+    private string? _scimMsg;
+    private string? _scimError;
+    private bool    _scimShowNew = false;
+    private string  _scimNewName = "";
+    private int?    _scimNewDays;
+    private string? _scimCreatedToken;
+    private Guid?   _scimRevokeId;
+    private string? _scimRevokeName;
+    private List<ScimTokenDto>? _scimTokens;
+    private List<ScimProvisioningLogDto>? _scimLog;
+    private string _scimBaseUrl = "{pam-server-url}";
 
     // OIDC Federation state (#271)
     private bool    _oidcLoading  = false;
@@ -1456,6 +1606,49 @@
             await LoadOidcAsync();
         if (tab == "extvault")
             await LoadEvAsync();
+        if (tab == "scim")
+            await LoadScimAsync();
+    }
+
+    // ── SCIM 2.0 (#291) ─────────────────────────────────────────────────────────────────────
+
+    private async Task LoadScimAsync()
+    {
+        _scimLoading = true; _scimError = null; _scimCreatedToken = null; StateHasChanged();
+        _scimTokens  = await Api.GetScimTokensAsync();
+        await LoadScimLogAsync();
+        _scimLoading = false; StateHasChanged();
+    }
+
+    private async Task LoadScimLogAsync()
+    {
+        _scimLog = await Api.GetScimProvisioningLogAsync();
+        StateHasChanged();
+    }
+
+    private async Task CreateScimTokenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_scimNewName)) { _scimError = "Name required."; return; }
+        _scimSaving = true; _scimError = null; _scimMsg = null; StateHasChanged();
+        var result = await Api.CreateScimTokenAsync(_scimNewName, _scimNewDays);
+        _scimSaving = false;
+        if (result != null)
+        {
+            _scimCreatedToken = result.RawToken;
+            _scimMsg          = $"Token '{result.Name}' created. Copy the token below — it will not be shown again.";
+            _scimShowNew      = false;
+            await LoadScimAsync();
+        }
+        else { _scimError = "Failed to create token."; StateHasChanged(); }
+    }
+
+    private async Task ConfirmRevokeScimTokenAsync()
+    {
+        if (!_scimRevokeId.HasValue) return;
+        var ok = await Api.RevokeScimTokenAsync(_scimRevokeId.Value);
+        _scimRevokeId = null; _scimRevokeName = null;
+        if (ok) { _scimMsg = "Token revoked."; await LoadScimAsync(); }
+        else { _scimError = "Revoke failed."; StateHasChanged(); }
     }
 
     // ── OIDC Federation (#271) ───────────────────────────────────────────────────────────────

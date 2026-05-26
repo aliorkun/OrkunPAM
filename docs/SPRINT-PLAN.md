@@ -948,9 +948,40 @@
 
 ---
 
+## Sprint 63 — Report Export PDF/Excel (#290) ✅ TAMAMLANDI
+**Tarih:** 2026-05-26
+**Durum:** Tamamlandi (onceki run'da kapatildi — issue #290 closed)
+
+---
+
+## Sprint 64 — SCIM 2.0 User Provisioning (#291) ✅ TAMAMLANDI
+**Tarih:** 2026-05-26
+**Durum:** Tamamlandi
+
+| Issue | Baslik | Tip | Durum |
+|-------|--------|-----|-------|
+| #291 | SCIM 2.0 User Provisioning — Azure AD / Okta / Auth0 (UM #13) | MVP-AUTH | ✅ Tamamlandi |
+
+**Sprint 64 Tamamlanan Bilesenler (2026-05-26):**
+- **AuthSource.SCIM (enum):** SCIM provisionlanan kullanicilar icin yeni AuthSource degeri
+- **GroupSource.SCIM (enum):** SCIM provisionlanan gruplar icin yeni GroupSource degeri
+- **User entity:** `ScimExternalId`, `ScimProvisioned`, `ScimLastSyncedAt` alanlari eklendi
+- **ScimToken entity (User.cs):** Bearer token entity — TokenHash (SHA256), TokenPrefix, IsActive, ExpiresAtUtc, LastUsedAtUtc, CreatedByUserId FK
+- **Migration `20260526_AddScimFields`:** Users tablosuna 3 SCIM alan + ScimTokens tablosu + indexler
+- **OrkunPamDbContext.cs:** ScimTokens DbSet + EF Core konfigurasyonu (unique TokenHash, SetNull FK)
+- **ScimEndpoints.cs (yeni):** RFC 7644 uyumlu 19 endpoint — Token mgmt (4) + Discovery (3) + Users CRUD (6) + Groups CRUD (5) + PATCH operations; Bearer token auth; Azure AD/Okta/Ping uyumlu filter parser; SCIM JSON content-type; session termination on deprovisioning; 5 audit events
+- **Program.cs:** `api.MapScimEndpoints()` kaydedildi
+- **PamApiService.cs:** `GetScimTokensAsync`, `CreateScimTokenAsync`, `RevokeScimTokenAsync`, `GetScimProvisioningLogAsync` + `ScimTokenDto`, `ScimTokenCreatedDto`, `ScimProvisioningLogDto`
+- **Integrations.razor:** SCIM 2.0 sekmesi — endpoint URL goster, token yonetimi (generate/revoke), token listesi, provisioning log, Generate Token modali, Revoke confirm modali
+- **RFP UM #13** → PC
+
+**Ilerleme:** 8/8 (%100) ✅
+
+---
+
 ## Sonraki Adim
-**Sprint 62 tamamlandi.** MFA Backup Codes (MFA #21) → PC (#289 kapatildi).
-**Sprint 63 hedefi:** #290 Report Export PDF/Excel (R #12)
+**Sprint 64 tamamlandi.** SCIM 2.0 User Provisioning (UM #13) → PC (#291 kapatildi).
+**Sprint 65 hedefi:** #295 RDP Session Recording (RA #11)
 **v1.0.0 GA Tag:** 18 Mayis 2026'da atildi
 **v2.0.0:** 30 Eylul 2026
 

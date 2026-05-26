@@ -80,7 +80,7 @@
 | UM 10 | Self-service password reset | PC | /portal reset flow |
 | UM 11 | User activity reports | PC | Audit log queries |
 | UM 12 | Bulk user import (CSV) | PC | CsvUserImportJob + Sprint 5 #85 |
-| UM 13 | User provisioning via SCIM | NS | #291 queued — Sprint 64 |
+| UM 13 | User provisioning via SCIM | PC | ScimEndpoints.cs — RFC 7644, Azure AD/Okta/Ping, Users+Groups CRUD, Sprint 64 #291 |
 | UM 14 | Delegated administration | NS | - |
 | UM 15 | User profile management | PC | /portal profile tab |
 | UM 16 | Multi-tenancy user isolation | NS | Deferred to v3+ |
@@ -332,9 +332,9 @@
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. R #12 — PDF/Excel export (#290 queued — Sprint 63)
-2. UM #13 — SCIM provisioning (#291 queued — Sprint 64)
-3. RA #11 — RDP session recording (#295 queued — Sprint 65)
+1. R #12 — PDF/Excel export (#290 ✅ Sprint 63 tamamlandi)
+2. UM #13 — SCIM provisioning (#291 ✅ Sprint 64 tamamlandi)
+3. RA #11 — RDP session recording (#295 — Sprint 65)
 4. Platform #3 — HA clustering (v2/v3+)
 5. Platform #47 — Zero-trust network access (v3+)
 6. RA #6 — Database proxy (deferred v3+)
