@@ -131,10 +131,30 @@ public sealed class AccessPolicyEngine : IAccessPolicyEngine
     }
 
     /// <summary>
+    /// Parses a TimeWindowJson string (either a JSON array of window specs or a single spec)
+    /// and checks whether the given time falls within any of them.
+    /// </summary>
+    public static bool IsWithinTimeWindowsJson(DateTime time, string timeWindowJson)
+    {
+        if (string.IsNullOrWhiteSpace(timeWindowJson))
+            return true;
+
+        try
+        {
+            var arr = JsonSerializer.Deserialize<string[]>(timeWindowJson);
+            if (arr != null)
+                return IsWithinTimeWindows(time, arr);
+        }
+        catch (JsonException) { }
+
+        return IsWithinTimeWindows(time, new[] { timeWindowJson });
+    }
+
+    /// <summary>
     /// Check if a given time falls within any of the specified time windows.
     /// Format: "DayRange HH:mm-HH:mm" where DayRange is like "Mon-Fri", "Sat", "Mon,Wed,Fri"
     /// </summary>
-    internal static bool IsWithinTimeWindows(DateTime time, string[] windows)
+    public static bool IsWithinTimeWindows(DateTime time, string[] windows)
     {
         foreach (var window in windows)
         {

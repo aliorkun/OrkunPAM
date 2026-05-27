@@ -643,19 +643,6 @@ public static class SessionEndpoints
             }
         }
 
-        string? password = null;
-        if (cred.PasswordEnc != null)
-        {
-            var decResult = vault.DecryptString(cred.PasswordEnc);
-            if (decResult.IsFailure)
-            {
-                logger.LogError("Session connect failed: cannot decrypt credential {CredId} for device {DeviceId}: {Error}",
-                    req.CredentialId, req.DeviceId, decResult.Error.Message);
-                return Results.Problem("Credential decryption failed. Check server logs.");
-            }
-            password = decResult.Value;
-        }
-
         var sessionToken = Guid.NewGuid().ToString("N");
 
         var session = new ProxySession

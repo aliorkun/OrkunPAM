@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Access;
 using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
+using OrkunPAM.Persistence.Services;
 
 namespace OrkunPAM.WebAPI.Endpoints;
 
@@ -189,17 +190,23 @@ public static class AccessAssignmentEndpoints
 
         var now = DateTime.UtcNow;
 
-        return await db.AccessAssignments.AnyAsync(a =>
-            a.IsEnabled
-            && a.CredentialId == credentialId
-            && (a.ValidFromUtc == null || a.ValidFromUtc <= now)
-            && (a.ValidUntilUtc == null || a.ValidUntilUtc >= now)
-            // Principal match: user or any of user's groups
-            && ((a.PrincipalType == PrincipalType.User && a.PrincipalId == userId)
-                || (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId)))
-            // Target match: device directly or via device group
-            && ((a.TargetType == AccessTargetType.Device && a.TargetId == deviceId)
-                || (a.TargetType == AccessTargetType.DeviceGroup && deviceGroupIds.Contains(a.TargetId))));
+        // Fetch matching assignments without TimeWindowJson filter (EF Core cannot translate it).
+        var candidates = await db.AccessAssignments
+            .Where(a =>
+                a.IsEnabled
+                && a.CredentialId == credentialId
+                && (a.ValidFromUtc == null || a.ValidFromUtc <= now)
+                && (a.ValidUntilUtc == null || a.ValidUntilUtc >= now)
+                && ((a.PrincipalType == PrincipalType.User && a.PrincipalId == userId)
+                    || (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId)))
+                && ((a.TargetType == AccessTargetType.Device && a.TargetId == deviceId)
+                    || (a.TargetType == AccessTargetType.DeviceGroup && deviceGroupIds.Contains(a.TargetId))))
+            .ToListAsync();
+
+        // Enforce per-assignment time-window restrictions in memory.
+        return candidates.Any(a =>
+            string.IsNullOrEmpty(a.TimeWindowJson)
+            || AccessPolicyEngine.IsWithinTimeWindowsJson(now, a.TimeWindowJson));
     }
 }
 
