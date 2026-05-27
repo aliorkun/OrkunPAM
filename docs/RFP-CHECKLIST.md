@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-27 (PM Run #35: Refactoring Sprint TAMAMLANDI 6/6 -- #311 SSH ZeroMemory bug fixed (commit dda82e6 fixes #311); SSH ECDSA + disconnect handling fixed (commit c5258eb); Refactoring sprint fully complete; no new issues; PM Run #34: Refactoring Sprint -- #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint -- #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 -> PC #290; Sprint 64 UM #13 -> PC #291; PM Run #31: Sprint 61 PV #12 -> PC #284; Sprint 62 MFA #21 -> PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 -> PC; Sprint 60 RA #8 -> PC #283; Sprint 59 Platform #44 -> PC #282; Sprint 57 R #39+40+41 -> PC #278; Sprint 56 MFA #23 -> PC #277; Sprint 55 MFA #22 -> PC #270; Sprint 54 UM #48 -> PC #271; Platform #21 -> PC #262; Sprint 52 RA #41 -> PC #263; Sprint 51 MFA #7 -> PC #261; Sprint 50 RA #40 -> PC #258; Sprint 49 MFA #20 -> PC #257; Sprint 48 PV #38 -> PC #251; Sprint 47 MFA #16 -> PC #252; Sprint 46 MFA #17+#18 -> PC #250; Sprint 45 RA #26 -> PC #249; Sprint 44 PV #21 -> PC #248; Sprint 43 RA #28+#30 -> PC #240; Sprint 42 PV #37 -> PC #241; Sprint 41 RA #45 -> PC #239)
+> Last updated: 2026-05-27 (PM Run #36: Post-sprint security hardening -- #313 RDP CWE-316 plaintext cache fixed + CWE-284 fail-secure enforced (commit 56710e8); #314 DeviceCredential fail-open closed; WebSSH/WebRDP auth aligned with session access control (commit 53cebb3); 12 broken PamApiService API URLs fixed (commit e56b98c); no new RFP items; PM Run #35: Refactoring Sprint TAMAMLANDI 6/6 -- #311 SSH ZeroMemory bug fixed (commit dda82e6 fixes #311); SSH ECDSA + disconnect handling fixed (commit c5258eb); Refactoring sprint fully complete; no new issues; PM Run #34: Refactoring Sprint -- #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint -- #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 -> PC #290; Sprint 64 UM #13 -> PC #291; PM Run #31: Sprint 61 PV #12 -> PC #284; Sprint 62 MFA #21 -> PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 -> PC; Sprint 60 RA #8 -> PC #283; Sprint 59 Platform #44 -> PC #282; Sprint 57 R #39+40+41 -> PC #278; Sprint 56 MFA #23 -> PC #277; Sprint 55 MFA #22 -> PC #270; Sprint 54 UM #48 -> PC #271; Platform #21 -> PC #262; Sprint 52 RA #41 -> PC #263; Sprint 51 MFA #7 -> PC #261; Sprint 50 RA #40 -> PC #258; Sprint 49 MFA #20 -> PC #257; Sprint 48 PV #38 -> PC #251; Sprint 47 MFA #16 -> PC #252; Sprint 46 MFA #17+#18 -> PC #250; Sprint 45 RA #26 -> PC #249; Sprint 44 PV #21 -> PC #248; Sprint 43 RA #28+#30 -> PC #240; Sprint 42 PV #37 -> PC #241; Sprint 41 RA #45 -> PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -169,12 +169,12 @@
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
 | RA 1 | SSH proxy | PC | SshProxy Windows Service -- credential lookup fixed (commit a653edd, #307); ZeroMemory fix (commit dda82e6, #311 closed); ECDSA removal + disconnect handling (commit c5258eb) |
-| RA 2 | RDP proxy | PC | RDP TCP relay -- step-up MFA enforcement fixed (security sprint) |
+| RA 2 | RDP proxy | PC | RDP TCP relay -- step-up MFA enforcement fixed (security sprint); CWE-316 plaintext credential cache removed + CWE-208 timing-safe token compare + CWE-284 fail-secure enforced (commit 56710e8, #313 #314) |
 | RA 3 | VNC proxy | PC | Native C# RFC 6143 + Sprint 6 #101 |
 | RA 4 | Telnet proxy | PC | Native C# RFC 854 + Sprint 19 |
 | RA 5 | HTTP/HTTPS proxy | PC | Native C# reverse proxy + Sprint 6 #102 |
 | RA 6 | Database proxy | NS | Deferred to v3+ |
-| RA 7 | Web-based SSH terminal | PC | XTerm.js terminal |
+| RA 7 | Web-based SSH terminal | PC | XTerm.js terminal -- WebSSH/WebRDP auth aligned with session access control model (commit 53cebb3) |
 | RA 8 | Network segmentation support | PC | NetworkZone entity + jump host ProxyJump (SSH direct-tcpip) + /network-zones UI (#283) |
 | RA 9 | Jump server / bastion | PC | SSH proxy as bastion |
 | RA 10 | Session recording (SSH) | PC | SessionRecorder |
@@ -313,7 +313,7 @@
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-27 (PM Run #35 -- Refactoring Sprint 6/6 COMPLETE: #311 SSH ZeroMemory fixed; ECDSA + disconnect handling improved; all refactoring issues closed; no new RFP items)*
+*Last full review: 2026-05-27 (PM Run #36 -- Post-sprint security hardening: #313 RDP CWE-316/208 fixed; #314 DeviceCredential CWE-284 fail-secure; WebSSH/WebRDP auth aligned; 12 API URLs corrected; no new RFP items; all 6 refactoring issues closed)*
 
 ---
 
@@ -321,6 +321,7 @@
 
 | Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| PM Run #36 | #313 (RDP CWE-316 plaintext cache), #314 (DeviceCredential CWE-284 fail-open), WebSSH/WebRDP auth fix (53cebb3), 12 API URL fixes (e56b98c) | No new RFP items -- security hardening only |
 | PM Run #35 | #311 (SSH ZeroMemory fix) -- Refactoring Sprint 6/6 COMPLETE | No new RFP items -- RA #1 SSH proxy now fully stable |
 | PM Run #34 | #304 (DeviceCredential CRUD), #306 (endpoint cleanup) | No new RFP items -- refactoring fixes only |
 | Sprint 64 | #291 | UM #13 (SCIM 2.0 -- RFC 7644, Azure AD/Okta/Ping Identity, Users+Groups CRUD, ScimEndpoints.cs) |
@@ -386,3 +387,6 @@ High priority NS items based on RFP weight:
 - DeviceCredential CRUD endpoints (#304) = Refactoring Sprint -> UM #46 (named account mapping)
 - SSH proxy credential lookup fix (commit a653edd, #307) = Refactoring Sprint -> PV #27 + RA #1
 - SSH proxy ZeroMemory bug (#311) = CLOSED -- fixed commit dda82e6; ECDSA removal + disconnect handling fixed commit c5258eb
+- RDP CWE-316 plaintext cache + CWE-208 timing-safe + CWE-284 fail-secure (#313 #314) = CLOSED -- fixed commit 56710e8
+- WebSSH/WebRDP auth alignment = commit 53cebb3 (session access control model)
+- 12 broken PamApiService API URL fixes = commit e56b98c
