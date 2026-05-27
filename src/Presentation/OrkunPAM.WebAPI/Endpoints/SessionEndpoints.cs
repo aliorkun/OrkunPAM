@@ -575,7 +575,7 @@ public static class SessionEndpoints
             }
         }
 
-        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
+        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred, skipPermissionCheck: isRealmCovered))
             return Results.Forbid();
 
         // DeviceCredential: realm-covered devices require explicit link (fail-secure).
@@ -769,7 +769,7 @@ public static class SessionEndpoints
             }
         }
 
-        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
+        if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred, skipPermissionCheck: isRdpRealmCovered))
             return Results.Forbid();
 
         // Device MFA step-up check for RDP (mirrors CreateSession logic)
@@ -936,21 +936,24 @@ public static class SessionEndpoints
     }
 
     private static async Task<bool> HasCredentialAccessAsync(
-        OrkunPamDbContext db, Guid userId, bool isAdmin, Credential cred)
+        OrkunPamDbContext db, Guid userId, bool isAdmin, Credential cred, bool skipPermissionCheck = false)
     {
         if (isAdmin) return true;
 
-        var userGroupIds = await db.UserGroups
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.GroupId)
-            .ToListAsync();
+        if (!skipPermissionCheck)
+        {
+            var userGroupIds = await db.UserGroups
+                .Where(ug => ug.UserId == userId)
+                .Select(ug => ug.GroupId)
+                .ToListAsync();
 
-        var hasAccess = await db.CredentialPermissions.AnyAsync(p =>
-            (p.CredentialId == cred.Id || p.FolderId == cred.FolderId)
-            && ((p.PrincipalType == PrincipalType.User && p.PrincipalId == userId)
-                || (p.PrincipalType == PrincipalType.Group && userGroupIds.Contains(p.PrincipalId))));
+            var hasAccess = await db.CredentialPermissions.AnyAsync(p =>
+                (p.CredentialId == cred.Id || p.FolderId == cred.FolderId)
+                && ((p.PrincipalType == PrincipalType.User && p.PrincipalId == userId)
+                    || (p.PrincipalType == PrincipalType.Group && userGroupIds.Contains(p.PrincipalId))));
 
-        if (!hasAccess) return false;
+            if (!hasAccess) return false;
+        }
 
         if (cred.RequiresApproval &&
             !(cred.CheckedOutByUserId == userId && cred.Status == CredentialStatus.CheckedOut))

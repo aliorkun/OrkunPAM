@@ -68,23 +68,45 @@ public static class WebRdpEndpoints
             if (cred == null || cred.DeviceId != deviceId || cred.PasswordEnc == null)
             { ctx.Response.StatusCode = 404; return; }
 
-            // Authorization check
+            // Authorization: admin roles bypass; others checked via realm (Kron PAM model) or AccessAssignment fallback.
             var isAdmin = principal.IsInRole("GlobalAdmin")
                        || principal.IsInRole("VaultAdmin")
                        || principal.IsInRole("SessionAdmin");
             if (!isAdmin)
             {
-                var hasPerm = await db.CredentialPermissions.AnyAsync(
-                    p => p.PrincipalType == PrincipalType.User
-                         && p.PrincipalId == userId
-                         && ((p.CredentialId == credentialId) || (p.FolderId == cred.FolderId))
-                         && p.PermissionLevel >= PermissionLevel.Use);
-                if (!hasPerm)
+                if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, deviceId))
                 {
-                    logger.LogWarning("WebRDP: user {UserId} unauthorized access to credential {CredId}", userId, credentialId);
-                    ctx.Response.StatusCode = 403;
-                    return;
+                    if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, deviceId))
+                    {
+                        logger.LogWarning("WebRDP: user {UserId} has no realm access for device {DeviceId}", userId, deviceId);
+                        ctx.Response.StatusCode = 403;
+                        await ctx.Response.WriteAsync("Access denied");
+                        return;
+                    }
                 }
+                else
+                {
+                    var hasPermission = await AccessAssignmentEndpoints.HasAccessAssignmentAsync(
+                        db, userId, deviceId, credentialId);
+                    if (!hasPermission)
+                    {
+                        logger.LogWarning("WebRDP: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                            userId, deviceId, credentialId);
+                        ctx.Response.StatusCode = 403;
+                        await ctx.Response.WriteAsync("Access denied");
+                        return;
+                    }
+                }
+            }
+
+            // Credentials requiring approval must be checked out by this user before RDP access
+            if (!isAdmin && cred.RequiresApproval &&
+                !(cred.Status == CredentialStatus.CheckedOut && cred.CheckedOutByUserId == userId))
+            {
+                logger.LogWarning("WebRDP: credential {CredId} requires checkout, not checked out by {UserId}", credentialId, userId);
+                ctx.Response.StatusCode = 403;
+                await ctx.Response.WriteAsync("Credential requires checkout approval");
+                return;
             }
 
             var decResult = vault.DecryptString(cred.PasswordEnc);

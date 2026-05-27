@@ -86,20 +86,29 @@ public static class WebSshEndpoints
                 }
                 else
                 {
-                    var hasPermission = await db.CredentialPermissions.AnyAsync(
-                        p => p.PrincipalType == PrincipalType.User
-                             && p.PrincipalId == userId
-                             && ((p.CredentialId == credentialId) || (p.FolderId == cred.FolderId))
-                             && p.PermissionLevel >= PermissionLevel.Use);
+                    var hasPermission = await AccessAssignmentEndpoints.HasAccessAssignmentAsync(
+                        db, userId, deviceId, credentialId);
                     if (!hasPermission)
                     {
                         logger.LogWarning(
-                            "WebSSH: user {UserId} unauthorized access attempt to credential {CredId}", userId, credentialId);
+                            "WebSSH: user {UserId} has no access assignment for device {DeviceId} + credential {CredId}",
+                            userId, deviceId, credentialId);
                         ctx.Response.StatusCode = 403;
                         await ctx.Response.WriteAsync("Access denied");
                         return;
                     }
                 }
+            }
+
+            // Credentials requiring approval must be checked out by this user before SSH access
+            if (!isAdmin && cred.RequiresApproval &&
+                !(cred.Status == CredentialStatus.CheckedOut && cred.CheckedOutByUserId == userId))
+            {
+                logger.LogWarning("WebSSH: credential {CredId} requires checkout, not checked out by {UserId}",
+                    credentialId, userId);
+                ctx.Response.StatusCode = 403;
+                await ctx.Response.WriteAsync("Credential requires checkout approval");
+                return;
             }
 
             var decResult = vault.DecryptString(cred.PasswordEnc);
