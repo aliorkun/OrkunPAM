@@ -59,7 +59,10 @@ public static class ScreenCaptureEndpoints
                    IAuditService audit, IConfiguration config, HttpContext ctx) =>
         {
             var secret = config["ProxyService:Secret"] ?? "";
-            if (secret.Length < 32 || ctx.Request.Headers["X-Proxy-Secret"] != secret)
+            var scHeaderValue = ctx.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+            if (secret.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(secret),
+                    System.Text.Encoding.UTF8.GetBytes(scHeaderValue)))
                 return Results.Unauthorized();
 
             if (!Guid.TryParse(req.SessionId, out var sessionId))

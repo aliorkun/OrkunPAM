@@ -154,7 +154,10 @@ public static class LiveSessionEndpoints
              IConfiguration config, HttpContext ctx) =>
         {
             var secret = config["ProxyService:Secret"] ?? "";
-            if (secret.Length < 32 || ctx.Request.Headers["X-Proxy-Secret"] != secret)
+            var liveHeaderValue = ctx.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+            if (secret.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(secret),
+                    System.Text.Encoding.UTF8.GetBytes(liveHeaderValue)))
                 return Results.Unauthorized();
 
             if (!string.IsNullOrEmpty(req.Text))

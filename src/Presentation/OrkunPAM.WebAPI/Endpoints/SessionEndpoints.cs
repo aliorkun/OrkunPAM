@@ -26,19 +26,23 @@ public static class SessionEndpoints
         });
 
         sessions.MapPost("/rdp/connect", async (ConnectRequest req, OrkunPamDbContext db,
-            IVaultEncryptionService vault, ILogger<Program> logger,
-            IMemoryCache cache, IConfiguration config, HttpContext context) =>
+            ILogger<Program> logger, IMemoryCache cache, IConfiguration config, HttpContext context) =>
         {
-            return await CreateRdpSession(req, db, vault, logger, cache, config, context);
+            return await CreateRdpSession(req, db, logger, cache, config, context);
         });
 
         // Called by the RDP proxy service to exchange a session token for target credentials.
         // Authenticated via X-Proxy-Secret header (not JWT).
         app.MapPost("/api/v1/sessions/rdp/validate-token",
-            async (ValidateRdpTokenRequest req, IMemoryCache cache, IConfiguration config, HttpContext context) =>
+            async (ValidateRdpTokenRequest req, IMemoryCache cache, IConfiguration config,
+                   HttpContext context, OrkunPamDbContext db, IVaultEncryptionService vault,
+                   ILogger<Program> logger) =>
         {
             var secret = config["ProxyService:Secret"] ?? "";
-            if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
+            var headerValue = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+            if (secret.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(secret),
+                    System.Text.Encoding.UTF8.GetBytes(headerValue)))
                 return Results.Unauthorized();
 
             if (!cache.TryGetValue($"rdp:token:{req.SessionToken}", out RdpTokenData? info) || info == null)
@@ -46,6 +50,23 @@ public static class SessionEndpoints
 
             // Single-use token: remove from cache immediately after first use
             cache.Remove($"rdp:token:{req.SessionToken}");
+
+            // Credential is decrypted on-demand here; never cached as plaintext
+            var rdpCred = await db.Credentials.FindAsync(info.CredentialId);
+            if (rdpCred?.PasswordEnc == null)
+            {
+                logger.LogError("RDP validate-token: credential {CredId} not found for session {SessionId}",
+                    info.CredentialId, info.SessionId);
+                return Results.Problem("Credential not found");
+            }
+
+            var rdpDecResult = vault.DecryptString(rdpCred.PasswordEnc);
+            if (rdpDecResult.IsFailure)
+            {
+                logger.LogError("RDP validate-token: cannot decrypt credential {CredId}: {Error}",
+                    info.CredentialId, rdpDecResult.Error.Message);
+                return Results.Problem("Credential decryption failed");
+            }
 
             return Results.Ok(new
             {
@@ -56,7 +77,7 @@ public static class SessionEndpoints
                     targetIp = info.TargetIp,
                     targetPort = info.TargetPort,
                     targetUsername = info.TargetUsername,
-                    targetPasswordBytes = info.TargetPasswordBytes,
+                    targetPasswordBytes = System.Text.Encoding.UTF8.GetBytes(rdpDecResult.Value),
                     targetDomain = info.TargetDomain
                 }
             });
@@ -67,7 +88,10 @@ public static class SessionEndpoints
             async (Guid id, EndSessionRequest req, OrkunPamDbContext db, IConfiguration config, HttpContext context) =>
         {
             var secret = config["ProxyService:Secret"] ?? "";
-            if (secret.Length < 32 || context.Request.Headers["X-Proxy-Secret"] != secret)
+            var endHeaderValue = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+            if (secret.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(secret),
+                    System.Text.Encoding.UTF8.GetBytes(endHeaderValue)))
                 return Results.Unauthorized();
 
             var session = await db.ProxySessions.FindAsync(id);
@@ -232,7 +256,7 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // ── Recording Playback endpoints ────────────────────────────────────────────
+        // ── Recording Playback endpoints ──────────────────────────────────────────────
         sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
             IRecordingPlaybackService playback, HttpContext context) =>
         {
@@ -526,11 +550,11 @@ public static class SessionEndpoints
         }
 
         // Access check: realm-based (Kron PAM model) takes priority over legacy AccessAssignment.
-        // When the device is in a realm-covered device group, realm membership is enforced.
-        // When no realm covers the device, fall back to the legacy AccessAssignment check.
+        bool isRealmCovered = false;
         if (!isAdmin)
         {
-            if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId))
+            isRealmCovered = await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId);
+            if (isRealmCovered)
             {
                 if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, req.DeviceId))
                 {
@@ -554,11 +578,13 @@ public static class SessionEndpoints
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred))
             return Results.Forbid();
 
-        // DeviceCredential: if the device has credential links configured, enforce the assignment
+        // DeviceCredential: realm-covered devices require explicit link (fail-secure).
+        // Legacy devices: enforce only when links are configured.
         if (!isAdmin)
         {
-            var deviceHasLinks = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
-            if (deviceHasLinks && !await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId))
+            var credentialLinked = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId);
+            var deviceHasLinks = isRealmCovered || await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
+            if (deviceHasLinks && !credentialLinked)
             {
                 logger.LogWarning("Session rejected: credential {CredId} not assigned to device {DeviceId} (user {UserId})",
                     req.CredentialId, req.DeviceId, userId);
@@ -689,7 +715,7 @@ public static class SessionEndpoints
     // -----------------------------------------------------------------------
 
     private static async Task<IResult> CreateRdpSession(
-        ConnectRequest req, OrkunPamDbContext db, IVaultEncryptionService vault,
+        ConnectRequest req, OrkunPamDbContext db,
         ILogger<Program> logger, IMemoryCache cache, IConfiguration config, HttpContext context)
     {
         var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -718,9 +744,11 @@ public static class SessionEndpoints
         }
 
         // Access check: realm-based takes priority; fall back to legacy AccessAssignment.
+        bool isRdpRealmCovered = false;
         if (!isAdmin)
         {
-            if (await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId))
+            isRdpRealmCovered = await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, req.DeviceId);
+            if (isRdpRealmCovered)
             {
                 if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, req.DeviceId))
                 {
@@ -775,11 +803,12 @@ public static class SessionEndpoints
             }
         }
 
-        // DeviceCredential: if the device has credential links configured, enforce the assignment
+        // DeviceCredential: realm-covered devices require explicit link (fail-secure).
         if (!isAdmin)
         {
-            var deviceHasLinks = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
-            if (deviceHasLinks && !await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId))
+            var rdpCredentialLinked = await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId && dc.CredentialId == req.CredentialId);
+            var rdpDeviceHasLinks = isRdpRealmCovered || await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == req.DeviceId);
+            if (rdpDeviceHasLinks && !rdpCredentialLinked)
             {
                 logger.LogWarning("RDP session rejected: credential {CredId} not assigned to device {DeviceId} (user {UserId})",
                     req.CredentialId, req.DeviceId, userId);
@@ -822,13 +851,6 @@ public static class SessionEndpoints
         if (cred.PasswordEnc == null)
             return Results.BadRequest(new { success = false, errors = new[] { "Credential has no password" } });
 
-        var decResult = vault.DecryptString(cred.PasswordEnc);
-        if (decResult.IsFailure)
-        {
-            logger.LogError("RDP session: cannot decrypt credential {CredId}: {Error}", req.CredentialId, decResult.Error.Message);
-            return Results.Problem("Credential decryption failed.");
-        }
-
         var session = new ProxySession
         {
             UserId     = userId,
@@ -848,13 +870,13 @@ public static class SessionEndpoints
 
         var sessionToken = Guid.NewGuid().ToString("N");
 
-        // Cache token for one-time use by the RDP proxy (TTL = 5 minutes)
+        // Cache token for one-time use by the RDP proxy — credential ID stored, not plaintext bytes
         var tokenData = new RdpTokenData(
             session.Id.ToString(),
             device.IpAddress ?? device.Hostname,
             device.ConnectionPort ?? 3389,
             cred.Username ?? "",
-            System.Text.Encoding.UTF8.GetBytes(decResult.Value),
+            cred.Id,
             null);
 
         cache.Set($"rdp:token:{sessionToken}", tokenData,
@@ -980,7 +1002,7 @@ public record TerminateSessionRequest(string Reason);
 public record ValidateRdpTokenRequest(string SessionToken);
 public record EndSessionRequest(int DurationSeconds, string? RecordingPath);
 public record RdpTokenData(string SessionId, string TargetIp, int TargetPort,
-    string TargetUsername, byte[] TargetPasswordBytes, string? TargetDomain);
+    string TargetUsername, Guid CredentialId, string? TargetDomain);
 public record CreateSessionPolicyRequest(string Name, int? MaxDurationMinutes, int? IdleTimeoutMinutes,
     bool AllowClipboard, bool AllowFileTransfer, bool AllowDriveMapping, bool AllowPrinting,
     bool? RecordingEnabled, bool? KeystrokeLogging, bool RequireReason, bool RequireTicket,
