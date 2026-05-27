@@ -55,9 +55,9 @@ internal sealed class PamApiClient
             var body = ms.ToArray();
             using var content = new ByteArrayContent(body);
             content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            CryptographicOperations.ZeroMemory(body);
 
             var resp = await client.PostAsync("/api/v1/auth/login", content, ct);
+            CryptographicOperations.ZeroMemory(body); // zero AFTER request is sent (CWE-316: minimise heap lifetime)
             if (!resp.IsSuccessStatusCode) return (false, null);
 
             var json = await resp.Content.ReadFromJsonAsync<LoginResponse>(ct);
