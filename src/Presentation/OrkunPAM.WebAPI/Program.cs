@@ -473,7 +473,6 @@ try
     api.MapLdapSamlEndpoints();
     api.MapSamlAuthEndpoints();
     api.MapOidcAuthEndpoints();
-    api.MapAapmEndpoints();
     api.MapSessionEndpoints();
     api.MapWebSshEndpoints();
     api.MapWebRdpEndpoints();
@@ -486,7 +485,6 @@ try
     api.MapFido2Endpoints();
     api.MapComplianceEndpoints();
     api.MapComplianceReportEndpoints();
-    api.MapAnalyticsEndpoints();
     api.MapIntegrationEndpoints();
     api.MapImportEndpoints();
     api.MapBreakGlassEndpoints();
@@ -500,11 +498,8 @@ try
     api.MapRdpGatewayEndpoints();
     api.MapPkiEndpoints();
     api.MapLaunchTokenEndpoints();
-    api.MapCloudPamEndpoints();
     api.MapCertificateEndpoints();
     api.MapPushMfaEndpoints();
-    api.MapSoarEndpoints();
-    api.MapSocDashboardEndpoints();
     api.MapDeviceTrustEndpoints();
     api.MapAccessPatternEndpoints();
     api.MapTelnetEndpoints();
