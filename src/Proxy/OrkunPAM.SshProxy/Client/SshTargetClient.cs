@@ -183,8 +183,17 @@ internal sealed class SshTargetClient : IDisposable
         await _conn.SendAsync(dhInitMs, ct);
 
         var replyPkt = await _conn.ReadPacketAsync(ct);
+        if (replyPkt[0] == Msg.Disconnect)
+        {
+            int dpos = 1;
+            _ = SshEncoding.ReadUInt32(replyPkt, ref dpos); // reason code
+            var reason = SshEncoding.ReadString(replyPkt, ref dpos);
+            throw new SshException(
+                $"Target SSH server disconnected during key exchange: {reason}. " +
+                "The target may not support rsa-sha2-256 host key algorithm.");
+        }
         if (replyPkt[0] != Msg.KexDhReply)
-            throw new SshException("Expected KEXDH_REPLY from target");
+            throw new SshException($"Expected KEXDH_REPLY from target, got message type {replyPkt[0]}");
 
         int pos = 1;
         var hostKeyBlob = SshEncoding.ReadByteString(replyPkt, ref pos);
@@ -233,7 +242,7 @@ internal sealed class SshTargetClient : IDisposable
         RandomNumberGenerator.Fill(cookie);
         SshEncoding.WriteBytes(ms, cookie);
         SshEncoding.WriteNameList(ms, Alg.Kex);
-        SshEncoding.WriteNameList(ms, "rsa-sha2-256", "ecdsa-sha2-nistp256");
+        SshEncoding.WriteNameList(ms, "rsa-sha2-256"); // only RSA implemented; ECDSA/Ed25519 not supported
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Cipher);
         SshEncoding.WriteNameList(ms, Alg.Mac);
@@ -255,7 +264,9 @@ internal sealed class SshTargetClient : IDisposable
         int kpos    = 0;
         var keyType = SshEncoding.ReadString(hostKeyBlob, ref kpos);
         if (keyType is not ("ssh-rsa" or "rsa-sha2-256"))
-            throw new SshException($"Unsupported host key type: {keyType}");
+            throw new SshException(
+                $"Unsupported host key type '{keyType}'. Only RSA (rsa-sha2-256) host keys are supported. " +
+                "Target SSH server must have an RSA host key (check /etc/ssh/ssh_host_rsa_key).");
         var e = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
         var n = SshEncoding.ReadMpInt(hostKeyBlob, ref kpos);
 
