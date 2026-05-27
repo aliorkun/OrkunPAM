@@ -131,8 +131,31 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true });
         });
 
+        devices.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db) =>
+        {
+            if (!await db.Devices.AnyAsync(d => d.Id == id))
+                return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
+
+            var list = await db.DeviceCredentials
+                .Where(dc => dc.DeviceId == id)
+                .Join(db.Credentials, dc => dc.CredentialId, c => c.Id, (dc, c) => new
+                {
+                    c.Id,
+                    c.Name,
+                    c.Username,
+                    Type = c.CredentialType.ToString(),
+                    Purpose = dc.Purpose.ToString(),
+                    dc.IsPrimary
+                }).ToListAsync();
+
+            return Results.Ok(new { success = true, data = list });
+        });
+
         devices.MapPost("/{id:guid}/credentials", async (Guid id, LinkCredentialRequest req, OrkunPamDbContext db) =>
         {
+            if (!await db.Devices.AnyAsync(d => d.Id == id))
+                return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
+
             if (await db.DeviceCredentials.AnyAsync(dc => dc.DeviceId == id && dc.CredentialId == req.CredentialId))
                 return Results.Conflict(new { success = false, errors = new[] { "Credential already linked" } });
 
@@ -143,6 +166,18 @@ public static class DeviceEndpoints
                 Purpose = req.Purpose,
                 IsPrimary = req.IsPrimary
             });
+            await db.SaveChangesAsync();
+            return Results.Ok(new { success = true });
+        });
+
+        devices.MapDelete("/{id:guid}/credentials/{credentialId:guid}", async (Guid id, Guid credentialId, OrkunPamDbContext db) =>
+        {
+            var dc = await db.DeviceCredentials
+                .FirstOrDefaultAsync(dc => dc.DeviceId == id && dc.CredentialId == credentialId);
+            if (dc == null)
+                return Results.NotFound(new { success = false, errors = new[] { "Credential assignment not found" } });
+
+            db.DeviceCredentials.Remove(dc);
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
         });
