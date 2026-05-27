@@ -117,16 +117,19 @@ internal sealed class PamApiClient
             if (device == null)
                 throw new InvalidOperationException($"No device found for host '{targetHost}'");
 
-            // Get the first SSH credential for this device
+            // Use device credentials endpoint (#304) — vault/credentials has no deviceId filter
             var credResp = await client.GetAsync(
-                $"/api/v1/vault/credentials?deviceId={device.Id}&credentialType=Ssh&pageSize=1", ct);
+                $"/api/v1/devices/{device.Id}/credentials", ct);
 
             if (!credResp.IsSuccessStatusCode)
                 throw new InvalidOperationException(
                     $"Credential lookup failed for device '{device.Id}' (HTTP {(int)credResp.StatusCode})");
 
-            var credData = await credResp.Content.ReadFromJsonAsync<CredentialListResponse>(ct);
-            var cred = credData?.Data?.FirstOrDefault();
+            var credData = await credResp.Content.ReadFromJsonAsync<DeviceCredentialListResponse>(ct);
+            var cred = credData?.Data?
+                .Where(c => c.Type == "SshKey" || c.Type == "UserPassword")
+                .OrderByDescending(c => c.IsPrimary)
+                .FirstOrDefault();
 
             if (cred == null)
                 throw new InvalidOperationException($"No SSH credential found for device '{device.Id}'");
@@ -437,6 +440,8 @@ internal sealed class PamApiClient
         string? JumpHostAddress, Guid? JumpHostCredentialId, string? JumpHostFingerprint, Guid? NetworkZoneId);
     private record CredentialListResponse(IEnumerable<CredentialDto>? Data);
     private record CredentialDto(string Id, string? Username);
+    private record DeviceCredentialListResponse(IEnumerable<DeviceCredentialDto>? Data);
+    private record DeviceCredentialDto(string Id, string? Username, string? Type, string? Purpose, bool IsPrimary);
     private record DecryptResponse(DecryptData? Data);
     private record DecryptData(string? Password, string? PrivateKey, string? Username);
     private record SessionStartResponse(SessionStartData? Data);
