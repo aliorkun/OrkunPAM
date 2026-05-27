@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-27 (PM Run #34: Refactoring Sprint — #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint — #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 → PC #290; Sprint 64 UM #13 → PC #291; PM Run #31: Sprint 61 PV #12 → PC #284; Sprint 62 MFA #21 → PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 → PC; Sprint 60 RA #8 → PC #283; Sprint 59 Platform #44 → PC #282; Sprint 57 R #39+40+41 → PC #278; Sprint 56 MFA #23 → PC #277; Sprint 55 MFA #22 → PC #270; Sprint 54 UM #48 → PC #271; Platform #21 → PC #262; Sprint 52 RA #41 → PC #263; Sprint 51 MFA #7 → PC #261; Sprint 50 RA #40 → PC #258; Sprint 49 MFA #20 → PC #257; Sprint 48 PV #38 → PC #251; Sprint 47 MFA #16 → PC #252; Sprint 46 MFA #17+#18 → PC #250; Sprint 45 RA #26 → PC #249; Sprint 44 PV #21 → PC #248; Sprint 43 RA #28+#30 → PC #240; Sprint 42 PV #37 → PC #241; Sprint 41 RA #45 → PC #239)
+> Last updated: 2026-05-27 (PM Run #35: Refactoring Sprint TAMAMLANDI 6/6 -- #311 SSH ZeroMemory bug fixed (commit dda82e6 fixes #311); SSH ECDSA + disconnect handling fixed (commit c5258eb); Refactoring sprint fully complete; no new issues; PM Run #34: Refactoring Sprint -- #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint -- #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 -> PC #290; Sprint 64 UM #13 -> PC #291; PM Run #31: Sprint 61 PV #12 -> PC #284; Sprint 62 MFA #21 -> PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 -> PC; Sprint 60 RA #8 -> PC #283; Sprint 59 Platform #44 -> PC #282; Sprint 57 R #39+40+41 -> PC #278; Sprint 56 MFA #23 -> PC #277; Sprint 55 MFA #22 -> PC #270; Sprint 54 UM #48 -> PC #271; Platform #21 -> PC #262; Sprint 52 RA #41 -> PC #263; Sprint 51 MFA #7 -> PC #261; Sprint 50 RA #40 -> PC #258; Sprint 49 MFA #20 -> PC #257; Sprint 48 PV #38 -> PC #251; Sprint 47 MFA #16 -> PC #252; Sprint 46 MFA #17+#18 -> PC #250; Sprint 45 RA #26 -> PC #249; Sprint 44 PV #21 -> PC #248; Sprint 43 RA #28+#30 -> PC #240; Sprint 42 PV #37 -> PC #241; Sprint 41 RA #45 -> PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -54,7 +54,7 @@
 | 41 | Solution shall support geolocation-based access control | PC | GeolocationAccessRule entity + IP geolocation lookup + Sprint 18 #208 |
 | 42 | Solution shall support time-based access control | PC | ScheduledSession + time windows in policies |
 | 43 | Solution shall support just-in-time (JIT) access | PC | JitAccessRequest (#38) |
-| 44 | Solution shall support biometric authentication | PC | Fido2Endpoints.cs — platform authenticator (Windows Hello / Touch ID) via WebAuthn authenticatorAttachment=platform (#282) |
+| 44 | Solution shall support biometric authentication | PC | Fido2Endpoints.cs -- platform authenticator (Windows Hello / Touch ID) via WebAuthn authenticatorAttachment=platform (#282) |
 | 45 | Solution shall support hardware security keys (FIDO2) | PC | Fido2Endpoints.cs + Fido2Credential entity |
 | 46 | Solution shall support certificate-based authentication | PC | PKI / Smart Card auth (#115) |
 | 47 | Solution shall support zero-trust network access | NS | - |
@@ -80,8 +80,8 @@
 | UM 10 | Self-service password reset | PC | /portal reset flow |
 | UM 11 | User activity reports | PC | Audit log queries |
 | UM 12 | Bulk user import (CSV) | PC | CsvUserImportJob + Sprint 5 #85 |
-| UM 13 | User provisioning via SCIM | PC | ScimEndpoints.cs — RFC 7644, Azure AD/Okta/Ping, Users+Groups CRUD, Sprint 64 #291 |
-| UM 14 | Delegated administration | NS | #297 queued — Sprint 66 |
+| UM 13 | User provisioning via SCIM | PC | ScimEndpoints.cs -- RFC 7644, Azure AD/Okta/Ping, Users+Groups CRUD, Sprint 64 #291 |
+| UM 14 | Delegated administration | NS | #297 queued -- Sprint 66 |
 | UM 15 | User profile management | PC | /portal profile tab |
 | UM 16 | Multi-tenancy user isolation | NS | Deferred to v3+ |
 | UM 17 | User risk scoring | PC | RiskScore in user analytics |
@@ -113,7 +113,7 @@
 | UM 43 | Account cloning | NS | - |
 | UM 44 | Password sharing (controlled) | PC | CredentialShare |
 | UM 45 | Shared account management | PC | Credential + CheckOutHistory |
-| UM 46 | Named account mapping | PC | DeviceCredential — GET+DELETE endpoints fixed (#304, Refactoring Sprint) |
+| UM 46 | Named account mapping | PC | DeviceCredential -- GET+DELETE endpoints fixed (#304, Refactoring Sprint) |
 | UM 47 | Access policy templates | PC | Policy entity |
 | UM 48 | User notification preferences | PC | NotificationPreference entity (#271) |
 
@@ -138,7 +138,7 @@
 | PV 13 | BYOK (Bring Your Own Key) | PC | MasterKey management |
 | PV 14 | HSM integration | NS | - |
 | PV 15 | Vault backup | PC | BackupRecord (#55) |
-| PV 16 | Dual control for sensitive creds | NS | #300 queued — Sprint 68 |
+| PV 16 | Dual control for sensitive creds | NS | #300 queued -- Sprint 68 |
 | PV 17 | Credential expiry tracking | PC | NextRotationAt field |
 | PV 18 | Password strength enforcement | PC | PasswordPolicy |
 | PV 19 | Auto-fill for web apps | NS | - |
@@ -149,7 +149,7 @@
 | PV 24 | Vault import/export | NS | - |
 | PV 25 | Credential health dashboard | PC | Rotation status in reports |
 | PV 26 | Secret versioning | PC | PasswordHistory |
-| PV 27 | Automatic secret injection | PC | SSH proxy credential injection — device credentials endpoint lookup fixed (commit a653edd, #307) |
+| PV 27 | Automatic secret injection | PC | SSH proxy credential injection -- device credentials endpoint lookup fixed (commit a653edd, #307) |
 | PV 28 | Secret zero / bootstrap secret | PC | MasterKey init flow |
 | PV 29 | Vault access policies | PC | CredentialPermission |
 | PV 30 | Dynamic secrets | NS | - |
@@ -160,7 +160,7 @@
 | PV 35 | Vault API access | PC | /api/v1/vault/* endpoints |
 | PV 36 | Vault encryption key rotation | PC | KeyRotation endpoint |
 | PV 37 | Credential request/approval workflow | PC | ApprovalRequest for credential access (#241) |
-| PV 38 | Credential access assignment | PC | AssignedCredential (Kron PAM model) — direct or group-based (#251) |
+| PV 38 | Credential access assignment | PC | AssignedCredential (Kron PAM model) -- direct or group-based (#251) |
 
 ---
 
@@ -168,8 +168,8 @@
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
-| RA 1 | SSH proxy | PC | SshProxy Windows Service — credential lookup fixed (commit a653edd, #307); ZeroMemory bug (#311, severity:high, pending fix) |
-| RA 2 | RDP proxy | PC | RDP TCP relay — step-up MFA enforcement fixed (security sprint) |
+| RA 1 | SSH proxy | PC | SshProxy Windows Service -- credential lookup fixed (commit a653edd, #307); ZeroMemory fix (commit dda82e6, #311 closed); ECDSA removal + disconnect handling (commit c5258eb) |
+| RA 2 | RDP proxy | PC | RDP TCP relay -- step-up MFA enforcement fixed (security sprint) |
 | RA 3 | VNC proxy | PC | Native C# RFC 6143 + Sprint 6 #101 |
 | RA 4 | Telnet proxy | PC | Native C# RFC 854 + Sprint 19 |
 | RA 5 | HTTP/HTTPS proxy | PC | Native C# reverse proxy + Sprint 6 #102 |
@@ -178,14 +178,14 @@
 | RA 8 | Network segmentation support | PC | NetworkZone entity + jump host ProxyJump (SSH direct-tcpip) + /network-zones UI (#283) |
 | RA 9 | Jump server / bastion | PC | SSH proxy as bastion |
 | RA 10 | Session recording (SSH) | PC | SessionRecorder |
-| RA 11 | Session recording (RDP) | NS | #295 queued — Sprint 65 |
+| RA 11 | Session recording (RDP) | NS | #295 queued -- Sprint 65 |
 | RA 12 | Session playback | PC | Recording playback endpoint |
 | RA 13 | Live session monitoring | PC | /api/v1/sessions/live/* |
 | RA 14 | Session termination | PC | Admin kill endpoint |
 | RA 15 | Command logging (SSH) | PC | CommandLog entity |
 | RA 16 | Keystroke logging | PC | CommandLog via SSH proxy |
 | RA 17 | Screen capture | PC | ScreenCaptureFrame |
-| RA 18 | File transfer logging | NS | #298 queued — Sprint 67 |
+| RA 18 | File transfer logging | NS | #298 queued -- Sprint 67 |
 | RA 19 | Session shadowing | PC | SessionShadow (#214) |
 | RA 20 | Session sharing | PC | SessionHandoff + ShareSession |
 | RA 21 | Multi-hop sessions | PC | ProxyJump SSH direct-tcpip via SshJumpTunnel.cs (Sprint 60 #283) |
@@ -230,7 +230,7 @@
 | MFA 6 | Voice call MFA | NS | - |
 | MFA 7 | OATH HOTP hardware tokens | PC | HardwareToken entity (#261) |
 | MFA 8 | PKI / smart card authentication | PC | TrustedCaCertificate + PkiUserCertificate (#115) |
-| MFA 9 | Risk-based MFA | PC | AdaptiveMfa — anomaly risk score triggers step-up (Sprint 17 #205) |
+| MFA 9 | Risk-based MFA | PC | AdaptiveMfa -- anomaly risk score triggers step-up (Sprint 17 #205) |
 | MFA 10 | Step-up authentication | PC | AdaptiveMfa step-up on risk threshold + Sprint 17 #205; RDP MFA step-up enforcement fixed (security sprint) |
 | MFA 11 | MFA bypass for service accounts | NS | - |
 | MFA 12 | MFA enrollment self-service | PC | /portal security tab |
@@ -313,7 +313,7 @@
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-27 (PM Run #34 — Refactoring Sprint: #304 DeviceCredential CRUD + #306 endpoint cleanup closed; SSH proxy improved; #311 HIGH SSH bug pending developer fix; no new RFP items)*
+*Last full review: 2026-05-27 (PM Run #35 -- Refactoring Sprint 6/6 COMPLETE: #311 SSH ZeroMemory fixed; ECDSA + disconnect handling improved; all refactoring issues closed; no new RFP items)*
 
 ---
 
@@ -321,27 +321,28 @@
 
 | Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
-| PM Run #34 | #304 (DeviceCredential CRUD), #306 (endpoint cleanup) | No new RFP items — refactoring fixes only; #311 HIGH SSH ZeroMemory bug opened |
-| Sprint 64 | #291 | UM #13 (SCIM 2.0 — RFC 7644, Azure AD/Okta/Ping Identity, Users+Groups CRUD, ScimEndpoints.cs) |
-| Sprint 63 | #290 | R #12 (PDF/Excel export — ReportExportEndpoints + QuestPDF + ClosedXML + Reports.razor download UI) |
-| Sprint 62 | #289 | MFA #21 (backup codes — generate/status/revoke + SelfService UI) |
-| Sprint 61 | #284 | PV #12 (credential federation — HashiCorp Vault KV v2 + Azure Key Vault + 9 endpoints) |
+| PM Run #35 | #311 (SSH ZeroMemory fix) -- Refactoring Sprint 6/6 COMPLETE | No new RFP items -- RA #1 SSH proxy now fully stable |
+| PM Run #34 | #304 (DeviceCredential CRUD), #306 (endpoint cleanup) | No new RFP items -- refactoring fixes only |
+| Sprint 64 | #291 | UM #13 (SCIM 2.0 -- RFC 7644, Azure AD/Okta/Ping Identity, Users+Groups CRUD, ScimEndpoints.cs) |
+| Sprint 63 | #290 | R #12 (PDF/Excel export -- ReportExportEndpoints + QuestPDF + ClosedXML + Reports.razor download UI) |
+| Sprint 62 | #289 | MFA #21 (backup codes -- generate/status/revoke + SelfService UI) |
+| Sprint 61 | #284 | PV #12 (credential federation -- HashiCorp Vault KV v2 + Azure Key Vault + 9 endpoints) |
 
 ---
 
 ## Open Items (Not Started)
 
 High priority NS items based on RFP weight:
-1. ~~R #12 — PDF/Excel export~~ ✅ **PC** (Sprint 63 #290 tamamlandı)
-2. ~~UM #13 — SCIM provisioning~~ ✅ **PC** (Sprint 64 #291 tamamlandı)
-3. RA #11 — RDP session recording (#295 — Sprint 65)
-4. UM #14 — Delegated Administration (#297 — Sprint 66)
-5. RA #18 — File Transfer Logging (#298 — Sprint 67)
-6. PV #16 — Dual Control for Sensitive Credentials (#300 — Sprint 68)
-7. Platform #3 — HA clustering (v2/v3+)
-8. Platform #47 — Zero-trust network access (v3+)
-9. RA #6 — Database proxy (deferred v3+)
-10. PV #14 — HSM integration (v3+)
+1. ~~R #12 -- PDF/Excel export~~ DONE (Sprint 63 #290)
+2. ~~UM #13 -- SCIM provisioning~~ DONE (Sprint 64 #291)
+3. RA #11 -- RDP session recording (#295 -- Sprint 65)
+4. UM #14 -- Delegated Administration (#297 -- Sprint 66)
+5. RA #18 -- File Transfer Logging (#298 -- Sprint 67)
+6. PV #16 -- Dual Control for Sensitive Credentials (#300 -- Sprint 68)
+7. Platform #3 -- HA clustering (v2/v3+)
+8. Platform #47 -- Zero-trust network access (v3+)
+9. RA #6 -- Database proxy (deferred v3+)
+10. PV #14 -- HSM integration (v3+)
 
 ---
 
@@ -356,7 +357,7 @@ High priority NS items based on RFP weight:
 
 ---
 
-*Generated by PM Agent — do not edit manually. Use GitHub Issues for gap tracking.*
+*Generated by PM Agent -- do not edit manually. Use GitHub Issues for gap tracking.*
 
 ## Additional Notes for Tracking
 
@@ -371,17 +372,17 @@ High priority NS items based on RFP weight:
 - Assigned credentials (#251) maps to PV #38 using Kron PAM model
 - Session delegation (#269) maps to RA #42
 - Session annotation + search (#258, #263) map to RA #40, RA #41
-- VNC proxy (#101) = Sprint 6 native C# RFC 6143 → RA #3
-- Telnet proxy (Sprint 19) = native C# RFC 854 → RA #4
-- HTTP/HTTPS proxy (#102) = Sprint 6 native C# reverse proxy → RA #5
-- Multi-hop sessions = ProxyJump SSH direct-tcpip SshJumpTunnel.cs (#283) → RA #21
-- Push notification MFA (#196) = Sprint 15 → MFA #5
-- Adaptive MFA (#205) = Sprint 17 → MFA #9 (risk-based) + MFA #10 (step-up) + MFA #19 (adaptive)
-- Geolocation access control (#208) = Sprint 18 → Platform #41
-- Bulk user CSV import (#85) = Sprint 5 → UM #12
-- Credential federation (#284) = Sprint 61 → PV #12 (HashiCorp Vault + Azure Key Vault)
-- Report Export (#290) = Sprint 63 → R #12 (QuestPDF PDF + ClosedXML Excel)
-- SCIM 2.0 (#291) = Sprint 64 → UM #13 (RFC 7644, Azure AD/Okta/Ping Identity)
-- DeviceCredential CRUD endpoints (#304) = Refactoring Sprint → UM #46 (named account mapping)
-- SSH proxy credential lookup fix (commit a653edd, #307) = Refactoring Sprint → PV #27 + RA #1
-- SSH proxy ZeroMemory bug (#311, severity:high) = OPEN — fix pending developer agent
+- VNC proxy (#101) = Sprint 6 native C# RFC 6143 -> RA #3
+- Telnet proxy (Sprint 19) = native C# RFC 854 -> RA #4
+- HTTP/HTTPS proxy (#102) = Sprint 6 native C# reverse proxy -> RA #5
+- Multi-hop sessions = ProxyJump SSH direct-tcpip SshJumpTunnel.cs (#283) -> RA #21
+- Push notification MFA (#196) = Sprint 15 -> MFA #5
+- Adaptive MFA (#205) = Sprint 17 -> MFA #9 (risk-based) + MFA #10 (step-up) + MFA #19 (adaptive)
+- Geolocation access control (#208) = Sprint 18 -> Platform #41
+- Bulk user CSV import (#85) = Sprint 5 -> UM #12
+- Credential federation (#284) = Sprint 61 -> PV #12 (HashiCorp Vault + Azure Key Vault)
+- Report Export (#290) = Sprint 63 -> R #12 (QuestPDF PDF + ClosedXML Excel)
+- SCIM 2.0 (#291) = Sprint 64 -> UM #13 (RFC 7644, Azure AD/Okta/Ping Identity)
+- DeviceCredential CRUD endpoints (#304) = Refactoring Sprint -> UM #46 (named account mapping)
+- SSH proxy credential lookup fix (commit a653edd, #307) = Refactoring Sprint -> PV #27 + RA #1
+- SSH proxy ZeroMemory bug (#311) = CLOSED -- fixed commit dda82e6; ECDSA removal + disconnect handling fixed commit c5258eb
