@@ -104,7 +104,7 @@ else
                                     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--pam-border)">
                                         <span style="font-size:0.85em">@ug.Name</span>
                                         <button class="pam-btn pam-btn-danger" style="font-size:0.75em;padding:2px 8px"
-                                                @onclick="@(() => RemoveUserGroupAsync(realm.Id, ug.UserGroupId))">
+                                                @onclick="@(() => RemoveUserGroupAsync(realm.Id, ug.UserGroupId!))">
                                             Remove
                                         </button>
                                     </div>
@@ -141,7 +141,7 @@ else
                                     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--pam-border)">
                                         <span style="font-size:0.85em">@dg.Name</span>
                                         <button class="pam-btn pam-btn-danger" style="font-size:0.75em;padding:2px 8px"
-                                                @onclick="@(() => RemoveDeviceGroupAsync(realm.Id, dg.DeviceGroupId))">
+                                                @onclick="@(() => RemoveDeviceGroupAsync(realm.Id, dg.DeviceGroupId!))">
                                             Remove
                                         </button>
                                     </div>

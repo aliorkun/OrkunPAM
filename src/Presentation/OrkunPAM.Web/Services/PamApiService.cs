@@ -625,62 +625,37 @@ public sealed class PamApiService
     // ── Device Realms ──────────────────────────────────────────────────────────
     public async Task<List<DeviceRealmDto>?> GetDeviceRealmsAsync()
     {
-        var result = await GetAsync<ListResult<DeviceRealmDto>>("/api/v1/access/realms");
+        var result = await GetAsync<ListResult<DeviceRealmDto>>("/api/v1/device-realms");
         return result?.Data;
     }
 
     public async Task<DeviceRealmDto?> GetDeviceRealmAsync(string id)
-        => await GetAsync<DeviceRealmDto>($"/api/v1/access/realms/{id}");
+        => await GetAsync<DeviceRealmDto>($"/api/v1/device-realms/{id}");
 
-    public async Task<DeviceRealmDto?> CreateDeviceRealmAsync(object payload)
+    public async Task<bool> CreateDeviceRealmAsync(string name, string? description, object? extra)
+        => await PostBoolAsync("/api/v1/device-realms", new { name, description });
+
+    public async Task<bool> UpdateDeviceRealmAsync(string id, string name, string? description, object? extra)
     {
         try
         {
             var client = await GetAuthClientAsync();
-            var resp = await client.PostAsJsonAsync("/api/v1/access/realms", payload);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceRealmDto>>(JsonOpts);
-            return result?.Data;
+            return (await client.PutAsJsonAsync($"/api/v1/device-realms/{id}", new { name, description })).IsSuccessStatusCode;
         }
-        catch { return null; }
-    }
-
-    public async Task<DeviceRealmDto?> UpdateDeviceRealmAsync(string id, object payload)
-    {
-        try
-        {
-            var client = await GetAuthClientAsync();
-            var resp = await client.PutAsJsonAsync($"/api/v1/access/realms/{id}", payload);
-            if (!resp.IsSuccessStatusCode) return null;
-            var result = await resp.Content.ReadFromJsonAsync<SingleResult<DeviceRealmDto>>(JsonOpts);
-            return result?.Data;
-        }
-        catch { return null; }
+        catch { return false; }
     }
 
     public async Task<bool> DeleteDeviceRealmAsync(string id)
     {
         var client = await GetAuthClientAsync();
-        try { return (await client.DeleteAsync($"/api/v1/access/realms/{id}")).IsSuccessStatusCode; }
+        try { return (await client.DeleteAsync($"/api/v1/device-realms/{id}")).IsSuccessStatusCode; }
         catch { return false; }
-    }
-
-    public async Task<bool> CreateDeviceRealmAsync(string name, string? description, object? extra)
-    {
-        var result = await CreateDeviceRealmAsync(new { name, description });
-        return result != null;
-    }
-
-    public async Task<bool> UpdateDeviceRealmAsync(string id, string name, string? description, object? extra)
-    {
-        var result = await UpdateDeviceRealmAsync(id, (object)new { name, description });
-        return result != null;
     }
 
     public async Task<bool> ToggleDeviceRealmAsync(string id) => await PostBoolAsync($"/api/v1/device-realms/{id}/toggle", new { });
 
-    public async Task<bool> AddUserGroupToRealmAsync(string realmId, string groupId) => await PostBoolAsync($"/api/v1/device-realms/{realmId}/user-groups/{groupId}", new { });
-    public async Task<bool> AddDeviceGroupToRealmAsync(string realmId, string groupId) => await PostBoolAsync($"/api/v1/device-realms/{realmId}/device-groups/{groupId}", new { });
+    public async Task<bool> AddUserGroupToRealmAsync(string realmId, string groupId) => await PostBoolAsync($"/api/v1/device-realms/{realmId}/user-groups", new { groupId });
+    public async Task<bool> AddDeviceGroupToRealmAsync(string realmId, string groupId) => await PostBoolAsync($"/api/v1/device-realms/{realmId}/device-groups", new { groupId });
     public async Task<bool> RemoveUserGroupFromRealmAsync(string realmId, string groupId) => await DeleteBoolAsync($"/api/v1/device-realms/{realmId}/user-groups/{groupId}");
     public async Task<bool> RemoveDeviceGroupFromRealmAsync(string realmId, string groupId) => await DeleteBoolAsync($"/api/v1/device-realms/{realmId}/device-groups/{groupId}");
 
@@ -1223,20 +1198,20 @@ public sealed class PamApiService
     public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalRequestsAsync(
         string? status = null, int page = 1, int pageSize = 20)
     {
-        var url = $"/api/v1/approvals?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrEmpty(status)) url += $"&status={status}";
+        var url = $"/api/v1/approval-requests?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(status)) url += "&status=" + status;
         return await GetAsync<PagedResult<ApprovalRequestDto>>(url);
     }
 
     public async Task<ApprovalRequestDto?> GetApprovalRequestAsync(string id)
-        => await GetAsync<ApprovalRequestDto>($"/api/v1/approvals/{id}");
+        => await GetAsync<ApprovalRequestDto>($"/api/v1/approval-requests/{id}");
 
     public async Task<bool> ApproveRequestAsync(string id, string? comment = null)
     {
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync($"/api/v1/approvals/{id}/approve", new { comment });
+            var resp = await client.PostAsJsonAsync($"/api/v1/approval-requests/{id}/approve", new { comment });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -1247,7 +1222,7 @@ public sealed class PamApiService
         var client = await GetAuthClientAsync();
         try
         {
-            var resp = await client.PostAsJsonAsync($"/api/v1/approvals/{id}/reject", new { comment });
+            var resp = await client.PostAsJsonAsync($"/api/v1/approval-requests/{id}/deny", new { comment });
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -2632,7 +2607,7 @@ public sealed class PamApiService
     // ── GET methods returning DTOs / lists ────────────────────────────────
     public async Task<List<FolderDto>?> GetFoldersAsync() => await GetAsync<List<FolderDto>>("/api/v1/vault/folders");
     public async Task<List<CredentialDto>?> GetFolderCredentialsAsync(string folderId) => await GetAsync<List<CredentialDto>>($"/api/v1/vault/folders/{folderId}/credentials");
-    public async Task<List<AssignedCredentialDto>?> GetAssignedCredentialsAsync() => await GetAsync<List<AssignedCredentialDto>>("/api/v1/vault/assigned-credentials");
+    public async Task<List<AssignedCredentialDto>?> GetAssignedCredentialsAsync() => await GetAsync<List<AssignedCredentialDto>>("/api/v1/assigned-credentials");
     public async Task<List<AlertRuleDto>?> GetAlertRulesAsync() => await GetAsync<List<AlertRuleDto>>("/api/v1/threat-analytics/alert-rules");
     public async Task<PagedResult<ReportDto>?> GetReportsListAsync() => await GetAsync<PagedResult<ReportDto>>("/api/v1/reports");
     public async Task<PagedResult<ReportScheduleDto>?> GetReportSchedulesAsync() => await GetAsync<PagedResult<ReportScheduleDto>>("/api/v1/reports/schedules");
@@ -2655,13 +2630,13 @@ public sealed class PamApiService
     public async Task<List<CredentialTemplateDto>?> GetCredentialTemplatesAsync() => await GetAsync<List<CredentialTemplateDto>>("/api/v1/vault/credential-templates");
     public async Task<List<RotationScriptDto>?> GetRotationScriptsAsync() => await GetAsync<List<RotationScriptDto>>("/api/v1/vault/rotation-scripts");
     public async Task<RotationScriptDto?> GetRotationScriptAsync(string id) => await GetAsync<RotationScriptDto>($"/api/v1/vault/rotation-scripts/{id}");
-    public async Task<List<DiscoveredAccountDto>?> GetDiscoveredAccountsAsync(string? status = null) => await GetAsync<List<DiscoveredAccountDto>>("/api/v1/discovery/accounts" + (!string.IsNullOrEmpty(status) ? $"?status={status}" : ""));
-    public async Task<List<DiscoveryJobDto>?> GetDiscoveryJobsAsync() => await GetAsync<List<DiscoveryJobDto>>("/api/v1/discovery/jobs");
+    public async Task<List<DiscoveredAccountDto>?> GetDiscoveredAccountsAsync(string? status = null) => await GetAsync<List<DiscoveredAccountDto>>("/api/v1/vault/discovered-accounts" + (!string.IsNullOrEmpty(status) ? $"?status={status}" : ""));
+    public async Task<List<DiscoveryJobDto>?> GetDiscoveryJobsAsync() => await GetAsync<List<DiscoveryJobDto>>("/api/v1/vault/discovery-jobs");
     public async Task<KeyStatusDto?> GetEncryptionStatusAsync() => await GetAsync<KeyStatusDto>("/api/v1/encryption/status");
     public async Task<FipsStatusDto?> GetFipsStatusAsync() => await GetAsync<FipsStatusDto>("/api/v1/encryption/fips");
-    public async Task<CredentialRiskSummaryDto?> GetCredentialRiskSummaryAsync() => await GetAsync<CredentialRiskSummaryDto>("/api/v1/vault/risk-summary");
-    public async Task<List<HighRiskCredentialDto>?> GetHighRiskCredentialsAsync() => await GetAsync<List<HighRiskCredentialDto>>("/api/v1/vault/high-risk");
-    public async Task<RotationFailuresResponseDto?> GetRotationFailuresAsync() => await GetAsync<RotationFailuresResponseDto>("/api/v1/vault/rotation-failures");
+    public async Task<CredentialRiskSummaryDto?> GetCredentialRiskSummaryAsync() => await GetAsync<CredentialRiskSummaryDto>("/api/v1/vault/credentials/risk-summary");
+    public async Task<List<HighRiskCredentialDto>?> GetHighRiskCredentialsAsync() => await GetAsync<List<HighRiskCredentialDto>>("/api/v1/vault/credentials/high-risk");
+    public async Task<RotationFailuresResponseDto?> GetRotationFailuresAsync() => await GetAsync<RotationFailuresResponseDto>("/api/v1/vault/credentials/rotation-failures");
     public async Task<CredentialGovernanceSummaryDto?> GetCredentialGovernanceSummaryAsync() => await GetAsync<CredentialGovernanceSummaryDto>("/api/v1/vault/governance/summary");
     public async Task<CredentialAccessMatrixResultDto?> GetCredentialAccessMatrixAsync(int page = 1, int pageSize = 50) => await GetAsync<CredentialAccessMatrixResultDto>($"/api/v1/vault/governance/access-matrix?page={page}&pageSize={pageSize}");
     public async Task<List<StaleCredentialAccessDto>?> GetStaleCredentialAccessAsync(int days = 90) => await GetAsync<List<StaleCredentialAccessDto>>($"/api/v1/vault/governance/stale?days={days}");
@@ -2669,8 +2644,8 @@ public sealed class PamApiService
     public async Task<List<JitRequestDto>?> GetMyJitRequestsAsync() => await GetAsync<List<JitRequestDto>>("/api/v1/jit/my-requests");
     public async Task<BreakGlassListResult?> GetBreakGlassEventsAsync(string? statusFilter = null) { var list = await GetAsync<List<BreakGlassDto>>("/api/v1/break-glass" + (statusFilter != null ? $"?status={statusFilter}" : "")); return list != null ? new BreakGlassListResult(list) : null; }
     public async Task<BreakGlassListResult?> GetMyBreakGlassEventsAsync() { var list = await GetAsync<List<BreakGlassDto>>("/api/v1/break-glass/my"); return list != null ? new BreakGlassListResult(list) : null; }
-    public async Task<List<PendingApprovalDto>?> GetPendingApprovalsAsync(string? userId = null) => await GetAsync<List<PendingApprovalDto>>("/api/v1/approvals/pending" + (userId != null ? $"?userId={userId}" : ""));
-    public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalsAsync(string? status = null, int page = 1, int pageSize = 20) => await GetAsync<PagedResult<ApprovalRequestDto>>("/api/v1/approvals");
+    public async Task<List<PendingApprovalDto>?> GetPendingApprovalsAsync(string? userId = null) => await GetAsync<List<PendingApprovalDto>>("/api/v1/approval-requests/pending" + (userId != null ? "?approverId=" + userId : ""));
+    public async Task<PagedResult<ApprovalRequestDto>?> GetApprovalsAsync(string? status = null, int page = 1, int pageSize = 20) => await GetAsync<PagedResult<ApprovalRequestDto>>("/api/v1/approval-requests");
     public async Task<List<VendorAccessDto>?> GetVendorAccessListAsync(string? filter = null) => await GetAsync<List<VendorAccessDto>>("/api/v1/vendors/access" + (filter != null ? $"?filter={filter}" : ""));
     public async Task<List<AttestationCampaignDto>?> GetAttestationsAsync() => await GetAsync<List<AttestationCampaignDto>>("/api/v1/compliance/attestations");
     public async Task<AttestationDetailDto?> GetAttestationDetailAsync(string id) => await GetAsync<AttestationDetailDto>($"/api/v1/compliance/attestations/{id}");
@@ -2684,7 +2659,7 @@ public sealed class PamApiService
     public async Task<List<MySessionDto>?> GetMySessionsAsync() => await GetAsync<List<MySessionDto>>("/api/v1/sessions/my");
     public async Task<UserProfileDto?> GetMyProfileAsync() => await GetAsync<UserProfileDto>("/api/v1/auth/profile");
     public async Task<List<MfaDeviceDto>?> GetMyMfaDevicesAsync() => await GetAsync<List<MfaDeviceDto>>("/api/v1/mfa/my-devices");
-    public async Task<List<DeviceDto>?> GetMyAccessibleDevicesAsync() => await GetAsync<List<DeviceDto>>("/api/v1/devices/my");
+    public async Task<List<DeviceDto>?> GetMyAccessibleDevicesAsync() => await GetAsync<List<DeviceDto>>("/api/v1/device-realms/accessible-devices");
     public async Task<CurrentUserDto?> GetCurrentUserAsync() => await GetAsync<CurrentUserDto>("/api/v1/auth/me");
     public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId) => await GetAsync<RecordingMetadataDto>($"/api/v1/sessions/{sessionId}/recording/metadata");
     public async Task<RecordingStreamDto?> GetRecordingStreamAsync(string sessionId) => await GetAsync<RecordingStreamDto>($"/api/v1/sessions/{sessionId}/recording");
@@ -2760,12 +2735,12 @@ public sealed class PamApiService
     public async Task<bool> CreateItsmConfigAsync(string name, string provider, string baseUrl, string username, string apiKey, string password, bool requireTicket, bool validateTicket) => await PostBoolAsync("/api/v1/integrations/itsm", new { name, provider, baseUrl, username, apiKey, password, requireTicket, validateTicket });
     public async Task<bool> CreateSiemTargetAsync(string name, string host, int port, string protocol, string format, int facility) => await PostBoolAsync("/api/v1/integrations/siem", new { name, host, port, protocol, format, facility });
     public async Task<bool> CreateAlertRuleAsync(string name, string conditionJson, string actionJson, int cooldownMinutes) => await PostBoolAsync("/api/v1/threat-analytics/alert-rules", new { name, conditionJson, actionJson, cooldownMinutes });
-    public async Task<bool> CreateAssignedCredentialAsync(string credentialId, string principalType, string principalId, string? deviceGroupId, string? notes = null) => await PostBoolAsync("/api/v1/vault/assigned-credentials", new { credentialId, principalType, principalId, deviceGroupId, notes });
+    public async Task<bool> CreateAssignedCredentialAsync(string credentialId, string principalType, string principalId, string? deviceGroupId, string? notes = null) => await PostBoolAsync("/api/v1/assigned-credentials", new { credentialId, principalType, principalId, deviceGroupId, notes });
     public async Task<bool> CreateAttestationAsync(string name, string scopeType, string? scopeFilter, DateTime startsAtUtc, DateTime deadlineUtc, bool autoRevokeOnMiss) => await PostBoolAsync("/api/v1/compliance/attestations", new { name, scopeType, startsAtUtc, deadlineUtc, autoRevokeOnMiss });
     public async Task<bool> CreateCloudAccountAsync(string name, string provider, string accountIdentifier, string region, string keyId, string secret) => await PostBoolAsync("/api/v1/cloud/accounts", new { name, provider, accountIdentifier, region, keyId, secret });
     public async Task<bool> CreateCloudJitRequestAsync(string resourceId, string permission, string justification, int durationMinutes, string? ticketNumber) => await PostBoolAsync("/api/v1/cloud/jit", new { resourceId, permission, justification, durationMinutes, ticketNumber });
     public async Task<bool> CreateCredentialTemplateAsync(string name, string? description, string? deviceType, string? defaultUsername, string? credentialKind, int rotationPeriodDays, int passwordMinLength, bool passwordRequireSpecial, bool sshKeyRotation, string? notes) => await PostBoolAsync("/api/v1/vault/credential-templates", new { name, description, deviceType, defaultUsername, credentialKind, rotationPeriodDays, passwordMinLength, passwordRequireSpecial, sshKeyRotation, notes });
-    public async Task<bool> CreateDiscoveryJobAsync(string name, string type, string target, string? schedule) => await PostBoolAsync("/api/v1/discovery/jobs", new { name, type, target, schedule });
+    public async Task<bool> CreateDiscoveryJobAsync(string name, string type, string target, string? schedule) => await PostBoolAsync("/api/v1/vault/discovery-jobs", new { name, type, target, schedule });
     public async Task<bool> CreateReportScheduleAsync(CreateReportScheduleDto dto) => await PostBoolAsync("/api/v1/reports/schedules", dto);
     public async Task<(bool Ok, string? Id)> CreateRotationScriptAsync(string name, string? description, string deviceType,
         string scriptType, string scriptContent, string? testScriptContent, bool isEnabled,
@@ -2801,7 +2776,7 @@ public sealed class PamApiService
     public async Task<bool> RevokeBreakGlassAsync(string id) => await PostBoolAsync($"/api/v1/break-glass/{id}/revoke", new { });
     public async Task<BreakGlassDto?> SubmitBreakGlassAsync(string resourceType, Guid? resourceId, string resourceName, string reason, string? ticketNumber, int durationMinutes) => await PostAsync<BreakGlassDto>("/api/v1/break-glass", new { resourceType, resourceId, resourceName, reason, ticketNumber, durationMinutes });
     public async Task<bool> SubmitJitRequestAsync(string resourceType, string? resourceName, string reason, int durationMinutes = 60, string? ticketNumber = null) => await PostBoolAsync("/api/v1/jit/requests", new { resourceType, resourceName, reason, durationMinutes, ticketNumber });
-    public async Task<bool> DenyRequestAsync(string requestId, string? comment) => await PostBoolAsync($"/api/v1/approvals/{requestId}/deny", new { comment });
+    public async Task<bool> DenyRequestAsync(string requestId, string? comment) => await PostBoolAsync($"/api/v1/approval-requests/{requestId}/deny", new { comment });
     public async Task<bool> ApproveCloudJitAsync(string id) => await PostBoolAsync($"/api/v1/cloud/jit/{id}/approve", new { });
     public async Task<bool> DenyCloudJitAsync(string id) => await PostBoolAsync($"/api/v1/cloud/jit/{id}/deny", new { });
     public async Task<bool> RevokeCloudJitAsync(string id) => await PostBoolAsync($"/api/v1/cloud/jit/{id}/revoke", new { });
@@ -2872,10 +2847,10 @@ public sealed class PamApiService
         catch { return new MfaConfirmResult(false, null); }
     }
     public async Task<ImportResultDto?> BulkImportUsersAsync(object file) => await PostAsync<ImportResultDto>("/api/v1/users/import", new { file });
-    public async Task<BulkImportResultDto?> BulkImportDiscoveredAccountsAsync(List<string> ids, Guid folderId) => await PostAsync<BulkImportResultDto>("/api/v1/discovery/accounts/bulk-import", new { ids, folderId });
-    public async Task<bool> IgnoreDiscoveredAccountAsync(string id) => await PostBoolAsync($"/api/v1/discovery/accounts/{id}/ignore", new { });
-    public async Task<DiscoveryScanResultDto?> RunDiscoveryJobAsync(string id) => await PostAsync<DiscoveryScanResultDto>($"/api/v1/discovery/jobs/{id}/run", new { });
-    public async Task<bool> TakeoverAccountAsync(string accountId, Guid folderId) => await PostBoolAsync($"/api/v1/discovery/accounts/{accountId}/takeover", new { folderId });
+    public async Task<BulkImportResultDto?> BulkImportDiscoveredAccountsAsync(List<string> ids, Guid folderId) => await PostAsync<BulkImportResultDto>("/api/v1/vault/discovered-accounts/bulk-import", new { ids, folderId });
+    public async Task<bool> IgnoreDiscoveredAccountAsync(string id) => await PostBoolAsync($"/api/v1/vault/discovered-accounts/{id}/ignore", new { });
+    public async Task<DiscoveryScanResultDto?> RunDiscoveryJobAsync(string id) => await PostAsync<DiscoveryScanResultDto>($"/api/v1/vault/discovery-jobs/{id}/run", new { });
+    public async Task<bool> TakeoverAccountAsync(string accountId, Guid folderId) => await PostBoolAsync($"/api/v1/vault/discovered-accounts/{accountId}/takeover", new { folderId });
     public async Task<bool> ForceRefreshThreatFeedsAsync() => await PostBoolAsync("/api/v1/threat-analytics/threat-intel/refresh", new { });
     public async Task<LdapSyncResultDto?> SyncLdapNowAsync(string configId) => await PostAsync<LdapSyncResultDto>($"/api/v1/integrations/ldap/{configId}/sync", new { });
     public async Task<bool> RunReportScheduleNowAsync(string id) => await PostBoolAsync($"/api/v1/reports/schedules/{id}/run", new { });
@@ -2929,7 +2904,7 @@ public sealed class PamApiService
     public async Task<bool> TogglePolicyAsync(string id, bool? enable = null) => await PostBoolAsync($"/api/v1/policies/{id}/toggle", new { enable });
     public async Task<bool> ToggleAlertRuleAsync(string id) => await PostBoolAsync($"/api/v1/threat-analytics/alert-rules/{id}/toggle", new { });
     public async Task<bool> ToggleAlertRuleAsync(Guid id) => await ToggleAlertRuleAsync(id.ToString());
-    public async Task<bool> ToggleAssignedCredentialAsync(string id) => await PostBoolAsync($"/api/v1/vault/assigned-credentials/{id}/toggle", new { });
+    public async Task<bool> ToggleAssignedCredentialAsync(string id) => await PostBoolAsync($"/api/v1/assigned-credentials/{id}/toggle", new { });
     public async Task<bool> ToggleCloudAccountAsync(string id) => await PostBoolAsync($"/api/v1/cloud/accounts/{id}/toggle", new { });
     public async Task<bool> ToggleItsmConfigAsync(string id) => await PostBoolAsync($"/api/v1/integrations/itsm/{id}/toggle", new { });
     public async Task<bool> ToggleSiemTargetAsync(string id) => await PostBoolAsync($"/api/v1/integrations/siem/{id}/toggle", new { });
@@ -2971,7 +2946,7 @@ public sealed class PamApiService
     public async Task<bool> DeletePolicyAsync(string id) => await DeleteBoolAsync($"/api/v1/policies/{id}");
     public async Task<bool> DeleteAlertRuleAsync(string id) => await DeleteBoolAsync($"/api/v1/threat-analytics/alert-rules/{id}");
     public async Task<bool> DeleteAlertRuleAsync(Guid id) => await DeleteAlertRuleAsync(id.ToString());
-    public async Task<bool> DeleteAssignedCredentialAsync(string id) => await DeleteBoolAsync($"/api/v1/vault/assigned-credentials/{id}");
+    public async Task<bool> DeleteAssignedCredentialAsync(string id) => await DeleteBoolAsync($"/api/v1/assigned-credentials/{id}");
     public async Task<bool> DeleteCloudAccountAsync(string id) => await DeleteBoolAsync($"/api/v1/cloud/accounts/{id}");
     public async Task<bool> DeleteCredentialTemplateAsync(string id) => await DeleteBoolAsync($"/api/v1/vault/credential-templates/{id}");
     public async Task<bool> DeleteCustomReportAsync(string id) => await DeleteBoolAsync($"/api/v1/reports/custom/{id}");
@@ -3150,20 +3125,15 @@ public record AccessAssignmentDto(
 public record DeviceRealmDto(
     string    Id,
     string    Name,
-    string?   Description,
-    List<Guid> UserGroupIds,
-    List<string> UserGroupNames,
-    List<Guid> DeviceGroupIds,
-    List<string> DeviceGroupNames,
-    string    PolicyKey,
-    bool      RequiresApproval,
-    DateTime  CreatedAtUtc,
-    DateTime  UpdatedAtUtc,
+    string?   Description = null,
     bool      IsEnabled = true,
+    string?   SessionPolicyId = null,
+    DateTime  CreatedAtUtc = default,
+    DateTime  UpdatedAtUtc = default,
     List<DeviceRealmGroupItemDto>? UserGroups = null,
     List<DeviceRealmGroupItemDto>? DeviceGroups = null);
 
-public record DeviceRealmGroupItemDto(string Id, string Name, string? UserGroupId = null, string? DeviceGroupId = null);
+public record DeviceRealmGroupItemDto(string? UserGroupId = null, string? DeviceGroupId = null, string? Name = null);
 
 public record SessionDto(
     string    Id,
