@@ -344,7 +344,7 @@ try
         .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build())
-        .AddPolicy("AdminPolicy", p => p.RequireRole("Admin", "SecurityAdmin"))
+        .AddPolicy("AdminPolicy", p => p.RequireRole("GlobalAdmin", "VaultAdmin", "SessionAdmin", "DeviceAdmin"))
         .AddPolicy("GrpcProxy", p => p
             .AddAuthenticationSchemes("MutualTls")
             .RequireAuthenticatedUser())

@@ -79,9 +79,9 @@ public static class DeviceEndpoints
             await db.SaveChangesAsync();
             return Results.Created($"/api/v1/devices/{device.Id}",
                 new { success = true, data = new { device.Id, device.Hostname, device.IpAddress } });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
-        devices.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
+        devices.MapGet("/{id:guid}", async (Guid id, OrkunPamDbContext db, HttpContext context) =>
         {
             var d = await db.Devices
                 .Include(d => d.DeviceCredentials)
@@ -89,6 +89,17 @@ public static class DeviceEndpoints
                 .FirstOrDefaultAsync(d => d.Id == id);
 
             if (d == null) return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
+
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+            if (!isAdmin)
+            {
+                var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (callerIdStr == null || !Guid.TryParse(callerIdStr, out var callerId))
+                    return Results.Unauthorized();
+                var accessible = await DeviceRealmEndpoints.GetAccessibleDeviceIdsAsync(db, callerId);
+                if (!accessible.Contains(id))
+                    return Results.Forbid();
+            }
 
             return Results.Ok(new
             {
@@ -132,7 +143,7 @@ public static class DeviceEndpoints
 
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, data = new { d.Id, d.Hostname } });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         devices.MapDelete("/{id:guid}", async (Guid id, OrkunPamDbContext db) =>
         {
@@ -141,7 +152,7 @@ public static class DeviceEndpoints
             db.Devices.Remove(d);
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         devices.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db, HttpContext context) =>
         {
@@ -216,7 +227,7 @@ public static class DeviceEndpoints
             });
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         devices.MapDelete("/{id:guid}/credentials/{credentialId:guid}", async (Guid id, Guid credentialId, OrkunPamDbContext db) =>
         {
@@ -228,7 +239,7 @@ public static class DeviceEndpoints
             db.DeviceCredentials.Remove(dc);
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         // Proxy-only endpoint: store SSH host key fingerprint (TOFU) — requires X-Proxy-Secret
         devices.MapPost("/{id:guid}/ssh-fingerprint", async (Guid id, SshFingerprintRequest req,
