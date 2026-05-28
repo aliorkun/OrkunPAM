@@ -60,7 +60,7 @@ public static class SessionEndpoints
                 return Results.Problem("Credential not found");
             }
 
-            var rdpDecResult = vault.DecryptString(rdpCred.PasswordEnc);
+            var rdpDecResult = vault.Decrypt(rdpCred.PasswordEnc);
             if (rdpDecResult.IsFailure)
             {
                 logger.LogError("RDP validate-token: cannot decrypt credential {CredId}: {Error}",
@@ -68,19 +68,26 @@ public static class SessionEndpoints
                 return Results.Problem("Credential decryption failed");
             }
 
-            return Results.Ok(new
+            try
             {
-                success = true,
-                data = new
+                return Results.Ok(new
                 {
-                    sessionId = info.SessionId,
-                    targetIp = info.TargetIp,
-                    targetPort = info.TargetPort,
-                    targetUsername = info.TargetUsername,
-                    targetPasswordBytes = System.Text.Encoding.UTF8.GetBytes(rdpDecResult.Value),
-                    targetDomain = info.TargetDomain
-                }
-            });
+                    success = true,
+                    data = new
+                    {
+                        sessionId = info.SessionId,
+                        targetIp = info.TargetIp,
+                        targetPort = info.TargetPort,
+                        targetUsername = info.TargetUsername,
+                        targetPasswordBytes = rdpDecResult.Value,
+                        targetDomain = info.TargetDomain
+                    }
+                });
+            }
+            finally
+            {
+                Array.Clear(rdpDecResult.Value, 0, rdpDecResult.Value.Length);
+            }
         }).WithTags("Sessions").AllowAnonymous();
 
         // Called by the RDP proxy to mark a session as completed.
@@ -256,7 +263,7 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // ── Recording Playback endpoints ──────────────────────────────────────────────
+        // ── Recording Playback endpoints ─────────────────────────────────────────────
         sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
             IRecordingPlaybackService playback, HttpContext context) =>
         {

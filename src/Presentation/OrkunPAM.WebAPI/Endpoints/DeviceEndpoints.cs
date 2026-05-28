@@ -15,7 +15,8 @@ public static class DeviceEndpoints
         devices.MapGet("/", async (OrkunPamDbContext db, HttpContext context, string? search, string? type, int page = 1, int pageSize = 50) =>
         {
             var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin")
+                || context.User.IsInRole("SessionAdmin") || context.User.IsInRole("DeviceAdmin");
 
             var query = db.Devices.AsQueryable();
 
@@ -90,7 +91,8 @@ public static class DeviceEndpoints
 
             if (d == null) return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
 
-            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin")
+                || context.User.IsInRole("SessionAdmin") || context.User.IsInRole("DeviceAdmin");
             if (!isAdmin)
             {
                 var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -160,7 +162,8 @@ public static class DeviceEndpoints
                 return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
 
             var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin")
+                || context.User.IsInRole("SessionAdmin") || context.User.IsInRole("DeviceAdmin");
 
             if (!isAdmin)
             {
