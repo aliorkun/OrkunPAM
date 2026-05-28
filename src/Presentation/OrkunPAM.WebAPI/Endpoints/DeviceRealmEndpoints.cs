@@ -284,7 +284,9 @@ public static class DeviceRealmEndpoints
                     Status   = d.Status.ToString(),
                     d.IsReachable,
                     d.IsManaged,
-                    CredentialCount = db.Credentials.Count(c => c.DeviceId == d.Id)
+                    CredentialCount = db.Credentials.Count(c => c.DeviceId == d.Id),
+                    d.NetworkZoneId,
+                    NetworkZoneName = d.NetworkZone != null ? d.NetworkZone.Name : null
                 })
                 .ToListAsync();
 

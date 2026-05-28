@@ -1,5 +1,6 @@
 @page "/devices"
 @inject PamApiService Api
+@inject AuthStateService Auth
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -222,6 +223,10 @@
     private int              _page       = 1;
     private const int        _pageSize   = 20;
 
+    // Realm-filtered: non-admins only see devices accessible via their realm membership.
+    private bool             _isAdmin;
+    private List<DeviceDto>? _realmDevices; // cached full list for client-side filter
+
     // Modal state
     private bool    _showModal;
     private string? _editingId;
@@ -246,6 +251,8 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        var user = await Auth.GetUserAsync();
+        _isAdmin = user?.Roles.Any(r => r is "GlobalAdmin" or "VaultAdmin" or "SessionAdmin") == true;
         _networkZones = await Api.GetNetworkZonesAsync();
         await LoadAsync();
     }
@@ -256,13 +263,41 @@
         _error   = null;
         StateHasChanged();
 
-        var result = await Api.GetDevicesAsync(_search, _typeFilter, status: null, _page, _pageSize);
-        if (result == null)
-            _error = "Failed to load devices — check API connection.";
+        if (_isAdmin)
+        {
+            var result = await Api.GetDevicesAsync(_search, _typeFilter, status: null, _page, _pageSize);
+            if (result == null)
+                _error = "Failed to load devices — check API connection.";
+            else
+            {
+                _devices = result.Data;
+                _meta    = result.Meta;
+            }
+        }
         else
         {
-            _devices = result.Data;
-            _meta    = result.Meta;
+            // Non-admins see only devices accessible via their realm membership.
+            // Fetch once and filter client-side.
+            if (_realmDevices == null)
+            {
+                _realmDevices = await Api.GetMyAccessibleDevicesAsync() ?? [];
+            }
+            var filtered = _realmDevices.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var s = _search.ToLowerInvariant();
+                filtered = filtered.Where(d =>
+                    d.Hostname.ToLowerInvariant().Contains(s) ||
+                    (d.IpAddress?.ToLowerInvariant().Contains(s) == true) ||
+                    (d.Fqdn?.ToLowerInvariant().Contains(s) == true));
+            }
+            if (!string.IsNullOrWhiteSpace(_typeFilter))
+                filtered = filtered.Where(d => d.Type.Equals(_typeFilter, StringComparison.OrdinalIgnoreCase));
+
+            var all = filtered.ToList();
+            var skip = (_page - 1) * _pageSize;
+            _devices = all.Skip(skip).Take(_pageSize).ToList();
+            _meta = new PageMeta(_page, _pageSize, all.Count);
         }
 
         _loading = false;
@@ -273,6 +308,9 @@
     {
         if (e.Key == "Enter") { _page = 1; await LoadAsync(); }
     }
+
+    // After adding/editing a device, non-admins must refresh the realm-filtered list.
+    private void InvalidateRealmCache() { if (!_isAdmin) _realmDevices = null; }
 
     private void ConnectSsh(string deviceId)
         => Nav.NavigateTo($"/connect?deviceId={deviceId}");
@@ -383,6 +421,7 @@
             return;
         }
 
+        InvalidateRealmCache();
         CloseModal();
         if (_editingId == null) _page = 1;
         await LoadAsync();
