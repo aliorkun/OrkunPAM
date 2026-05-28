@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Access;
 using OrkunPAM.Domain.Entities.Device;
+using OrkunPAM.Domain.Enums;
 using OrkunPAM.Persistence;
 
 namespace OrkunPAM.WebAPI.Endpoints;
@@ -332,6 +333,71 @@ public static class DeviceRealmEndpoints
             .AnyAsync(r => r.IsEnabled
                 && r.UserGroups.Any(ug => userGroupIds.Contains(ug.UserGroupId))
                 && r.DeviceGroups.Any(dg => deviceGroupIds.Contains(dg.DeviceGroupId)));
+    }
+
+    /// <summary>
+    /// Returns all device IDs accessible to a user via realm membership or legacy AccessAssignment.
+    /// Used to filter the device list endpoint for non-admin callers.
+    /// </summary>
+    public static async Task<List<Guid>> GetAccessibleDeviceIdsAsync(OrkunPamDbContext db, Guid userId)
+    {
+        var userGroupIds = await db.UserGroups
+            .Where(ug => ug.UserId == userId)
+            .Select(ug => ug.GroupId)
+            .ToListAsync();
+
+        // Realm-based: get device group IDs from realms where user's groups have access
+        var realmDeviceGroupIds = await db.DeviceRealms
+            .Where(r => r.IsEnabled && r.UserGroups.Any(ug => userGroupIds.Contains(ug.UserGroupId)))
+            .SelectMany(r => r.DeviceGroups.Select(dg => dg.DeviceGroupId))
+            .Distinct()
+            .ToListAsync();
+
+        var realmDeviceIds = realmDeviceGroupIds.Count > 0
+            ? await db.DeviceGroupMembers
+                .Where(dgm => realmDeviceGroupIds.Contains(dgm.DeviceGroupId))
+                .Select(dgm => dgm.DeviceId)
+                .Distinct()
+                .ToListAsync()
+            : new List<Guid>();
+
+        // Legacy AccessAssignment fallback (device-targeted)
+        var now = DateTime.UtcNow;
+        var directAssignmentDeviceIds = await db.AccessAssignments
+            .Where(a => a.IsEnabled
+                && a.TargetType == AccessTargetType.Device
+                && (a.ValidFromUtc == null || a.ValidFromUtc <= now)
+                && (a.ValidUntilUtc == null || a.ValidUntilUtc >= now)
+                && ((a.PrincipalType == PrincipalType.User && a.PrincipalId == userId)
+                    || (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId))))
+            .Select(a => a.TargetId)
+            .Distinct()
+            .ToListAsync();
+
+        var groupAssignmentDeviceGroupIds = await db.AccessAssignments
+            .Where(a => a.IsEnabled
+                && a.TargetType == AccessTargetType.DeviceGroup
+                && (a.ValidFromUtc == null || a.ValidFromUtc <= now)
+                && (a.ValidUntilUtc == null || a.ValidUntilUtc >= now)
+                && ((a.PrincipalType == PrincipalType.User && a.PrincipalId == userId)
+                    || (a.PrincipalType == PrincipalType.Group && userGroupIds.Contains(a.PrincipalId))))
+            .Select(a => a.TargetId)
+            .Distinct()
+            .ToListAsync();
+
+        var groupAssignmentDeviceIds = groupAssignmentDeviceGroupIds.Count > 0
+            ? await db.DeviceGroupMembers
+                .Where(dgm => groupAssignmentDeviceGroupIds.Contains(dgm.DeviceGroupId))
+                .Select(dgm => dgm.DeviceId)
+                .Distinct()
+                .ToListAsync()
+            : new List<Guid>();
+
+        return realmDeviceIds
+            .Union(directAssignmentDeviceIds)
+            .Union(groupAssignmentDeviceIds)
+            .Distinct()
+            .ToList();
     }
 }
 

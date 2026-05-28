@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using OrkunPAM.Domain.Entities.Device;
 using OrkunPAM.Domain.Enums;
@@ -11,9 +12,20 @@ public static class DeviceEndpoints
     {
         var devices = app.MapGroup("/api/v1/devices").WithTags("Devices");
 
-        devices.MapGet("/", async (OrkunPamDbContext db, string? search, string? type, int page = 1, int pageSize = 50) =>
+        devices.MapGet("/", async (OrkunPamDbContext db, HttpContext context, string? search, string? type, int page = 1, int pageSize = 50) =>
         {
+            var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+
             var query = db.Devices.AsQueryable();
+
+            if (!isAdmin)
+            {
+                if (callerIdStr == null || !Guid.TryParse(callerIdStr, out var callerId))
+                    return Results.Unauthorized();
+                var accessibleIds = await DeviceRealmEndpoints.GetAccessibleDeviceIdsAsync(db, callerId);
+                query = query.Where(d => accessibleIds.Contains(d.Id));
+            }
 
             if (!string.IsNullOrEmpty(search))
                 query = query.Where(d => d.Hostname.Contains(search) || d.IpAddress!.Contains(search) || d.Fqdn!.Contains(search));
@@ -131,10 +143,46 @@ public static class DeviceEndpoints
             return Results.Ok(new { success = true });
         });
 
-        devices.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db) =>
+        devices.MapGet("/{id:guid}/credentials", async (Guid id, OrkunPamDbContext db, HttpContext context) =>
         {
             if (!await db.Devices.AnyAsync(d => d.Id == id))
                 return Results.NotFound(new { success = false, errors = new[] { "Device not found" } });
+
+            var callerIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isAdmin = context.User.IsInRole("GlobalAdmin") || context.User.IsInRole("VaultAdmin") || context.User.IsInRole("SessionAdmin");
+
+            if (!isAdmin)
+            {
+                if (callerIdStr == null || !Guid.TryParse(callerIdStr, out var callerId))
+                    return Results.Unauthorized();
+
+                var isRealmCovered = await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, id);
+                if (isRealmCovered)
+                {
+                    if (!await DeviceRealmEndpoints.HasRealmAccessAsync(db, callerId, id))
+                        return Results.Forbid();
+                }
+                else
+                {
+                    var credIds = await db.DeviceCredentials
+                        .Where(dc => dc.DeviceId == id)
+                        .Select(dc => dc.CredentialId)
+                        .ToListAsync();
+
+                    var hasAnyAccess = false;
+                    foreach (var credId in credIds)
+                    {
+                        if (await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, callerId, id, credId))
+                        {
+                            hasAnyAccess = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasAnyAccess)
+                        return Results.Forbid();
+                }
+            }
 
             var list = await db.DeviceCredentials
                 .Where(dc => dc.DeviceId == id)
