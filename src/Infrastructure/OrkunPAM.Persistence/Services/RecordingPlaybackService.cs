@@ -16,7 +16,7 @@ public interface IRecordingPlaybackService
     Task<RecordingMetadata?> GetMetadataAsync(string recordingPath, string sessionType);
 
     /// <summary>Stream decrypted recording content as bytes.</summary>
-    Task<byte[]?> GetDecryptedContentAsync(string recordingPath);
+    Task<byte[]?> GetDecryptedContentAsync(string recordingPath, bool useDekFile = true);
 
     /// <summary>Parse SSH recording (asciinema v2 format) into timed events.</summary>
     Task<AsciinemaRecording?> ParseSshRecordingAsync(string recordingPath);
@@ -34,21 +34,16 @@ public interface IRecordingPlaybackService
 public class RecordingPlaybackService : IRecordingPlaybackService
 {
     private readonly IVaultEncryptionService _vault;
-    private readonly IKeyStore _keyStore;
     private readonly ILogger<RecordingPlaybackService> _logger;
-
-    // HKDF info label for recording integrity key derivation
-    private static readonly byte[] RecordingIntegrityLabel = "OrkunPAM-Recording-Integrity-v1"u8.ToArray();
 
     // Recording file magic bytes for format detection
     private static readonly byte[] SshMagic = "OPAM-SSH-REC"u8.ToArray();
     private static readonly byte[] RdpMagic = "OPAM-RDP-REC"u8.ToArray();
     private static readonly byte[] HttpMagic = "OPAM-HTTP-REC"u8.ToArray();
 
-    public RecordingPlaybackService(IVaultEncryptionService vault, IKeyStore keyStore, ILogger<RecordingPlaybackService> logger)
+    public RecordingPlaybackService(IVaultEncryptionService vault, ILogger<RecordingPlaybackService> logger)
     {
         _vault = vault;
-        _keyStore = keyStore;
         _logger = logger;
     }
 
@@ -94,7 +89,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         }
     }
 
-    public async Task<byte[]?> GetDecryptedContentAsync(string recordingPath)
+    public async Task<byte[]?> GetDecryptedContentAsync(string recordingPath, bool useDekFile = true)
     {
         if (string.IsNullOrEmpty(recordingPath) || !File.Exists(recordingPath))
             return null;
@@ -102,7 +97,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         try
         {
             var encryptedBytes = await File.ReadAllBytesAsync(recordingPath);
-            return DecryptRecording(encryptedBytes);
+            return DecryptRecording(encryptedBytes, useDekFile ? recordingPath : null);
         }
         catch (Exception ex)
         {
@@ -113,7 +108,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
 
     public async Task<AsciinemaRecording?> ParseSshRecordingAsync(string recordingPath)
     {
-        var content = await GetDecryptedContentAsync(recordingPath);
+        var content = await GetDecryptedContentAsync(recordingPath, useDekFile: true);
         if (content == null) return null;
 
         try
@@ -130,7 +125,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
 
     public async Task<List<HttpRecordingEntry>?> ParseHttpRecordingAsync(string recordingPath)
     {
-        var content = await GetDecryptedContentAsync(recordingPath);
+        var content = await GetDecryptedContentAsync(recordingPath, useDekFile: true);
         if (content == null) return null;
 
         try
@@ -196,56 +191,29 @@ public class RecordingPlaybackService : IRecordingPlaybackService
 
         try
         {
+            // AES-GCM authentication tag is the integrity mechanism for all recording formats.
+            // A successful decryption means the ciphertext was not tampered with.
+            // Compute the SHA-256 of the raw file as a stable file identity hash.
             var fileBytes = await File.ReadAllBytesAsync(recordingPath);
+            var fileHash = Convert.ToHexString(SHA256.HashData(fileBytes)).ToLowerInvariant();
 
-            if (fileBytes.Length < 96)
+            var plaintext = await GetDecryptedContentAsync(recordingPath, useDekFile: true);
+            if (plaintext == null)
             {
                 return new RecordingIntegrityResult
                 {
                     IsValid = false,
-                    Message = "File too small for integrity verification"
+                    Message = "Decryption failed — recording may be tampered or DEK missing",
+                    FileHash = fileHash
                 };
             }
 
-            // Read the stored MAC from the last 32 bytes
-            var storedMac = new byte[32];
-            Array.Copy(fileBytes, fileBytes.Length - 32, storedMac, 0, 32);
-
-            var contentBytes = new byte[fileBytes.Length - 32];
-            Array.Copy(fileBytes, 0, contentBytes, 0, contentBytes.Length);
-
-            // Require vault key store to be initialized for HMAC-SHA256 verification
-            var dekResult = _keyStore.GetActiveDataEncryptionKey("SessionRecordings");
-            if (!dekResult.IsSuccess)
+            return new RecordingIntegrityResult
             {
-                return new RecordingIntegrityResult
-                {
-                    IsValid = false,
-                    Message = "Vault not initialized — cannot verify recording integrity"
-                };
-            }
-
-            // Derive a purpose-specific 256-bit HMAC key via HKDF so the DEK itself is not used directly
-            var dekBytes = dekResult.Value.Key;
-            var hmacKey = HKDF.DeriveKey(HashAlgorithmName.SHA256, dekBytes, 32, null, RecordingIntegrityLabel);
-            try
-            {
-                using var hmac = new HMACSHA256(hmacKey);
-                var expectedMac = hmac.ComputeHash(contentBytes);
-                var isValid = CryptographicOperations.FixedTimeEquals(storedMac, expectedMac);
-
-                return new RecordingIntegrityResult
-                {
-                    IsValid = isValid,
-                    Message = isValid ? "HMAC-SHA256 integrity verified" : "Integrity check failed — recording may be tampered",
-                    FileHash = Convert.ToHexString(expectedMac).ToLowerInvariant()
-                };
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(hmacKey);
-                CryptographicOperations.ZeroMemory(dekBytes);
-            }
+                IsValid = true,
+                Message = "AES-GCM authentication tag verified",
+                FileHash = fileHash
+            };
         }
         catch (Exception ex)
         {
@@ -258,43 +226,88 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         }
     }
 
-    // ── Private helpers ──────────────────────────────────
+    // ── Private helpers ──────────────────────────────
 
-    private byte[]? DecryptRecording(byte[] encryptedBytes)
+    private byte[]? DecryptRecording(byte[] encryptedBytes, string? recordingPath = null)
     {
-        // Skip magic header (up to 16 bytes) to find encrypted payload
+        // SSH proxy recordings use a per-session DEK stored in a .dek file alongside the .ascrec file.
+        // Format on disk: nonce(12) + ciphertext(variable) + GCM-tag(16)
+        // DEK file: DPAPI-protected on Windows, raw with restricted permissions on non-Windows.
+        // Vault-encrypted recordings (future HTTP proxy etc.) use the vault format:
+        //   version(4) + iv(12) + ciphertext + tag(16)
+        if (recordingPath != null)
+        {
+            var dekPath = Path.ChangeExtension(recordingPath, ".dek");
+            if (File.Exists(dekPath))
+            {
+                try
+                {
+                    return DecryptWithDekFile(encryptedBytes, dekPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "DEK-based decryption failed for {Path}", recordingPath);
+                    return null;
+                }
+            }
+        }
+
+        // Fallback: vault-encrypted recording (version(4) + iv(12) + ciphertext + tag(16))
+        // Skip any magic header prefix written by proxies
         int offset = 0;
         if (encryptedBytes.Length > 16)
         {
-            // Check for known magic headers
-            if (StartsWithMagic(encryptedBytes, SshMagic))
-                offset = SshMagic.Length;
-            else if (StartsWithMagic(encryptedBytes, RdpMagic))
-                offset = RdpMagic.Length;
-            else if (StartsWithMagic(encryptedBytes, HttpMagic))
-                offset = HttpMagic.Length;
+            if (StartsWithMagic(encryptedBytes, SshMagic)) offset = SshMagic.Length;
+            else if (StartsWithMagic(encryptedBytes, RdpMagic)) offset = RdpMagic.Length;
+            else if (StartsWithMagic(encryptedBytes, HttpMagic)) offset = HttpMagic.Length;
         }
 
-        // Strip trailing hash if present (last 32 bytes)
-        int payloadLength = encryptedBytes.Length - offset;
-        if (payloadLength > 32)
-        {
-            // Heuristic: if there's a hash chain footer, remove it before decryption
-            // The encrypted payload has its own authenticated encryption (AES-GCM tag)
-        }
-
-        var payload = new byte[payloadLength];
-        Array.Copy(encryptedBytes, offset, payload, 0, payloadLength);
-
+        var payload = encryptedBytes.AsSpan(offset).ToArray();
         var result = _vault.Decrypt(payload);
         if (result.IsFailure)
         {
-            _logger.LogError("Recording decryption failed: {Error}", result.Error.Message);
+            _logger.LogError("Vault decryption failed: {Error}", result.Error.Message);
             return null;
         }
 
         return result.Value;
     }
+
+    // Decrypt a recording that was encrypted by SessionRecorder using a per-session DEK.
+    // File format: nonce(12) + ciphertext(variable) + GCM-tag(16)
+    private static byte[] DecryptWithDekFile(byte[] encryptedBytes, string dekPath)
+    {
+        const int NonceSize = 12;
+        const int TagSize = 16;
+
+        if (encryptedBytes.Length < NonceSize + TagSize)
+            throw new InvalidDataException("Recording file too small for DEK-based format.");
+
+        var rawDek = File.ReadAllBytes(dekPath);
+        var dek = OperatingSystem.IsWindows() ? UnprotectDekWindows(rawDek) : rawDek;
+
+        try
+        {
+            var nonce = encryptedBytes.AsSpan(0, NonceSize);
+            var ciphertextLength = encryptedBytes.Length - NonceSize - TagSize;
+            var ciphertext = encryptedBytes.AsSpan(NonceSize, ciphertextLength);
+            var tag = encryptedBytes.AsSpan(NonceSize + ciphertextLength, TagSize);
+            var plaintext = new byte[ciphertextLength];
+
+            using var aes = new AesGcm(dek, TagSize);
+            aes.Decrypt(nonce, ciphertext, tag, plaintext);
+            return plaintext;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(dek);
+        }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static byte[] UnprotectDekWindows(byte[] protectedDek) =>
+        System.Security.Cryptography.ProtectedData.Unprotect(
+            protectedDek, null, System.Security.Cryptography.DataProtectionScope.LocalMachine);
 
     private static bool StartsWithMagic(byte[] data, byte[] magic)
     {
@@ -397,7 +410,8 @@ public class RecordingPlaybackService : IRecordingPlaybackService
     };
 }
 
-// ── DTOs ────────────────────────────────────────────────────\n
+// ── DTOs ────────────────────────────────────────────\\
+
 public class RecordingMetadata
 {
     public long FileSizeBytes { get; set; }
