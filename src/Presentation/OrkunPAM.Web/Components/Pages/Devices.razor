@@ -321,9 +321,10 @@
         _launchError = null;
         StateHasChanged();
 
-        // Use first available credential for the device (simplified)
-        var creds = await Api.GetCredentialsAsync(deviceId: deviceId, pageSize: 1);
-        var credId = creds?.Data?.FirstOrDefault()?.Id;
+        // Use primary (or first) credential linked to this device.
+        var deviceCreds = await Api.GetDeviceCredentialsAsync(deviceId);
+        var credId = deviceCreds?.FirstOrDefault(c => c.IsPrimary)?.Id
+                  ?? deviceCreds?.FirstOrDefault()?.Id;
         if (credId == null)
         {
             _launchError = "No credentials found for this device.";

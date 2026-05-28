@@ -194,6 +194,9 @@ public sealed class PamApiService
     public async Task<DeviceDto?> GetDeviceAsync(string id)
         => await GetAsync<DeviceDto>($"/api/v1/devices/{id}");
 
+    public async Task<List<DeviceCredentialDto>?> GetDeviceCredentialsAsync(string deviceId)
+        => await GetAsync<List<DeviceCredentialDto>>($"/api/v1/devices/{deviceId}/credentials");
+
     public async Task<bool> CreateDeviceAsync(
         string hostname, string? fqdn, string? ipAddress,
         string type, string protocol, int port, string? os,
@@ -4974,3 +4977,11 @@ public record CustomReportPreviewResultDto(
     List<string> Columns,
     List<Dictionary<string, string>> Rows,
     string? FilterSummary);
+
+public record DeviceCredentialDto(
+    Guid   Id,
+    string Name,
+    string? Username,
+    string Type,
+    string Purpose,
+    bool   IsPrimary);
