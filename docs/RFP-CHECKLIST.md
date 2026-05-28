@@ -1,7 +1,7 @@
 # PAM RFP Template - Compliance Checklist
 
 > Auto-generated from PAM Template.xlsx. PM Agent uses this to track which RFP items are implemented.
-> Last updated: 2026-05-27 (PM Run #36: Post-sprint security hardening -- #313 RDP CWE-316 plaintext cache fixed + CWE-284 fail-secure enforced (commit 56710e8); #314 DeviceCredential fail-open closed; WebSSH/WebRDP auth aligned with session access control (commit 53cebb3); 12 broken PamApiService API URLs fixed (commit e56b98c); no new RFP items; PM Run #35: Refactoring Sprint TAMAMLANDI 6/6 -- #311 SSH ZeroMemory bug fixed (commit dda82e6 fixes #311); SSH ECDSA + disconnect handling fixed (commit c5258eb); Refactoring sprint fully complete; no new issues; PM Run #34: Refactoring Sprint -- #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint -- #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 -> PC #290; Sprint 64 UM #13 -> PC #291; PM Run #31: Sprint 61 PV #12 -> PC #284; Sprint 62 MFA #21 -> PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 -> PC; Sprint 60 RA #8 -> PC #283; Sprint 59 Platform #44 -> PC #282; Sprint 57 R #39+40+41 -> PC #278; Sprint 56 MFA #23 -> PC #277; Sprint 55 MFA #22 -> PC #270; Sprint 54 UM #48 -> PC #271; Platform #21 -> PC #262; Sprint 52 RA #41 -> PC #263; Sprint 51 MFA #7 -> PC #261; Sprint 50 RA #40 -> PC #258; Sprint 49 MFA #20 -> PC #257; Sprint 48 PV #38 -> PC #251; Sprint 47 MFA #16 -> PC #252; Sprint 46 MFA #17+#18 -> PC #250; Sprint 45 RA #26 -> PC #249; Sprint 44 PV #21 -> PC #248; Sprint 43 RA #28+#30 -> PC #240; Sprint 42 PV #37 -> PC #241; Sprint 41 RA #45 -> PC #239)
+> Last updated: 2026-05-28 (PM Run #37: #315 CWE-316 dead credential decrypt in CreateSession removed (commit d94ab30); #316 CWE-284 AccessAssignment TimeWindowJson enforcement now active (commit d94ab30); realm-based device visibility enforced on Devices page + GET /devices for non-admin users (commit 05a6200 + 9acac29); LaunchNativeAsync now uses device credentials endpoint (commit 6f29716); missing CredentialTemplate + ReportExport endpoints registered in Program.cs (commit bd00576); backlog 1 open issue (#112 refactoring-deferred); no new issues; PM Run #36: Post-sprint security hardening -- #313 RDP CWE-316 plaintext cache fixed + CWE-284 fail-secure enforced (commit 56710e8); #314 DeviceCredential fail-open closed; WebSSH/WebRDP auth aligned with session access control (commit 53cebb3); 12 broken PamApiService API URLs fixed (commit e56b98c); no new RFP items; PM Run #35: Refactoring Sprint TAMAMLANDI 6/6 -- #311 SSH ZeroMemory bug fixed (commit dda82e6 fixes #311); SSH ECDSA + disconnect handling fixed (commit c5258eb); Refactoring sprint fully complete; no new issues; PM Run #34: Refactoring Sprint -- #304 DeviceCredential CRUD closed, #306 endpoint cleanup closed; SSH proxy credential lookup improved (commit a653edd, #307); #311 HIGH severity SSH ZeroMemory bug opened; no new RFP items; PM Run #33: Refactoring Sprint -- #302 closed (build fix), #303 menu simplification + #305 session auth closed; no new RFP items; PM Run #32: Sprint 63 R #12 -> PC #290; Sprint 64 UM #13 -> PC #291; PM Run #31: Sprint 61 PV #12 -> PC #284; Sprint 62 MFA #21 -> PC #289; PM Run #30 backfill: Platform #41 + UM #12 + RA #3 + RA #4 + RA #5 + RA #21 + MFA #5 + MFA #9 + MFA #10 + MFA #19 -> PC; Sprint 60 RA #8 -> PC #283; Sprint 59 Platform #44 -> PC #282; Sprint 57 R #39+40+41 -> PC #278; Sprint 56 MFA #23 -> PC #277; Sprint 55 MFA #22 -> PC #270; Sprint 54 UM #48 -> PC #271; Platform #21 -> PC #262; Sprint 52 RA #41 -> PC #263; Sprint 51 MFA #7 -> PC #261; Sprint 50 RA #40 -> PC #258; Sprint 49 MFA #20 -> PC #257; Sprint 48 PV #38 -> PC #251; Sprint 47 MFA #16 -> PC #252; Sprint 46 MFA #17+#18 -> PC #250; Sprint 45 RA #26 -> PC #249; Sprint 44 PV #21 -> PC #248; Sprint 43 RA #28+#30 -> PC #240; Sprint 42 PV #37 -> PC #241; Sprint 41 RA #45 -> PC #239)
 
 **Legend:** PC = Partially Complete, C = Complete, NS = Not Started, N/A = Not Applicable
 
@@ -313,7 +313,7 @@
 ---
 
 *This checklist is maintained by the PM Agent and updated after each sprint.*
-*Last full review: 2026-05-27 (PM Run #36 -- Post-sprint security hardening: #313 RDP CWE-316/208 fixed; #314 DeviceCredential CWE-284 fail-secure; WebSSH/WebRDP auth aligned; 12 API URLs corrected; no new RFP items; all 6 refactoring issues closed)*
+*Last full review: 2026-05-28 (PM Run #37 -- Security hardening continued: #315 CWE-316 dead credential decrypt removed from CreateSession; #316 CWE-284 AccessAssignment TimeWindowJson now enforced; realm-based device visibility + GET /devices access control; LaunchNativeAsync credential endpoint fix; missing CredentialTemplate + ReportExport endpoint registrations fixed; backlog: 1 open issue #112 refactoring-deferred; refactoring sprint fully stable)*
 
 ---
 
@@ -321,6 +321,7 @@
 
 | Sprint / Run | Issues Closed | RFP Items |
 |--------|--------------|----------|
+| PM Run #37 | #315 (CWE-316 dead credential decrypt in CreateSession), #316 (CWE-284 TimeWindowJson enforcement), realm-based device visibility (05a6200 + 9acac29), LaunchNativeAsync credential endpoint (6f29716), endpoint registrations fix (bd00576) | No new RFP items -- security hardening only |
 | PM Run #36 | #313 (RDP CWE-316 plaintext cache), #314 (DeviceCredential CWE-284 fail-open), WebSSH/WebRDP auth fix (53cebb3), 12 API URL fixes (e56b98c) | No new RFP items -- security hardening only |
 | PM Run #35 | #311 (SSH ZeroMemory fix) -- Refactoring Sprint 6/6 COMPLETE | No new RFP items -- RA #1 SSH proxy now fully stable |
 | PM Run #34 | #304 (DeviceCredential CRUD), #306 (endpoint cleanup) | No new RFP items -- refactoring fixes only |
@@ -390,3 +391,8 @@ High priority NS items based on RFP weight:
 - RDP CWE-316 plaintext cache + CWE-208 timing-safe + CWE-284 fail-secure (#313 #314) = CLOSED -- fixed commit 56710e8
 - WebSSH/WebRDP auth alignment = commit 53cebb3 (session access control model)
 - 12 broken PamApiService API URL fixes = commit e56b98c
+- CreateSession dead credential decrypt removed (#315) = CLOSED -- commit d94ab30; CWE-316 eliminated; vault inject no longer leaks plaintext to heap
+- AccessAssignment TimeWindowJson enforcement (#316) = CLOSED -- commit d94ab30; CWE-284 fixed; Platform #42 time-based access control now enforced on all 4 session paths (WebSSH, WebRDP, CreateSession, CreateRdpSession)
+- Realm-based device visibility: GET /devices + Devices page non-admin filtering = commits 05a6200 + 9acac29
+- LaunchNativeAsync uses device credentials endpoint = commit 6f29716
+- CredentialTemplate + ReportExport endpoint registrations = commit bd00576
