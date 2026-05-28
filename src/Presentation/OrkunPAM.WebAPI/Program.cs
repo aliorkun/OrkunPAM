@@ -467,6 +467,7 @@ try
     api.MapGroupEndpoints();
     api.MapRoleEndpoints();
     api.MapVaultEndpoints();
+    api.MapCredentialTemplateEndpoints();
     api.MapDeviceEndpoints();
     api.MapPolicyEndpoints();
     api.MapWorkflowEndpoints();
@@ -478,6 +479,7 @@ try
     api.MapWebRdpEndpoints();
     api.MapDiscoveryEndpoints();
     api.MapReportEndpoints();
+    api.MapReportExportEndpoints();
     api.MapReportScheduleEndpoints();
     api.MapCustomReportEndpoints();
     api.MapExecutiveDashboardEndpoints();
