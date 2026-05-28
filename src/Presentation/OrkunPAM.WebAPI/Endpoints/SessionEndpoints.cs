@@ -68,26 +68,21 @@ public static class SessionEndpoints
                 return Results.Problem("Credential decryption failed");
             }
 
-            try
+            var passwordCopy = (byte[])rdpDecResult.Value.Clone();
+            Array.Clear(rdpDecResult.Value, 0, rdpDecResult.Value.Length);
+            return Results.Ok(new
             {
-                return Results.Ok(new
+                success = true,
+                data = new
                 {
-                    success = true,
-                    data = new
-                    {
-                        sessionId = info.SessionId,
-                        targetIp = info.TargetIp,
-                        targetPort = info.TargetPort,
-                        targetUsername = info.TargetUsername,
-                        targetPasswordBytes = rdpDecResult.Value,
-                        targetDomain = info.TargetDomain
-                    }
-                });
-            }
-            finally
-            {
-                Array.Clear(rdpDecResult.Value, 0, rdpDecResult.Value.Length);
-            }
+                    sessionId = info.SessionId,
+                    targetIp = info.TargetIp,
+                    targetPort = info.TargetPort,
+                    targetUsername = info.TargetUsername,
+                    targetPasswordBytes = passwordCopy,
+                    targetDomain = info.TargetDomain
+                }
+            });
         }).WithTags("Sessions").AllowAnonymous();
 
         // Called by the RDP proxy to mark a session as completed.
@@ -760,7 +755,7 @@ public static class SessionEndpoints
                 return Results.Json(
                     new { success = false, errors = new[] { "No access assignment for this device/credential combination" } },
                     statusCode: 403);
-            }
+                }
         }
 
         if (!await HasCredentialAccessAsync(db, userId, isAdmin, cred, skipPermissionCheck: isRdpRealmCovered))

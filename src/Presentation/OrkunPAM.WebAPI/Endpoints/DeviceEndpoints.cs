@@ -290,7 +290,7 @@ public static class DeviceEndpoints
             db.DeviceGroups.Add(g);
             await db.SaveChangesAsync();
             return Results.Created($"/api/v1/device-groups/{g.Id}", new { success = true, data = new { g.Id, g.Name } });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         groups.MapPost("/{id:guid}/members", async (Guid id, AddDeviceGroupMembersRequest req, OrkunPamDbContext db) =>
         {
@@ -304,7 +304,7 @@ public static class DeviceEndpoints
             }
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, message = $"{added} device(s) added" });
-        });
+        }).RequireAuthorization("AdminPolicy");
 
         var platforms = app.MapGroup("/api/v1/platforms").WithTags("Devices");
 
@@ -332,7 +332,7 @@ public static class DeviceEndpoints
             db.Platforms.Add(p);
             await db.SaveChangesAsync();
             return Results.Created($"/api/v1/platforms/{p.Id}", new { success = true, data = new { p.Id, p.Name } });
-        });
+        }).RequireAuthorization("AdminPolicy");
     }
 }
 
