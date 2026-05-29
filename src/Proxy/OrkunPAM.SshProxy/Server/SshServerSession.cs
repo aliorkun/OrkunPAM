@@ -72,6 +72,9 @@ internal sealed class SshServerSession
             // Fail-secure: deny if check fails or returns false.
             if (!await _api.CheckRealmAccessAsync(userId, deviceId, credentialId, _ct))
             {
+                // CWE-316: zero decrypted credentials before denial path to prevent heap exposure
+                if (targetPassword != null) Array.Clear(targetPassword, 0, targetPassword.Length);
+                if (jumpHostPassword != null) Array.Clear(jumpHostPassword, 0, jumpHostPassword.Length);
                 _log.LogWarning(
                     "[SECURITY] SSH access denied: PAM user '{PamUser}' (id={UserId}) has no realm/assignment access to device {DeviceId}",
                     pamUser, userId, deviceId);
