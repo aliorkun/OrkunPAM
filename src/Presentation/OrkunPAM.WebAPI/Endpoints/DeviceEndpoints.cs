@@ -257,9 +257,11 @@ public static class DeviceEndpoints
         devices.MapPost("/{id:guid}/ssh-fingerprint", async (Guid id, SshFingerprintRequest req,
             OrkunPamDbContext db, IConfiguration config, HttpContext context) =>
         {
-            var expectedSecret = config["ProxyService:Secret"];
-            var providedSecret = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault();
-            if (string.IsNullOrEmpty(expectedSecret) || providedSecret != expectedSecret)
+            var expectedSecret = config["ProxyService:Secret"] ?? "";
+            var providedSecret = context.Request.Headers["X-Proxy-Secret"].FirstOrDefault() ?? "";
+            if (expectedSecret.Length < 32 || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(expectedSecret),
+                    System.Text.Encoding.UTF8.GetBytes(providedSecret)))
                 return Results.Forbid();
 
             var d = await db.Devices.FindAsync(id);
