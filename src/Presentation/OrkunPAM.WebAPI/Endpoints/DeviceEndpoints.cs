@@ -61,13 +61,18 @@ public static class DeviceEndpoints
 
         devices.MapPost("/", async (CreateDeviceRequest req, OrkunPamDbContext db) =>
         {
+            if (!Enum.TryParse<DeviceType>(req.DeviceType, true, out var deviceType))
+                deviceType = DeviceType.LinuxServer;
+            if (!Enum.TryParse<ConnectionProtocol>(req.Protocol, true, out var protocol))
+                protocol = ConnectionProtocol.Ssh;
+
             var device = new Device
             {
                 Hostname = req.Hostname,
                 Fqdn = req.Fqdn,
                 IpAddress = req.IpAddress,
-                DeviceType = req.DeviceType,
-                ConnectionProtocol = req.Protocol,
+                DeviceType = deviceType,
+                ConnectionProtocol = protocol,
                 ConnectionPort = req.Port,
                 OperatingSystem = req.OperatingSystem,
                 Tags = req.Tags,
@@ -337,7 +342,7 @@ public static class DeviceEndpoints
 }
 
 public record CreateDeviceRequest(string Hostname, string? Fqdn, string? IpAddress,
-    DeviceType DeviceType, ConnectionProtocol Protocol, int? Port,
+    string? DeviceType, string? Protocol, int? Port,
     string? OperatingSystem, string? Tags, string? Notes, Guid? PlatformId, Guid? NetworkZoneId);
 public record UpdateDeviceRequest(string? Hostname, string? IpAddress, string? Fqdn,
     string? OperatingSystem, string? Tags, string? Notes, int? Port, DeviceStatus? Status, Guid? NetworkZoneId);

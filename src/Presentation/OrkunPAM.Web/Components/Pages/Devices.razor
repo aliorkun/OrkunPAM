@@ -162,10 +162,18 @@
                     <div class="pam-form-group" style="flex:1">
                         <label class="pam-label">Type *</label>
                         <select class="pam-input" style="width:100%" @bind="_fType">
-                            <option value="Server">Server</option>
-                            <option value="Workstation">Workstation</option>
-                            <option value="NetworkDevice">Network Device</option>
+                            <option value="WindowsServer">Windows Server</option>
+                            <option value="LinuxServer">Linux Server</option>
+                            <option value="WindowsWorkstation">Windows Workstation</option>
+                            <option value="NetworkSwitch">Network Switch</option>
+                            <option value="NetworkRouter">Network Router</option>
+                            <option value="Firewall">Firewall</option>
                             <option value="DatabaseServer">Database Server</option>
+                            <option value="WebApplication">Web Application</option>
+                            <option value="Hypervisor">Hypervisor</option>
+                            <option value="CloudInstance">Cloud Instance</option>
+                            <option value="IoT">IoT</option>
+                            <option value="Other">Other</option>
                         </select>
                     </div>
                     <div class="pam-form-group" style="flex:1">
@@ -235,7 +243,7 @@
     private string  _fHostname       = "";
     private string  _fIpAddress      = "";
     private string  _fFqdn           = "";
-    private string  _fType           = "Server";
+    private string  _fType           = "LinuxServer";
     private string  _fProtocol       = "Ssh";
     private int     _fPort           = 22;
     private string  _fOs             = "";
