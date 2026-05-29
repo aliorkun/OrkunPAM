@@ -147,6 +147,10 @@ public static class DeviceEndpoints
             if (req.Port.HasValue) d.ConnectionPort = req.Port.Value;
             if (req.Status.HasValue) d.Status = req.Status.Value;
             if (req.NetworkZoneId.HasValue) d.NetworkZoneId = req.NetworkZoneId == Guid.Empty ? null : req.NetworkZoneId;
+            if (!string.IsNullOrEmpty(req.DeviceType) && Enum.TryParse<DeviceType>(req.DeviceType, true, out var updatedType))
+                d.DeviceType = updatedType;
+            if (!string.IsNullOrEmpty(req.Protocol) && Enum.TryParse<ConnectionProtocol>(req.Protocol, true, out var updatedProtocol))
+                d.ConnectionProtocol = updatedProtocol;
 
             await db.SaveChangesAsync();
             return Results.Ok(new { success = true, data = new { d.Id, d.Hostname } });
@@ -345,7 +349,8 @@ public record CreateDeviceRequest(string Hostname, string? Fqdn, string? IpAddre
     string? DeviceType, string? Protocol, int? Port,
     string? OperatingSystem, string? Tags, string? Notes, Guid? PlatformId, Guid? NetworkZoneId);
 public record UpdateDeviceRequest(string? Hostname, string? IpAddress, string? Fqdn,
-    string? OperatingSystem, string? Tags, string? Notes, int? Port, DeviceStatus? Status, Guid? NetworkZoneId);
+    string? OperatingSystem, string? Tags, string? Notes, int? Port, DeviceStatus? Status, Guid? NetworkZoneId,
+    string? DeviceType, string? Protocol);
 public record LinkCredentialRequest(Guid CredentialId, CredentialPurpose Purpose, bool IsPrimary);
 public record CreateDeviceGroupRequest(string Name, DeviceGroupType GroupType, int? VlanId, string? SubnetCidr, Guid? ParentGroupId);
 public record AddDeviceGroupMembersRequest(Guid[] DeviceIds);
