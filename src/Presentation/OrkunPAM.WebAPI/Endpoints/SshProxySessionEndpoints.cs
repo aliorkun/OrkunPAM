@@ -96,6 +96,46 @@ public static class SshProxySessionEndpoints
                 data = new { terminated = session.Status == SessionStatus.Terminated }
             });
         }).WithTags("SSH").AllowAnonymous();
+
+        // POST /api/v1/ssh/proxy/realm-check — verify user has realm/access-assignment access to device
+        app.MapPost("/api/v1/ssh/proxy/realm-check",
+            async (SshRealmCheckRequest req, OrkunPamDbContext db,
+                   IConfiguration config, HttpContext context, ILogger<Program> logger) =>
+        {
+            if (!ValidateProxySecret(context, config)) return Results.Unauthorized();
+
+            if (!Guid.TryParse(req.UserId, out var userId))
+                return Results.Ok(new { success = true, data = new { allowed = false, reason = "Invalid userId" } });
+
+            if (!Guid.TryParse(req.DeviceId, out var deviceId))
+                return Results.Ok(new { success = true, data = new { allowed = false, reason = "Invalid deviceId" } });
+
+            bool allowed;
+            bool isRealmCovered = await DeviceRealmEndpoints.IsDeviceCoveredByRealmAsync(db, deviceId);
+
+            if (isRealmCovered)
+            {
+                allowed = await DeviceRealmEndpoints.HasRealmAccessAsync(db, userId, deviceId);
+            }
+            else if (!string.IsNullOrEmpty(req.CredentialId) && Guid.TryParse(req.CredentialId, out var credentialId))
+            {
+                allowed = await AccessAssignmentEndpoints.HasAccessAssignmentAsync(db, userId, deviceId, credentialId);
+            }
+            else
+            {
+                // No realm and no credential to check — deny
+                allowed = false;
+            }
+
+            if (!allowed)
+            {
+                logger.LogWarning(
+                    "[AUDIT] SSH_PROXY_ACCESS_DENIED userId={UserId} deviceId={DeviceId} realmCovered={RealmCovered}",
+                    req.UserId, req.DeviceId, isRealmCovered);
+            }
+
+            return Results.Ok(new { success = true, data = new { allowed, realmCovered = isRealmCovered } });
+        }).WithTags("SSH").AllowAnonymous();
     }
 
     private static bool ValidateProxySecret(HttpContext context, IConfiguration config)
@@ -115,4 +155,6 @@ public static class SshProxySessionEndpoints
 
     private sealed record SshSessionEndRequest(
         string SessionId, int DurationSeconds, string? RecordingPath);
+
+    private sealed record SshRealmCheckRequest(string? UserId, string? DeviceId, string? CredentialId);
 }

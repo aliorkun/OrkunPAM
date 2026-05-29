@@ -68,6 +68,16 @@ internal sealed class SshServerSession
             var (targetIp, targetPort, targetUser, targetPassword, targetPrivateKey, expectedFingerprint, deviceId, credentialId, jumpHostAddress, jumpHostPassword, jumpHostUser, jumpHostFingerprint, networkZoneId) =
                 await _api.GetTargetCredentialAsync(pamUser, targetHost, _ct);
 
+            // Realm-based access control (CWE-284): verify user has access to this device.
+            // Fail-secure: deny if check fails or returns false.
+            if (!await _api.CheckRealmAccessAsync(userId, deviceId, credentialId, _ct))
+            {
+                _log.LogWarning(
+                    "[SECURITY] SSH access denied: PAM user '{PamUser}' (id={UserId}) has no realm/assignment access to device {DeviceId}",
+                    pamUser, userId, deviceId);
+                throw new SshException($"Access denied: user '{pamUser}' is not authorized for this device.");
+            }
+
             _log.LogInformation("Connecting to target {User}@{Host}:{Port} for PAM user '{PamUser}' (auth: {Auth}, tofu: {Tofu})",
                 targetUser, targetIp, targetPort, pamUser,
                 targetPrivateKey != null ? "publickey" : "password",

@@ -411,6 +411,33 @@ internal sealed class PamApiClient
         }
     }
 
+    /// <summary>
+    /// Verify that the PAM user has realm or access-assignment access to the target device.
+    /// Returns false on any error (fail-secure).
+    /// </summary>
+    internal async Task<bool> CheckRealmAccessAsync(string? userId, string deviceId, string credentialId, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(userId)) return false;
+        try
+        {
+            var client = _factory.CreateClient("PamApi");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/ssh/proxy/realm-check");
+            req.Content = JsonContent.Create(new { userId, deviceId, credentialId });
+            req.Headers.Add("X-Proxy-Secret", _proxySecret);
+            var resp = await client.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return false;
+            var json = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(ct);
+            return json.TryGetProperty("data", out var d) &&
+                   d.TryGetProperty("allowed", out var a) && a.GetBoolean();
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "CheckRealmAccess failed for userId={UserId} deviceId={DeviceId} — denying (fail-secure)",
+                userId, deviceId);
+            return false;
+        }
+    }
+
     /// <summary>Check if an admin has terminated this session via the UI.</summary>
     internal async Task<bool> IsTerminatedAsync(string sessionId, CancellationToken ct)
     {
