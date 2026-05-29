@@ -83,6 +83,8 @@ try
     builder.Services.AddSingleton<IJwtTokenService>(sp =>
         new JwtTokenService(sp.GetRequiredService<RsaSecurityKey>(),
             sp.GetRequiredService<IConfiguration>()));
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<OrkunPAM.SharedKernel.ICurrentUserService, OrkunPAM.WebAPI.Services.HttpContextCurrentUserService>();
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
     builder.Services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
