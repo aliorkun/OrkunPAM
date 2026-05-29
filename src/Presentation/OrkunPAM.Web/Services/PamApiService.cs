@@ -2664,10 +2664,10 @@ public sealed class PamApiService
     public async Task<List<MfaDeviceDto>?> GetMyMfaDevicesAsync() => await GetAsync<List<MfaDeviceDto>>("/api/v1/mfa/my-devices");
     public async Task<List<DeviceDto>?> GetMyAccessibleDevicesAsync() => await GetAsync<List<DeviceDto>>("/api/v1/device-realms/accessible-devices");
     public async Task<CurrentUserDto?> GetCurrentUserAsync() => await GetAsync<CurrentUserDto>("/api/v1/auth/me");
-    public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId) => await GetAsync<RecordingMetadataDto>($"/api/v1/sessions/{sessionId}/recording/metadata");
-    public async Task<RecordingStreamDto?> GetRecordingStreamAsync(string sessionId) => await GetAsync<RecordingStreamDto>($"/api/v1/sessions/{sessionId}/recording");
+    public async Task<RecordingMetadataDto?> GetRecordingMetadataAsync(string sessionId) => await GetAsync<RecordingMetadataDto>($"/api/v1/sessions/{sessionId}/recording");
+    public async Task<RecordingStreamDto?> GetRecordingStreamAsync(string sessionId) => await GetAsync<RecordingStreamDto>($"/api/v1/sessions/{sessionId}/recording/stream");
     public async Task<ListResult<RecordingSearchHitDto>?> SearchRecordingAsync(string sessionId, string query) => await GetAsync<ListResult<RecordingSearchHitDto>>($"/api/v1/sessions/{sessionId}/recording/search?q={Uri.EscapeDataString(query)}");
-    public async Task<List<ScreenCaptureFrameDto>?> GetScreenCapturesAsync(string sessionId) => await GetAsync<List<ScreenCaptureFrameDto>>($"/api/v1/sessions/{sessionId}/recording/captures");
+    public async Task<List<ScreenCaptureFrameDto>?> GetScreenCapturesAsync(string sessionId) => await GetAsync<List<ScreenCaptureFrameDto>>($"/api/v1/sessions/{sessionId}/screen-captures");
     public async Task<List<RdpHaNodeDto>?> GetRdpHaNodesAsync() => await GetAsync<List<RdpHaNodeDto>>("/api/v1/rdp/ha-nodes");
     public async Task<List<RemoteAppDto>?> GetRemoteAppsAsync() => await GetAsync<List<RemoteAppDto>>("/api/v1/rdp/remote-apps");
     public async Task<ExecutiveDashboardDto?> GetExecutiveDashboardAsync() => await GetAsync<ExecutiveDashboardDto>("/api/v1/reports/executive");
