@@ -785,6 +785,26 @@ public class OrkunPamDbContext : DbContext, IUnitOfWork
             e.Property(m => m.Status).HasConversion<byte>();
         });
 
+        modelBuilder.Entity<RotationScript>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(200);
+            e.Property(r => r.DeviceType).HasMaxLength(100);
+            e.Property(r => r.ScriptType).HasConversion<byte>();
+            e.HasOne(r => r.Credential)
+                .WithMany()
+                .HasForeignKey(r => r.CredentialId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Credential → RotationScript (separate relationship, not inverse of above)
+        modelBuilder.Entity<Credential>(e =>
+        {
+            e.HasOne(c => c.RotationScript)
+                .WithMany()
+                .HasForeignKey(c => c.RotationScriptId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
         modelBuilder.Entity<CredentialOrchestrationSet>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(200);
