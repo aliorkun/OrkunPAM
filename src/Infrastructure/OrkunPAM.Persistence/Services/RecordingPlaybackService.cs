@@ -157,11 +157,9 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         var recording = await ParseSshRecordingAsync(recordingPath);
         if (recording == null) return results;
 
-        var keywordLower = keyword.ToLowerInvariant();
-
-        foreach (var evt in recording.Events)
+        for (int i = 0; i < recording.Events.Count; i++)
         {
-            // Only search output events (type "o")
+            var evt = recording.Events[i];
             if (evt.EventType != "o") continue;
 
             if (evt.Data.Contains(keyword, StringComparison.OrdinalIgnoreCase))
@@ -170,7 +168,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
                 {
                     TimestampSeconds = evt.TimestampSeconds,
                     MatchedText = ExtractContext(evt.Data, keyword, contextChars: 80),
-                    EventIndex = recording.Events.IndexOf(evt)
+                    EventIndex = i
                 });
             }
         }
@@ -226,7 +224,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
         }
     }
 
-    // ── Private helpers ──────────────────────────────
+    // ── Private helpers ──────────────────────────────────────────────
 
     private byte[]? DecryptRecording(byte[] encryptedBytes, string? recordingPath = null)
     {
@@ -410,8 +408,7 @@ public class RecordingPlaybackService : IRecordingPlaybackService
     };
 }
 
-// ── DTOs ────────────────────────────────────────────\\
-
+// ── DTOs ────────────────────────────────────────────\n
 public class RecordingMetadata
 {
     public long FileSizeBytes { get; set; }
