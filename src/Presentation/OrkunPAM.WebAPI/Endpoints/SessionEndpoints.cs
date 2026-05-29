@@ -70,6 +70,11 @@ public static class SessionEndpoints
 
             var passwordCopy = (byte[])rdpDecResult.Value.Clone();
             Array.Clear(rdpDecResult.Value, 0, rdpDecResult.Value.Length);
+            context.Response.OnCompleted(() =>
+            {
+                Array.Clear(passwordCopy, 0, passwordCopy.Length);
+                return Task.CompletedTask;
+            });
             return Results.Ok(new
             {
                 success = true,
@@ -258,7 +263,7 @@ public static class SessionEndpoints
             return Results.Ok(new { success = true, data = commands, meta = new { page, pageSize, totalCount = total } });
         });
 
-        // ── Recording Playback endpoints ─────────────────────────────────────────────
+        // ── Recording Playback endpoints ──────────────────────────────────────────────
         sessions.MapGet("/{id:guid}/recording", async (Guid id, OrkunPamDbContext db,
             IRecordingPlaybackService playback, HttpContext context) =>
         {
