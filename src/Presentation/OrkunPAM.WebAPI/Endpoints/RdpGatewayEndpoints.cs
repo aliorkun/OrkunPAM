@@ -106,7 +106,7 @@ public static class RdpGatewayEndpoints
                 device.IpAddress ?? device.Hostname,
                 device.ConnectionPort ?? 3389,
                 cred.Username ?? "",
-                Encoding.UTF8.GetBytes(decResult.Value),
+                cred.Id,
                 null), TimeSpan.FromSeconds(300));
 
             var proxyHost = config["RdpProxy:PublicHostname"] ?? context.Request.Host.Host;
@@ -179,7 +179,7 @@ public static class RdpGatewayEndpoints
                 original.TargetIpAddress ?? "",
                 original.TargetPort ?? 3389,
                 cred.Username ?? "",
-                Encoding.UTF8.GetBytes(decResult.Value),
+                cred.Id,
                 null), TimeSpan.FromSeconds(300));
 
             var proxyHost = config["RdpProxy:PublicHostname"] ?? context.Request.Host.Host;
